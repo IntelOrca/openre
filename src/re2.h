@@ -2,6 +2,11 @@
 
 #include <cstdint>
 
+using ScdOpcode = uint8_t;
+using AotId = uint8_t;
+using SceKind = uint8_t;
+using ItemType = uint8_t;
+
 #pragma pack(push, 1)
 
 struct MATRIX
@@ -48,24 +53,6 @@ struct SCE_AOT
     int16_t Data;
 };
 
-struct IN_DOOR_WORK
-{
-    int16_t Next_pos_x;
-    int16_t Next_pos_y;
-    int16_t Next_pos_z;
-    int16_t Next_cdir_y;
-    uint8_t Next_stage;
-    uint8_t Next_room;
-    uint8_t Next_cut;
-    uint8_t Next_nfloor;
-    uint8_t Dtex_type;
-    uint8_t Door_type;
-    uint8_t Knock_type;
-    uint8_t Key_id;
-    uint8_t Key_type;
-    uint8_t Free;
-};
-
 struct SceAotBase
 {
     uint8_t Sce;
@@ -82,6 +69,13 @@ struct SceAot : SceAotBase
     uint16_t D;
 };
 
+struct SceAotMessageData
+{
+    uint16_t var_00;
+    uint16_t var_02;
+    uint16_t var_04;
+};
+
 struct XZPoint
 {
     int16_t X;
@@ -93,10 +87,28 @@ struct SceAot4p : SceAotBase
     XZPoint Points[4];
 };
 
+struct SceAotDoorData
+{
+    int16_t TargetX;
+    int16_t TargetY;
+    int16_t TargetZ;
+    int16_t TargetD;
+    uint8_t TargetStage;
+    uint8_t TargetRoom;
+    uint8_t TargetCut;
+    uint8_t TargetFloor;
+    uint8_t Texture;
+    uint8_t DoorType;
+    uint8_t KnockType;
+    uint8_t LockId;
+    uint8_t KeyType;
+    uint8_t Free;
+};
+
 struct SceAotDoor
 {
     SceAot Aot;
-    IN_DOOR_WORK Door;
+    SceAotDoorData Door;
 };
 
 struct ScdAotSet
@@ -261,9 +273,32 @@ struct PLAYER_WORK
     uint8_t field_217;
 };
 
+struct InventorySlot
+{
+    ItemType Type;
+    uint8_t Quantity;
+    uint8_t Part;
+    uint8_t unk_04;
+};
+
+struct Unknown6949F8
+{
+    uint8_t pad_00[0x0C];
+    uint8_t var_0C;
+    uint8_t pad_0D;
+    uint8_t var_0E;
+};
+
+struct Unknown988628
+{
+    uint8_t pad_000[0x10C];
+    uint16_t var_10C;
+};
+
 #pragma pack(pop)
 
-enum {
+enum
+{
     SCE_AUTO,
     SCE_DOOR,
     SCE_ITEM,
@@ -281,15 +316,18 @@ enum {
     SCE_WINDOWS,
 };
 
-using ScdOpcode = uint8_t;
-using AotId = uint8_t;
-using SceKind = uint8_t;
+enum
+{
+    ITEM_TYPE_INK_RIBBON = 30,
+};
 
 constexpr uint8_t SAT_4P = (1 << 7);
 
 constexpr uint32_t GAME_FLAG_HAS_PARTNER = (1 << 28);
 constexpr uint32_t GAME_FLAG_IS_PLAYER_1 = (1 << 31);
 
+constexpr uint32_t MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE = 0;
+constexpr uint32_t MESSAGE_KIND_WILL_YOU_USE_USE_INK_RIBBON = 1;
 constexpr uint32_t MESSAGE_KIND_YOU_USED_KEY_X = 5;
 constexpr uint32_t MESSAGE_KIND_YOU_UNLOCKED_IT = 10;
 constexpr uint32_t MESSAGE_KIND_LOCKED_FROM_OTHER_SIDE = 11;
