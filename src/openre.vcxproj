@@ -158,6 +158,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp" />
+    <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="re2.h" />
     <ClInclude Include="scd.h" />

@@ -286,6 +286,24 @@ struct InventorySlot : InventoryDef
     uint8_t unk_04;
 };
 
+struct Unknown68A204
+{
+    uint8_t pad_00[0x0D];
+    uint8_t var_0D;
+    uint8_t pad_0E[0x13 - 0x0E];
+    uint8_t var_13;
+};
+
+struct Unknown689C60
+{
+    uint8_t pad_000[0x008];
+    uint8_t var_008;
+    uint8_t pad_009[0x155 - 0x008];
+    uint8_t var_155;
+    uint8_t pad_156[0x1E4 - 0x155];
+    uint32_t var_1E4;
+};
+
 struct Unknown6949F8
 {
     uint8_t pad_00[0x0C];

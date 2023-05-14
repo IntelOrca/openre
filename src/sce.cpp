@@ -1,4 +1,5 @@
 #include "re2.h"
+#include "openre.h"
 #include "player.h"
 
 using namespace openre::player;
@@ -12,7 +13,6 @@ namespace openre::sce
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
     static uint32_t* gDoorLocks = (uint32_t*)0x98ED2C;
-    static uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
     static uint8_t& _questionFlag = *((uint8_t*)0x98E542);
 
     static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
