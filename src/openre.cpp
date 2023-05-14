@@ -3,8 +3,10 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "player.h"
 
 using namespace openre;
+using namespace openre::player;
 using namespace openre::scd;
 using namespace openre::sce;
 
@@ -17,6 +19,7 @@ void onAttach()
     interop::writeJmp(0x4EDF40, &snd_se_walk);
     scd_init_hooks();
     sce_init_hooks();
+    player_init_hooks();
 }
 
 extern "C"

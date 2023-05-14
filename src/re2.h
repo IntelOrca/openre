@@ -6,6 +6,7 @@ using ScdOpcode = uint8_t;
 using AotId = uint8_t;
 using SceKind = uint8_t;
 using ItemType = uint8_t;
+using PldType = uint8_t;
 
 #pragma pack(push, 1)
 
@@ -273,11 +274,15 @@ struct PLAYER_WORK
     uint8_t field_217;
 };
 
-struct InventorySlot
+struct InventoryDef
 {
     ItemType Type;
     uint8_t Quantity;
     uint8_t Part;
+};
+
+struct InventorySlot : InventoryDef
+{
     uint8_t unk_04;
 };
 
@@ -318,7 +323,39 @@ enum
 
 enum
 {
+    ITEM_TYPE_NONE = 0,
+    ITEM_TYPE_KNIFE = 1,
+    ITEM_TYPE_HANDGUN_LEON = 2,
+    ITEM_TYPE_HANDGUN_CLAIRE = 3,
+    ITEM_TYPE_HANDGUN_COLT_SAA = 13,
+    ITEM_TYPE_AMMO_HANDGUN = 20,
     ITEM_TYPE_INK_RIBBON = 30,
+    ITEM_TYPE_FIRST_AID_SPRAY = 35,
+    ITEM_TYPE_HERB_GGB = 45,
+    ITEM_TYPE_LIGHTER = 47,
+    ITEM_TYPE_LOCKPICK = 48,
+    ITEM_TYPE_PHOTO_SHERRY = 49,
+    ITEM_TYPE_PHOTO_ADA = 87,
+};
+
+enum
+{
+    PLD_LEON_0,
+    PLD_CLAIRE_0,
+    PLD_LEON_1,
+    PLD_CLAIRE_1,
+    PLD_LEON_2,
+    PLD_CLAIRE_2,
+    PLD_LEON_3,
+    PLD_CLAIRE_3,
+    PLD_LEON_4,
+    PLD_CLAIRE_4,
+    PLD_LEON_5,
+    PLD_CHRIS,
+    PLD_HUNK,
+    PLD_TOFU,
+    PLD_ADA,
+    PLD_SHERRY
 };
 
 constexpr uint8_t SAT_4P = (1 << 7);
@@ -332,3 +369,6 @@ constexpr uint32_t MESSAGE_KIND_YOU_USED_KEY_X = 5;
 constexpr uint32_t MESSAGE_KIND_YOU_UNLOCKED_IT = 10;
 constexpr uint32_t MESSAGE_KIND_LOCKED_FROM_OTHER_SIDE = 11;
 constexpr uint32_t MESSAGE_KIND_LEAVE_SHERRY_BEHIND = 8;
+
+constexpr uint8_t INVENTORY_INDEX_SPECIAL = 10;
+constexpr uint8_t FULL_INVENTORY_SIZE = 11;

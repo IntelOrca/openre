@@ -1,4 +1,7 @@
 #include "re2.h"
+#include "player.h"
+
+using namespace openre::player;
 
 namespace openre::sce
 {
@@ -10,8 +13,6 @@ namespace openre::sce
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
     static uint32_t* gDoorLocks = (uint32_t*)0x98ED2C;
     static uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
-    static uint8_t& gInventorySize = *((uint8_t*)0x98E9A4);
-    static InventorySlot* gInventory = (InventorySlot*)0x98ED34;
     static uint8_t& _questionFlag = *((uint8_t*)0x98E542);
 
     static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
@@ -43,7 +44,7 @@ namespace openre::sce
     constexpr uint8_t QUESTION_FLAG_IS_WAITING = 1 << 7;
 
     // 0x00503170
-    static int bitarray_get(uint32_t* bitArray, int index)
+    int bitarray_get(uint32_t* bitArray, int index)
     {
         auto dwordIndex = index >> 5;
         auto bitIndex = index & 0x1F;
@@ -52,7 +53,15 @@ namespace openre::sce
     }
 
     // 0x00503120
-    static void bitarray_set(uint32_t* bitArray, int index)
+    void bitarray_set(uint32_t* bitArray, int index)
+    {
+        auto dwordIndex = index >> 5;
+        auto bitIndex = index & 0x1F;
+        bitArray[dwordIndex] |= 0x80000000 >> bitIndex;
+    }
+
+    // 0x00503140
+    void bitarray_clr(uint32_t* bitArray, int index)
     {
         auto dwordIndex = index >> 5;
         auto bitIndex = index & 0x1F;
@@ -73,19 +82,6 @@ namespace openre::sce
         using sig = void (*)(int, int);
         auto p = (sig)0x004ED950;
         p(a0, a1);
-    }
-
-    // 0x00502660
-    static int inventory_find_item(ItemType type)
-    {
-        for (int i = 0; i < gInventorySize; i++)
-        {
-            if (gInventory[i].Type == type)
-            {
-                return i;
-            }
-        }
-        return -1;
     }
 
     static int sub_4E95F0()
