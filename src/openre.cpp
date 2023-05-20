@@ -2,31 +2,37 @@
 
 #include <cassert>
 #include <windows.h>
+#include "audio.h"
 #include "interop.hpp"
+#include "file.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
 #include "player.h"
 
 using namespace openre;
+using namespace openre::audio;
+using namespace openre::file;
 using namespace openre::player;
 using namespace openre::scd;
 using namespace openre::sce;
 
 namespace openre
 {
+    GameTable& gGameTable = *((GameTable*)0x0098E79C);
     uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
     uint16_t& gCurrentStage = *((uint16_t*)0x98EB14);
     uint16_t& gCurrentRoom = *((uint16_t*)0x98EB16);
     uint16_t& gCurrentCut = *((uint16_t*)0x98EB18);
     uint16_t& gLastCut = *((uint16_t*)0x98EB1A);
+    uint32_t& gErrorCode = *((uint32_t*)0x680580);
+    uint32_t& dword_988624 = *((uint32_t*)0x988624);
 
     static uint8_t* _ospBuffer = (uint8_t*)0x698840;
     static char* _rdtPathBuffer = (char*)0x689C20;
     static const char* _stageSymbols = "123456789abcdefg";
 
     static uint8_t& byte_524EB9 = *((uint8_t*)0x524EB9);
-    static uint32_t& dword_680580 = *((uint32_t*)0x680580);
     static uint8_t& byte_6998C0 = *((uint8_t*)0x6998C0);
     static Unknown689C60*& dword_689C60 = *((Unknown689C60**)0x689C60);
     static uint32_t& dword_689F30 = *((uint32_t*)0x689F30);
@@ -36,7 +42,6 @@ namespace openre
     static uint8_t* byte_68A233 = (uint8_t*)0x68A233;
     static uint32_t& dword_98861C = *((uint32_t*)0x98861C);
     static uint32_t& dword_988620 = *((uint32_t*)0x988620);
-    static uint32_t& dword_988624 = *((uint32_t*)0x988624);
     static uint16_t& word_98A616 = *((uint16_t*)0x98A616);
     static uint16_t& word_98A61A = *((uint16_t*)0x98A61A);
     static uint16_t& word_98EB24 = *((uint16_t*)0x98EB24);
@@ -58,6 +63,7 @@ namespace openre
     static uint32_t& dword_680570 = *((uint32_t*)0x680570);
     static uint32_t& dword_67C9F4 = *((uint32_t*)0x67C9F4);
     static uint32_t& dword_68055C = *((uint32_t*)0x68055C);
+    static uint8_t& byte_989E7E = *((uint8_t*)0x989E7E);
 
     // 0x00509C90
     static uint8_t get_player_num()
@@ -104,22 +110,6 @@ namespace openre
         byte_68A233[eax] = 1;
     }
 
-    // 0x00508DC0
-    static void sub_508DC0()
-    {
-        using sig = void (*)();
-        auto p = (sig)0x00508DC0;
-        p();
-    }
-
-    // 0x00509020
-    static HANDLE sub_509020(const char* path, int a1)
-    {
-        using sig = HANDLE(*)(const char*, int);
-        auto p = (sig)0x00509020;
-        return p(path, a1);
-    }
-
     // 0x004427E0
     static void sub_4427E0()
     {
@@ -127,36 +117,6 @@ namespace openre
         dword_680570 = eax;
         dword_67C9F4 = eax;
         dword_68055C = eax * 10;
-    }
-
-    // 0x00502D40
-    static size_t read_file_into_buffer(const char* path, void* buffer, size_t length)
-    {
-        size_t result = 0;
-        auto hFile = sub_509020(path, length);
-        if (hFile != INVALID_HANDLE_VALUE)
-        {
-            auto fileSize = GetFileSize(hFile, NULL);
-            DWORD bytesRead = 0;
-            if (ReadFile(hFile, buffer, fileSize, &bytesRead, nullptr) && bytesRead == fileSize)
-            {
-                result = bytesRead;
-            }
-            CloseHandle(hFile);
-        }
-        if (result == 0)
-        {
-            dword_680580 = 11;
-        }
-        return result;
-    }
-
-    // 0x00509540
-    static uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t unk)
-    {
-        using sig = uint32_t(*)(const char*, void*, size_t, size_t, size_t);
-        auto p = (sig)0x00509540;
-        return p(path, buffer, offset, length, unk);
     }
 
     // 0x004DD360
@@ -168,7 +128,7 @@ namespace openre
         auto bytesRead = read_partial_file_into_buffer("common\\bin\\osp.bin", _ospBuffer, edx, 4224, 4);
         if (bytesRead == 0)
         {
-            dword_680580 = bytesRead;
+            gErrorCode = bytesRead;
             byte_6998C0 = 0;
         }
     }
@@ -230,7 +190,7 @@ namespace openre
                 read_osp();
                 if (read_file_into_buffer(_rdtPathBuffer, byte_98861C, 8) == 0)
                 {
-                    sub_508DC0();
+                    file_error();
                 }
                 // loc_4DECB9
                 break;
@@ -272,6 +232,37 @@ namespace openre
     }
 }
 
+static void load_init_table(void* tempBuffer, uint8_t index)
+{
+    if (read_file_into_buffer("common\\data\\init_tbl.dat", tempBuffer, 4) == 0)
+    {
+        file_error();
+        return;
+    }
+
+    auto src = &((uint8_t*)tempBuffer)[index * 1944];
+    std::memcpy(&gGameTable, src, 1944);
+}
+
+// 0x004B7860
+static void load_init_table_1()
+{
+    load_init_table((void*)0x00999AE0, byte_989E7E);
+}
+
+// 0x004DE650
+static void load_init_table_2()
+{
+    load_init_table((void*)0x008BD880, 5);
+}
+
+// 0x00505B20
+static void load_init_table_3()
+{
+    dword_988624 = 0x008FF8A0;
+    load_init_table((void*)0x008BD880, byte_989E7E);
+}
+
 void snd_se_walk(int, int, PLAYER_WORK* pEm)
 {
 }
@@ -282,9 +273,13 @@ void onAttach()
     // interop::writeJmp(0x004EDF40, &snd_se_walk);
     // interop::writeJmp(0x00502D40, &read_file_into_buffer);
     // interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
+    interop::writeJmp(0x004B7860, load_init_table_1);
+    interop::writeJmp(0x004DE650, load_init_table_2);
+    interop::writeJmp(0x00505B20, load_init_table_3);
     scd_init_hooks();
     sce_init_hooks();
     player_init_hooks();
+    bgm_init_hooks();
 }
 
 extern "C"

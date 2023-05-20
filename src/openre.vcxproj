@@ -149,6 +149,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="audio.cpp" />
+    <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="openre.cpp" />
@@ -157,12 +159,16 @@
     <ClCompile Include="sce.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="audio.h" />
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="re2.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="file.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

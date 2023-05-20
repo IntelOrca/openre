@@ -135,6 +135,25 @@ struct ScdAotSet4p
     uint8_t Data[6];
 };
 
+struct ScdSceBgmControl
+{
+    uint8_t Opcode;
+    uint8_t var_01;
+    uint8_t var_02;
+    uint8_t var_03;
+    uint8_t var_04;
+    uint8_t var_05;
+};
+
+struct ScdSceBgmTblSet
+{
+    uint8_t Opcode;
+    uint8_t pad_01;
+    uint16_t roomstage;
+    uint16_t var_04;
+    uint16_t var_06;
+};
+
 struct PLAYER_WORK
 {
     int Be_flg;
@@ -317,6 +336,27 @@ struct Unknown988628
     uint8_t pad_000[0x10C];
     uint16_t var_10C;
 };
+
+// 0x98E79C - 0x98EF34
+struct GameTable
+{
+    uint8_t pad_000[0x98E9A4 - 0x98E79C];       // 0x0098E79C
+    uint8_t inventory_size;                     // 0x0098E9A4
+    uint8_t pad_209[0x98E9BC - 0x98E9A5];
+    uint16_t num_saves;                         // 0x0098E9BC
+    uint8_t pad_222[0x98E9C8 - 0x98E9BE];
+    uint16_t bgm_table[142];                    // 0x0098E9C8
+    uint8_t pad_348[0x98EB14 - 0x98EAE4];
+    uint16_t current_stage;                     // 0x0098EB14
+    uint16_t current_room;                      // 0x0098EB16
+    uint16_t current_cut;                       // 0x0098EB18
+    uint16_t last_cut;                          // 0x0098EB1A
+    uint8_t pad_380[0x98ED2C - 0x98EB1C];
+    uint32_t door_locks[2];                     // 0x0098ED2C
+    InventorySlot inventory[11];                // 0x0098ED34
+    uint8_t pad_005[0x98EF34 - 0x98ED60];
+};
+static_assert(sizeof(GameTable) == 1944);
 
 #pragma pack(pop)
 

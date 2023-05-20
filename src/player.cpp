@@ -2,6 +2,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "re2.h"
+#include "openre.h"
 
 using namespace openre::sce;
 
@@ -16,9 +17,6 @@ namespace openre::player
     uint8_t& gSavedWeaponIndex = *((uint8_t*)0x9888DA);
     uint8_t& gSavedInventorySize = *((uint8_t*)0x9888DB);
     InventorySlot* gSavedInventory = (InventorySlot*)0x9888DC;
-    uint8_t& gInventorySize = *((uint8_t*)0x98E9A4);
-    InventorySlot* gInventory = (InventorySlot*)0x98ED34;
-
 
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
 
@@ -53,10 +51,11 @@ namespace openre::player
     // 0x00502190
     static void partner_switch(PldType pldType)
     {
+        auto inventory = gGameTable.inventory;
         if (pldType == PLD_ADA || pldType == PLD_SHERRY)
         {
             gSavedWeaponIndex = gCurrentWeaponIndex;
-            gSavedInventorySize = gInventorySize;
+            gSavedInventorySize = gGameTable.inventory_size;
             bitarray_set(dword_98EB4C, UNK_BIT_INVENTORY_SAVED);
             const InventoryDef* srcInventory;
             if (pldType == PLD_ADA)
@@ -72,13 +71,13 @@ namespace openre::player
                 srcInventory = _initialInventorySherry;
             }
 
-            gInventorySize = 8;
+            gGameTable.inventory_size = 8;
             for (auto i = 0; i < FULL_INVENTORY_SIZE; i++)
             {
-                gSavedInventory[i] = gInventory[i];
-                gInventory[i].Type = srcInventory[i].Type;
-                gInventory[i].Quantity = srcInventory[i].Quantity;
-                gInventory[i].Part = srcInventory[i].Part;
+                gSavedInventory[i] = inventory[i];
+                inventory[i].Type = srcInventory[i].Type;
+                inventory[i].Quantity = srcInventory[i].Quantity;
+                inventory[i].Part = srcInventory[i].Part;
             }
         }
         else
@@ -88,10 +87,10 @@ namespace openre::player
                 // TODO just unstash the special slot as well
                 for (auto i = 0; i < FULL_INVENTORY_SIZE - 1; i++)
                 {
-                    gInventory[i] = gSavedInventory[i];
+                    inventory[i] = gSavedInventory[i];
                 }
 
-                gInventorySize = gSavedInventorySize;
+                gGameTable.inventory_size = gSavedInventorySize;
                 gCurrentWeaponIndex = gSavedWeaponIndex;
                 if (gCurrentWeaponIndex == WEAPON_INDEX_NONE)
                 {
@@ -99,16 +98,16 @@ namespace openre::player
                 }
                 else
                 {
-                    gCurrentWeaponType = gInventory[gCurrentWeaponIndex].Type;
+                    gCurrentWeaponType = inventory[gCurrentWeaponIndex].Type;
                 }
 
                 // TODO this isn't necessary if you just unstash the special slot
-                gInventory[INVENTORY_INDEX_SPECIAL].Type = ITEM_TYPE_LOCKPICK;
-                gInventory[INVENTORY_INDEX_SPECIAL].Quantity = 1;
-                gInventory[INVENTORY_INDEX_SPECIAL].Part = 0;
+                inventory[INVENTORY_INDEX_SPECIAL].Type = ITEM_TYPE_LOCKPICK;
+                inventory[INVENTORY_INDEX_SPECIAL].Quantity = 1;
+                inventory[INVENTORY_INDEX_SPECIAL].Part = 0;
                 if ((pldType & 1) == 0)
                 {
-                    gInventory[INVENTORY_INDEX_SPECIAL].Type = ITEM_TYPE_LIGHTER;
+                    inventory[INVENTORY_INDEX_SPECIAL].Type = ITEM_TYPE_LIGHTER;
                 }
 
                 bitarray_clr(dword_98EB4C, UNK_BIT_INVENTORY_SAVED);
@@ -119,9 +118,10 @@ namespace openre::player
     // 0x00502660
     int inventory_find_item(ItemType type)
     {
-        for (int i = 0; i < gInventorySize; i++)
+        auto inventory = gGameTable.inventory;
+        for (int i = 0; i < gGameTable.inventory_size; i++)
         {
-            if (gInventory[i].Type == type)
+            if (inventory[i].Type == type)
             {
                 return i;
             }

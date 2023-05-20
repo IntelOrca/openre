@@ -12,7 +12,6 @@ namespace openre::sce
     static SceAotBase** gAotTable = (SceAotBase**)0x988850;
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
-    static uint32_t* gDoorLocks = (uint32_t*)0x98ED2C;
     static uint8_t& _questionFlag = *((uint8_t*)0x98E542);
 
     static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
@@ -160,7 +159,7 @@ namespace openre::sce
         }
 
         int eax;
-        if (data->LockId < 128 || (eax = bitarray_get(gDoorLocks, data->LockId & 0x3F)))
+        if (data->LockId < 128 || (eax = bitarray_get(gGameTable.door_locks, data->LockId & 0x3F)))
         {
             byte_991F80 = 1;
             dword_988848 = data;
@@ -197,7 +196,7 @@ namespace openre::sce
             byte_98E541 = inventoryIndex + 1;
         }
 
-        bitarray_set(gDoorLocks, data->LockId & 0x3F);
+        bitarray_set(gGameTable.door_locks, data->LockId & 0x3F);
         return 0;
     }
 
