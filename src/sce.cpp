@@ -6,6 +6,13 @@ using namespace openre::player;
 
 namespace openre::sce
 {
+    enum {
+        ITEMBOX_INTERACT_STATE_INIT,
+        ITEMBOX_INTERACT_STATE_OPENING,
+        ITEMBOX_INTERACT_STATE_OPENED,
+        ITEMBOX_INTERACT_STATE_CLOSING,
+    };
+
     using Action = void (*)();
     using SceImpl = int (*)(void*);
 
@@ -14,27 +21,38 @@ namespace openre::sce
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
     static uint8_t& _questionFlag = *((uint8_t*)0x98E542);
 
-    static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
-    static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
-    static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
-    static SceAotDoorData*& dword_988848 = *((SceAotDoorData**)0x988848);
-    static uint8_t& byte_991F80 = *((uint8_t*)0x991F80);
-    static uint8_t& byte_98504F = *((uint8_t*)0x98504F);
-    static void*& dword_98E790 = *((void**)0x98E790);
-    static uint8_t& byte_98E541 = *((uint8_t*)0x98E541);
+    static uint8_t& byte_6805B1 = *((uint8_t*)0x6805B1);
+    static uint8_t& byte_6805B3 = *((uint8_t*)0x6805B3);
+    static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
+    static int16_t& _itemBoxAcceleration = *((int16_t*)0x689C98);
+    static Unknown689CA8*& _itemBoxObj = *((Unknown689CA8**)0x689CA8);
+    static uint8_t& gHudMode = *((uint8_t*)0x691F70);
+    static uint8_t& byte_691F74 = *((uint8_t*)0x691F74);
     static uint16_t& word_6949F0 = *((uint16_t*)0x6949F0);
     static uint16_t& word_6949F4 = *((uint16_t*)0x6949F4);
+    static Unknown6949F8*& dword_6949F8 = *((Unknown6949F8**)0x6949F8);
+    static uint8_t& gQuestionFlags = *((uint8_t*)0x98504C);
+    static uint8_t& gPickupItemName = *((uint8_t*)0x98504F);
+    static Unknown988628*& dword_988628 = *((Unknown988628**)0x988628);
+    static SceAotDoorData*& dword_988848 = *((SceAotDoorData**)0x988848);
+    static Unknown6949F8*& dword_9888D0 = *((Unknown6949F8**)0x9888D0);
+    static uint32_t& dword_989E6C = *((uint32_t*)0x989E6C);
+    static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
+    static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
+    static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
+    static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
+    static uint8_t& byte_98E541 = *((uint8_t*)0x98E541);
+    static void*& dword_98E790 = *((void**)0x98E790);
+    static Action& dword_98E794 = *((Action*)0x98E794);
+    static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
     static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static Unknown988628*& dword_988628 = *((Unknown988628**)0x988628);
-    static Action& dword_98E794 = *((Action*)0x98E794);
+    static uint8_t& byte_989EF5 = *((uint8_t*)0x989EF5);
+    static uint8_t& byte_989EF6 = *((uint8_t*)0x989EF6);
+    static Unknown689CA8* data_0098A61C = (Unknown689CA8*)0x98A61C;
+    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
+    static uint8_t& byte_991F80 = *((uint8_t*)0x991F80);
     static uint32_t& dword_991FC4 = *((uint32_t*)0x991FC4);
-    static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
-    static Unknown6949F8*& dword_6949F8 = *((Unknown6949F8**)0x6949F8);
-    static uint32_t& dword_989E6C = *((uint32_t*)0x989E6C);
-    static uint8_t& gQuestionFlags = *((uint8_t*)0x98504C);
-    static uint8_t& byte_98E533 = *((uint8_t*)0x98E533);
-    static uint8_t& byte_691F74 = *((uint8_t*)0x691F74);
 
     constexpr uint8_t KEY_LOCKED = 255;
     constexpr uint8_t KEY_UNLOCK = 254;
@@ -131,9 +149,48 @@ namespace openre::sce
     // 0x004E9A20
     static void sce_itembox_callback()
     {
-        using sig = int (*)();
-        auto p = (sig)0x004E9A20;
-        p();
+        switch (gQuestionFlags) {
+        case ITEMBOX_INTERACT_STATE_INIT:
+            dword_991FC4 = dword_989ED4;
+            dword_989ED4 |= 0x7F000000;
+            _itemBoxSpeed = 1;
+            _itemBoxAcceleration = 3;
+            snd_se_on(0x2150000, 0);
+            gQuestionFlags = 1;
+            _itemBoxObj = &data_0098A61C[_itemBoxObjIndex];
+            [[fallthrough]];
+        case ITEMBOX_INTERACT_STATE_OPENING:
+            _itemBoxObj->var_78 -= _itemBoxSpeed;
+            _itemBoxSpeed += _itemBoxAcceleration;
+            if (_itemBoxObj->var_78 < -399)
+            {
+                gQuestionFlags = ITEMBOX_INTERACT_STATE_OPENED;
+                _itemBoxAcceleration = -_itemBoxAcceleration;
+            }
+            break;
+        case ITEMBOX_INTERACT_STATE_OPENED:
+            _itemBoxObj->var_78 -= _itemBoxSpeed;
+            if (_itemBoxSpeed + _itemBoxAcceleration > 0)
+            {
+                _itemBoxSpeed += _itemBoxAcceleration;
+                break;
+            }
+            gHudMode = HUD_MODE_ITEM_BOX;
+            gGameFlags |= GAME_FLAG_15;
+            byte_991F80 = 1;
+            _itemBoxSpeed = 0;
+            gQuestionFlags = ITEMBOX_INTERACT_STATE_CLOSING;
+            [[fallthrough]];
+        case ITEMBOX_INTERACT_STATE_CLOSING:
+            _itemBoxSpeed++;
+            if (_itemBoxSpeed > 4)
+            {
+                _itemBoxObj->var_78 = 0;
+                gQuestionFlags = 0;
+                dword_98E794 = nullptr;
+            }
+            break;
+        }
     }
 
     // 0x004E9440
@@ -189,7 +246,7 @@ namespace openre::sce
                 return 0;
             }
 
-            byte_98504F = key;
+            gPickupItemName = key;
             show_message(0, 0x100, MESSAGE_KIND_YOU_USED_KEY_X, 0xFF000000);
             snd_se_on(0x2250000, 0);
             dword_98E790 = &sub_4E95F0;
@@ -198,6 +255,60 @@ namespace openre::sce
 
         bitarray_set(gGameTable.door_locks, data->LockId & 0x3F);
         return 0;
+    }
+
+    // 0x004E96C0
+    static void sce_item(SceAotItemData* data)
+    {
+        gPickupItemName = data->type;
+        dword_9888D0 = dword_6949F8;
+        gPickupItem = data->type;
+        if ((byte_6805B3 != 0) && (data->type == ITEM_TYPE_INK_RIBBON))
+        {
+            data->amount = 2;
+        }
+        if (byte_6805B1 != 0)
+        {
+            switch (data->type)
+            {
+            case ITEM_TYPE_AMMO_HANDGUN:
+                data->amount = data->amount == 15 ? 10 : 20;
+                break;
+            case ITEM_TYPE_AMMO_SHOTGUN:
+                data->amount = 5;
+                break;
+            case ITEM_TYPE_AMMO_MAGNUM:
+                data->amount = 6;
+                break;
+            case ITEM_TYPE_AMMO_EXPLOSIVE_ROUNDS:
+                data->amount = 4;
+                break;
+            case ITEM_TYPE_AMMO_FLAME_ROUNDS:
+                data->amount = 4;
+                break;
+            case ITEM_TYPE_AMMO_ACID_ROUNDS:
+                data->amount = 4;
+                break;
+            case ITEM_TYPE_AMMO_BOWGUN:
+                data->amount = 12;
+                break;
+            }
+        }
+
+        if ((data->action & 1) != 0)
+        {
+            // Pick up from floor animation
+            byte_989EF5 = 6;
+            byte_989EF6 = 0;
+        }
+        else
+        {
+            // No pick up animation
+            byte_991F80 = 1;
+            dword_991FC4 = dword_989ED4;
+            gHudMode = HUD_MODE_PICKUP_ITEM;
+            gGameFlags |= GAME_FLAG_15;
+        }
     }
 
     // 0x004E97C0
@@ -231,9 +342,9 @@ namespace openre::sce
     // 0x004E99F0
     static void sce_itembox(void*)
     {
-        byte_98E533 = dword_6949F8->var_0C;
+        _itemBoxObjIndex = dword_6949F8->var_0C;
         byte_691F74 = dword_6949F8->var_0E;
-        _questionFlag = 0;
+        _questionFlag = ITEMBOX_INTERACT_STATE_INIT;
         dword_98E794 = &sce_itembox_callback;
     }
 
@@ -246,6 +357,7 @@ namespace openre::sce
     {
         set_sce_hook(SCE_AUTO, reinterpret_cast<SceImpl>(&sce_auto));
         set_sce_hook(SCE_DOOR, reinterpret_cast<SceImpl>(&sce_door));
+        set_sce_hook(SCE_ITEM, reinterpret_cast<SceImpl>(&sce_item));
         set_sce_hook(SCE_NORMAL, reinterpret_cast<SceImpl>(&sce_normal));
         set_sce_hook(SCE_MESSAGE, reinterpret_cast<SceImpl>(&sce_message));
         set_sce_hook(SCE_WATER, reinterpret_cast<SceImpl>(&sce_water));

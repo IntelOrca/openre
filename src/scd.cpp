@@ -10,9 +10,12 @@ namespace openre::scd
         SCD_NOP = 0x00,
         SCD_AOT_SET = 0x2C,
         SCD_DOOR_AOT_SE = 0x3B,
+        SCD_ITEM_AOT_SET = 0x4E,
         SCD_SCE_BGM_CONTROL = 0x51,
         SCD_SCE_BGMTBL_SET = 0x57,
         SCD_AOT_SET_4P = 0x67,
+        SCD_DOOR_AOT_SET_4P = 0x68,
+        SCD_ITEM_AOT_SET_4P = 0x69,
     };
 
     using ScdOpcodeImpl = int (*)(SCE_TASK*);

@@ -135,6 +135,29 @@ struct ScdAotSet4p
     uint8_t Data[6];
 };
 
+struct SceAotItemData
+{
+    uint8_t type;
+    uint8_t pad_01;
+    uint16_t amount;
+    uint16_t flag;
+    uint8_t md1;
+    uint8_t action;
+};
+
+struct SceAotItem
+{
+    SceAot Aot;
+    SceAotItemData Item;
+};
+
+struct ScdSceAotItem
+{
+    uint8_t Opcode;
+    uint8_t Id;
+    SceAotItem Data;
+};
+
 struct ScdSceBgmControl
 {
     uint8_t Opcode;
@@ -337,6 +360,14 @@ struct Unknown988628
     uint16_t var_10C;
 };
 
+struct Unknown689CA8
+{
+    uint8_t pad_00[0x78];
+    int16_t var_78;
+    uint8_t pad_7A[4];
+};
+static_assert(sizeof(Unknown689CA8) == 0x7E);
+
 // 0x98E79C - 0x98EF34
 struct GameTable
 {
@@ -387,6 +418,15 @@ enum
     ITEM_TYPE_HANDGUN_CLAIRE = 3,
     ITEM_TYPE_HANDGUN_COLT_SAA = 13,
     ITEM_TYPE_AMMO_HANDGUN = 20,
+    ITEM_TYPE_AMMO_SHOTGUN = 21,
+    ITEM_TYPE_AMMO_MAGNUM = 22,
+    ITEM_TYPE_AMMO_FLAMETHROWER = 23,
+    ITEM_TYPE_AMMO_EXPLOSIVE_ROUNDS = 24,
+    ITEM_TYPE_AMMO_FLAME_ROUNDS = 25,
+    ITEM_TYPE_AMMO_ACID_ROUNDS = 26,
+    ITEM_TYPE_AMMO_SMG = 27,
+    ITEM_TYPE_AMMO_SPARKSHOT = 28,
+    ITEM_TYPE_AMMO_BOWGUN = 29,
     ITEM_TYPE_INK_RIBBON = 30,
     ITEM_TYPE_FIRST_AID_SPRAY = 35,
     ITEM_TYPE_HERB_GGB = 45,
@@ -416,8 +456,18 @@ enum
     PLD_SHERRY
 };
 
+enum
+{
+    HUD_MODE_INVENTORY,
+    HUD_MODE_ITEM_BOX,
+    HUD_MODE_PICKUP_ITEM,
+    HUD_MODE_MAP_1,
+    HUD_MODE_MAP_2,
+};
+
 constexpr uint8_t SAT_4P = (1 << 7);
 
+constexpr uint32_t GAME_FLAG_15 = (1 << 15);
 constexpr uint32_t GAME_FLAG_HAS_PARTNER = (1 << 28);
 constexpr uint32_t GAME_FLAG_IS_PLAYER_1 = (1 << 31);
 
