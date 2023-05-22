@@ -5,6 +5,7 @@
 #include "audio.h"
 #include "interop.hpp"
 #include "file.h"
+#include "hud.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
@@ -13,6 +14,7 @@
 using namespace openre;
 using namespace openre::audio;
 using namespace openre::file;
+using namespace openre::hud;
 using namespace openre::player;
 using namespace openre::scd;
 using namespace openre::sce;
@@ -27,6 +29,7 @@ namespace openre
     uint16_t& gLastCut = *((uint16_t*)0x98EB1A);
     uint32_t& gErrorCode = *((uint32_t*)0x680580);
     uint32_t& dword_988624 = *((uint32_t*)0x988624);
+    Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
 
     static uint8_t* _ospBuffer = (uint8_t*)0x698840;
     static char* _rdtPathBuffer = (char*)0x689C20;
@@ -36,7 +39,6 @@ namespace openre
     static uint8_t& byte_6998C0 = *((uint8_t*)0x6998C0);
     static Unknown689C60*& dword_689C60 = *((Unknown689C60**)0x689C60);
     static uint32_t& dword_689F30 = *((uint32_t*)0x689F30);
-    static Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
     static uint16_t* word_68A220 = (uint16_t*)0x68A220;
     static uint16_t* word_68A222 = (uint16_t*)0x68A222;
     static uint8_t* byte_68A233 = (uint8_t*)0x68A233;
@@ -102,9 +104,9 @@ namespace openre
     }
 
     // 0x00508CE0
-    static void sub_508CE0(int a0)
+    void sub_508CE0(int a0)
     {
-        auto eax = dword_689F30 * 27;
+        auto eax = dword_689F30 * 36;
         word_68A222[eax / 2] = a0;
         word_68A220[eax / 2] = 1;
         byte_68A233[eax] = 1;
@@ -276,10 +278,12 @@ void onAttach()
     interop::writeJmp(0x004B7860, load_init_table_1);
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
+
     scd_init_hooks();
     sce_init_hooks();
     player_init_hooks();
     bgm_init_hooks();
+    hud_init_hooks();
 }
 
 extern "C"

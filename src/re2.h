@@ -7,6 +7,9 @@ using AotId = uint8_t;
 using SceKind = uint8_t;
 using ItemType = uint8_t;
 using PldType = uint8_t;
+using HudKind = uint8_t;
+
+using Action = void (*)();
 
 #pragma pack(push, 1)
 
@@ -330,7 +333,9 @@ struct InventorySlot : InventoryDef
 
 struct Unknown68A204
 {
-    uint8_t pad_00[0x0D];
+    uint8_t pad_00[0x09 - 0x00];
+    uint8_t var_09;
+    uint8_t pad_0A[0x0D - 0x0A];
     uint8_t var_0D;
     uint8_t pad_0E[0x13 - 0x0E];
     uint8_t var_13;
@@ -367,6 +372,24 @@ struct Unknown689CA8
     uint8_t pad_7A[4];
 };
 static_assert(sizeof(Unknown689CA8) == 0x7E);
+
+struct HudInfo
+{
+    uint8_t routine;
+    uint8_t var_01;
+    uint8_t pad_02[0x0C - 0x02];
+    uint8_t var_0C;
+    uint8_t pad_0D[0x24 - 0x0D];
+    uint8_t var_24;
+    uint8_t var_25;
+};
+
+struct Unknown98A720
+{
+    uint8_t var_00;
+    uint8_t pad_01[503];
+};
+static_assert(sizeof(Unknown98A720) == 504);
 
 // 0x98E79C - 0x98EF34
 struct GameTable

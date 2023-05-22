@@ -152,6 +152,7 @@
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />
+    <ClCompile Include="hud.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
@@ -160,6 +161,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
+    <ClInclude Include="hud.h" />
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />

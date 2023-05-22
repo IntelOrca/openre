@@ -13,13 +13,12 @@ namespace openre::sce
         ITEMBOX_INTERACT_STATE_CLOSING,
     };
 
-    using Action = void (*)();
     using SceImpl = int (*)(void*);
 
     static SceAotBase** gAotTable = (SceAotBase**)0x988850;
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
-    static uint8_t& _questionFlag = *((uint8_t*)0x98E542);
+    static uint8_t& _questionState = *((uint8_t*)0x98E542);
 
     static uint8_t& byte_6805B1 = *((uint8_t*)0x6805B1);
     static uint8_t& byte_6805B3 = *((uint8_t*)0x6805B3);
@@ -114,7 +113,7 @@ namespace openre::sce
         constexpr uint8_t STATE_QUESTION = 0;
         constexpr uint8_t STATE_ANSWER = 1;
 
-        if (_questionFlag == STATE_QUESTION)
+        if (_questionState == STATE_QUESTION)
         {
             auto inventoryIndex = inventory_find_item(ITEM_TYPE_INK_RIBBON);
             if (inventoryIndex < 0)
@@ -122,18 +121,18 @@ namespace openre::sce
                 dword_989ED4 = dword_991FC4;
                 show_message(0, 0x100, MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE, 0xFF000000);
                 dword_98E794 = nullptr;
-                _questionFlag = STATE_QUESTION;
+                _questionState = STATE_QUESTION;
             }
             else
             {
                 show_message(0, 0x100, MESSAGE_KIND_WILL_YOU_USE_USE_INK_RIBBON, 0xFF000000);
-                _questionFlag = STATE_ANSWER;
+                _questionState = STATE_ANSWER;
             }
         }
-        else if (_questionFlag == STATE_ANSWER && !(gQuestionFlags & QUESTION_FLAG_IS_WAITING))
+        else if (_questionState == STATE_ANSWER && !(gQuestionFlags & QUESTION_FLAG_IS_WAITING))
         {
             dword_98E794 = nullptr;
-            _questionFlag = STATE_QUESTION;
+            _questionState = STATE_QUESTION;
             if (gQuestionFlags & QUESTION_FLAG_ANSWER_NO)
             {
                 dword_989ED4 = dword_991FC4;
@@ -149,14 +148,14 @@ namespace openre::sce
     // 0x004E9A20
     static void sce_itembox_callback()
     {
-        switch (gQuestionFlags) {
+        switch (_questionState) {
         case ITEMBOX_INTERACT_STATE_INIT:
             dword_991FC4 = dword_989ED4;
             dword_989ED4 |= 0x7F000000;
             _itemBoxSpeed = 1;
             _itemBoxAcceleration = 3;
             snd_se_on(0x2150000, 0);
-            gQuestionFlags = 1;
+            _questionState = ITEMBOX_INTERACT_STATE_OPENING;
             _itemBoxObj = &data_0098A61C[_itemBoxObjIndex];
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_OPENING:
@@ -164,7 +163,7 @@ namespace openre::sce
             _itemBoxSpeed += _itemBoxAcceleration;
             if (_itemBoxObj->var_78 < -399)
             {
-                gQuestionFlags = ITEMBOX_INTERACT_STATE_OPENED;
+                _questionState = ITEMBOX_INTERACT_STATE_OPENED;
                 _itemBoxAcceleration = -_itemBoxAcceleration;
             }
             break;
@@ -179,14 +178,14 @@ namespace openre::sce
             gGameFlags |= GAME_FLAG_15;
             byte_991F80 = 1;
             _itemBoxSpeed = 0;
-            gQuestionFlags = ITEMBOX_INTERACT_STATE_CLOSING;
+            _questionState = ITEMBOX_INTERACT_STATE_CLOSING;
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_CLOSING:
             _itemBoxSpeed++;
             if (_itemBoxSpeed > 4)
             {
                 _itemBoxObj->var_78 = 0;
-                gQuestionFlags = 0;
+                _questionState = 0;
                 dword_98E794 = nullptr;
             }
             break;
@@ -333,7 +332,7 @@ namespace openre::sce
     static void sce_save(void*)
     {
         dword_98E794 = &sce_save_callback;
-        _questionFlag = 0;
+        _questionState = 0;
         dword_991FC4 = dword_989ED4;
         dword_989ED4 |= 0xFF000000;
         byte_98E9A7 = dword_6949F8->var_0C;
@@ -344,7 +343,7 @@ namespace openre::sce
     {
         _itemBoxObjIndex = dword_6949F8->var_0C;
         byte_691F74 = dword_6949F8->var_0E;
-        _questionFlag = ITEMBOX_INTERACT_STATE_INIT;
+        _questionState = ITEMBOX_INTERACT_STATE_INIT;
         dword_98E794 = &sce_itembox_callback;
     }
 
