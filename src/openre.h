@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include "re2.h"
+#include <cstdint>
 
 namespace openre
 {

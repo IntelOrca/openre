@@ -85,17 +85,21 @@ namespace openre::audio
             return 1;
 
         dword_693C4C = 0;
-        if (-1 < byte_693802) {
-            if (byte_693800 != '\0') {
+        if (-1 < byte_693802)
+        {
+            if (byte_693800 != '\0')
+            {
                 auto uVar3 = sub_4347B0(5, 0);
-                if ((uVar3 & 1) != 0) {
+                if ((uVar3 & 1) != 0)
+                {
                     sub_4341E0(5, 0xffffffff);
                 }
                 byte_693800 = '\0';
             }
             auto iVar4 = 0;
             auto puVar6 = dword_6934E0;
-            do {
+            do
+            {
                 sub_434140(5, iVar4);
                 *puVar6 = 0;
                 puVar6 = puVar6 + 0x104;
@@ -103,13 +107,17 @@ namespace openre::audio
             } while ((int)puVar6 < 0x6937ec);
             byte_693802 = -1;
         }
-        if (*current_bgm_address == 0xff) {
+        if (*current_bgm_address == 0xff)
+        {
             return 0xff;
         }
-        if (-1 < byte_69380A) {
-            if (byte_693808 != '\0') {
+        if (-1 < byte_69380A)
+        {
+            if (byte_693808 != '\0')
+            {
                 auto uVar3 = sub_4347B0(5, 1);
-                if ((uVar3 & 1) != 0) {
+                if ((uVar3 & 1) != 0)
+                {
                     sub_4341E0(6, 0);
                 }
                 byte_693808 = '\0';
@@ -118,10 +126,13 @@ namespace openre::audio
             byte_693EA0 = 0;
             byte_69380A = -1;
         }
-        if (-1 < byte_693812) {
-            if (byte_693810 != '\0') {
+        if (-1 < byte_693812)
+        {
+            if (byte_693810 != '\0')
+            {
                 auto uVar3 = sub_4347B0(5, 2);
-                if ((uVar3 & 1) != 0) {
+                if ((uVar3 & 1) != 0)
+                {
                     sub_4341E0(6, 1);
                 }
                 byte_693810 = '\0';
@@ -137,11 +148,13 @@ namespace openre::audio
 
         auto buffer = (uint8_t*)((dword_988624 + 16) & 0xFFFFFFF0);
         auto numBytes = read_file_into_buffer(path, (char*)buffer, 1);
-        if (numBytes == 0) {
+        if (numBytes == 0)
+        {
             file_error();
             return 1;
         }
-        if (numBytes == -1) {
+        if (numBytes == -1)
+        {
             return 0xff;
         }
 
@@ -150,8 +163,7 @@ namespace openre::audio
 
         dword_6934B4 = byte_6D730C + unk1;
         std::memcpy(byte_6D730C, (void*)buffer, unk2);
-        dword_693C4C =
-            *(int*)(dword_6934B4 + 12) + (uint32_t) * (uint16_t*)(dword_6934B4 + 18) * -0x200 - 0xA20;
+        dword_693C4C = *(int*)(dword_6934B4 + 12) + (uint32_t) * (uint16_t*)(dword_6934B4 + 18) * -0x200 - 0xA20;
         if (dword_693C4C < 0x38801)
         {
             byte_692FF5 = sub_4344A0(5, gGameTable.current_stage, gGameTable.current_room, bgmIndex);

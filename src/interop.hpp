@@ -44,7 +44,7 @@ namespace openre::interop
             return (uint32_t)_ptr;
         }
 
-        operator T* () const
+        operator T*() const
         {
             return reinterpret_cast<T*>(_ptr);
         };
@@ -403,7 +403,7 @@ namespace openre::interop
     void readMemory(uint32_t address, void* data, size_t size);
     void writeMemory(uint32_t address, const void* data, size_t size);
 
-    using hook_function = uint8_t(*)(registers& regs);
+    using hook_function = uint8_t (*)(registers& regs);
 
     void registerHook(uintptr_t address, hook_function function);
     void writeRet(uint32_t address);

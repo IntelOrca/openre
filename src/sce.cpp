@@ -1,12 +1,13 @@
-#include "re2.h"
 #include "openre.h"
 #include "player.h"
+#include "re2.h"
 
 using namespace openre::player;
 
 namespace openre::sce
 {
-    enum {
+    enum
+    {
         ITEMBOX_INTERACT_STATE_INIT,
         ITEMBOX_INTERACT_STATE_OPENING,
         ITEMBOX_INTERACT_STATE_OPENED,
@@ -148,7 +149,8 @@ namespace openre::sce
     // 0x004E9A20
     static void sce_itembox_callback()
     {
-        switch (_questionState) {
+        switch (_questionState)
+        {
         case ITEMBOX_INTERACT_STATE_INIT:
             dword_991FC4 = dword_989ED4;
             dword_989ED4 |= 0x7F000000;
@@ -205,10 +207,7 @@ namespace openre::sce
         if (dword_98A0D4 != 0)
             return 0;
 
-        if ((gGameFlags & GAME_FLAG_IS_PLAYER_1) &&
-            (gGameFlags & GAME_FLAG_HAS_PARTNER) &&
-            (dword_98A110[0] & 1) &&
-            (dword_98A110[0x21D] & 0x20))
+        if ((gGameFlags & GAME_FLAG_IS_PLAYER_1) && (gGameFlags & GAME_FLAG_HAS_PARTNER) && (dword_98A110[0] & 1) && (dword_98A110[0x21D] & 0x20))
         {
             show_message(0, 0x100, MESSAGE_KIND_LEAVE_SHERRY_BEHIND, 0xFF000000);
             return 0;

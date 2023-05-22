@@ -1,12 +1,13 @@
-#include "audio.h"
 #include "scd.h"
+#include "audio.h"
 #include "re2.h"
 
 using namespace openre::audio;
 
 namespace openre::scd
 {
-    enum {
+    enum
+    {
         SCD_NOP = 0x00,
         SCD_AOT_SET = 0x2C,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -64,12 +65,7 @@ namespace openre::scd
     {
         auto opcode = reinterpret_cast<ScdSceBgmControl*>(sce->Data);
 
-        auto arg =
-            (opcode->var_05) |
-            (opcode->var_04 << 8) |
-            (opcode->var_03 << 16) |
-            (opcode->var_02 << 24) |
-            (opcode->var_01 << 28);
+        auto arg = (opcode->var_05) | (opcode->var_04 << 8) | (opcode->var_03 << 16) | (opcode->var_02 << 24) | (opcode->var_01 << 28);
         bgm_set_control(arg);
 
         sce->Data += sizeof(ScdSceBgmControl);

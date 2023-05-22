@@ -1,8 +1,8 @@
 #include "interop.hpp"
+#include "openre.h"
+#include "re2.h"
 #include "scd.h"
 #include "sce.h"
-#include "re2.h"
-#include "openre.h"
 
 using namespace openre::sce;
 

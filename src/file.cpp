@@ -17,7 +17,7 @@ namespace openre::file
     // 0x00509020
     static HANDLE sub_509020(const char* path, int a1)
     {
-        using sig = HANDLE(*)(const char*, int);
+        using sig = HANDLE (*)(const char*, int);
         auto p = (sig)0x00509020;
         return p(path, a1);
     }
@@ -26,7 +26,7 @@ namespace openre::file
     size_t read_file_into_buffer(const char* path, void* buffer, size_t length)
     {
 #ifdef USE_ORIGINAL_FILEIO
-        using sig = uint32_t(*)(const char*, void*, size_t);
+        using sig = uint32_t (*)(const char*, void*, size_t);
         auto p = (sig)0x00502D40;
         return p(path, buffer, length);
 #else
@@ -45,15 +45,15 @@ namespace openre::file
         if (result == 0)
         {
             gErrorCode = 11;
-    }
+        }
         return result;
 #endif
-}
+    }
 
     // 0x00509540
     uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t unk)
     {
-        using sig = uint32_t(*)(const char*, void*, size_t, size_t, size_t);
+        using sig = uint32_t (*)(const char*, void*, size_t, size_t, size_t);
         auto p = (sig)0x00509540;
         return p(path, buffer, offset, length, unk);
     }
