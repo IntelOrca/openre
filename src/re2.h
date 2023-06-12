@@ -20,6 +20,149 @@ struct MATRIX
     int t[3];
 };
 
+struct Entity
+{
+};
+
+struct PlayerEntity : Entity
+{
+    int Be_flg;
+    uint8_t Routine_0;
+    uint8_t Routine_1;
+    uint8_t Routine_2;
+    uint8_t Routine_3;
+    uint8_t Id;
+    uint8_t Sc_id;
+    uint8_t At_obj_no;
+    uint8_t At_sce_no;
+    uint8_t Work_no;
+    uint8_t At_em_no;
+    int16_t At_em_flg;
+    int Attribute;
+    int pTmd;
+    int pPacket;
+    int pTmd2;
+    int pPacket2;
+    uint16_t M[3][3];
+    int16_t M_pad;
+    int Pos_x;
+    int Pos_y;
+    int Pos_z;
+    int16_t Old_x;
+    int16_t Old_y;
+    int16_t Old_z;
+    int16_t Old_x2;
+    int16_t Old_y2;
+    int16_t Old_z2;
+    int dummy00;
+    MATRIX Workm;
+    int16_t Cdir_x;
+    int16_t Cdir_y;
+    int16_t Cdir_z;
+    int16_t dummy01;
+    int Poly_rgb;
+    MATRIX* pSuper;
+    int Atd[32];
+    uint8_t Tpage,
+        Clut,
+        nFloor,
+        Parts_num;
+    int pKan_t_ptr;
+    int16_t Water;
+    int16_t Type;
+    int Sca_info;
+    int field_114;
+    int field_118;
+    int field_11C;
+    int field_120;
+    int field_124;
+    int field_128;
+    int field_12C;
+    int field_130;
+    int field_134;
+    int field_138;
+    int field_13C;
+    int field_140;
+    int16_t Spd_x;
+    int16_t Spd_y;
+    int16_t Spd_z;
+    uint8_t In_screen;
+    uint8_t Model_Tex_type;
+    uint8_t Move_no;
+    uint8_t Move_cnt;
+    uint8_t Hokan_flg;
+    uint8_t Mplay_flg;
+    uint8_t Root_ck_cnt;
+    uint8_t D_life_u;
+    uint8_t D_life_c;
+    uint8_t D_life_d;
+    int16_t Status_flg;
+    int16_t Life;
+    int16_t Timer0;
+    int16_t Timer1;
+    int16_t F_pos_x;
+    int16_t F_pos_y;
+    int16_t F_pos_z;
+    int16_t Max_life;
+    int16_t Base_pos_x;
+    int16_t Base_pos_y;
+    int16_t Base_pos_z;
+    uint8_t Timer2;
+    uint8_t Timer3;
+    int pKage_work;
+    int field_170;
+    int field_174;
+    uint32_t* pNow_seq;
+    int pSeq_t_ptr;
+    int pSub0_kan_t_ptr;
+    int pSub0_seq_t_ptr;
+    int field_188;
+    int field_18C;
+    int field_190;
+    int field_194;
+    int pSin_parts_ptr;
+    int pParts_tmd;
+    int pParts_packet;
+    int pM_uint8_t_ptr;
+    int pM_option_tmd;
+    int pM_option_packet;
+    int pM_Kage_work;
+    int pEnemy_ptr;
+    int pEnemy_neck;
+    int pSa_dat;
+    uint8_t Neck_flg;
+    uint8_t Neck_no;
+    int16_t Ground;
+    int16_t Dest_x;
+    int16_t Dest_z;
+    int16_t Down_cnt;
+    uint8_t At_hit_flg;
+    uint8_t field_1CB;
+    int16_t Sce_flg;
+    uint8_t Em_set_flg;
+    uint8_t Model_type;
+    int field_1D0;
+    int field_1D4;
+    int field_1D8;
+    int field_1DC;
+    int field_1E0;
+    int field_1E4;
+    int field_1E8;
+    int field_1EC;
+    int field_1F0;
+    int field_1F4;
+    int field_1F8;
+    int field_1FC;
+    int field_200;
+    void(__cdecl* pTbefore_func)(PlayerEntity*);
+    void(__cdecl* pTafter_func)(PlayerEntity*);
+    int field_20C;
+    int field_210;
+    int16_t Poison_timer;
+    uint8_t Pison_down;
+    uint8_t field_217;
+};
+
 struct SCE_TASK
 {
     uint8_t Routine_0;
@@ -36,7 +179,7 @@ struct SCE_TASK
     int32_t Stack[32];
     uint32_t* pS_SP;
     int32_t Ret_addr[4];
-    int32_t pWork;
+    Entity* pWork;
     int16_t Spd[3];
     int16_t Dspd[3];
     int16_t Aspd[3];
@@ -180,145 +323,6 @@ struct ScdSceBgmTblSet
     uint16_t var_06;
 };
 
-struct PLAYER_WORK
-{
-    int Be_flg;
-    uint8_t Routine_0;
-    uint8_t Routine_1;
-    uint8_t Routine_2;
-    uint8_t Routine_3;
-    uint8_t Id;
-    uint8_t Sc_id;
-    uint8_t At_obj_no;
-    uint8_t At_sce_no;
-    uint8_t Work_no;
-    uint8_t At_em_no;
-    int16_t At_em_flg;
-    int Attribute;
-    int pTmd;
-    int pPacket;
-    int pTmd2;
-    int pPacket2;
-    uint16_t M[3][3];
-    int16_t M_pad;
-    int Pos_x;
-    int Pos_y;
-    int Pos_z;
-    int16_t Old_x;
-    int16_t Old_y;
-    int16_t Old_z;
-    int16_t Old_x2;
-    int16_t Old_y2;
-    int16_t Old_z2;
-    int dummy00;
-    MATRIX Workm;
-    int16_t Cdir_x;
-    int16_t Cdir_y;
-    int16_t Cdir_z;
-    int16_t dummy01;
-    int Poly_rgb;
-    MATRIX* pSuper;
-    int Atd[32];
-    uint8_t Tpage,
-        Clut,
-        nFloor,
-        Parts_num;
-    int pKan_t_ptr;
-    int16_t Water;
-    int16_t Type;
-    int Sca_info;
-    int field_114;
-    int field_118;
-    int field_11C;
-    int field_120;
-    int field_124;
-    int field_128;
-    int field_12C;
-    int field_130;
-    int field_134;
-    int field_138;
-    int field_13C;
-    int field_140;
-    int16_t Spd_x;
-    int16_t Spd_y;
-    int16_t Spd_z;
-    uint8_t In_screen;
-    uint8_t Model_Tex_type;
-    uint8_t Move_no;
-    uint8_t Move_cnt;
-    uint8_t Hokan_flg;
-    uint8_t Mplay_flg;
-    uint8_t Root_ck_cnt;
-    uint8_t D_life_u;
-    uint8_t D_life_c;
-    uint8_t D_life_d;
-    int16_t Status_flg;
-    int16_t Life;
-    int16_t Timer0;
-    int16_t Timer1;
-    int16_t F_pos_x;
-    int16_t F_pos_y;
-    int16_t F_pos_z;
-    int16_t Max_life;
-    int16_t Base_pos_x;
-    int16_t Base_pos_y;
-    int16_t Base_pos_z;
-    uint8_t Timer2;
-    uint8_t Timer3;
-    int pKage_work;
-    int field_170;
-    int field_174;
-    uint32_t* pNow_seq;
-    int pSeq_t_ptr;
-    int pSub0_kan_t_ptr;
-    int pSub0_seq_t_ptr;
-    int field_188;
-    int field_18C;
-    int field_190;
-    int field_194;
-    int pSin_parts_ptr;
-    int pParts_tmd;
-    int pParts_packet;
-    int pM_uint8_t_ptr;
-    int pM_option_tmd;
-    int pM_option_packet;
-    int pM_Kage_work;
-    int pEnemy_ptr;
-    int pEnemy_neck;
-    int pSa_dat;
-    uint8_t Neck_flg;
-    uint8_t Neck_no;
-    int16_t Ground;
-    int16_t Dest_x;
-    int16_t Dest_z;
-    int16_t Down_cnt;
-    uint8_t At_hit_flg;
-    uint8_t field_1CB;
-    int16_t Sce_flg;
-    uint8_t Em_set_flg;
-    uint8_t Model_type;
-    int field_1D0;
-    int field_1D4;
-    int field_1D8;
-    int field_1DC;
-    int field_1E0;
-    int field_1E4;
-    int field_1E8;
-    int field_1EC;
-    int field_1F0;
-    int field_1F4;
-    int field_1F8;
-    int field_1FC;
-    int field_200;
-    void(__cdecl* pTbefore_func)(PLAYER_WORK*);
-    void(__cdecl* pTafter_func)(PLAYER_WORK*);
-    int field_20C;
-    int field_210;
-    int16_t Poison_timer;
-    uint8_t Pison_down;
-    uint8_t field_217;
-};
-
 struct InventoryDef
 {
     ItemType Type;
@@ -365,13 +369,13 @@ struct Unknown988628
     uint16_t var_10C;
 };
 
-struct Unknown689CA8
+struct ObjectEntity : Entity
 {
     uint8_t pad_00[0x78];
     int16_t var_78;
     uint8_t pad_7A[4];
 };
-static_assert(sizeof(Unknown689CA8) == 0x7E);
+static_assert(sizeof(ObjectEntity) == 0x7E);
 
 struct HudInfo
 {
@@ -486,6 +490,17 @@ enum
     HUD_MODE_PICKUP_ITEM,
     HUD_MODE_MAP_1,
     HUD_MODE_MAP_2,
+};
+
+enum
+{
+    WK_NONE,
+    WK_PLAYER,
+    WK_SPLAYER,
+    WK_ENEMY,
+    WK_OBJECT,
+    WK_DOOR,
+    WK_ALL
 };
 
 constexpr uint8_t SAT_4P = (1 << 7);

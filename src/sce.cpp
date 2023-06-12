@@ -1,7 +1,9 @@
+#include "audio.h"
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
 
+using namespace openre::audio;
 using namespace openre::player;
 
 namespace openre::sce
@@ -20,12 +22,13 @@ namespace openre::sce
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
     static uint8_t& _questionState = *((uint8_t*)0x98E542);
+    static ObjectEntity* _objectEntities = (ObjectEntity*)0x98A61C;
 
     static uint8_t& byte_6805B1 = *((uint8_t*)0x6805B1);
     static uint8_t& byte_6805B3 = *((uint8_t*)0x6805B3);
     static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
     static int16_t& _itemBoxAcceleration = *((int16_t*)0x689C98);
-    static Unknown689CA8*& _itemBoxObj = *((Unknown689CA8**)0x689CA8);
+    static ObjectEntity*& _itemBoxObj = *((ObjectEntity**)0x689CA8);
     static uint8_t& gHudMode = *((uint8_t*)0x691F70);
     static uint8_t& byte_691F74 = *((uint8_t*)0x691F74);
     static uint16_t& word_6949F0 = *((uint16_t*)0x6949F0);
@@ -49,7 +52,6 @@ namespace openre::sce
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
     static uint8_t& byte_989EF5 = *((uint8_t*)0x989EF5);
     static uint8_t& byte_989EF6 = *((uint8_t*)0x989EF6);
-    static Unknown689CA8* data_0098A61C = (Unknown689CA8*)0x98A61C;
     static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
     static uint8_t& byte_991F80 = *((uint8_t*)0x991F80);
     static uint32_t& dword_991FC4 = *((uint32_t*)0x991FC4);
@@ -59,6 +61,31 @@ namespace openre::sce
 
     constexpr uint8_t QUESTION_FLAG_ANSWER_NO = 1 << 0;
     constexpr uint8_t QUESTION_FLAG_IS_WAITING = 1 << 7;
+
+    PlayerEntity* GetPlayerEntity()
+    {
+        return *((PlayerEntity**)0x0098A10C);
+    }
+
+    Entity* GetPartnerEntity()
+    {
+        return *((Entity**)0x0098A110);
+    }
+
+    Entity* GetEnemyEntity(int index)
+    {
+        return ((Entity**)0x0098A114)[index];
+    }
+
+    ObjectEntity* GetObjectEntity(int index)
+    {
+        return &_objectEntities[index];
+    }
+
+    Entity* GetDoorEntity(int index)
+    {
+        return *((Entity**)0x0098A110);
+    }
 
     // 0x00503170
     int bitarray_get(uint32_t* bitArray, int index)
@@ -91,14 +118,6 @@ namespace openre::sce
         using sig = void (*)(int, int, int, int);
         auto p = (sig)0x004C89B2;
         p(a0, a1, a2, a3);
-    }
-
-    // 0x004ED950
-    static void snd_se_on(int a0, int a1)
-    {
-        using sig = void (*)(int, int);
-        auto p = (sig)0x004ED950;
-        p(a0, a1);
     }
 
     static int sub_4E95F0()
@@ -158,7 +177,7 @@ namespace openre::sce
             _itemBoxAcceleration = 3;
             snd_se_on(0x2150000, 0);
             _questionState = ITEMBOX_INTERACT_STATE_OPENING;
-            _itemBoxObj = &data_0098A61C[_itemBoxObjIndex];
+            _itemBoxObj = GetObjectEntity(_itemBoxObjIndex);
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_OPENING:
             _itemBoxObj->var_78 -= _itemBoxSpeed;

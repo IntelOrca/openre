@@ -211,9 +211,18 @@ namespace openre::audio
         p(arg0);
     }
 
+    // 0x004ED950
+    void snd_se_on(int a0, int a1)
+    {
+        // using sig = void (*)(int, int);
+        // auto p = (sig)0x004ED950;
+        // p(a0, a1);
+    }
+
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004ECDA0, read_bgm);
         interop::writeJmp(0x004ED920, bgm_set_entry);
+        interop::writeJmp(0x004ED950, snd_se_on);
     }
 }

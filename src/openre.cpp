@@ -265,7 +265,7 @@ static void load_init_table_3()
     load_init_table((void*)0x008BD880, byte_989E7E);
 }
 
-void snd_se_walk(int, int, PLAYER_WORK* pEm)
+void snd_se_walk(int, int, PlayerEntity* pEm)
 {
 }
 
