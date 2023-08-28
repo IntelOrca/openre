@@ -13,13 +13,12 @@ namespace openre::hud
 
     static uint8_t*& dword_53DB74 = *((uint8_t**)0x53DB74);
     static uint32_t& dword_689DF8 = *((uint32_t*)0x689DF8);
-    static uint8_t& byte_691F61 = *((uint8_t*)0x691F61);
+    static uint8_t& _st = *((uint8_t*)0x691F61);
     static uint32_t& dword_691F74 = *((uint32_t*)0x691F74);
     static uint8_t& byte_691F76 = *((uint8_t*)0x691F76);
     static uint16_t& word_692FBE = *((uint16_t*)0x692FBE);
     static uint16_t& word_692FC0 = *((uint16_t*)0x692FC0);
-    static Unknown98A720*& dword_98A720 = *((Unknown98A720**)0x98A720);
-    static uint8_t* byte_8C1880 = (uint8_t*)0x8C1880;
+    static uint8_t* _bgBuffer = (uint8_t*)0x8C1880;
 
     // 0x004C4AD0
     static int hud_screen_fade(int a0)
@@ -98,13 +97,6 @@ namespace openre::hud
         p();
     }
 
-    static void sub_4FBEB0()
-    {
-        using sig = void (*)();
-        auto p = (sig)0x004FBEB0;
-        p();
-    }
-
     static void hud_render_itembox_items()
     {
         using sig = void (*)();
@@ -119,13 +111,13 @@ namespace openre::hud
         {
             gHudInfoPtr = &gHudInfo;
             dword_53DB74 = (uint8_t*)0x009864E0;
-            if (read_file_into_buffer("common\\data\\itembox.tim", byte_8C1880, 4) == 0)
+            if (read_file_into_buffer("common\\data\\itembox.tim", _bgBuffer, 4) == 0)
             {
                 file_error();
                 return;
             }
 
-            sub_43FF40(byte_8C1880, 29, 0);
+            sub_43FF40(_bgBuffer, 29, 0);
             gHudInfoPtr->routine = 1;
             gHudInfoPtr->var_01 = 3;
             gHudInfoPtr->var_25 = 0;
@@ -140,7 +132,7 @@ namespace openre::hud
                 dword_689DF8--;
             }
             sub_4C49C0(512, -6144, 7, 1);
-            sub_508CE0(1);
+            task_sleep(1);
             dword_68A204->var_09 = 1;
         }
         else if (dword_68A204->var_09 == 1)
@@ -154,7 +146,7 @@ namespace openre::hud
             hud_render_selection(dword_53DB74[gHudInfoPtr->var_0C * 4 + 0x8856]);
             if (hud_screen_fade(0) == 0)
             {
-                sub_508CE0(1);
+                task_sleep(1);
             }
             else
             {
@@ -173,7 +165,7 @@ namespace openre::hud
     static void hud_itembox_2()
     {
         byte_691F76 = 1;
-        _itemBoxRender[byte_691F61]();
+        _itemBoxRender[_st]();
         hud_render_itembox_items();
         hud_render_items();
         hud_render_weapon_amount();

@@ -28,18 +28,19 @@ namespace openre
     uint16_t& gCurrentCut = *((uint16_t*)0x98EB18);
     uint16_t& gLastCut = *((uint16_t*)0x98EB1A);
     uint32_t& gErrorCode = *((uint32_t*)0x680580);
-    uint32_t& dword_988624 = *((uint32_t*)0x988624);
+    PlayerEntity& gPlayerEntity = *((PlayerEntity*)0x00989EF0);
+    uint32_t& _memTop = *((uint32_t*)0x988624);
     Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
 
     static uint8_t* _ospBuffer = (uint8_t*)0x698840;
     static char* _rdtPathBuffer = (char*)0x689C20;
     static const char* _stageSymbols = "123456789abcdefg";
 
-    static uint8_t& byte_524EB9 = *((uint8_t*)0x524EB9);
-    static uint8_t& byte_6998C0 = *((uint8_t*)0x6998C0);
-    static Unknown689C60*& dword_689C60 = *((Unknown689C60**)0x689C60);
-    static uint32_t& dword_689F30 = *((uint32_t*)0x689F30);
-    static uint16_t* word_68A220 = (uint16_t*)0x68A220;
+    static uint8_t& _graphicsPtr = *((uint8_t*)0x524EB9);
+    static uint8_t& _ospMaskFlag = *((uint8_t*)0x6998C0);
+    static PlayerEntity*& _em = *((PlayerEntity**)0x689C60);
+    static uint32_t& _taskIndex = *((uint32_t*)0x689F30);
+    static uint16_t* _tasks = (uint16_t*)0x68A220;
     static uint16_t* word_68A222 = (uint16_t*)0x68A222;
     static uint8_t* byte_68A233 = (uint8_t*)0x68A233;
     static uint32_t& dword_98861C = *((uint32_t*)0x98861C);
@@ -49,22 +50,21 @@ namespace openre
     static uint16_t& word_98EB24 = *((uint16_t*)0x98EB24);
     static void*& byte_98861C = *((void**)0x98861C);
     static uint32_t& dword_98862C = *((uint32_t*)0x98862C);
-    static uint32_t& dword_689C10 = *((uint32_t*)0x689C10);
+    static uint32_t& _rdtnCount = *((uint32_t*)0x689C10);
     static uint32_t& dword_989E68 = *((uint32_t*)0x989E68);
     static uint8_t& byte_989E7D = *((uint8_t*)0x989E7D);
     static uint8_t& byte_989EEB = *((uint8_t*)0x989EEB);
-    static Unknown689C60& unk_989EF0 = *((Unknown689C60*)0x00989EF0);
     static void** dword_98A110 = (void**)0x98A110;
-    static uint64_t*& dword_98E51C = *((uint64_t**)0x98E51C);
+    static ObjectEntity*& dword_98E51C = *((ObjectEntity**)0x98E51C);
     static char* dword_98E544 = (char*)0x98E544;
     static uint16_t& word_98E78C = *((uint16_t*)0x98E78C);
     static uint32_t& dword_98E798 = *((uint32_t*)0x98E798);
     static uint16_t& word_989EE8 = *((uint16_t*)0x989EE8);
-    static uint64_t* qword_98A61C = (uint64_t*)0x98A61C;
+    static ObjectEntity* _om = (ObjectEntity*)0x98A61C;
     static uint8_t& byte_99270F = *((uint8_t*)0x99270F);
-    static uint32_t& dword_680570 = *((uint32_t*)0x680570);
-    static uint32_t& dword_67C9F4 = *((uint32_t*)0x67C9F4);
-    static uint32_t& dword_68055C = *((uint32_t*)0x68055C);
+    static uint32_t& _timerCurrent = *((uint32_t*)0x680570);
+    static uint32_t& _timerLast = *((uint32_t*)0x67C9F4);
+    static uint32_t& _timer10 = *((uint32_t*)0x68055C);
     static uint8_t& byte_989E7E = *((uint8_t*)0x989E7E);
 
     // 0x00509C90
@@ -80,7 +80,7 @@ namespace openre
     }
 
     // 0x004EC9C0
-    static void sub_4EC9C0()
+    static void snd_bgm_set()
     {
         using sig = void (*)();
         auto p = (sig)0x004EC9C0;
@@ -104,39 +104,39 @@ namespace openre
     }
 
     // 0x00508CE0
-    void sub_508CE0(int a0)
+    void task_sleep(int frames)
     {
-        auto eax = dword_689F30 * 36;
-        word_68A222[eax / 2] = a0;
-        word_68A220[eax / 2] = 1;
+        auto eax = _taskIndex * 36;
+        word_68A222[eax / 2] = frames;
+        _tasks[eax / 2] = 1;
         byte_68A233[eax] = 1;
     }
 
     // 0x004427E0
-    static void sub_4427E0()
+    static void update_timer()
     {
-        auto eax = timeGetTime();
-        dword_680570 = eax;
-        dword_67C9F4 = eax;
-        dword_68055C = eax * 10;
+        auto time = timeGetTime();
+        _timerCurrent = time;
+        _timerLast = time;
+        _timer10 = time * 10;
     }
 
     // 0x004DD360
     static void read_osp()
     {
-        byte_6998C0 = 1;
+        _ospMaskFlag = 1;
         auto eax = (gCurrentStage * 32) + gCurrentRoom;
         auto edx = (eax * 33) * 128;
         auto bytesRead = read_partial_file_into_buffer("common\\bin\\osp.bin", _ospBuffer, edx, 4224, 4);
         if (bytesRead == 0)
         {
             gErrorCode = bytesRead;
-            byte_6998C0 = 0;
+            _ospMaskFlag = 0;
         }
     }
 
     // 0x004DE7B0
-    void sub_4DE7B0()
+    void room_set()
     {
         while (true)
         {
@@ -145,15 +145,15 @@ namespace openre
             case 0:
             {
                 auto buffer2 = (char*)0x00689C40;
-                if (byte_524EB9 == 0 || byte_524EB9 == 2)
+                if (_graphicsPtr == 0 || _graphicsPtr == 2)
                 {
                     std::strcpy(buffer2, "common\\data\\font1.adt");
                 }
-                else if (byte_524EB9 == 1)
+                else if (_graphicsPtr == 1)
                 {
                     std::strcpy(buffer2, "common\\data\\font1.tim");
                 }
-                dword_689C60 = &unk_989EF0;
+                _em = &gPlayerEntity;
                 get_rdt_path(_rdtPathBuffer, get_player_num(), (dword_98E798 & 0xFF) + gCurrentStage, gCurrentRoom & 0xFF);
 
                 switch (gCurrentStage)
@@ -162,9 +162,9 @@ namespace openre
                     word_98E78C = 0;
                     dword_989E68 = 0;
                     gGameFlags &= 0xFFF04000;
-                    dword_689C60->var_1E4 = 0;
-                    dword_689C60->var_155 &= 0xF9;
-                    dword_988624 = dword_988620;
+                    _em->pOn_om = 0;
+                    _em->Status_flg &= 0xF9FF;
+                    _memTop = dword_988620;
                     dword_98861C = dword_988620;
                     dword_68A204->var_0D = 10;
                     break;
@@ -174,7 +174,7 @@ namespace openre
             case 2:
                 dword_68A204->var_0D = 3;
                 byte_99270F = 0;
-                sub_508CE0(1);
+                task_sleep(1);
                 break;
             case 3:
                 if (gCurrentStage == byte_989E7D)
@@ -197,7 +197,7 @@ namespace openre
                 // loc_4DECB9
                 break;
             case 10:
-                sub_4EC9C0();
+                snd_bgm_set();
                 if (dword_68A204->var_13 == 0)
                 {
                     sub_4450C0();
@@ -207,17 +207,17 @@ namespace openre
                     {
                         dword_98A110[i] = dword_98E544;
                     }
-                    dword_689C10 = 0;
+                    _rdtnCount = 0;
                     word_98A616 = 0;
                     word_98A61A = 0;
                     sub_43DF40();
-                    dword_98E51C = qword_98A61C;
-                    dword_689C10 = 32;
+                    dword_98E51C = _om;
+                    _rdtnCount = 32;
                     for (auto i = 0; i < 32; i++)
                     {
-                        qword_98A61C[i] = 0;
+                        _om->Be_flg = 0;
                     }
-                    if (dword_689C60->var_008 == word_98EB24)
+                    if (_em->Id == word_98EB24)
                     {
                         dword_68A204->var_0D = 2;
                     }
@@ -261,7 +261,7 @@ static void load_init_table_2()
 // 0x00505B20
 static void load_init_table_3()
 {
-    dword_988624 = 0x008FF8A0;
+    _memTop = 0x008FF8A0;
     load_init_table((void*)0x008BD880, byte_989E7E);
 }
 

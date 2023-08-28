@@ -25,7 +25,7 @@ namespace openre::sce
     static ObjectEntity* _objectEntities = (ObjectEntity*)0x98A61C;
 
     static uint8_t& byte_6805B1 = *((uint8_t*)0x6805B1);
-    static uint8_t& byte_6805B3 = *((uint8_t*)0x6805B3);
+    static uint8_t& _censorshipOff = *((uint8_t*)0x6805B3);
     static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
     static int16_t& _itemBoxAcceleration = *((int16_t*)0x689C98);
     static ObjectEntity*& _itemBoxObj = *((ObjectEntity**)0x689CA8);
@@ -41,7 +41,6 @@ namespace openre::sce
     static Unknown6949F8*& dword_9888D0 = *((Unknown6949F8**)0x9888D0);
     static uint32_t& dword_989E6C = *((uint32_t*)0x989E6C);
     static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
-    static uint32_t& dword_98A0D4 = *((uint32_t*)0x98A0D4);
     static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
     static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
     static uint8_t& byte_98E541 = *((uint8_t*)0x98E541);
@@ -50,8 +49,6 @@ namespace openre::sce
     static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
     static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static uint8_t& byte_989EF5 = *((uint8_t*)0x989EF5);
-    static uint8_t& byte_989EF6 = *((uint8_t*)0x989EF6);
     static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
     static uint8_t& byte_991F80 = *((uint8_t*)0x991F80);
     static uint32_t& dword_991FC4 = *((uint32_t*)0x991FC4);
@@ -180,16 +177,16 @@ namespace openre::sce
             _itemBoxObj = GetObjectEntity(_itemBoxObjIndex);
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_OPENING:
-            _itemBoxObj->var_78 -= _itemBoxSpeed;
+            _itemBoxObj->Cdir_z -= _itemBoxSpeed;
             _itemBoxSpeed += _itemBoxAcceleration;
-            if (_itemBoxObj->var_78 < -399)
+            if (_itemBoxObj->Cdir_z < -399)
             {
                 _questionState = ITEMBOX_INTERACT_STATE_OPENED;
                 _itemBoxAcceleration = -_itemBoxAcceleration;
             }
             break;
         case ITEMBOX_INTERACT_STATE_OPENED:
-            _itemBoxObj->var_78 -= _itemBoxSpeed;
+            _itemBoxObj->Cdir_z -= _itemBoxSpeed;
             if (_itemBoxSpeed + _itemBoxAcceleration > 0)
             {
                 _itemBoxSpeed += _itemBoxAcceleration;
@@ -205,7 +202,7 @@ namespace openre::sce
             _itemBoxSpeed++;
             if (_itemBoxSpeed > 4)
             {
-                _itemBoxObj->var_78 = 0;
+                _itemBoxObj->Cdir_z = 0;
                 _questionState = 0;
                 dword_98E794 = nullptr;
             }
@@ -223,7 +220,7 @@ namespace openre::sce
     // 0x004E9460
     static int sce_door(SceAotDoorData* data)
     {
-        if (dword_98A0D4 != 0)
+        if (gPlayerEntity.pOn_om != 0)
             return 0;
 
         if ((gGameFlags & GAME_FLAG_IS_PLAYER_1) && (gGameFlags & GAME_FLAG_HAS_PARTNER) && (dword_98A110[0] & 1) && (dword_98A110[0x21D] & 0x20))
@@ -280,7 +277,7 @@ namespace openre::sce
         gPickupItemName = data->type;
         dword_9888D0 = dword_6949F8;
         gPickupItem = data->type;
-        if ((byte_6805B3 != 0) && (data->type == ITEM_TYPE_INK_RIBBON))
+        if ((_censorshipOff != 0) && (data->type == ITEM_TYPE_INK_RIBBON))
         {
             data->amount = 2;
         }
@@ -315,8 +312,8 @@ namespace openre::sce
         if ((data->action & 1) != 0)
         {
             // Pick up from floor animation
-            byte_989EF5 = 6;
-            byte_989EF6 = 0;
+            gPlayerEntity.Routine_1 = 6;
+            gPlayerEntity.Routine_2 = 0;
         }
         else
         {

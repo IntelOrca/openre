@@ -15,7 +15,7 @@ namespace openre::file
     }
 
     // 0x00509020
-    static HANDLE sub_509020(const char* path, int a1)
+    static HANDLE file_open_handle(const char* path, int a1)
     {
         using sig = HANDLE (*)(const char*, int);
         auto p = (sig)0x00509020;

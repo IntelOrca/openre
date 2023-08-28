@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 using ScdOpcode = uint8_t;
 using AotId = uint8_t;
@@ -13,18 +14,75 @@ using Action = void (*)();
 
 #pragma pack(push, 1)
 
+struct SVECTOR
+{
+    int16_t vx;
+    int16_t vy;
+    int16_t vz;
+    int16_t pad;
+};
+static_assert(sizeof(SVECTOR) == 0x08);
+
 struct MATRIX
 {
     int16_t m[3][3];
     int16_t field_12;
     int t[3];
 };
+static_assert(sizeof(MATRIX) == 0x20);
+
+struct PARTS_W
+{
+    uint32_t Be_flg;
+    uint8_t Attribute;
+    uint8_t field_5;
+    uint8_t field_6;
+    uint8_t field_7;
+    uint32_t pTmd;
+    uint32_t pPacket;
+    uint32_t pTmd2;
+    uint32_t pPacket2;
+    uint16_t M[3][3];
+    uint16_t field_2A;
+    uint32_t Pos_x;
+    uint32_t Pos_y;
+    uint32_t Pos_z;
+    uint16_t Old_x;
+    uint16_t Old_y;
+    uint16_t Old_z;
+    uint16_t Old_x2;
+    uint16_t Old_y2;
+    uint16_t Old_z2;
+    uint16_t dummy00;
+    uint16_t dm00;
+    MATRIX Workm;
+    uint16_t Cdir_x;
+    uint16_t Cdir_y;
+    uint16_t Cdir_z;
+    uint16_t dummy01;
+    uint32_t Poly_rgb;
+    MATRIX* pSuper;
+    uint8_t Parts_no;
+    uint8_t Timer1;
+    uint8_t Timer2;
+    uint8_t Sabun_flg;
+    uint16_t Rot_x;
+    uint16_t Rot_y;
+    uint16_t Rot_z;
+    uint16_t Sabun_cnt0;
+    uint16_t Timer0;
+    uint16_t Timer3;
+    uint32_t* pSa_dat_head;
+    uint16_t Size_x;
+    uint16_t Size_y;
+    uint16_t Size_z;
+    uint16_t dummy03;
+    PARTS_W* pOya_parts;
+    uint16_t Free[10];
+};
+static_assert(sizeof(PARTS_W) == 0xAC);
 
 struct Entity
-{
-};
-
-struct PlayerEntity : Entity
 {
     int Be_flg;
     uint8_t Routine_0;
@@ -70,6 +128,10 @@ struct PlayerEntity : Entity
     int pKan_t_ptr;
     int16_t Water;
     int16_t Type;
+};
+
+struct PlayerEntity : Entity
+{
     int Sca_info;
     int field_114;
     int field_118;
@@ -146,7 +208,7 @@ struct PlayerEntity : Entity
     int field_1D8;
     int field_1DC;
     int field_1E0;
-    int field_1E4;
+    int pOn_om;
     int field_1E8;
     int field_1EC;
     int field_1F0;
@@ -345,16 +407,6 @@ struct Unknown68A204
     uint8_t var_13;
 };
 
-struct Unknown689C60
-{
-    uint8_t pad_000[0x008];
-    uint8_t var_008;
-    uint8_t pad_009[0x155 - 0x008];
-    uint8_t var_155;
-    uint8_t pad_156[0x1E4 - 0x155];
-    uint32_t var_1E4;
-};
-
 struct Unknown6949F8
 {
     uint8_t pad_00[0x0C];
@@ -371,11 +423,20 @@ struct Unknown988628
 
 struct ObjectEntity : Entity
 {
-    uint8_t pad_00[0x78];
-    int16_t var_78;
-    uint8_t pad_7A[4];
+    uint32_t Sca_info;
+    uint32_t pSca_hit_data;
+    int16_t Sca_old_x;
+    int16_t Sca_old_z;
+    MATRIX Super_matrix;
+    SVECTOR Super_vector;
+    uint8_t Push_cnt;
+    uint8_t Free0;
+    uint8_t Free1;
+    uint8_t Free2;
+    uint32_t pSin_parts_ptr;
+    PARTS_W Parts;
 };
-static_assert(sizeof(ObjectEntity) == 0x7E);
+static_assert(sizeof(ObjectEntity) == 0x1F8);
 
 struct HudInfo
 {
@@ -506,6 +567,7 @@ enum
 constexpr uint8_t SAT_4P = (1 << 7);
 
 constexpr uint32_t GAME_FLAG_15 = (1 << 15);
+constexpr uint32_t GAME_FLAG_EASY = (1 << 26);
 constexpr uint32_t GAME_FLAG_HAS_PARTNER = (1 << 28);
 constexpr uint32_t GAME_FLAG_IS_PLAYER_1 = (1 << 31);
 
