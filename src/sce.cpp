@@ -81,7 +81,7 @@ namespace openre::sce
 
     Entity* GetDoorEntity(int index)
     {
-        return *((Entity**)0x0098A110);
+        return ((Entity**)0x0099CEA0)[index];
     }
 
     // 0x00503170
