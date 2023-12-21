@@ -1,7 +1,10 @@
 #include "scd.h"
 #include "audio.h"
+#include "interop.hpp"
+#include "openre.h"
 #include "re2.h"
 #include "sce.h"
+#include <cassert>
 #include <cstring>
 
 using namespace openre::audio;
@@ -12,6 +15,7 @@ namespace openre::scd
     enum
     {
         SCD_NOP = 0x00,
+        SCD_EVT_KILL = 0x05,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -23,11 +27,106 @@ namespace openre::scd
         SCD_ITEM_AOT_SET_4P = 0x69,
     };
 
+    enum
+    {
+        SCD_RESULT_FALSE,
+        SCD_RESULT_NEXT,
+        SCD_RESULT_NEXT_TICK,
+    };
+
+    constexpr uint8_t SCD_STATUS_EMPTY = 0;
+
     using ScdOpcodeImpl = int (*)(SCE_TASK*);
 
     static SceAotBase** gAotTable = (SceAotBase**)0x988850;
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static ScdOpcodeImpl* gScdImplTable = (ScdOpcodeImpl*)0x53AE10;
+    static uint32_t& gRandomBase = *((uint32_t*)0x695E58);
+    static int16_t& word_989EEE = *((int16_t*)0x989EEE);
+    static int16_t& word_98EB26 = *((int16_t*)0x98EB26);
+    static int16_t& word_98EB28 = *((int16_t*)0x98EB28);
+
+    static int get_max_tasks()
+    {
+        return 14;
+    }
+
+    static SCE_TASK* get_task(SceTaskId index)
+    {
+        assert(index < get_max_tasks());
+        return &((SCE_TASK*)0x00694A00)[index];
+    }
+
+    // 0x004E39E0
+    static void scd_init()
+    {
+        auto maxTasks = get_max_tasks();
+        for (auto i = 0; i < maxTasks; i++)
+        {
+            auto task = get_task(i);
+            task->Status = SCD_STATUS_EMPTY;
+            task->Task_level = maxTasks - i - 1;
+            task->Sub_ctr = 0;
+            task->Ifel_ctr[0] = 0xFF;
+            task->Loop_ctr[0] = 0xFF;
+        }
+        gRandomBase = 0x138201C3;
+    }
+
+    // 0x004E3DA0
+    static void sce_work_clr()
+    {
+        interop::call(0x004E3DA0);
+    }
+
+    // 0x004E3F40
+    static void sce_aot_init()
+    {
+        interop::call(0x004E3F40);
+    }
+
+    // 0x004E3DE0
+    static void sce_work_clr_at()
+    {
+        interop::call(0x004E3DE0);
+    }
+
+    static int scd_execute_opcode(SCE_TASK* task, ScdOpcode instruction)
+    {
+        return gScdImplTable[instruction](task);
+    }
+
+    // 0x004E4310
+    static void sce_scheduler_main()
+    {
+        for (auto i = 0; i < 10; i++)
+        {
+            auto task = get_task(i);
+            if (task->Status != SCD_STATUS_EMPTY)
+            {
+                while (true)
+                {
+                    auto opcode = *task->Data;
+                    auto result = scd_execute_opcode(task, opcode);
+                    if (dword_68A204->var_13 != 0)
+                        return;
+                    if (result == SCD_RESULT_NEXT)
+                        continue;
+                    if (result == SCD_RESULT_NEXT_TICK)
+                        break;
+                    auto eax = task->Sub_ctr;
+                    auto cl = task->Ifel_ctr[eax];
+                    if (cl & 0x80)
+                        break;
+                    task->pS_SP--;
+                    task->Data = *task->pS_SP;
+                    task->Ifel_ctr[eax]--;
+                }
+            }
+        }
+        sce_work_clr();
+        sce_work_clr_at();
+    }
 
     static void set_aot_entry(AotId id, SceAotBase* aot)
     {
@@ -43,7 +142,17 @@ namespace openre::scd
     static int scd_nop(SCE_TASK* sce)
     {
         sce->Data++;
-        return 1;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E4490
+    static int scd_evt_kill(SCE_TASK* sce)
+    {
+        sce->Data++;
+        auto taskId = *sce->Data++;
+        auto taskToKill = get_task(taskId);
+        taskToKill->Status = 0;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E51C0
@@ -52,7 +161,7 @@ namespace openre::scd
         auto opcode = reinterpret_cast<ScdAotSet*>(sce->Data);
         set_aot_entry(opcode->Id, &opcode->Aot);
         sce->Data += sizeof(ScdAotSet);
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E5250
@@ -61,7 +170,7 @@ namespace openre::scd
         auto opcode = reinterpret_cast<ScdSceAotDoor*>(sce->Data);
         set_aot_entry(opcode->Id, &opcode->Data.Aot);
         sce->Data += sizeof(ScdSceAotDoor);
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E8290
@@ -73,7 +182,7 @@ namespace openre::scd
         bgm_set_control(arg);
 
         sce->Data += sizeof(ScdSceBgmControl);
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E82E0
@@ -82,7 +191,7 @@ namespace openre::scd
         auto opcode = reinterpret_cast<ScdSceBgmTblSet*>(sce->Data);
         bgm_set_entry((opcode->roomstage << 16) | opcode->var_06 | opcode->var_04);
         sce->Data += sizeof(ScdSceBgmTblSet);
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E5200
@@ -92,7 +201,7 @@ namespace openre::scd
         set_aot_entry(opcode->Id, &opcode->Aot);
         opcode->Aot.Sat |= SAT_4P;
         sce->Data += sizeof(ScdAotSet4p);
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E5E90
@@ -126,7 +235,7 @@ namespace openre::scd
             sce->pWork = GetDoorEntity(wkIndex);
             break;
         }
-        return 1;
+        return SCD_RESULT_NEXT;
     }
 
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
@@ -136,7 +245,11 @@ namespace openre::scd
 
     void scd_init_hooks()
     {
+        interop::writeJmp(0x004E39E0, &scd_init);
+        interop::writeJmp(0x004E4310, &sce_scheduler_main);
+
         set_scd_hook(SCD_NOP, &scd_nop);
+        set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);

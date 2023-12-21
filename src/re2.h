@@ -4,6 +4,7 @@
 #include <cstddef>
 
 using ScdOpcode = uint8_t;
+using SceTaskId = uint8_t;
 using AotId = uint8_t;
 using SceKind = uint8_t;
 using ItemType = uint8_t;
@@ -239,7 +240,7 @@ struct SCE_TASK
     int32_t Lbreak[16];
     int16_t Lcnt[16];
     int32_t Stack[32];
-    uint32_t* pS_SP;
+    uint8_t** pS_SP;
     int32_t Ret_addr[4];
     Entity* pWork;
     int16_t Spd[3];
@@ -470,7 +471,23 @@ struct GameTable
     uint16_t current_room;                // 0x0098EB16
     uint16_t current_cut;                 // 0x0098EB18
     uint16_t last_cut;                    // 0x0098EB1A
-    uint8_t pad_380[0x98ED2C - 0x98EB1C];
+    uint16_t word_98EB1C;                 // 0x0098EB1C
+    uint16_t rng;                         // 0x0098EB1E
+    uint16_t word_98EB20;                 // 0x0098EB20
+    uint16_t word_98EB22;                 // 0x0098EB22
+    uint16_t next_pld;                    // 0x0098EB24
+    uint16_t word_98EB26;                 // 0x0098EB26
+    uint16_t word_98EB28;                 // 0x0098EB28
+    uint16_t word_98EB2A;                 // 0x0098EB2A
+    uint32_t fg_scenario[8];              // 0x0098EB2C
+    uint32_t fg_common[8];                // 0x0098EB4C
+    uint32_t fg_room;                     // 0x0098EB6C
+    uint32_t dword_98EB70;                // 0x0098EB70
+    uint32_t fg_enemy_0[8];               // 0x0098EB74
+    uint32_t fg_enemy_1[8];               // 0x0098EB94
+    uint32_t fg_item[7];                  // 0x0098EBB4
+    uint32_t dword_98EBD0;                // 0x0098EBD0
+    uint8_t pad_380[0x98ED2C - 0x98EBD4];
     uint32_t door_locks[2];               // 0x0098ED2C
     InventorySlot inventory[11];          // 0x0098ED34
     uint8_t pad_005[0x98EF34 - 0x98ED60];
