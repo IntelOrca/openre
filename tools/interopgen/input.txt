@@ -1,0 +1,204 @@
+﻿# struct      name                    size
+# base        name
+# declare     name                    size                    address
+
+typedef     ItemType                u8
+
+struct      InventoryDef
+declare     Type                    ItemType
+declare     Quantity                u8
+declare     Part                    u8
+
+struct      InventorySlot
+base        InventoryDef
+declare     unk_04                  u8
+
+struct      Vec16
+declare     x                       s16
+declare     y                       s16
+declare     z                       s16
+
+struct      Vec32
+declare     x                       s32
+declare     y                       s32
+declare     z                       s32
+
+struct      Mat16
+declare     m                       s16[9]
+declare     field_12                s16
+declare     t                       s32[3]
+
+struct      Entity
+declare     be_flg                  s32
+declare     routine_0               u8
+declare     routine_1               u8
+declare     routine_2               u8
+declare     routine_3               u8
+declare     id                      u8
+declare     sc_id                   u8
+declare     at_obj_no               u8
+declare     at_sce_no               u8
+declare     work_no                 u8
+declare     at_em_no                u8
+declare     at_em_flg               s16
+declare     attribute               s32
+declare     pTmd                    s32
+declare     pPacket                 s32
+declare     pTmd2                   s32
+declare     pPacket2                s32
+declare     m                       u16[9]
+declare     m_pad                   s16
+declare     pos                     Vec32
+declare     old_pos                 Vec16
+declare     old_pos_2               Vec16
+declare     dummy00                 s32
+declare     workm                   Mat16
+declare     cdir                    Vec16
+declare     dummy01                 s16
+declare     poly_rgb                s32
+declare     pSuper                  Mat16*
+declare     atd                     s32[32]
+declare     tpage                   u8
+declare     clut                    u8
+declare     nFloor                  u8
+declare     parts_num               u8
+declare     pKan_t_ptr              s32
+declare     water                   s16
+declare     type                    s16
+
+struct      PlayerEntity
+base        Entity
+declare     Sca_info                s32
+declare     field_114               s32
+declare     field_118               s32
+declare     field_11C               s32
+declare     field_120               s32
+declare     field_124               s32
+declare     field_128               s32
+declare     field_12C               s32
+declare     field_130               s32
+declare     field_134               s32
+declare     field_138               s32
+declare     field_13C               s32
+declare     field_140               s32
+declare     spd                     Vec16
+declare     in_screen               u8
+declare     model_Tex_type          u8
+declare     move_no                 u8
+declare     move_cnt                u8
+declare     hokan_flg               u8
+declare     mplay_flg               u8
+declare     root_ck_cnt             u8
+declare     d_life_u                u8
+declare     d_life_c                u8
+declare     d_life_d                u8
+declare     status_flg              s16
+declare     life                    s16
+declare     timer0                  s16
+declare     timer1                  s16
+declare     f_pos                   Vec16
+declare     max_life                s16
+declare     base_pos                Vec16
+declare     timer2                  u8
+declare     timer3                  u8
+declare     pKage_work              s32
+declare     field_170               s32
+declare     field_174               s32
+declare     pNow_seq                u32*
+declare     pSeq_t_ptr              s32
+declare     pSub0_kan_t_ptr         s32
+declare     pSub0_seq_t_ptr         s32
+declare     field_188               s32
+declare     field_18C               s32
+declare     field_190               s32
+declare     field_194               s32
+declare     pSin_parts_ptr          s32
+declare     pParts_tmd              s32
+declare     pParts_packet           s32
+declare     pM_uint8_t_ptr          s32
+declare     pM_option_tmd           s32
+declare     pM_option_packet        s32
+declare     pM_Kage_work            s32
+declare     pEnemy_ptr              s32
+declare     pEnemy_neck             s32
+declare     pSa_dat                 s32
+declare     neck_flg                u8
+declare     neck_no                 u8
+declare     ground                  s16
+declare     dest_x                  s16
+declare     dest_z                  s16
+declare     down_cnt                s16
+declare     at_hit_flg              u8
+declare     field_1CB               u8
+declare     sce_flg                 s16
+declare     em_set_flg              u8
+declare     model_type              u8
+declare     field_1D0               s32
+declare     field_1D4               s32
+declare     field_1D8               s32
+declare     field_1DC               s32
+declare     field_1E0               s32
+declare     pOn_om                  s32
+declare     field_1E8               s32
+declare     field_1EC               s32
+declare     field_1F0               s32
+declare     field_1F4               s32
+declare     field_1F8               s32
+declare     field_1FC               s32
+declare     field_200               s32
+declare     pTbefore_func           void*
+declare     pTafter_func            void*
+declare     field_20C               s32
+declare     field_210               s32
+declare     poison_timer            s16
+declare     pison_down              u8
+declare     field_217               u8
+
+struct      SceTask
+declare     routine                 u8
+declare     status                  u8
+declare     sub_ctr                 u8
+declare     task_level              u8
+declare     ifel_ctr                u8[4]
+declare     loop_ctr                u8[4]
+declare     loop_if_class           u8[16]
+declare     data                    u8*
+declare     lstack                  s32[16]
+declare     lbreak                  s32[16]
+declare     lcnt                    s16[16]
+declare     stack                   s32[32]
+declare     sp                      u8**
+declare     ret_addr                s32[4]
+declare     work                    Entity*
+declare     spd                     s16[3]
+declare     dspd                    s16[3]
+declare     aspd                    s16[3]
+declare     adspd                   s16[3]
+declare     r_no_bak                s32
+
+struct      GameTable
+declare     inventory_size          u8                      0x0098E9A4
+declare     num_saves               u16                     0x0098E9BC
+declare     bgm_table               u16[142]                0x0098E9C8
+declare     current_stage           u16                     0x0098EB14
+declare     current_room            u16                     0x0098EB16
+declare     current_cut             u16                     0x0098EB18
+declare     last_cut                u16                     0x0098EB1A
+declare     word_98EB1C             u16                     0x0098EB1C
+declare     rng                     u16                     0x0098EB1E
+declare     word_98EB20             u16                     0x0098EB20
+declare     word_98EB22             u16                     0x0098EB22
+declare     next_pld                u16                     0x0098EB24
+declare     word_98EB26             u16                     0x0098EB26
+declare     word_98EB28             u16                     0x0098EB28
+declare     word_98EB2A             u16                     0x0098EB2A
+declare     fg_scenario             u32[8]                  0x0098EB2C
+declare     fg_common               u32[8]                  0x0098EB4C
+declare     fg_room                 u32                     0x0098EB6C
+declare     dword_98EB70            u32                     0x0098EB70
+declare     fg_enemy_0              u32[8]                  0x0098EB74
+declare     fg_enemy_1              u32[8]                  0x0098EB94
+declare     fg_item                 u32[7]                  0x0098EBB4
+declare     dword_98EBD0            u32                     0x0098EBD0
+declare     door_locks              u32[2]                  0x0098ED2C
+declare     inventory               InventorySlot[11]       0x0098ED34
