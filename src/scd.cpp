@@ -15,7 +15,7 @@ namespace openre::scd
     enum
     {
         SCD_NOP = 0x00,
-        SCD_EVT_NEXT = 0X02,
+        SCD_EVT_NEXT = 0x02,
         SCD_EVT_KILL = 0x05,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
