@@ -9,6 +9,7 @@
 #include "scd.h"
 #include "sce.h"
 #include <cassert>
+#include <cstring>
 #include <windows.h>
 
 using namespace openre;
