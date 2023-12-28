@@ -1,5 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
+#include <cstring>
+
 #include "audio.h"
 #include "file.h"
 #include "interop.hpp"

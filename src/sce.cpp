@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "interop.hpp"
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
