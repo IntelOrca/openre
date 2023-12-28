@@ -15,6 +15,7 @@ namespace openre::scd
     enum
     {
         SCD_NOP = 0x00,
+        SCD_EVT_NEXT = 0X02,
         SCD_EVT_KILL = 0x05,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
@@ -238,6 +239,13 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E4420
+    static int scd_evt_next(SCE_TASK* sce)
+    {
+        sce->Data++;
+        return SCD_RESULT_NEXT_TICK;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -249,6 +257,7 @@ namespace openre::scd
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
 
         set_scd_hook(SCD_NOP, &scd_nop);
+        set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
