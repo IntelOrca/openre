@@ -1,0 +1,25 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+          sudo apt update
+          sudo apt install -y g++-mingw-w64
+    - name: Build
+      run: |
+          cmake -B out
+          cmake --build out
+    - name: Package
+      run: |
+          cp out/openre.dll dist
+          cp LICENSE README.md dist
+          chmod 664 dist/openre.dll
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: openre
+        path: dist/**/*
