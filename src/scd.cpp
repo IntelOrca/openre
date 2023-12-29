@@ -5,7 +5,6 @@
 #include "re2.h"
 #include "sce.h"
 #include <cassert>
-#include <cstdio>
 #include <cstring>
 
 using namespace openre::audio;
