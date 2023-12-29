@@ -5,6 +5,7 @@
 #include "re2.h"
 #include "sce.h"
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 
 using namespace openre::audio;
@@ -15,6 +16,7 @@ namespace openre::scd
     enum
     {
         SCD_NOP = 0x00,
+        SCD_EVT_END = 0x01,
         SCD_EVT_NEXT = 0x02,
         SCD_EVT_KILL = 0x05,
         SCD_AOT_SET = 0x2C,
@@ -246,6 +248,25 @@ namespace openre::scd
         return SCD_RESULT_NEXT_TICK;
     }
 
+    // 0x004E43D0
+    static int scd_evt_end(SCE_TASK* sce)
+    {
+        auto eax = sce->Sub_ctr;
+        // loc_4E4407
+        if (eax == 0)
+        {
+            sce->Status = 0;
+            return SCD_RESULT_NEXT_TICK;
+        }
+
+        auto edx = *(&sce->Task_level + eax);
+        auto ecx = eax - 1;
+        sce->Data = reinterpret_cast<uint8_t*>(sce->Ret_addr[ecx]);
+        sce->Sub_ctr = ecx;
+        sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[ecx + (edx + 1)]));
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -258,6 +279,7 @@ namespace openre::scd
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
+        set_scd_hook(SCD_EVT_END, &scd_evt_end);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
