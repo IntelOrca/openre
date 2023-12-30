@@ -166,7 +166,7 @@ namespace openre
                     dword_989E68 = 0;
                     gGameFlags &= 0xFFF04000;
                     _em->pOn_om = 0;
-                    _em->Status_flg &= 0xF9FF;
+                    _em->status_flg &= 0xF9FF;
                     _memTop = dword_988620;
                     dword_98861C = dword_988620;
                     dword_68A204->var_0D = 10;
@@ -218,9 +218,9 @@ namespace openre
                     _rdtnCount = 32;
                     for (auto i = 0; i < 32; i++)
                     {
-                        _om->Be_flg = 0;
+                        _om->be_flg = 0;
                     }
-                    if (_em->Id == word_98EB24)
+                    if (_em->id == word_98EB24)
                     {
                         dword_68A204->var_0D = 2;
                     }

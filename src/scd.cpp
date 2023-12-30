@@ -12,6 +12,12 @@ using namespace openre::sce;
 
 namespace openre::scd
 {
+    using ScdOpcode = uint8_t;
+    using SceTaskId = uint8_t;
+    using AotId = uint8_t;
+    using ItemType = uint8_t;
+    using HudKind = uint8_t;
+
     enum
     {
         SCD_NOP = 0x00,
@@ -42,9 +48,102 @@ namespace openre::scd
         SCD_RESULT_NEXT_TICK,
     };
 
+    enum
+    {
+        WK_NONE,
+        WK_PLAYER,
+        WK_SPLAYER,
+        WK_ENEMY,
+        WK_OBJECT,
+        WK_DOOR,
+        WK_ALL
+    };
+
+    struct SceAot : SceAotBase
+    {
+        int16_t X;
+        int16_t Z;
+        uint16_t W;
+        uint16_t D;
+    };
+
+    struct XZPoint
+    {
+        int16_t X;
+        int16_t Z;
+    };
+
+    struct SceAot4p : SceAotBase
+    {
+        XZPoint Points[4];
+    };
+
+    struct SceAotDoor
+    {
+        SceAot Aot;
+        SceAotDoorData Door;
+    };
+
+    struct ScdAotSet
+    {
+        uint8_t Opcode;
+        uint8_t Id;
+        SceAot Aot;
+        uint8_t Data[6];
+    };
+
+    struct ScdSceAotDoor
+    {
+        uint8_t Opcode;
+        uint8_t Id;
+        SceAotDoor Data;
+    };
+
+    struct ScdAotSet4p
+    {
+        uint8_t Opcode;
+        uint8_t Id;
+        SceAot4p Aot;
+        uint8_t Data[6];
+    };
+
+    struct SceAotItem
+    {
+        SceAot Aot;
+        SceAotItemData Item;
+    };
+
+    struct ScdSceAotItem
+    {
+        uint8_t Opcode;
+        uint8_t Id;
+        SceAotItem Data;
+    };
+
+    struct ScdSceBgmControl
+    {
+        uint8_t Opcode;
+        uint8_t var_01;
+        uint8_t var_02;
+        uint8_t var_03;
+        uint8_t var_04;
+        uint8_t var_05;
+    };
+
+    struct ScdSceBgmTblSet
+    {
+        uint8_t Opcode;
+        uint8_t pad_01;
+        uint16_t roomstage;
+        uint16_t var_04;
+        uint16_t var_06;
+    };
+
     constexpr uint8_t SCD_STATUS_EMPTY = 0;
 
-    using ScdOpcodeImpl = int (*)(SCE_TASK*);
+    constexpr uint8_t SAT_4P = (1 << 7);
+
+    using ScdOpcodeImpl = int (*)(SceTask*);
 
     static SceAotBase** gAotTable = (SceAotBase**)0x988850;
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
@@ -59,10 +158,10 @@ namespace openre::scd
         return 14;
     }
 
-    static SCE_TASK* get_task(SceTaskId index)
+    static SceTask* get_task(SceTaskId index)
     {
         assert(index < get_max_tasks());
-        return &((SCE_TASK*)0x00694A00)[index];
+        return &((SceTask*)0x00694A00)[index];
     }
 
     // 0x004E39E0
@@ -72,11 +171,11 @@ namespace openre::scd
         for (auto i = 0; i < maxTasks; i++)
         {
             auto task = get_task(i);
-            task->Status = SCD_STATUS_EMPTY;
-            task->Task_level = maxTasks - i - 1;
-            task->Sub_ctr = 0;
-            task->Ifel_ctr[0] = 0xFF;
-            task->Loop_ctr[0] = 0xFF;
+            task->status = SCD_STATUS_EMPTY;
+            task->task_level = maxTasks - i - 1;
+            task->sub_ctr = 0;
+            task->ifel_ctr[0] = 0xFF;
+            task->loop_ctr[0] = 0xFF;
         }
         gRandomBase = 0x138201C3;
     }
@@ -99,7 +198,7 @@ namespace openre::scd
         interop::call(0x004E3DE0);
     }
 
-    static int scd_execute_opcode(SCE_TASK* task, ScdOpcode instruction)
+    static int scd_execute_opcode(SceTask* task, ScdOpcode instruction)
     {
         return gScdImplTable[instruction](task);
     }
@@ -110,11 +209,11 @@ namespace openre::scd
         for (auto i = 0; i < 10; i++)
         {
             auto task = get_task(i);
-            if (task->Status != SCD_STATUS_EMPTY)
+            if (task->status != SCD_STATUS_EMPTY)
             {
                 while (true)
                 {
-                    auto opcode = *task->Data;
+                    auto opcode = *task->data;
                     auto result = scd_execute_opcode(task, opcode);
                     if (dword_68A204->var_13 != 0)
                         return;
@@ -122,13 +221,13 @@ namespace openre::scd
                         continue;
                     if (result == SCD_RESULT_NEXT_TICK)
                         break;
-                    auto eax = task->Sub_ctr;
-                    auto cl = task->Ifel_ctr[eax];
+                    auto eax = task->sub_ctr;
+                    auto cl = task->ifel_ctr[eax];
                     if (cl & 0x80)
                         break;
-                    task->pS_SP--;
-                    task->Data = *task->pS_SP;
-                    task->Ifel_ctr[eax]--;
+                    task->sp--;
+                    task->data = *task->sp;
+                    task->ifel_ctr[eax]--;
                 }
             }
         }
@@ -147,109 +246,109 @@ namespace openre::scd
     }
 
     // 0x004E43B0
-    static int scd_nop(SCE_TASK* sce)
+    static int scd_nop(SceTask* sce)
     {
-        sce->Data++;
+        sce->data++;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E4490
-    static int scd_evt_kill(SCE_TASK* sce)
+    static int scd_evt_kill(SceTask* sce)
     {
-        sce->Data++;
-        auto taskId = *sce->Data++;
+        sce->data++;
+        auto taskId = *sce->data++;
         auto taskToKill = get_task(taskId);
-        taskToKill->Status = SCD_STATUS_EMPTY;
+        taskToKill->status = SCD_STATUS_EMPTY;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E51C0
-    static int scd_aot_set(SCE_TASK* sce)
+    static int scd_aot_set(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdAotSet*>(sce->Data);
+        auto opcode = reinterpret_cast<ScdAotSet*>(sce->data);
         set_aot_entry(opcode->Id, &opcode->Aot);
-        sce->Data += sizeof(ScdAotSet);
+        sce->data += sizeof(ScdAotSet);
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E5250
-    static int scd_door_aot_se(SCE_TASK* sce)
+    static int scd_door_aot_se(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdSceAotDoor*>(sce->Data);
+        auto opcode = reinterpret_cast<ScdSceAotDoor*>(sce->data);
         set_aot_entry(opcode->Id, &opcode->Data.Aot);
-        sce->Data += sizeof(ScdSceAotDoor);
+        sce->data += sizeof(ScdSceAotDoor);
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E8290
-    static int scd_sce_bgm_control(SCE_TASK* sce)
+    static int scd_sce_bgm_control(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdSceBgmControl*>(sce->Data);
+        auto opcode = reinterpret_cast<ScdSceBgmControl*>(sce->data);
 
         auto arg = (opcode->var_05) | (opcode->var_04 << 8) | (opcode->var_03 << 16) | (opcode->var_02 << 24) | (opcode->var_01 << 28);
         bgm_set_control(arg);
 
-        sce->Data += sizeof(ScdSceBgmControl);
+        sce->data += sizeof(ScdSceBgmControl);
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E82E0
-    static int scd_sce_bgmtbl_set(SCE_TASK* sce)
+    static int scd_sce_bgmtbl_set(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdSceBgmTblSet*>(sce->Data);
+        auto opcode = reinterpret_cast<ScdSceBgmTblSet*>(sce->data);
         bgm_set_entry((opcode->roomstage << 16) | opcode->var_06 | opcode->var_04);
-        sce->Data += sizeof(ScdSceBgmTblSet);
+        sce->data += sizeof(ScdSceBgmTblSet);
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E5200
-    static int scd_aot_set_4p(SCE_TASK* sce)
+    static int scd_aot_set_4p(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdAotSet4p*>(sce->Data);
+        auto opcode = reinterpret_cast<ScdAotSet4p*>(sce->data);
         set_aot_entry(opcode->Id, &opcode->Aot);
         opcode->Aot.Sat |= SAT_4P;
-        sce->Data += sizeof(ScdAotSet4p);
+        sce->data += sizeof(ScdAotSet4p);
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E5E90
-    static int scd_work_set(SCE_TASK* sce)
+    static int scd_work_set(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdAotSet4p*>(sce->Data);
-        auto wkKind = sce->Data[1];
-        auto wkIndex = sce->Data[2];
+        auto opcode = reinterpret_cast<ScdAotSet4p*>(sce->data);
+        auto wkKind = sce->data[1];
+        auto wkIndex = sce->data[2];
 
-        std::memset(sce->Spd, 0, sizeof(sce->Spd));
-        std::memset(sce->Dspd, 0, sizeof(sce->Dspd));
-        std::memset(sce->Aspd, 0, sizeof(sce->Aspd));
-        std::memset(sce->Adspd, 0, sizeof(sce->Adspd));
+        std::memset(sce->spd, 0, sizeof(sce->spd));
+        std::memset(sce->dspd, 0, sizeof(sce->dspd));
+        std::memset(sce->aspd, 0, sizeof(sce->aspd));
+        std::memset(sce->adspd, 0, sizeof(sce->adspd));
 
-        sce->Data += 3;
+        sce->data += 3;
         switch (wkKind)
         {
         case WK_PLAYER:
-            sce->pWork = GetPlayerEntity();
+            sce->work = GetPlayerEntity();
             break;
         case WK_SPLAYER:
-            sce->pWork = GetPartnerEntity();
+            sce->work = GetPartnerEntity();
             break;
         case WK_ENEMY:
-            sce->pWork = GetEnemyEntity(wkIndex);
+            sce->work = GetEnemyEntity(wkIndex);
             break;
         case WK_OBJECT:
-            sce->pWork = GetObjectEntity(wkIndex);
+            sce->work = GetObjectEntity(wkIndex);
             break;
         case WK_DOOR:
-            sce->pWork = GetDoorEntity(wkIndex);
+            sce->work = GetDoorEntity(wkIndex);
             break;
         }
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E4420
-    static int scd_evt_next(SCE_TASK* sce)
+    static int scd_evt_next(SceTask* sce)
     {
-        sce->Data++;
+        sce->data++;
         return SCD_RESULT_NEXT_TICK;
     }
 
@@ -339,7 +438,7 @@ namespace openre::scd
         sce->Data += 2;
         return SCD_RESULT_NEXT;
     }
-    
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;

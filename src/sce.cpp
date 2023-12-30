@@ -1,10 +1,14 @@
+#include "sce.h"
 #include "audio.h"
+#include "hud.h"
 #include "interop.hpp"
+#include "item.h"
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
 
 using namespace openre::audio;
+using namespace openre::hud;
 using namespace openre::player;
 
 namespace openre::sce
@@ -59,6 +63,13 @@ namespace openre::sce
 
     constexpr uint8_t QUESTION_FLAG_ANSWER_NO = 1 << 0;
     constexpr uint8_t QUESTION_FLAG_IS_WAITING = 1 << 7;
+
+    constexpr uint32_t MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE = 0;
+    constexpr uint32_t MESSAGE_KIND_WILL_YOU_USE_USE_INK_RIBBON = 1;
+    constexpr uint32_t MESSAGE_KIND_YOU_USED_KEY_X = 5;
+    constexpr uint32_t MESSAGE_KIND_YOU_UNLOCKED_IT = 10;
+    constexpr uint32_t MESSAGE_KIND_LOCKED_FROM_OTHER_SIDE = 11;
+    constexpr uint32_t MESSAGE_KIND_LEAVE_SHERRY_BEHIND = 8;
 
     PlayerEntity* GetPlayerEntity()
     {
@@ -178,16 +189,16 @@ namespace openre::sce
             _itemBoxObj = GetObjectEntity(_itemBoxObjIndex);
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_OPENING:
-            _itemBoxObj->Cdir_z -= _itemBoxSpeed;
+            _itemBoxObj->cdir.z -= _itemBoxSpeed;
             _itemBoxSpeed += _itemBoxAcceleration;
-            if (_itemBoxObj->Cdir_z < -399)
+            if (_itemBoxObj->cdir.z < -399)
             {
                 _questionState = ITEMBOX_INTERACT_STATE_OPENED;
                 _itemBoxAcceleration = -_itemBoxAcceleration;
             }
             break;
         case ITEMBOX_INTERACT_STATE_OPENED:
-            _itemBoxObj->Cdir_z -= _itemBoxSpeed;
+            _itemBoxObj->cdir.z -= _itemBoxSpeed;
             if (_itemBoxSpeed + _itemBoxAcceleration > 0)
             {
                 _itemBoxSpeed += _itemBoxAcceleration;
@@ -203,7 +214,7 @@ namespace openre::sce
             _itemBoxSpeed++;
             if (_itemBoxSpeed > 4)
             {
-                _itemBoxObj->Cdir_z = 0;
+                _itemBoxObj->cdir.z = 0;
                 _questionState = 0;
                 dword_98E794 = nullptr;
             }
@@ -313,8 +324,8 @@ namespace openre::sce
         if ((data->action & 1) != 0)
         {
             // Pick up from floor animation
-            gPlayerEntity.Routine_1 = 6;
-            gPlayerEntity.Routine_2 = 0;
+            gPlayerEntity.routine_1 = 6;
+            gPlayerEntity.routine_2 = 0;
         }
         else
         {
