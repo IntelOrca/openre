@@ -4,15 +4,21 @@ namespace interopgen
 {
     internal class Program
     {
-        static void Main(string[] args) => new Program().Go(args);
+        static int Main(string[] args) => new Program().Go(args);
 
         private readonly List<InteropStruct> _structs = new List<InteropStruct>();
         private readonly Dictionary<string, string> _typedefs = new Dictionary<string, string>();
         private InteropStruct? _currentStruct;
 
-        public void Go(string[] args)
+        public int Go(string[] args)
         {
-            var inputPath = @"M:\git\interopgen\input.txt";
+            if (args.Length == 0)
+            {
+                Console.Error.WriteLine("usage: <input>");
+                return 1;
+            }
+
+            var inputPath = args[0];
             var input = File.ReadAllLines(inputPath);
             for (int i = 0; i < input.Length; i++)
             {
@@ -24,10 +30,11 @@ namespace interopgen
                 catch
                 {
                     Console.Error.WriteLine($"Failed to process line {i}");
-                    return;
+                    return 2;
                 }
             }
             ProcessStructs();
+            return 0;
         }
 
         private void ProcessLine(string line)
@@ -63,25 +70,25 @@ namespace interopgen
                     _currentStruct!.Base = lineArgs[1];
                     break;
                 case "declare":
-                {
-                    var typeSyntax = lineArgs[2];
-                    var typeName = typeSyntax;
-                    var arrayLen = null as int?;
-                    var lBracket = typeSyntax.IndexOf('[');
-                    if (lBracket != -1)
                     {
-                        var rBracket = typeSyntax.IndexOf("]");
-                        typeName = typeSyntax[..lBracket];
-                        arrayLen = ParseInt(typeSyntax.Substring(lBracket + 1, rBracket - lBracket - 1));
+                        var typeSyntax = lineArgs[2];
+                        var typeName = typeSyntax;
+                        var arrayLen = null as int?;
+                        var lBracket = typeSyntax.IndexOf('[');
+                        if (lBracket != -1)
+                        {
+                            var rBracket = typeSyntax.IndexOf("]");
+                            typeName = typeSyntax[..lBracket];
+                            arrayLen = ParseInt(typeSyntax.Substring(lBracket + 1, rBracket - lBracket - 1));
+                        }
+                        var address = null as int?;
+                        if (lineArgs.Length > 3)
+                        {
+                            address = ParseInt(lineArgs[3]);
+                        }
+                        _currentStruct!.Members.Add(new InteropMember(lineArgs[1], typeName, arrayLen, address));
+                        break;
                     }
-                    var address = null as int?;
-                    if (lineArgs.Length > 3)
-                    {
-                        address = ParseInt(lineArgs[3]);
-                    }
-                    _currentStruct!.Members.Add(new InteropMember(lineArgs[1], typeName, arrayLen, address));
-                    break;
-                }
             }
         }
 
@@ -92,14 +99,23 @@ namespace interopgen
                 ProcessStruct(s);
             }
             var header = GenerateHeader();
+            Console.WriteLine(header);
         }
 
         private string GenerateHeader()
         {
             var sb = new StringBuilder();
+            sb.AppendLine("#pragma once");
+            sb.AppendLine();
+            sb.AppendLine("#include <cstdint>");
+            sb.AppendLine("#include <cstddef>");
+            sb.AppendLine();
+            sb.AppendLine("#pragma pack(push, 1)");
+            sb.AppendLine();
+
             foreach (var kvp in _typedefs)
             {
-                sb.AppendLine($"using {kvp.Key} = {kvp.Value};");
+                sb.AppendLine($"using {kvp.Key} = {GetRealTypeName(kvp.Value)};");
             }
             sb.AppendLine();
             foreach (var s in _structs)
@@ -137,11 +153,18 @@ namespace interopgen
                 sb.AppendLine($"static_assert(sizeof({s.Name}) == 0x{s.Size:X2});");
                 sb.AppendLine();
             }
+
+            sb.AppendLine("#pragma pack(pop)");
             return sb.ToString();
         }
 
         private static string GetRealTypeName(string name)
         {
+            var asterisk = name.IndexOf('*');
+            if (asterisk != -1)
+            {
+                return GetRealTypeName(name.Substring(0, asterisk)) + name.Substring(asterisk);
+            }
             return name switch
             {
                 "void" => "void",
@@ -163,8 +186,8 @@ namespace interopgen
 
         private InteropStruct ExpectProcessedStruct(string name)
         {
-            var s = _structs.First(x => x.Name == name);
-            if (!s.Processed)
+            var s = _structs.FirstOrDefault(x => x.Name == name);
+            if (s == null || !s.Processed)
                 throw new Exception($"{name} not defined beforehand");
             return s;
         }
@@ -232,7 +255,7 @@ namespace interopgen
             }
             if (type.EndsWith("*"))
             {
-                GetSize(type.TrimEnd('*'));
+                // GetSize(type.TrimEnd('*'));
                 return 4;
             }
             return type switch

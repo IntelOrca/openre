@@ -28,6 +28,48 @@ declare     m                       s16[9]
 declare     field_12                s16
 declare     t                       s32[3]
 
+struct      PartsW
+declare     Be_flg                  u32
+declare     Attribute               u8
+declare     field_5                 u8
+declare     field_6                 u8
+declare     field_7                 u8
+declare     pTmd                    u32
+declare     pPacket                 u32
+declare     pTmd2                   u32
+declare     pPacket2                u32
+declare     M                       u16[9]
+declare     field_2A                u16
+declare     pos                     Vec32
+declare     old_x                   Vec16
+declare     old_x2                  Vec16
+declare     dummy00                 u16
+declare     dm00                    u16
+declare     workm                   Mat16
+declare     cdir_x                  u16
+declare     cdir_y                  u16
+declare     cdir_z                  u16
+declare     dummy01                 u16
+declare     poly_rgb                u32
+declare     super                   Mat16
+declare     parts_no                u8
+declare     timer1                  u8
+declare     timer2                  u8
+declare     sabun_flg               u8
+declare     rot_x                   u16
+declare     rot_y                   u16
+declare     rot_z                   u16
+declare     sabun_cnt0              u16
+declare     timer0                  u16
+declare     timer3                  u16
+declare     psa_dat_head            u32*
+declare     size_x                  u16
+declare     size_y                  u16
+declare     size_z                  u16
+declare     dummy03                 u16
+declare     oya_parts               PartsW*
+declare     free                    u16[10]
+
 struct      Entity
 declare     be_flg                  s32
 declare     routine_0               u8
@@ -202,3 +244,37 @@ declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
+
+struct      Unknown68A204
+declare     var_09                  u8                      0x09
+declare     var_0D                  u8                      0x0D
+declare     var_13                  u8                      0x13
+
+struct      Unknown6949F8
+declare     var_0C                  u8                      0x0C
+declare     var_0E                  u8                      0x0E
+
+struct      Unknown988628
+declare     var_10C                 u16                     0x10C
+
+struct      ObjectEntity
+base        Entity
+declare     sca_info                u32
+declare     sca_hit_data            u32
+declare     sca_old_x               s16
+declare     sca_old_z               s16
+declare     super_matrix            Mat16
+declare     super_vector            Vec16
+declare     push_cnt                u8
+declare     free0                   u8
+declare     free1                   u8
+declare     free2                   u8
+declare     sin_parts_ptr           u32
+declare     parts                   PartsW
+
+struct      HudInfo
+declare     routine                 u8
+declare     var_01                  u8
+declare     var_0C                  u8
+declare     var_24                  u8
+declare     var_25                  u8
