@@ -153,7 +153,7 @@ namespace openre::scd
         sce->Data++;
         auto taskId = *sce->Data++;
         auto taskToKill = get_task(taskId);
-        taskToKill->Status = 0;
+        taskToKill->Status = SCD_STATUS_EMPTY;
         return SCD_RESULT_NEXT;
     }
 
@@ -250,19 +250,18 @@ namespace openre::scd
     // 0x004E43D0
     static int scd_evt_end(SCE_TASK* sce)
     {
-        auto eax = sce->Sub_ctr;
-        // loc_4E4407
-        if (eax == 0)
+        auto subroutineDepth = sce->Sub_ctr;
+        if (subroutineDepth == 0)
         {
             sce->Status = SCD_STATUS_EMPTY;
             return SCD_RESULT_NEXT_TICK;
         }
 
-        auto edx = *(&sce->Task_level + eax);
-        auto ecx = eax - 1;
-        sce->Data = reinterpret_cast<uint8_t*>(sce->Ret_addr[ecx]);
-        sce->Sub_ctr = ecx;
-        sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[ecx + (edx + 1)]));
+        auto stackOffset = *(&sce->Task_level + subroutineDepth);
+        auto callerIndex = subroutineDepth - 1;
+        sce->Data = reinterpret_cast<uint8_t*>(sce->Ret_addr[callerIndex]);
+        sce->Sub_ctr = callerIndex;
+        sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[callerIndex + (stackOffset + 1)]));
         return SCD_RESULT_NEXT;
     }
 
