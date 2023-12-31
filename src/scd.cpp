@@ -254,7 +254,7 @@ namespace openre::scd
         // loc_4E4407
         if (eax == 0)
         {
-            sce->Status = 0;
+            sce->Status = SCD_STATUS_EMPTY;
             return SCD_RESULT_NEXT_TICK;
         }
 
