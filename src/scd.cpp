@@ -5,6 +5,7 @@
 #include "re2.h"
 #include "sce.h"
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 
 using namespace openre::audio;
@@ -26,6 +27,9 @@ namespace openre::scd
         SCD_AOT_SET_4P = 0x67,
         SCD_DOOR_AOT_SET_4P = 0x68,
         SCD_ITEM_AOT_SET_4P = 0x69,
+        SCD_HEAL = 0x83,
+        SCD_POISON_CK = 0x86,
+        SCD_POISON_CLR = 0x87,
     };
 
     enum
@@ -246,6 +250,33 @@ namespace openre::scd
         return SCD_RESULT_NEXT_TICK;
     }
 
+    // 0x004E8FB0
+    static int scd_heal(SCE_TASK* sce)
+    {
+        sce->Data++;
+        gPlayerEntity.Life = gPlayerEntity.Max_life;
+        gPoisonTimer = 0;
+        gPoisonStatus = 0;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E90C0
+    static int scd_poison_ck(SCE_TASK* sce)
+    {
+        sce->Data++;
+        return gPoisonStatus != 0 ? SCD_RESULT_NEXT : SCD_RESULT_FALSE;
+    }
+
+    // 0x004E90E0
+    static int scd_poison_clr(SCE_TASK* sce)
+    {
+        sce->Data++;
+        gPoisonTimer = 0;
+        gPoisonStatus = 0;
+        gPlayerEntity.Routine_0 = 1;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -265,5 +296,8 @@ namespace openre::scd
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
+        set_scd_hook(SCD_HEAL, &scd_heal);
+        set_scd_hook(SCD_POISON_CK, &scd_poison_ck);
+        set_scd_hook(SCD_POISON_CLR, &scd_poison_clr);
     }
 }
