@@ -205,8 +205,10 @@ struct PlayerEntity : Entity
     uint8_t Em_set_flg;
     uint8_t Model_type;
     int field_1D0;
-    int field_1D4;
-    int field_1D8;
+    uint16_t Sce_free0;
+    uint16_t Sce_free1;
+    uint16_t Sce_free2;
+    uint16_t Sce_free3;
     int field_1DC;
     int field_1E0;
     int pOn_om;
