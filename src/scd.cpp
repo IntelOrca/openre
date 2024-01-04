@@ -17,6 +17,7 @@ namespace openre::scd
     enum
     {
         SCD_NOP = 0x00,
+        SCD_EVT_END = 0x01,
         SCD_EVT_NEXT = 0x02,
         SCD_EVT_KILL = 0x05,
         SCD_AOT_SET = 0x2C,
@@ -155,7 +156,7 @@ namespace openre::scd
         sce->Data++;
         auto taskId = *sce->Data++;
         auto taskToKill = get_task(taskId);
-        taskToKill->Status = 0;
+        taskToKill->Status = SCD_STATUS_EMPTY;
         return SCD_RESULT_NEXT;
     }
 
@@ -249,6 +250,24 @@ namespace openre::scd
         return SCD_RESULT_NEXT_TICK;
     }
 
+    // 0x004E43D0
+    static int scd_evt_end(SCE_TASK* sce)
+    {
+        auto subroutineDepth = sce->Sub_ctr;
+        if (subroutineDepth == 0)
+        {
+            sce->Status = SCD_STATUS_EMPTY;
+            return SCD_RESULT_NEXT_TICK;
+        }
+
+        auto stackOffset = *(&sce->Task_level + subroutineDepth);
+        auto callerIndex = subroutineDepth - 1;
+        sce->Data = reinterpret_cast<uint8_t*>(sce->Ret_addr[callerIndex]);
+        sce->Sub_ctr = callerIndex;
+        sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[callerIndex + (stackOffset + 1)]));
+        return SCD_RESULT_NEXT;
+    }
+
     // 0x004E72D0
     static int scd_plc_motion(SCE_TASK* sce)
     {
@@ -290,6 +309,7 @@ namespace openre::scd
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
+        set_scd_hook(SCD_EVT_END, &scd_evt_end);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
