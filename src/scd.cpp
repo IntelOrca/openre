@@ -271,26 +271,19 @@ namespace openre::scd
     // 0x004E72D0
     static int scd_plc_motion(SCE_TASK* sce)
     {
-        printf("%s", "scd_plc_motion\n");
         auto group = sce->Data[1];
         auto animation = sce->Data[2];
         auto flags = sce->Data[3];
         auto entity = reinterpret_cast<PlayerEntity*>(sce->pWork);
 
-        printf("%d %s", int(group), "\n");
-        printf("%d %s", int(animation), "\n");
-        printf("%d %s", int(flags), "\n");
-
-        entity->Routine_0 = group | 4;
-        // 14C 332
+        entity->Routine_0 = 4;
+        entity->Routine_1 = group;
+        entity->Routine_2 = 0;
+        entity->Routine_3 = 0;
         entity->Move_no = animation;
-        // 14D 333
         entity->Move_cnt = 0;
-        // 1CC 460
         entity->Sce_flg = flags;
-        // 1D4
         entity->Sce_free0 = 0;
-        // 1D6
         entity->Sce_free1 = 0;
 
         sce->Data += 4;

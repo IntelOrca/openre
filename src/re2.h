@@ -204,12 +204,14 @@ struct PlayerEntity : Entity
     int16_t Sce_flg;
     uint8_t Em_set_flg;
     uint8_t Model_type;
-    int field_1D0;
+    uint16_t Damage_flg;
+    uint8_t Damage_no;
+    uint8_t Damage_cnt;
     uint16_t Sce_free0;
     uint16_t Sce_free1;
     uint16_t Sce_free2;
     uint16_t Sce_free3;
-    int field_1DC;
+    uint16_t Spl_flg;
     int field_1E0;
     int pOn_om;
     int field_1E8;
