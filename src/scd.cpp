@@ -315,6 +315,7 @@ namespace openre::scd
         entity->Sce_free1 = 0;
 
         sce->Data += 4;
+        return SCD_RESULT_NEXT;
     }
 
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
