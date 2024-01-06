@@ -30,6 +30,8 @@ namespace openre
     uint16_t& gLastCut = *((uint16_t*)0x98EB1A);
     uint32_t& gErrorCode = *((uint32_t*)0x680580);
     PlayerEntity& gPlayerEntity = *((PlayerEntity*)0x00989EF0);
+    uint16_t& gPoisonStatus = *((uint16_t*)0x0098A108);
+    uint8_t& gPoisonTimer = *((uint8_t*)0x0098A10A);
     uint32_t& _memTop = *((uint32_t*)0x988624);
     Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
 
