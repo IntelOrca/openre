@@ -386,6 +386,13 @@ struct ScdSceBgmTblSet
     uint16_t var_06;
 };
 
+struct ScdIfelCk
+{
+    uint8_t Opcode;
+    uint8_t var_02;
+    uint16_t blockSize;
+};
+
 struct InventoryDef
 {
     ItemType Type;

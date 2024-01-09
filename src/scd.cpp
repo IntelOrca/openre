@@ -18,6 +18,8 @@ namespace openre::scd
         SCD_EVT_END = 0x01,
         SCD_EVT_NEXT = 0x02,
         SCD_EVT_KILL = 0x05,
+        SCD_IFEL_CK = 0x06,
+        SCD_END_IF = 0x08,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -295,6 +297,36 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E44C0
+    static int scd_ifel_ck(SCE_TASK* sce)
+    {
+        auto opcode = reinterpret_cast<ScdIfelCk*>(sce->Data);
+        auto blockSize = opcode->blockSize;
+        auto ifelCtr = &sce->Ifel_ctr[sce->Sub_ctr];
+        ifelCtr++;
+
+        sce->Data += 4;
+
+        auto sum = static_cast<uint32_t>(*sce->Data) + blockSize;
+        auto spPtr = reinterpret_cast<uint8_t*>(&sce->pS_SP);
+        spPtr[3] = static_cast<uint8_t>(sum);
+        spPtr[2] = static_cast<uint8_t>((sum >> 8) & 0xFF);
+        spPtr[1] = static_cast<uint8_t>((sum >> 16) & 0xFF);
+        spPtr[0] = static_cast<uint8_t>((sum >> 24) & 0xFF);
+
+        sce->pS_SP += 4;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E4550
+    static int scd_end_if(SCE_TASK* sce)
+    {
+        sce->pS_SP -= 4;
+        sce->Ifel_ctr[sce->Sub_ctr]--;
+        sce->Data += 2;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -309,6 +341,8 @@ namespace openre::scd
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
         set_scd_hook(SCD_EVT_END, &scd_evt_end);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
+        set_scd_hook(SCD_IFEL_CK, &scd_ifel_ck);
+        set_scd_hook(SCD_END_IF, &scd_end_if);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
