@@ -302,19 +302,9 @@ namespace openre::scd
     {
         auto opcode = reinterpret_cast<ScdIfelCk*>(sce->Data);
         auto blockSize = opcode->blockSize;
-        auto ifelCtr = &sce->Ifel_ctr[sce->Sub_ctr];
-        ifelCtr++;
-
         sce->Data += 4;
-
-        auto sum = static_cast<uint32_t>(*sce->Data) + blockSize;
-        auto spPtr = reinterpret_cast<uint8_t*>(&sce->pS_SP);
-        spPtr[3] = static_cast<uint8_t>(sum);
-        spPtr[2] = static_cast<uint8_t>((sum >> 8) & 0xFF);
-        spPtr[1] = static_cast<uint8_t>((sum >> 16) & 0xFF);
-        spPtr[0] = static_cast<uint8_t>((sum >> 24) & 0xFF);
-
-        sce->pS_SP += 4;
+        sce->Ifel_ctr[sce->Sub_ctr]++;
+        *sce->pS_SP++ = sce->Data + blockSize;
         return SCD_RESULT_NEXT;
     }
 
