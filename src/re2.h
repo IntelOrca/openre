@@ -212,6 +212,7 @@ struct PlayerEntity : Entity
     uint16_t Sce_free2;
     uint16_t Sce_free3;
     uint16_t Spl_flg;
+    uint16_t Parts0_pos_y;
     int field_1E0;
     int pOn_om;
     int field_1E8;
