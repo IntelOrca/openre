@@ -311,7 +311,7 @@ namespace openre::scd
     // 0x004E4550
     static int scd_end_if(SCE_TASK* sce)
     {
-        sce->pS_SP -= 4;
+        sce->pS_SP--;
         sce->Ifel_ctr[sce->Sub_ctr]--;
         sce->Data += 2;
         return SCD_RESULT_NEXT;
