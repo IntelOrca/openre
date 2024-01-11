@@ -21,6 +21,7 @@ namespace openre::scd
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
+        SCD_PLC_MOTION = 0x3F,
         SCD_ITEM_AOT_SET = 0x4E,
         SCD_SCE_BGM_CONTROL = 0x51,
         SCD_SCE_BGMTBL_SET = 0x57,
@@ -295,6 +296,28 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E72D0
+    static int scd_plc_motion(SCE_TASK* sce)
+    {
+        auto group = sce->Data[1];
+        auto animation = sce->Data[2];
+        auto flags = sce->Data[3];
+        auto entity = reinterpret_cast<PlayerEntity*>(sce->pWork);
+
+        entity->Routine_0 = 4;
+        entity->Routine_1 = group;
+        entity->Routine_2 = 0;
+        entity->Routine_3 = 0;
+        entity->Move_no = animation;
+        entity->Move_cnt = 0;
+        entity->Sce_flg = flags;
+        entity->Sce_free0 = 0;
+        entity->Sce_free1 = 0;
+
+        sce->Data += 4;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -312,6 +335,7 @@ namespace openre::scd
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
+        set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
