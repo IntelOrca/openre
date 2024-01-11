@@ -267,7 +267,7 @@ namespace openre::scd
         sce->Sub_ctr = callerIndex;
         sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[callerIndex + (stackOffset + 1)]));
         return SCD_RESULT_NEXT;
-    } 
+    }
 
     // 0x004E8FB0
     static int scd_heal(SCE_TASK* sce)
