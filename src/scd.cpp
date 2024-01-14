@@ -59,6 +59,13 @@ namespace openre::scd
         WK_ALL
     };
 
+    struct ScdIfelCk
+    {
+        uint8_t Opcode;
+        uint8_t pad_02;
+        uint16_t BlockSize;
+    };
+
     struct SceAot : SceAotBase
     {
         int16_t X;
@@ -353,89 +360,89 @@ namespace openre::scd
     }
 
     // 0x004E43D0
-    static int scd_evt_end(SCE_TASK* sce)
+    static int scd_evt_end(SceTask* sce)
     {
-        auto subroutineDepth = sce->Sub_ctr;
+        auto subroutineDepth = sce->sub_ctr;
         if (subroutineDepth == 0)
         {
-            sce->Status = SCD_STATUS_EMPTY;
+            sce->status = SCD_STATUS_EMPTY;
             return SCD_RESULT_NEXT_TICK;
         }
 
-        auto stackOffset = *(&sce->Task_level + subroutineDepth);
+        auto stackOffset = *(&sce->task_level + subroutineDepth);
         auto callerIndex = subroutineDepth - 1;
-        sce->Data = reinterpret_cast<uint8_t*>(sce->Ret_addr[callerIndex]);
-        sce->Sub_ctr = callerIndex;
-        sce->pS_SP = reinterpret_cast<uint8_t**>(&(sce->Stack[callerIndex + (stackOffset + 1)]));
+        sce->data = reinterpret_cast<uint8_t*>(sce->ret_addr[callerIndex]);
+        sce->sub_ctr = callerIndex;
+        sce->sp = reinterpret_cast<uint8_t**>(&(sce->stack[callerIndex + (stackOffset + 1)]));
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E8FB0
-    static int scd_heal(SCE_TASK* sce)
+    static int scd_heal(SceTask* sce)
     {
-        sce->Data++;
-        gPlayerEntity.Life = gPlayerEntity.Max_life;
+        sce->data++;
+        gPlayerEntity.life = gPlayerEntity.max_life;
         gPoisonTimer = 0;
         gPoisonStatus = 0;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E90C0
-    static int scd_poison_ck(SCE_TASK* sce)
+    static int scd_poison_ck(SceTask* sce)
     {
-        sce->Data++;
+        sce->data++;
         return gPoisonStatus != 0 ? SCD_RESULT_NEXT : SCD_RESULT_FALSE;
     }
 
     // 0x004E90E0
-    static int scd_poison_clr(SCE_TASK* sce)
+    static int scd_poison_clr(SceTask* sce)
     {
-        sce->Data++;
+        sce->data++;
         gPoisonTimer = 0;
         gPoisonStatus = 0;
-        gPlayerEntity.Routine_0 = 1;
+        gPlayerEntity.routine_0 = 1;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E72D0
-    static int scd_plc_motion(SCE_TASK* sce)
+    static int scd_plc_motion(SceTask* sce)
     {
-        auto group = sce->Data[1];
-        auto animation = sce->Data[2];
-        auto flags = sce->Data[3];
-        auto entity = reinterpret_cast<PlayerEntity*>(sce->pWork);
+        auto group = sce->data[1];
+        auto animation = sce->data[2];
+        auto flags = sce->data[3];
+        auto entity = reinterpret_cast<PlayerEntity*>(sce->work);
 
-        entity->Routine_0 = 4;
-        entity->Routine_1 = group;
-        entity->Routine_2 = 0;
-        entity->Routine_3 = 0;
-        entity->Move_no = animation;
-        entity->Move_cnt = 0;
-        entity->Sce_flg = flags;
-        entity->Sce_free0 = 0;
-        entity->Sce_free1 = 0;
+        entity->routine_0 = 4;
+        entity->routine_1 = group;
+        entity->routine_2 = 0;
+        entity->routine_3 = 0;
+        entity->move_no = animation;
+        entity->move_cnt = 0;
+        entity->sce_flg = flags;
+        entity->sce_free0 = 0;
+        entity->sce_free1 = 0;
 
-        sce->Data += 4;
+        sce->data += 4;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E44C0
-    static int scd_ifel_ck(SCE_TASK* sce)
+    static int scd_ifel_ck(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdIfelCk*>(sce->Data);
-        auto blockSize = opcode->blockSize;
-        sce->Data += 4;
-        sce->Ifel_ctr[sce->Sub_ctr]++;
-        *sce->pS_SP++ = sce->Data + blockSize;
+        auto opcode = reinterpret_cast<ScdIfelCk*>(sce->data);
+        auto blockSize = opcode->BlockSize;
+        sce->data += 4;
+        sce->ifel_ctr[sce->sub_ctr]++;
+        *sce->sp++ = sce->data + blockSize;
         return SCD_RESULT_NEXT;
     }
 
     // 0x004E4550
-    static int scd_end_if(SCE_TASK* sce)
+    static int scd_end_if(SceTask* sce)
     {
-        sce->pS_SP--;
-        sce->Ifel_ctr[sce->Sub_ctr]--;
-        sce->Data += 2;
+        sce->sp--;
+        sce->ifel_ctr[sce->sub_ctr]--;
+        sce->data += 2;
         return SCD_RESULT_NEXT;
     }
 
