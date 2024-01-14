@@ -1,4 +1,6 @@
+#include "player.h"
 #include "interop.hpp"
+#include "item.h"
 #include "openre.h"
 #include "re2.h"
 #include "scd.h"
@@ -8,6 +10,11 @@ using namespace openre::sce;
 
 namespace openre::player
 {
+    using PldType = uint8_t;
+
+    constexpr uint8_t INVENTORY_INDEX_SPECIAL = 10;
+    constexpr uint8_t FULL_INVENTORY_SIZE = 11;
+
     extern uint8_t WEAPON_INDEX_NONE = 128;
 
     extern uint8_t UNK_BIT_INVENTORY_SAVED = 127;

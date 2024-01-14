@@ -7,6 +7,8 @@ using namespace openre::file;
 
 namespace openre::hud
 {
+    using Action = void (*)();
+
     static Action* gHudImplTable = (Action*)0x5402C0;
     static HudInfo*& gHudInfoPtr = *((HudInfo**)0x53DB70);
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
