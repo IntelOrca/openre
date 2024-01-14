@@ -22,7 +22,7 @@ using namespace openre::sce;
 
 namespace openre
 {
-    GameTable& gGameTable = *((GameTable*)0x0098E79C);
+    GameTable& gGameTable = *((GameTable*)0x00000000);
     uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
     uint16_t& gCurrentStage = *((uint16_t*)0x98EB14);
     uint16_t& gCurrentRoom = *((uint16_t*)0x98EB16);

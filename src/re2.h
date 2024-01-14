@@ -252,6 +252,7 @@ static_assert(sizeof(SceTask) == 0x174);
 
 struct GameTable
 {
+    uint8_t pad_0000[10021284];         // 0x0000
     uint8_t inventory_size;             // 0x98E9A4
     uint8_t pad_98E9A5[23];             // 0x98E9A5
     uint16_t num_saves;                 // 0x98E9BC
@@ -282,31 +283,34 @@ struct GameTable
     uint32_t door_locks[2];             // 0x98ED2C
     InventorySlot inventory[11];        // 0x98ED34
 };
-static_assert(sizeof(GameTable) == 0x3BC);
+static_assert(sizeof(GameTable) == 0x98ED60);
 
 struct Unknown68A204
 {
+    uint8_t pad_0000[9];                // 0x0000
     uint8_t var_09;                     // 0x0009
     uint8_t pad_000A[3];                // 0x000A
     uint8_t var_0D;                     // 0x000D
     uint8_t pad_000E[5];                // 0x000E
     uint8_t var_13;                     // 0x0013
 };
-static_assert(sizeof(Unknown68A204) == 0x0B);
+static_assert(sizeof(Unknown68A204) == 0x14);
 
 struct Unknown6949F8
 {
+    uint8_t pad_0000[12];               // 0x0000
     uint8_t var_0C;                     // 0x000C
     uint8_t pad_000D[1];                // 0x000D
     uint8_t var_0E;                     // 0x000E
 };
-static_assert(sizeof(Unknown6949F8) == 0x03);
+static_assert(sizeof(Unknown6949F8) == 0x0F);
 
 struct Unknown988628
 {
+    uint8_t pad_0000[268];              // 0x0000
     uint16_t var_10C;                   // 0x010C
 };
-static_assert(sizeof(Unknown988628) == 0x02);
+static_assert(sizeof(Unknown988628) == 0x10E);
 
 struct ObjectEntity : Entity
 {

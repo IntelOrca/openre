@@ -223,17 +223,16 @@ namespace interopgen
                 }
             }
 
-            if (s.Size == null)
-            {
-                s.Size = baseSize + (address - s.Members[0].Address);
-            }
-
             // Add paddings
-            for (var i = 1; i < s.Members.Count; i++)
+            for (var i = 0; i < s.Members.Count; i++)
             {
-                var prev = s.Members[i - 1];
                 var curr = s.Members[i];
-                var padAddress = prev.Address + prev.Size!.Value;
+                var padAddress = baseSize;
+                if (i != 0)
+                {
+                    var prev = s.Members[i - 1];
+                    padAddress = prev.Address!.Value + prev.Size!.Value;
+                }
                 var padLength = curr.Address - padAddress;
                 if (curr.Address > padAddress)
                 {
@@ -241,6 +240,11 @@ namespace interopgen
                     padMember.Size = padLength;
                     s.Members.Insert(i, padMember);
                 }
+            }
+
+            if (s.Size == null)
+            {
+                s.Size = baseSize + (address - s.Members[0].Address);
             }
 
             s.Processed = true;
