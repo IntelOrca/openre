@@ -252,7 +252,9 @@ static_assert(sizeof(SceTask) == 0x174);
 
 struct GameTable
 {
-    uint8_t pad_0000[10021284];         // 0x0000
+    uint8_t pad_0000[10020764];         // 0x0000
+    uint8_t table_start;                // 0x98E79C
+    uint8_t pad_98E79D[519];            // 0x98E79D
     uint8_t inventory_size;             // 0x98E9A4
     uint8_t pad_98E9A5[23];             // 0x98E9A5
     uint16_t num_saves;                 // 0x98E9BC

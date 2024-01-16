@@ -246,7 +246,7 @@ static void load_init_table(void* tempBuffer, uint8_t index)
     }
 
     auto src = &((uint8_t*)tempBuffer)[index * 1944];
-    std::memcpy(&gGameTable, src, 1944);
+    std::memcpy(&gGameTable.table_start, src, 1944);
 }
 
 // 0x004B7860
