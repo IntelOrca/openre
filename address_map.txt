@@ -51,7 +51,7 @@ declare     cdir_y                  u16
 declare     cdir_z                  u16
 declare     dummy01                 u16
 declare     poly_rgb                u32
-declare     super                   Mat16
+declare     super                   u32
 declare     parts_no                u8
 declare     timer1                  u8
 declare     timer2                  u8
@@ -270,6 +270,7 @@ declare     sca_old_x               s16
 declare     sca_old_z               s16
 declare     super_matrix            Mat16
 declare     super_vector            Vec16
+declare     pad_140                 u16
 declare     push_cnt                u8
 declare     free0                   u8
 declare     free1                   u8

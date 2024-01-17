@@ -69,26 +69,26 @@ struct PartsW
     uint16_t cdir_z;                    // 0x006C
     uint16_t dummy01;                   // 0x006E
     uint32_t poly_rgb;                  // 0x0070
-    Mat16 super;                        // 0x0074
-    uint8_t parts_no;                   // 0x0094
-    uint8_t timer1;                     // 0x0095
-    uint8_t timer2;                     // 0x0096
-    uint8_t sabun_flg;                  // 0x0097
-    uint16_t rot_x;                     // 0x0098
-    uint16_t rot_y;                     // 0x009A
-    uint16_t rot_z;                     // 0x009C
-    uint16_t sabun_cnt0;                // 0x009E
-    uint16_t timer0;                    // 0x00A0
-    uint16_t timer3;                    // 0x00A2
-    uint32_t* psa_dat_head;             // 0x00A4
-    uint16_t size_x;                    // 0x00A8
-    uint16_t size_y;                    // 0x00AA
-    uint16_t size_z;                    // 0x00AC
-    uint16_t dummy03;                   // 0x00AE
-    PartsW* oya_parts;                  // 0x00B0
-    uint16_t free[10];                  // 0x00B4
+    uint32_t super;                     // 0x0074
+    uint8_t parts_no;                   // 0x0078
+    uint8_t timer1;                     // 0x0079
+    uint8_t timer2;                     // 0x007A
+    uint8_t sabun_flg;                  // 0x007B
+    uint16_t rot_x;                     // 0x007C
+    uint16_t rot_y;                     // 0x007E
+    uint16_t rot_z;                     // 0x0080
+    uint16_t sabun_cnt0;                // 0x0082
+    uint16_t timer0;                    // 0x0084
+    uint16_t timer3;                    // 0x0086
+    uint32_t* psa_dat_head;             // 0x0088
+    uint16_t size_x;                    // 0x008C
+    uint16_t size_y;                    // 0x008E
+    uint16_t size_z;                    // 0x0090
+    uint16_t dummy03;                   // 0x0092
+    PartsW* oya_parts;                  // 0x0094
+    uint16_t free[10];                  // 0x0098
 };
-static_assert(sizeof(PartsW) == 0xC8);
+static_assert(sizeof(PartsW) == 0xAC);
 
 struct Entity
 {
@@ -322,14 +322,15 @@ struct ObjectEntity : Entity
     int16_t sca_old_z;                  // 0x011A
     Mat16 super_matrix;                 // 0x011C
     Vec16 super_vector;                 // 0x013C
-    uint8_t push_cnt;                   // 0x0142
-    uint8_t free0;                      // 0x0143
-    uint8_t free1;                      // 0x0144
-    uint8_t free2;                      // 0x0145
-    uint32_t sin_parts_ptr;             // 0x0146
-    PartsW parts;                       // 0x014A
+    uint16_t pad_140;                   // 0x0142
+    uint8_t push_cnt;                   // 0x0144
+    uint8_t free0;                      // 0x0145
+    uint8_t free1;                      // 0x0146
+    uint8_t free2;                      // 0x0147
+    uint32_t sin_parts_ptr;             // 0x0148
+    PartsW parts;                       // 0x014C
 };
-static_assert(sizeof(ObjectEntity) == 0x212);
+static_assert(sizeof(ObjectEntity) == 0x1F8);
 
 struct HudInfo
 {
