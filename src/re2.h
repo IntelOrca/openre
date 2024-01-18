@@ -252,7 +252,13 @@ static_assert(sizeof(SceTask) == 0x174);
 
 struct GameTable
 {
-    uint8_t pad_0000[10020764];         // 0x0000
+    uint8_t pad_0000[6905432];          // 0x0000
+    uint32_t random_base;               // 0x695E58
+    uint8_t pad_695E5C[3090932];        // 0x695E5C
+    void* aot_table[32];                // 0x988850
+    uint8_t pad_9888D0[23640];          // 0x9888D0
+    uint8_t aot_count;                  // 0x98E528
+    uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C
     uint8_t pad_98E79D[519];            // 0x98E79D
     uint8_t inventory_size;             // 0x98E9A4

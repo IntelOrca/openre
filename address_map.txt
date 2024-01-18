@@ -223,6 +223,9 @@ declare     adspd                   s16[3]
 declare     r_no_bak                s32
 
 struct      GameTable
+declare     random_base             u32                     0x00695E58
+declare     aot_table               void*[32]               0x00988850
+declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
 declare     num_saves               u16                     0x0098E9BC

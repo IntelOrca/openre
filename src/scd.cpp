@@ -152,13 +152,7 @@ namespace openre::scd
 
     using ScdOpcodeImpl = int (*)(SceTask*);
 
-    static SceAotBase** gAotTable = (SceAotBase**)0x988850;
-    static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static ScdOpcodeImpl* gScdImplTable = (ScdOpcodeImpl*)0x53AE10;
-    static uint32_t& gRandomBase = *((uint32_t*)0x695E58);
-    static int16_t& word_989EEE = *((int16_t*)0x989EEE);
-    static int16_t& word_98EB26 = *((int16_t*)0x98EB26);
-    static int16_t& word_98EB28 = *((int16_t*)0x98EB28);
 
     static int get_max_tasks()
     {
@@ -184,7 +178,7 @@ namespace openre::scd
             task->ifel_ctr[0] = 0xFF;
             task->loop_ctr[0] = 0xFF;
         }
-        gRandomBase = 0x138201C3;
+        gGameTable.random_base = 0x138201C3;
     }
 
     // 0x004E3DA0
@@ -244,10 +238,10 @@ namespace openre::scd
 
     static void set_aot_entry(AotId id, SceAotBase* aot)
     {
-        auto& entry = gAotTable[id];
+        auto& entry = gGameTable.aot_table[id];
         if (entry == nullptr)
         {
-            gAotCount++;
+            gGameTable.aot_count++;
         }
         entry = aot;
     }
