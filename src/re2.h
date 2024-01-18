@@ -250,13 +250,57 @@ struct SceTask
 };
 static_assert(sizeof(SceTask) == 0x174);
 
+struct BgmTableEntry
+{
+    uint8_t main;                       // 0x0000
+    uint8_t sub0;                       // 0x0001
+    uint8_t sub1;                       // 0x0002
+};
+static_assert(sizeof(BgmTableEntry) == 0x03);
+
 struct GameTable
 {
-    uint8_t pad_0000[6905432];          // 0x0000
+    uint8_t pad_0000[5394102];          // 0x0000
+    bool enable_dsound;                 // 0x524EB6
+    uint8_t pad_524EB7[96033];          // 0x524EB7
+    BgmTableEntry byte_53C5D8[146];     // 0x53C5D8
+    uint8_t pad_53C78E[1];              // 0x53C78E
+    uint8_t byte_53C78F[70];            // 0x53C78F
+    uint8_t pad_53C7D5[1402912];        // 0x53C7D5
+    uint8_t vab_id[16];                 // 0x692FF5
+    uint8_t pad_693005[1199];           // 0x693005
+    uint8_t* dword_6934B4;              // 0x6934B4
+    uint8_t pad_6934B8[40];             // 0x6934B8
+    char ss_name_bgm[260];              // 0x6934E0
+    uint8_t pad_6935E4[540];            // 0x6935E4
+    int8_t seq_ctr[3];                  // 0x693800
+    uint8_t pad_693803[1];              // 0x693803
+    uint32_t dword_693804;              // 0x693804
+    uint8_t byte_693808;                // 0x693808
+    uint8_t pad_693809[1];              // 0x693809
+    int8_t byte_69380A;                 // 0x69380A
+    uint8_t pad_69380B[5];              // 0x69380B
+    uint8_t byte_693810;                // 0x693810
+    uint8_t pad_693811[1];              // 0x693811
+    uint8_t byte_693812;                // 0x693812
+    uint8_t pad_693813[1081];           // 0x693813
+    uint32_t dword_693C4C;              // 0x693C4C
+    uint8_t pad_693C50[564];            // 0x693C50
+    uint8_t* current_bgm_address;       // 0x693E84
+    uint8_t pad_693E88[24];             // 0x693E88
+    char ss_name_sbgm[260];             // 0x693EA0
+    uint8_t byte_693FA4;                // 0x693FA4
+    uint8_t pad_693FA5[7859];           // 0x693FA5
     uint32_t random_base;               // 0x695E58
-    uint8_t pad_695E5C[3090932];        // 0x695E5C
+    uint8_t pad_695E5C[267440];         // 0x695E5C
+    uint8_t byte_6D730C[24592];         // 0x6D730C
+    uint8_t pad_6DD31C[2798344];        // 0x6DD31C
+    void* mem_top;                      // 0x988624
+    uint8_t pad_988628[552];            // 0x988628
     void* aot_table[32];                // 0x988850
-    uint8_t pad_9888D0[23640];          // 0x9888D0
+    uint8_t pad_9888D0[5532];           // 0x9888D0
+    uint32_t dword_989E6C;              // 0x989E6C
+    uint8_t pad_989E70[18104];          // 0x989E70
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C

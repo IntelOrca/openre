@@ -167,6 +167,8 @@ namespace interopgen
             }
             return name switch
             {
+                "bool" => "bool",
+                "char" => "char",
                 "void" => "void",
                 "s8" => "int8_t",
                 "u8" => "uint8_t",
@@ -265,6 +267,8 @@ namespace interopgen
             return type switch
             {
                 "void" => 0,
+                "bool" => 1,
+                "char" => 1,
                 "u8" or "s8" => 1,
                 "u16" or "s16" => 2,
                 "u32" or "s32" => 4,

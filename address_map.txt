@@ -222,9 +222,33 @@ declare     aspd                    s16[3]
 declare     adspd                   s16[3]
 declare     r_no_bak                s32
 
+struct      BgmTableEntry
+declare     main                    u8
+declare     sub0                    u8
+declare     sub1                    u8
+
 struct      GameTable
+declare     enable_dsound           bool                    0x00524EB6
+declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
+declare     byte_53C78F             u8[70]                  0x0053C78F
+declare     vab_id                  u8[16]                  0x00692FF5
+declare     dword_6934B4            u8*                     0x006934B4
+declare     ss_name_bgm             char[260]               0x006934E0
+declare     seq_ctr                 s8[3]                   0x00693800
+declare     dword_693804            u32                     0x00693804
+declare     byte_693808             u8                      0x00693808
+declare     byte_69380A             s8                      0x0069380A
+declare     byte_693810             u8                      0x00693810
+declare     byte_693812             u8                      0x00693812
+declare     dword_693C4C            u32                     0x00693C4C
+declare     current_bgm_address     u8*                     0x00693E84
+declare     ss_name_sbgm            char[260]               0x00693EA0
+declare     byte_693FA4             u8                      0x00693FA4
 declare     random_base             u32                     0x00695E58
+declare     byte_6D730C             u8[24592]               0x006D730C
+declare     mem_top                 void*                   0x00988624
 declare     aot_table               void*[32]               0x00988850
+declare     dword_989E6C            u32                     0x00989E6C
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
