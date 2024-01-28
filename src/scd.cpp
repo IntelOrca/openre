@@ -16,7 +16,6 @@ namespace openre::scd
 {
     using ScdOpcode = uint8_t;
     using SceTaskId = uint8_t;
-    using AotId = uint8_t;
     using ItemType = uint8_t;
     using HudKind = uint8_t;
 
@@ -25,6 +24,7 @@ namespace openre::scd
         SCD_NOP = 0x00,
         SCD_EVT_END = 0x01,
         SCD_EVT_NEXT = 0x02,
+        SCD_EVT_EXEC = 0x04,
         SCD_EVT_KILL = 0x05,
         SCD_IFEL_CK = 0x06,
         SCD_END_IF = 0x08,
@@ -192,48 +192,13 @@ namespace openre::scd
         gGameTable.random_base = 0x138201C3;
     }
 
-    // 0x004E3DA0
-    static void sce_work_clr()
-    {
-        interop::call(0x004E3DA0);
-    }
-
-    // 0x004E3F40
-    static void sce_aot_init()
-    {
-        interop::call(0x004E3F40);
-    }
-
-    // 0x004E3DE0
-    static void sce_work_clr_at()
-    {
-        interop::call(0x004E3DE0);
-    }
-
     static int scd_execute_opcode(SceTask* task, ScdOpcode instruction)
     {
         return gScdImplTable[instruction](task);
     }
 
-    // 0x004E3BD0
-    static void sce_rnd_set()
-    {
-        if ((gGameTable.fg_system & 0x1000000) != 0)
-        {
-            gGameTable.rng = rnd();
-        }
-        else
-        {
-            auto rb0 = gGameTable.random_base;
-            auto rb1 = rb0 * 2;
-            auto rbN = (((rb1 >> 16) + rb0) ^ rb1) & 0xFFFF;
-            gGameTable.random_base = rbN ^ rb1;
-            gGameTable.rng = gGameTable.random_base & 0xFFFF;
-        }
-    }
-
     // 0x004E4310
-    static void sce_scheduler_main()
+    void sce_scheduler_main()
     {
         for (auto i = 0; i < 10; i++)
         {
@@ -275,35 +240,53 @@ namespace openre::scd
         task->data = get_scd_event(evt);
     }
 
+    static SceTask* get_empty_task(int min, int max)
+    {
+        for (auto i = min; i < max; i++)
+        {
+            auto task = get_task(i);
+            if (task->status == SCD_STATUS_EMPTY)
+            {
+                return task;
+            }
+        }
+        return nullptr;
+    }
+
     // 0x004E3FA0
-    static void event_exec(int task, int evt)
+    void scd_event_exec(int taskIndex, int evt)
     {
-        using sig = void (*)(int, int);
-        auto p = (sig)0x004E3FA0;
-        p(task, evt);
-    }
-
-    // 0x004E42D0
-    static void sce_scheduler()
-    {
-        if ((gGameTable.fg_stop & 0x2000000) == 0)
+#if MORE_SCD_EVENTS
+        auto min = 32;
+        auto max = 100;
+        auto cap = 10;
+        if (gGameTable.sce_type != SCE_TYPE_MAIN)
         {
-            sce_rnd_set();
-            gGameTable.sce_type = 0;
-            gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
-            event_exec(0, 1);
-            sce_scheduler_main();
+            min = 100;
+            max = 140;
+            cap = 14;
+            if (taskIndex < cap)
+                taskIndex = 100 + taskIndex;
         }
-    }
-
-    static void set_aot_entry(AotId id, SceAotBase* aot)
-    {
-        auto& entry = gGameTable.aot_table[id];
-        if (entry == nullptr)
+#else
+        auto min = 2;
+        auto max = 10;
+        auto cap = 10;
+        if (gGameTable.sce_type != SCE_TYPE_MAIN)
         {
-            gGameTable.aot_count++;
+            min = 10;
+            max = 14;
+            cap = 14;
         }
-        entry = aot;
+#endif
+
+        auto task = taskIndex >= cap ? get_empty_task(min, max) : get_task(taskIndex);
+        if (task != nullptr)
+        {
+            task->sub_ctr = 0;
+            memset(task->spd, 0, (size_t)&task->r_no_bak - (size_t)task->spd);
+            event_init(task, evt);
+        }
     }
 
     // 0x004E43B0
@@ -320,6 +303,17 @@ namespace openre::scd
         auto taskId = *sce->data++;
         auto taskToKill = get_task(taskId);
         taskToKill->status = SCD_STATUS_EMPTY;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E4460
+    static int scd_evt_exec(SceTask* sce)
+    {
+        sce->data++;
+        auto taskIndex = *sce->data++;
+        sce->data++;
+        auto eventIndex = *sce->data++;
+        scd_event_exec(taskIndex, eventIndex);
         return SCD_RESULT_NEXT;
     }
 
@@ -516,14 +510,13 @@ namespace openre::scd
     void scd_init_hooks()
     {
         interop::writeJmp(0x004E39E0, &scd_init);
-        interop::writeJmp(0x004E3BD0, &sce_rnd_set);
         interop::writeJmp(0x004E3F60, &event_init);
-        interop::writeJmp(0x004E42D0, &sce_scheduler);
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
         set_scd_hook(SCD_EVT_END, &scd_evt_end);
+        set_scd_hook(SCD_EVT_EXEC, &scd_evt_exec);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_IFEL_CK, &scd_ifel_ck);
         set_scd_hook(SCD_END_IF, &scd_end_if);

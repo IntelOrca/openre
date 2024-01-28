@@ -5,11 +5,15 @@
 #include "item.h"
 #include "openre.h"
 #include "player.h"
+#include "rdt.h"
 #include "re2.h"
+#include "scd.h"
 
 using namespace openre::audio;
 using namespace openre::hud;
 using namespace openre::player;
+using namespace openre::rdt;
+using namespace openre::scd;
 
 namespace openre::sce
 {
@@ -121,6 +125,131 @@ namespace openre::sce
         bitArray[dwordIndex] |= 0x80000000 >> bitIndex;
     }
 
+    // 0x004E3DA0
+    void sce_work_clr()
+    {
+        interop::call(0x004E3DA0);
+    }
+
+    // 0x004E3DE0
+    void sce_work_clr_at()
+    {
+        interop::call(0x004E3DE0);
+    }
+
+    // 0x004E3E50
+    void sce_work_clr_set()
+    {
+        interop::call(0x004E3E50);
+    }
+
+    // 0x004E3F40
+    static void sce_aot_init()
+    {
+        interop::call(0x004E3F40);
+    }
+
+    // 0x004E3AE0
+    static void sce_se_set()
+    {
+        interop::call(0x004E3AE0);
+    }
+
+    // 0x004E4180
+    static void sce_col_chg_init()
+    {
+        interop::call(0x004E4180);
+    }
+
+    // 0x004E41C0
+    static void sce_mirror_init()
+    {
+        interop::call(0x004E41C0);
+    }
+
+    // 0x004E4250
+    static void sce_kirakira_set()
+    {
+        interop::call(0x004E4250);
+    }
+
+    // 0x004E4040
+    static int sce_get_map_flg(int stage, int room)
+    {
+        return (int)interop::call(0x004E4040);
+    }
+
+    // 0x004E3BD0
+    void sce_rnd_set()
+    {
+        if ((gGameTable.fg_system & 0x1000000) != 0)
+        {
+            gGameTable.rng = rnd();
+        }
+        else
+        {
+            auto rb0 = gGameTable.random_base;
+            auto rb1 = rb0 * 2;
+            auto rbN = (((rb1 >> 16) + rb0) ^ rb1) & 0xFFFF;
+            gGameTable.random_base = rbN ^ rb1;
+            gGameTable.rng = gGameTable.random_base & 0xFFFF;
+        }
+    }
+
+    // 0x004E40D0
+    static void sce_scheduler_set()
+    {
+        if (gGameTable.fg_system & 0x1000000)
+        {
+            auto mapFlag = sce_get_map_flg(gGameTable.current_stage, gGameTable.current_room);
+            if (bitarray_get(gGameTable.fg_map, mapFlag))
+                bitarray_clr(gGameTable.fg_common, 255);
+            else
+                bitarray_set(gGameTable.fg_common, 255);
+        }
+        sce_rnd_set();
+        sce_work_clr();
+        sce_work_clr_set();
+
+        // Begin init scd procedure
+        gGameTable.sce_type = SCE_TYPE_MAIN;
+        gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_INIT);
+        scd_event_exec(TASK_ID_RESERVED_0, EVT_MAIN);
+
+        // Begin main scd procedure
+        gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
+        scd_event_exec(TASK_ID_RESERVED_1, EVT_MAIN);
+
+        sce_scheduler_main();
+        sce_se_set();
+        sce_col_chg_init();
+        sce_mirror_init();
+        sce_kirakira_set();
+    }
+
+    // 0x004E42D0
+    static void sce_scheduler()
+    {
+        if ((gGameTable.fg_stop & 0x2000000) == 0)
+        {
+            sce_rnd_set();
+            gGameTable.sce_type = SCE_TYPE_MAIN;
+            gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
+            scd_event_exec(TASK_ID_RESERVED_0, EVT_FRAME);
+            sce_scheduler_main();
+        }
+    }
+
+    void set_aot_entry(AotId id, SceAotBase* aot)
+    {
+        auto& entry = gGameTable.aot_table[id];
+        if (entry == nullptr)
+        {
+            gGameTable.aot_count++;
+        }
+        entry = aot;
+    }
+
     // 0x004C89B2
     static void show_message(int a0, int a1, int a2, int a3)
     {
@@ -223,7 +352,7 @@ namespace openre::sce
     }
 
     // 0x004E9440
-    static void sce_auto(void*)
+    static void sce_auto(const void*)
     {
         word_98EAE4 = word_6949F0;
         word_98EAE6 = word_6949F4;
@@ -338,25 +467,34 @@ namespace openre::sce
     }
 
     // 0x004E97C0
-    static void sce_normal(void*)
+    static void sce_normal(const void*)
     {
     }
 
     // 0x004E97D0
-    static void sce_message(SceAotMessageData* data)
+    static void sce_message(const SceAotMessageData* data)
     {
         show_message(0, data->var_02 + 768, data->var_00, data->var_04 << 16);
     }
 
+    // 0x004E9800
+    static void sce_event(const SceAotEventData* data)
+    {
+        if (!(gGameTable.fg_stop & 0x2000000))
+        {
+            scd_event_exec(data->task_index, data->event_index);
+        }
+    }
+
     // 0x004E9880
-    static void sce_water(uint16_t* data)
+    static void sce_water(const uint16_t* data)
     {
         auto unk = dword_988628;
         unk->var_10C = *data;
     }
 
     // 0x004E98F0
-    static void sce_save(void*)
+    static void sce_save(const void*)
     {
         dword_98E794 = &sce_save_callback;
         _questionState = 0;
@@ -366,7 +504,7 @@ namespace openre::sce
     }
 
     // 0x004E99F0
-    static void sce_itembox(void*)
+    static void sce_itembox(const void*)
     {
         _itemBoxObjIndex = dword_6949F8->var_0C;
         byte_691F74 = dword_6949F8->var_0E;
@@ -381,11 +519,16 @@ namespace openre::sce
 
     void sce_init_hooks()
     {
+        interop::writeJmp(0x004E3BD0, &sce_rnd_set);
+        interop::writeJmp(0x004E40D0, &sce_scheduler_set);
+        interop::writeJmp(0x004E42D0, &sce_scheduler);
+        interop::writeJmp(0x004E4310, &sce_scheduler_main);
         set_sce_hook(SCE_AUTO, reinterpret_cast<SceImpl>(&sce_auto));
         set_sce_hook(SCE_DOOR, reinterpret_cast<SceImpl>(&sce_door));
         set_sce_hook(SCE_ITEM, reinterpret_cast<SceImpl>(&sce_item));
         set_sce_hook(SCE_NORMAL, reinterpret_cast<SceImpl>(&sce_normal));
         set_sce_hook(SCE_MESSAGE, reinterpret_cast<SceImpl>(&sce_message));
+        set_sce_hook(SCE_EVENT, reinterpret_cast<SceImpl>(&sce_event));
         set_sce_hook(SCE_WATER, reinterpret_cast<SceImpl>(&sce_water));
         set_sce_hook(SCE_SAVE, reinterpret_cast<SceImpl>(&sce_save));
         set_sce_hook(SCE_ITEMBOX, reinterpret_cast<SceImpl>(&sce_itembox));

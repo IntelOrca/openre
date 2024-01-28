@@ -73,7 +73,15 @@ namespace openre::sce
         uint16_t var_04;
     };
 
+    struct SceAotEventData
+    {
+        uint16_t task_index;
+        uint8_t pad_02;
+        uint8_t event_index;
+    };
+
     using Action = void (*)();
+    using AotId = uint8_t;
     using SceKind = uint8_t;
 
     PlayerEntity* GetPlayerEntity();
@@ -86,4 +94,9 @@ namespace openre::sce
     int bitarray_get(uint32_t* bitArray, int index);
     void bitarray_set(uint32_t* bitArray, int index);
     void bitarray_clr(uint32_t* bitArray, int index);
+    void set_aot_entry(AotId id, SceAotBase* aot);
+    void sce_work_clr();
+    void sce_work_clr_at();
+    void sce_work_clr_set();
+    void sce_rnd_set();
 }

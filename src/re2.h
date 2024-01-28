@@ -362,7 +362,9 @@ struct GameTable
     uint32_t fg_enemy_1[8];             // 0x98EB94
     uint32_t fg_item[7];                // 0x98EBB4
     uint32_t dword_98EBD0;              // 0x98EBD0
-    uint8_t pad_98EBD4[344];            // 0x98EBD4
+    uint8_t pad_98EBD4[48];             // 0x98EBD4
+    uint32_t fg_map[5];                 // 0x98EC04
+    uint8_t pad_98EC18[276];            // 0x98EC18
     uint32_t door_locks[2];             // 0x98ED2C
     InventorySlot inventory[11];        // 0x98ED34
 };

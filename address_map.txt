@@ -295,6 +295,7 @@ declare     fg_enemy_0              u32[8]                  0x0098EB74
 declare     fg_enemy_1              u32[8]                  0x0098EB94
 declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
+declare     fg_map                  u32[5]                  0x0098EC04
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 
