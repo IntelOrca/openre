@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "audio.h"
+#include "door.h"
 #include "file.h"
 #include "hud.h"
 #include "interop.hpp"
@@ -14,6 +15,7 @@
 
 using namespace openre;
 using namespace openre::audio;
+using namespace openre::door;
 using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
@@ -292,6 +294,7 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
 
+    door_init_hooks();
     scd_init_hooks();
     sce_init_hooks();
     player_init_hooks();

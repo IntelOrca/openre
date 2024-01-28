@@ -285,10 +285,18 @@ declare     ccol_old                s16
 declare     ccol_no                 u8
 declare     ctex_old                u8
 
+struct      Unknown68A204
+declare     var_08                  u8                      0x08
+declare     var_09                  u8                      0x09
+declare     var_0D                  u8                      0x0D
+declare     var_13                  u8                      0x13
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
+declare     door_state              u32                     0x006893F4
+declare     ctcb                    Unknown68A204*          0x0068A204
 declare     vab_id                  u8[16]                  0x00692FF5
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
@@ -328,6 +336,9 @@ declare     fg_system               u32                     0x00989E6C
 declare     fg_status               u32                     0x00989ED0
 declare     fg_stop                 u32                     0x00989ED4
 declare     fg_use                  u32                     0x00989ED8
+declare     dword_989EDC            u32                     0x00989EDC
+declare     dword_989EE0            u32                     0x00989EE0
+declare     dword_989EE4            u32                     0x00989EE4
 declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
@@ -339,6 +350,10 @@ declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
 declare     num_saves               u16                     0x0098E9BC
 declare     bgm_table               u16[142]                0x0098E9C8
+declare     scd_variables_00        u16                     0x0098EAE4
+declare     word_98EAE6             u16                     0x0098EAE6
+declare     last_used_item          u16                     0x0098EAE8
+declare     word_98EAEA             u16                     0x0098EAEA
 declare     current_stage           u16                     0x0098EB14
 declare     current_room            u16                     0x0098EB16
 declare     current_cut             u16                     0x0098EB18
@@ -354,7 +369,7 @@ declare     word_98EB2A             u16                     0x0098EB2A
 declare     fg_scenario             u32[8]                  0x0098EB2C
 declare     fg_common               u32[8]                  0x0098EB4C
 declare     fg_room                 u32                     0x0098EB6C
-declare     dword_98EB70            u32                     0x0098EB70
+declare     fg_tick                 u32                     0x0098EB70
 declare     fg_enemy_0              u32[8]                  0x0098EB74
 declare     fg_enemy_1              u32[8]                  0x0098EB94
 declare     fg_item                 u32[7]                  0x0098EBB4
@@ -363,11 +378,6 @@ declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
-
-struct      Unknown68A204
-declare     var_09                  u8                      0x09
-declare     var_0D                  u8                      0x0D
-declare     var_13                  u8                      0x13
 
 struct      Unknown6949F8
 declare     var_0C                  u8                      0x0C

@@ -150,6 +150,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="audio.cpp" />
+    <ClCompile Include="door.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
@@ -162,6 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
+    <ClInclude Include="door.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="item.h" />

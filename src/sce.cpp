@@ -138,7 +138,16 @@ namespace openre::sce
     // 0x004E3DA0
     void sce_work_clr()
     {
-        interop::call(0x004E3DA0);
+        gGameTable.scd_variables_00 = 0xFFFF;
+        gGameTable.word_98EAE6 = 0xFFFF;
+        gGameTable.last_used_item = 0xFFFF;
+        gGameTable.word_98EAEA = -1;
+        gGameTable.fg_tick = 0;
+        gGameTable.fg_use = 0;
+        gGameTable.dword_989EDC = 0;
+        gGameTable.dword_989EE0 = 0;
+        gGameTable.dword_989EE4 = 0;
+        gGameTable.mizu_div_ctr = 0;
     }
 
     // 0x004E3DE0
