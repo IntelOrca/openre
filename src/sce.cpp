@@ -77,17 +77,17 @@ namespace openre::sce
 
     PlayerEntity* GetPlayerEntity()
     {
-        return *((PlayerEntity**)0x0098A10C);
+        return gGameTable.player_work;
     }
 
     Entity* GetPartnerEntity()
     {
-        return *((Entity**)0x0098A110);
+        return gGameTable.splayer_work;
     }
 
     Entity* GetEnemyEntity(int index)
     {
-        return ((Entity**)0x0098A114)[index];
+        return gGameTable.enemies[index];
     }
 
     ObjectEntity* GetObjectEntity(int index)
@@ -125,6 +125,16 @@ namespace openre::sce
         bitArray[dwordIndex] |= 0x80000000 >> bitIndex;
     }
 
+    // 0x004E3F40
+    static void sce_aot_init()
+    {
+        for (auto i = 0; i < 32; i++)
+        {
+            set_aot_entry(i, nullptr);
+        }
+        gGameTable.aot_count = 0;
+    }
+
     // 0x004E3DA0
     void sce_work_clr()
     {
@@ -140,13 +150,29 @@ namespace openre::sce
     // 0x004E3E50
     void sce_work_clr_set()
     {
-        interop::call(0x004E3E50);
-    }
-
-    // 0x004E3F40
-    static void sce_aot_init()
-    {
-        interop::call(0x004E3F40);
+        scd_init_tasks();
+        sce_aot_init();
+        gGameTable.fg_status &= ~0x0C00;
+        gGameTable.cc_work.ctex_old = 0xFF;
+        gGameTable.c_id = 0xFF;
+        gGameTable.c_model_type = 0xFF;
+        gGameTable.c_kind = 0xFF;
+        gGameTable.byte_695E72 = 0xFF;
+        gGameTable.fg_room = 0;
+        gGameTable.fg_room_enemy = 0;
+        gGameTable.word_989EEE = 0;
+        gGameTable.word_98EB26 = 0xFFFF;
+        gGameTable.word_98EB28 = 0xFFFF;
+        std::memset(gGameTable.pri_be_flg, 0xFF, sizeof(gGameTable.pri_be_flg));
+        gGameTable.mizu_div_max = 0;
+        gGameTable.mizu_div_ctr = 0;
+        gGameTable.rbj_reset_flg = 0;
+        gGameTable.cc_work.ccol_no = 0;
+        gGameTable.se_tmp0 = 0;
+        gGameTable.c_em = GetEnemyEntity(0);
+        gGameTable.cd_vol_0 = 120;
+        gGameTable.pl.be_flg &= ~0x0400;
+        gGameTable.pl.var_10F &= 0x0F;
     }
 
     // 0x004E3AE0
@@ -176,7 +202,17 @@ namespace openre::sce
     // 0x004E4040
     static int sce_get_map_flg(int stage, int room)
     {
-        return (int)interop::call(0x004E4040);
+        switch (stage)
+        {
+        case 0: return 0 + room;
+        case 1: return 30 + room;
+        case 2: return 58 + room;
+        case 3: return 72 + room;
+        case 4: return 89 + room;
+        case 5: return 99 + room;
+        case 6: return 123 + room;
+        default: return stage + room;
+        }
     }
 
     // 0x004E3BD0
@@ -243,9 +279,13 @@ namespace openre::sce
     void set_aot_entry(AotId id, SceAotBase* aot)
     {
         auto& entry = gGameTable.aot_table[id];
-        if (entry == nullptr)
+        if (entry == nullptr && aot != nullptr)
         {
             gGameTable.aot_count++;
+        }
+        else if (entry != nullptr && aot == nullptr)
+        {
+            gGameTable.aot_count--;
         }
         entry = aot;
     }

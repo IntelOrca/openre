@@ -106,7 +106,8 @@ declare     nFloor                  u8
 declare     parts_num               u8
 declare     pKan_t_ptr              s32
 declare     water                   s16
-declare     type                    s16
+declare     type                    u8
+declare     var_10F                 u8
 
 struct      PlayerEntity
 base        Entity
@@ -200,6 +201,22 @@ declare     poison_timer            s16
 declare     pison_down              u8
 declare     field_217               u8
 
+struct      ObjectEntity
+base        Entity
+declare     sca_info                u32
+declare     sca_hit_data            u32
+declare     sca_old_x               s16
+declare     sca_old_z               s16
+declare     super_matrix            Mat16
+declare     super_vector            Vec16
+declare     pad_140                 u16
+declare     push_cnt                u8
+declare     free0                   u8
+declare     free1                   u8
+declare     free2                   u8
+declare     sin_parts_ptr           u32
+declare     parts                   PartsW
+
 struct      SceTask
 declare     routine                 u8
 declare     status                  u8
@@ -241,6 +258,33 @@ struct      Rdt
 declare     header                  RdtHeader
 declare     offsets                 void*[23]
 
+struct      DrMove
+declare     tag                     u32
+declare     code                    u32[5]
+
+struct      PsxRect
+declare     x                       s16
+declare     y                       s16
+declare     w                       s16
+declare     h                       s16
+
+struct      CCPartsWork
+declare     cc_ctr                  u8
+declare     cc_cnt                  u8
+declare     cc_wait                 u8
+declare     cc_num                  u8
+declare     cc_pos_x                s16
+declare     cc_pos_y                s16
+declare     cc_dr_move              DrMove[2]
+declare     cc_dr_rect              PsxRect[2]
+declare     obj                     ObjectEntity*
+
+struct      CCWork
+declare     cc_parts                CCPartsWork[30]
+declare     ccol_old                s16
+declare     ccol_no                 u8
+declare     ctex_old                u8
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -256,12 +300,26 @@ declare     byte_693810             u8                      0x00693810
 declare     byte_693812             u8                      0x00693812
 declare     dword_693C4C            u32                     0x00693C4C
 declare     current_bgm_address     u8*                     0x00693E84
+declare     cd_vol_0                u32                     0x00693E88
 declare     ss_name_sbgm            char[260]               0x00693EA0
 declare     byte_693FA4             u8                      0x00693FA4
 declare     random_base             u32                     0x00695E58
 declare     scd                     u8*                     0x00695E5C
+declare     c_em                    Entity*                 0x00695E60
+declare     mizu_div                u32                     0x00695E64
 declare     sce_type                u8                      0x00695E68
+declare     cut_old                 u8                      0x00695E69
+declare     c_id                    u8                      0x00695E6A
+declare     c_model_type            u8                      0x00695E6B
+declare     c_kind                  u8                      0x00695E6C
+declare     mizu_div_max            u8                      0x00695E6D
+declare     mizu_div_ctr            u8                      0x00695E6E
+declare     rbj_reset_flg           u8                      0x00695E6F
+declare     se_tmp0                 u8                      0x00695E70
+declare     byte_695E71             u8                      0x00695E71
+declare     byte_695E72             u8                      0x00695E72
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     cc_work                 CCWork                  0x00980B00
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
@@ -270,6 +328,12 @@ declare     fg_system               u32                     0x00989E6C
 declare     fg_status               u32                     0x00989ED0
 declare     fg_stop                 u32                     0x00989ED4
 declare     fg_use                  u32                     0x00989ED8
+declare     fg_room_enemy           u16                     0x00989EEC
+declare     word_989EEE             u16                     0x00989EEE
+declare     pl                      PlayerEntity            0x00989EF0
+declare     player_work             PlayerEntity*           0x0098A10C
+declare     splayer_work            PlayerEntity*           0x0098A110
+declare     enemies                 Entity*[16]             0x0098A114
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
@@ -296,6 +360,7 @@ declare     fg_enemy_1              u32[8]                  0x0098EB94
 declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
 declare     fg_map                  u32[5]                  0x0098EC04
+declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 
@@ -310,22 +375,6 @@ declare     var_0E                  u8                      0x0E
 
 struct      Unknown988628
 declare     var_10C                 u16                     0x10C
-
-struct      ObjectEntity
-base        Entity
-declare     sca_info                u32
-declare     sca_hit_data            u32
-declare     sca_old_x               s16
-declare     sca_old_z               s16
-declare     super_matrix            Mat16
-declare     super_vector            Vec16
-declare     pad_140                 u16
-declare     push_cnt                u8
-declare     free0                   u8
-declare     free1                   u8
-declare     free2                   u8
-declare     sin_parts_ptr           u32
-declare     parts                   PartsW
 
 struct      HudInfo
 declare     routine                 u8

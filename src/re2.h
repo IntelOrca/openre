@@ -127,7 +127,8 @@ struct Entity
     uint8_t parts_num;                  // 0x0107
     int32_t pKan_t_ptr;                 // 0x0108
     int16_t water;                      // 0x010C
-    int16_t type;                       // 0x010E
+    uint8_t type;                       // 0x010E
+    uint8_t var_10F;                    // 0x010F
 };
 static_assert(sizeof(Entity) == 0x110);
 
@@ -225,6 +226,24 @@ struct PlayerEntity : Entity
 };
 static_assert(sizeof(PlayerEntity) == 0x214);
 
+struct ObjectEntity : Entity
+{
+    uint32_t sca_info;                  // 0x0110
+    uint32_t sca_hit_data;              // 0x0114
+    int16_t sca_old_x;                  // 0x0118
+    int16_t sca_old_z;                  // 0x011A
+    Mat16 super_matrix;                 // 0x011C
+    Vec16 super_vector;                 // 0x013C
+    uint16_t pad_140;                   // 0x0142
+    uint8_t push_cnt;                   // 0x0144
+    uint8_t free0;                      // 0x0145
+    uint8_t free1;                      // 0x0146
+    uint8_t free2;                      // 0x0147
+    uint32_t sin_parts_ptr;             // 0x0148
+    PartsW parts;                       // 0x014C
+};
+static_assert(sizeof(ObjectEntity) == 0x1F8);
+
 struct SceTask
 {
     uint8_t routine;                    // 0x0000
@@ -278,6 +297,45 @@ struct Rdt
 };
 static_assert(sizeof(Rdt) == 0x64);
 
+struct DrMove
+{
+    uint32_t tag;                       // 0x0000
+    uint32_t code[5];                   // 0x0004
+};
+static_assert(sizeof(DrMove) == 0x18);
+
+struct PsxRect
+{
+    int16_t x;                          // 0x0000
+    int16_t y;                          // 0x0002
+    int16_t w;                          // 0x0004
+    int16_t h;                          // 0x0006
+};
+static_assert(sizeof(PsxRect) == 0x08);
+
+struct CCPartsWork
+{
+    uint8_t cc_ctr;                     // 0x0000
+    uint8_t cc_cnt;                     // 0x0001
+    uint8_t cc_wait;                    // 0x0002
+    uint8_t cc_num;                     // 0x0003
+    int16_t cc_pos_x;                   // 0x0004
+    int16_t cc_pos_y;                   // 0x0006
+    DrMove cc_dr_move[2];               // 0x0008
+    PsxRect cc_dr_rect[2];              // 0x0038
+    ObjectEntity* obj;                  // 0x0048
+};
+static_assert(sizeof(CCPartsWork) == 0x4C);
+
+struct CCWork
+{
+    CCPartsWork cc_parts[30];           // 0x0000
+    int16_t ccol_old;                   // 0x08E8
+    uint8_t ccol_no;                    // 0x08EA
+    uint8_t ctex_old;                   // 0x08EB
+};
+static_assert(sizeof(CCWork) == 0x8EC);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -307,17 +365,31 @@ struct GameTable
     uint32_t dword_693C4C;              // 0x693C4C
     uint8_t pad_693C50[564];            // 0x693C50
     uint8_t* current_bgm_address;       // 0x693E84
-    uint8_t pad_693E88[24];             // 0x693E88
+    uint32_t cd_vol_0;                  // 0x693E88
+    uint8_t pad_693E8C[20];             // 0x693E8C
     char ss_name_sbgm[260];             // 0x693EA0
     uint8_t byte_693FA4;                // 0x693FA4
     uint8_t pad_693FA5[7859];           // 0x693FA5
     uint32_t random_base;               // 0x695E58
     uint8_t* scd;                       // 0x695E5C
-    uint8_t pad_695E60[8];              // 0x695E60
+    Entity* c_em;                       // 0x695E60
+    uint32_t mizu_div;                  // 0x695E64
     uint8_t sce_type;                   // 0x695E68
-    uint8_t pad_695E69[267427];         // 0x695E69
+    uint8_t cut_old;                    // 0x695E69
+    uint8_t c_id;                       // 0x695E6A
+    uint8_t c_model_type;               // 0x695E6B
+    uint8_t c_kind;                     // 0x695E6C
+    uint8_t mizu_div_max;               // 0x695E6D
+    uint8_t mizu_div_ctr;               // 0x695E6E
+    uint8_t rbj_reset_flg;              // 0x695E6F
+    uint8_t se_tmp0;                    // 0x695E70
+    uint8_t byte_695E71;                // 0x695E71
+    uint8_t byte_695E72;                // 0x695E72
+    uint8_t pad_695E73[267417];         // 0x695E73
     uint8_t byte_6D730C[24592];         // 0x6D730C
-    uint8_t pad_6DD31C[2798324];        // 0x6DD31C
+    uint8_t pad_6DD31C[2766820];        // 0x6DD31C
+    CCWork cc_work;                     // 0x980B00
+    uint8_t pad_9813EC[29220];          // 0x9813EC
     uint32_t dword_988610;              // 0x988610
     uint8_t pad_988614[8];              // 0x988614
     Rdt* rdt;                           // 0x98861C
@@ -331,7 +403,15 @@ struct GameTable
     uint32_t fg_status;                 // 0x989ED0
     uint32_t fg_stop;                   // 0x989ED4
     uint32_t fg_use;                    // 0x989ED8
-    uint8_t pad_989EDC[17996];          // 0x989EDC
+    uint8_t pad_989EDC[16];             // 0x989EDC
+    uint16_t fg_room_enemy;             // 0x989EEC
+    uint16_t word_989EEE;               // 0x989EEE
+    PlayerEntity pl;                    // 0x989EF0
+    uint8_t pad_98A104[8];              // 0x98A104
+    PlayerEntity* player_work;          // 0x98A10C
+    PlayerEntity* splayer_work;         // 0x98A110
+    Entity* enemies[16];                // 0x98A114
+    uint8_t pad_98A154[17364];          // 0x98A154
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C
@@ -364,7 +444,9 @@ struct GameTable
     uint32_t dword_98EBD0;              // 0x98EBD0
     uint8_t pad_98EBD4[48];             // 0x98EBD4
     uint32_t fg_map[5];                 // 0x98EC04
-    uint8_t pad_98EC18[276];            // 0x98EC18
+    uint8_t pad_98EC18[8];              // 0x98EC18
+    uint32_t pri_be_flg[64];            // 0x98EC20
+    uint8_t pad_98ED20[12];             // 0x98ED20
     uint32_t door_locks[2];             // 0x98ED2C
     InventorySlot inventory[11];        // 0x98ED34
 };
@@ -396,24 +478,6 @@ struct Unknown988628
     uint16_t var_10C;                   // 0x010C
 };
 static_assert(sizeof(Unknown988628) == 0x10E);
-
-struct ObjectEntity : Entity
-{
-    uint32_t sca_info;                  // 0x0110
-    uint32_t sca_hit_data;              // 0x0114
-    int16_t sca_old_x;                  // 0x0118
-    int16_t sca_old_z;                  // 0x011A
-    Mat16 super_matrix;                 // 0x011C
-    Vec16 super_vector;                 // 0x013C
-    uint16_t pad_140;                   // 0x0142
-    uint8_t push_cnt;                   // 0x0144
-    uint8_t free0;                      // 0x0145
-    uint8_t free1;                      // 0x0146
-    uint8_t free2;                      // 0x0147
-    uint32_t sin_parts_ptr;             // 0x0148
-    PartsW parts;                       // 0x014C
-};
-static_assert(sizeof(ObjectEntity) == 0x1F8);
 
 struct HudInfo
 {

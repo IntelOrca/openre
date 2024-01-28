@@ -21,6 +21,7 @@ namespace openre::scd
     };
 
     void scd_init_hooks();
+    void scd_init_tasks();
     void sce_scheduler_main();
     void scd_event_exec(int taskIndex, int evt);
 }

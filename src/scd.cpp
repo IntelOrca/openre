@@ -192,6 +192,19 @@ namespace openre::scd
         gGameTable.random_base = 0x138201C3;
     }
 
+    void scd_init_tasks()
+    {
+        for (auto i = 0; i < 10; i++)
+        {
+            auto task = get_task(i);
+            task->sub_ctr = i;
+            task->routine = 0;
+            task->status = 0;
+            task->task_level = 0xFF;
+            task->ifel_ctr[3] = 0xFF;
+        }
+    }
+
     static int scd_execute_opcode(SceTask* task, ScdOpcode instruction)
     {
         return gScdImplTable[instruction](task);
