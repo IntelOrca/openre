@@ -227,6 +227,20 @@ declare     main                    u8
 declare     sub0                    u8
 declare     sub1                    u8
 
+struct      RdtHeader
+declare     num_sprites             u8
+declare     num_cuts                u8
+declare     num_models              u8
+declare     num_items               u8
+declare     num_doors               u8
+declare     room_at                 u8
+declare     reverb_lv               u8
+declare     unknown7                u8
+
+struct      Rdt
+declare     header                  RdtHeader
+declare     offsets                 void*[23]
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -245,10 +259,17 @@ declare     current_bgm_address     u8*                     0x00693E84
 declare     ss_name_sbgm            char[260]               0x00693EA0
 declare     byte_693FA4             u8                      0x00693FA4
 declare     random_base             u32                     0x00695E58
+declare     scd                     u8*                     0x00695E5C
+declare     sce_type                u8                      0x00695E68
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     dword_988610            u32                     0x00988610
+declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
 declare     aot_table               void*[32]               0x00988850
-declare     dword_989E6C            u32                     0x00989E6C
+declare     fg_system               u32                     0x00989E6C
+declare     fg_status               u32                     0x00989ED0
+declare     fg_stop                 u32                     0x00989ED4
+declare     fg_use                  u32                     0x00989ED8
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4

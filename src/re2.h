@@ -258,6 +258,26 @@ struct BgmTableEntry
 };
 static_assert(sizeof(BgmTableEntry) == 0x03);
 
+struct RdtHeader
+{
+    uint8_t num_sprites;                // 0x0000
+    uint8_t num_cuts;                   // 0x0001
+    uint8_t num_models;                 // 0x0002
+    uint8_t num_items;                  // 0x0003
+    uint8_t num_doors;                  // 0x0004
+    uint8_t room_at;                    // 0x0005
+    uint8_t reverb_lv;                  // 0x0006
+    uint8_t unknown7;                   // 0x0007
+};
+static_assert(sizeof(RdtHeader) == 0x08);
+
+struct Rdt
+{
+    RdtHeader header;                   // 0x0000
+    void* offsets[23];                  // 0x0008
+};
+static_assert(sizeof(Rdt) == 0x64);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -292,15 +312,26 @@ struct GameTable
     uint8_t byte_693FA4;                // 0x693FA4
     uint8_t pad_693FA5[7859];           // 0x693FA5
     uint32_t random_base;               // 0x695E58
-    uint8_t pad_695E5C[267440];         // 0x695E5C
+    uint8_t* scd;                       // 0x695E5C
+    uint8_t pad_695E60[8];              // 0x695E60
+    uint8_t sce_type;                   // 0x695E68
+    uint8_t pad_695E69[267427];         // 0x695E69
     uint8_t byte_6D730C[24592];         // 0x6D730C
-    uint8_t pad_6DD31C[2798344];        // 0x6DD31C
+    uint8_t pad_6DD31C[2798324];        // 0x6DD31C
+    uint32_t dword_988610;              // 0x988610
+    uint8_t pad_988614[8];              // 0x988614
+    Rdt* rdt;                           // 0x98861C
+    uint8_t pad_988620[4];              // 0x988620
     void* mem_top;                      // 0x988624
     uint8_t pad_988628[552];            // 0x988628
     void* aot_table[32];                // 0x988850
     uint8_t pad_9888D0[5532];           // 0x9888D0
-    uint32_t dword_989E6C;              // 0x989E6C
-    uint8_t pad_989E70[18104];          // 0x989E70
+    uint32_t fg_system;                 // 0x989E6C
+    uint8_t pad_989E70[96];             // 0x989E70
+    uint32_t fg_status;                 // 0x989ED0
+    uint32_t fg_stop;                   // 0x989ED4
+    uint32_t fg_use;                    // 0x989ED8
+    uint8_t pad_989EDC[17996];          // 0x989EDC
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C

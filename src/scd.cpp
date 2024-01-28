@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "interop.hpp"
 #include "openre.h"
+#include "rdt.h"
 #include "re2.h"
 #include "sce.h"
 #include <cassert>
@@ -9,6 +10,7 @@
 
 using namespace openre::audio;
 using namespace openre::sce;
+using namespace openre::rdt;
 
 namespace openre::scd
 {
@@ -26,6 +28,7 @@ namespace openre::scd
         SCD_EVT_KILL = 0x05,
         SCD_IFEL_CK = 0x06,
         SCD_END_IF = 0x08,
+        SCD_SCE_RND = 0x28,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -147,6 +150,7 @@ namespace openre::scd
     };
 
     constexpr uint8_t SCD_STATUS_EMPTY = 0;
+    constexpr uint8_t SCD_STATUS_1 = 1;
 
     constexpr uint8_t SAT_4P = (1 << 7);
 
@@ -163,6 +167,13 @@ namespace openre::scd
     {
         assert(index < get_max_tasks());
         return &((SceTask*)0x00694A00)[index];
+    }
+
+    static uint8_t* get_scd_event(int index)
+    {
+        auto scd = gGameTable.scd;
+        auto evtTable = (uint16_t*)scd;
+        return scd + evtTable[index];
     }
 
     // 0x004E39E0
@@ -204,6 +215,23 @@ namespace openre::scd
         return gScdImplTable[instruction](task);
     }
 
+    // 0x004E3BD0
+    static void sce_rnd_set()
+    {
+        if ((gGameTable.fg_system & 0x1000000) != 0)
+        {
+            gGameTable.rng = rnd();
+        }
+        else
+        {
+            auto rb0 = gGameTable.random_base;
+            auto rb1 = rb0 * 2;
+            auto rbN = (((rb1 >> 16) + rb0) ^ rb1) & 0xFFFF;
+            gGameTable.random_base = rbN ^ rb1;
+            gGameTable.rng = gGameTable.random_base & 0xFFFF;
+        }
+    }
+
     // 0x004E4310
     static void sce_scheduler_main()
     {
@@ -234,6 +262,38 @@ namespace openre::scd
         }
         sce_work_clr();
         sce_work_clr_at();
+    }
+
+    // 0x004E3F60
+    static void event_init(SceTask* task, int evt)
+    {
+        task->status = SCD_STATUS_1;
+        task->routine = 0;
+        task->sp = (uint8_t**)((uintptr_t)task + ((task->sub_ctr + 6) * 32));
+        task->ifel_ctr[0] = -1;
+        task->loop_ctr[0] = -1;
+        task->data = get_scd_event(evt);
+    }
+
+    // 0x004E3FA0
+    static void event_exec(int task, int evt)
+    {
+        using sig = void (*)(int, int);
+        auto p = (sig)0x004E3FA0;
+        p(task, evt);
+    }
+
+    // 0x004E42D0
+    static void sce_scheduler()
+    {
+        if ((gGameTable.fg_stop & 0x2000000) == 0)
+        {
+            sce_rnd_set();
+            gGameTable.sce_type = 0;
+            gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
+            event_exec(0, 1);
+            sce_scheduler_main();
+        }
     }
 
     static void set_aot_entry(AotId id, SceAotBase* aot)
@@ -440,6 +500,14 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E4F60
+    static int scd_sce_rnd(SceTask* sce)
+    {
+        sce->data += 2;
+        sce_rnd_set();
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -448,6 +516,9 @@ namespace openre::scd
     void scd_init_hooks()
     {
         interop::writeJmp(0x004E39E0, &scd_init);
+        interop::writeJmp(0x004E3BD0, &sce_rnd_set);
+        interop::writeJmp(0x004E3F60, &event_init);
+        interop::writeJmp(0x004E42D0, &sce_scheduler);
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
 
         set_scd_hook(SCD_NOP, &scd_nop);
@@ -456,6 +527,7 @@ namespace openre::scd
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_IFEL_CK, &scd_ifel_ck);
         set_scd_hook(SCD_END_IF, &scd_end_if);
+        set_scd_hook(SCD_SCE_RND, &scd_sce_rnd);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);

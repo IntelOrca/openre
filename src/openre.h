@@ -15,4 +15,5 @@ namespace openre
     extern uint8_t& gPoisonTimer;
 
     void task_sleep(int frames);
+    uint8_t rnd();
 }

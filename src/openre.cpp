@@ -235,6 +235,15 @@ namespace openre
             }
         }
     }
+
+    // 0x004B2A90
+    uint8_t rnd()
+    {
+        auto hi = (uint16_t)gGameTable.dword_988610 >> 7;
+        auto lo = (uint16_t)(258 * gGameTable.dword_988610) >> 8;
+        gGameTable.dword_988610 = lo | (hi << 8);
+        return lo;
+    }
 }
 
 static void load_init_table(void* tempBuffer, uint8_t index)
@@ -281,6 +290,7 @@ void onAttach()
     interop::writeJmp(0x004B7860, load_init_table_1);
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
+    interop::writeJmp(0x004B2A90, rnd);
 
     scd_init_hooks();
     sce_init_hooks();

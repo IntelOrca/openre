@@ -156,6 +156,7 @@
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
+    <ClCompile Include="rdt.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
   </ItemGroup>
@@ -166,6 +167,7 @@
     <ClInclude Include="item.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
+    <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
