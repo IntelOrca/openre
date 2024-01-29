@@ -117,6 +117,44 @@ namespace openre
         byte_68A233[eax] = 1;
     }
 
+    // 0x00508D10
+    void task_exit()
+    {
+        interop::call(0x00508D10);
+    }
+
+    // 0x004C4AD0
+    bool fade_status(int no)
+    {
+        using sig = bool (*)(int);
+        auto p = (sig)0x004C4AD0;
+        return (p(no) & 0xFF) != 0;
+    }
+
+    // 0x004C49C0
+    void fade_set(short a0, short add, char mask, char pri)
+    {
+        using sig = void (*)(short, short, char, char);
+        auto p = (sig)0x004C49C0;
+        p(a0, add, mask, pri);
+    }
+
+    // 0x004C4A50
+    void fade_adjust(int no, short kido, int rgb, PsxRect* rect)
+    {
+        using sig = void (*)(int, short, int, PsxRect*);
+        auto p = (sig)0x004C4A50;
+        p(no, kido, rgb, rect);
+    }
+
+    // 0x004CA2F9
+    void mess_print(int x, int y, const uint8_t* str, short a4)
+    {
+        using sig = void (*)(int, int, const uint8_t*, short);
+        auto p = (sig)0x004CA2F9;
+        p(x, y, str, a4);
+    }
+
     // 0x004427E0
     static void update_timer()
     {

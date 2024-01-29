@@ -48,6 +48,9 @@
     <ClCompile Include="door.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="marni.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -81,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="door.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="marni.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

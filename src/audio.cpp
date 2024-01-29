@@ -204,11 +204,22 @@ namespace openre::audio
     }
 
     // 0x004ED950
-    void snd_se_on(int a0, int a1)
+    static void snd_se_on(int a0, const Vec32* a1)
     {
-        using sig = void (*)(int, int);
+        using sig = void (*)(int, const Vec32*);
         auto p = (sig)0x004ED950;
         p(a0, a1);
+    }
+
+
+    void snd_se_on(int a0, const Vec32& a1)
+    {
+        snd_se_on(a0, &a1);
+    }
+
+    void snd_se_on(int a0)
+    {
+        snd_se_on(a0, nullptr);
     }
 
     void bgm_init_hooks()

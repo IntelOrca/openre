@@ -95,9 +95,9 @@ namespace openre::sce
         return &_objectEntities[index];
     }
 
-    Entity* GetDoorEntity(int index)
+    DoorEntity* GetDoorEntity(int index)
     {
-        return ((Entity**)0x0099CEA0)[index];
+        return gGameTable.doors[index];
     }
 
     // 0x00503170
@@ -362,7 +362,7 @@ namespace openre::sce
             dword_989ED4 |= 0x7F000000;
             _itemBoxSpeed = 1;
             _itemBoxAcceleration = 3;
-            snd_se_on(0x2150000, 0);
+            snd_se_on(0x2150000);
             _questionState = ITEMBOX_INTERACT_STATE_OPENING;
             _itemBoxObj = GetObjectEntity(_itemBoxObjIndex);
             [[fallthrough]];
@@ -432,11 +432,11 @@ namespace openre::sce
         if (key == KEY_UNLOCK)
         {
             show_message(eax, 0x100, MESSAGE_KIND_YOU_UNLOCKED_IT, 0xFF000000);
-            snd_se_on(0x2260000, 0);
+            snd_se_on(0x2260000);
         }
         else if (key == KEY_LOCKED)
         {
-            snd_se_on(0x2160000, 0);
+            snd_se_on(0x2160000);
             show_message(0, 0x100, MESSAGE_KIND_LOCKED_FROM_OTHER_SIDE, 0xFF000000);
             return 0;
         }
@@ -445,14 +445,14 @@ namespace openre::sce
             auto inventoryIndex = inventory_find_item(key);
             if (inventoryIndex < 0)
             {
-                snd_se_on(0x2160000, 0);
+                snd_se_on(0x2160000);
                 show_message(0, 0x100, (int)key - 76, 0xFF000000);
                 return 0;
             }
 
             gPickupItemName = key;
             show_message(0, 0x100, MESSAGE_KIND_YOU_USED_KEY_X, 0xFF000000);
-            snd_se_on(0x2250000, 0);
+            snd_se_on(0x2250000);
             dword_98E790 = &sub_4E95F0;
             byte_98E541 = inventoryIndex + 1;
         }

@@ -15,7 +15,6 @@ using namespace openre::rdt;
 namespace openre::scd
 {
     using ScdOpcode = uint8_t;
-    using SceTaskId = uint8_t;
     using ItemType = uint8_t;
     using HudKind = uint8_t;
 
@@ -149,9 +148,6 @@ namespace openre::scd
         uint16_t var_06;
     };
 
-    constexpr uint8_t SCD_STATUS_EMPTY = 0;
-    constexpr uint8_t SCD_STATUS_1 = 1;
-
     constexpr uint8_t SAT_4P = (1 << 7);
 
     using ScdOpcodeImpl = int (*)(SceTask*);
@@ -163,7 +159,7 @@ namespace openre::scd
         return 14;
     }
 
-    static SceTask* get_task(SceTaskId index)
+    SceTask* get_task(SceTaskId index)
     {
         assert(index < get_max_tasks());
         return &((SceTask*)0x00694A00)[index];
@@ -353,7 +349,8 @@ namespace openre::scd
     {
         auto opcode = reinterpret_cast<ScdSceBgmControl*>(sce->data);
 
-        auto arg = (opcode->var_05) | (opcode->var_04 << 8) | (opcode->var_03 << 16) | (opcode->var_02 << 24) | (opcode->var_01 << 28);
+        auto arg = (opcode->var_05) | (opcode->var_04 << 8) | (opcode->var_03 << 16) | (opcode->var_02 << 24)
+            | (opcode->var_01 << 28);
         bgm_set_control(arg);
 
         sce->data += sizeof(ScdSceBgmControl);
@@ -394,21 +391,11 @@ namespace openre::scd
         sce->data += 3;
         switch (wkKind)
         {
-        case WK_PLAYER:
-            sce->work = GetPlayerEntity();
-            break;
-        case WK_SPLAYER:
-            sce->work = GetPartnerEntity();
-            break;
-        case WK_ENEMY:
-            sce->work = GetEnemyEntity(wkIndex);
-            break;
-        case WK_OBJECT:
-            sce->work = GetObjectEntity(wkIndex);
-            break;
-        case WK_DOOR:
-            sce->work = GetDoorEntity(wkIndex);
-            break;
+        case WK_PLAYER: sce->work = GetPlayerEntity(); break;
+        case WK_SPLAYER: sce->work = GetPartnerEntity(); break;
+        case WK_ENEMY: sce->work = GetEnemyEntity(wkIndex); break;
+        case WK_OBJECT: sce->work = GetObjectEntity(wkIndex); break;
+        case WK_DOOR: sce->work = GetDoorEntity(wkIndex); break;
         }
         return SCD_RESULT_NEXT;
     }

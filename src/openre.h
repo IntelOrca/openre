@@ -15,5 +15,10 @@ namespace openre
     extern uint8_t& gPoisonTimer;
 
     void task_sleep(int frames);
+    void task_exit();
+    bool fade_status(int no);
+    void fade_set(short a0, short add, char mask, char pri);
+    void fade_adjust(int no, short kido, int rgb, PsxRect* rect);
+    void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
 }

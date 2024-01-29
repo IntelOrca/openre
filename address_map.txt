@@ -217,6 +217,12 @@ declare     free2                   u8
 declare     sin_parts_ptr           u32
 declare     parts                   PartsW
 
+struct      DoorEntity
+base        Entity
+declare     var_145                 u8                      0x145
+declare     var_22E                 u16                     0x22E
+declare     var_248                 u16                     0x248
+
 struct      SceTask
 declare     routine                 u8
 declare     status                  u8
@@ -296,6 +302,7 @@ declare     enable_dsound           bool                    0x00524EB6
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     door_state              u32                     0x006893F4
+declare     door                    DoorEntity*             0x00689400
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     vab_id                  u8[16]                  0x00692FF5
 declare     dword_6934B4            u8*                     0x006934B4
@@ -328,6 +335,7 @@ declare     byte_695E71             u8                      0x00695E71
 declare     byte_695E72             u8                      0x00695E72
 declare     byte_6D730C             u8[24592]               0x006D730C
 declare     cc_work                 CCWork                  0x00980B00
+declare     dword_9885F8            u32                     0x009885F8
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
@@ -354,6 +362,8 @@ declare     scd_variables_00        u16                     0x0098EAE4
 declare     word_98EAE6             u16                     0x0098EAE6
 declare     last_used_item          u16                     0x0098EAE8
 declare     word_98EAEA             u16                     0x0098EAEA
+declare     word_98EAFE             s16                     0x0098EAFE
+declare     scd_var_temp            u16                     0x0098EB02
 declare     current_stage           u16                     0x0098EB14
 declare     current_room            u16                     0x0098EB16
 declare     current_cut             u16                     0x0098EB18
@@ -378,6 +388,8 @@ declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
+declare     byte_98F07A             u8                      0x0098F07A
+declare     doors                   DoorEntity*[9]          0x0099CEA0
 
 struct      Unknown6949F8
 declare     var_0C                  u8                      0x0C
