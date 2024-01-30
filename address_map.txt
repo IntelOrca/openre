@@ -18,10 +18,18 @@ declare     x                       s16
 declare     y                       s16
 declare     z                       s16
 
+struct      Vec16p
+base        Vec16
+declare     pad_6                   s16
+
 struct      Vec32
 declare     x                       s32
 declare     y                       s32
 declare     z                       s32
+
+struct      Vec32p
+base        Vec32
+declare     pad_0C                  s32
 
 struct      Mat16
 declare     m                       s16[9]
@@ -208,8 +216,7 @@ declare     sca_hit_data            u32
 declare     sca_old_x               s16
 declare     sca_old_z               s16
 declare     super_matrix            Mat16
-declare     super_vector            Vec16
-declare     pad_140                 u16
+declare     super_vector            Vec16p
 declare     push_cnt                u8
 declare     free0                   u8
 declare     free1                   u8
@@ -219,9 +226,17 @@ declare     parts                   PartsW
 
 struct      DoorEntity
 base        Entity
-declare     var_145                 u8                      0x145
-declare     var_22E                 u16                     0x22E
-declare     var_248                 u16                     0x248
+declare     sca_info                u32
+declare     sca_hit_data            u32
+declare     sca_old_x               s16
+declare     sca_old_z               s16
+declare     super_matrix            Mat16
+declare     super_vector            Vec16p
+declare     attribute_2             u8
+declare     attribute_3             u8
+declare     model_no                u16
+declare     free0                   u16
+declare     free2                   u16
 
 struct      SceTask
 declare     routine                 u8
@@ -264,6 +279,23 @@ struct      Rdt
 declare     header                  RdtHeader
 declare     offsets                 void*[23]
 
+struct      DoorInfo
+declare     prepacket               void*
+declare     tmd_adr                 void*
+declare     packettop               void*
+declare     var_0C                  s32
+declare     var_10                  s32
+declare     var_14                  s32
+declare     edh_offset              u32                     0x224
+declare     vb_offset               u32
+declare     ctr1                    u16
+declare     ctr2                    u16
+declare     v0                      Vec16p
+declare     v1                      Vec16p
+declare     v2                      Vec16p
+declare     sound_flg               u16
+declare     div_max                 u16
+
 struct      DrMove
 declare     tag                     u32
 declare     code                    u32[5]
@@ -299,10 +331,12 @@ declare     var_13                  u8                      0x13
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
+declare     global_prj              s32                     0x00526268
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
+declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
-declare     door                    DoorEntity*             0x00689400
+declare     door                    DoorInfo*               0x00689400
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     vab_id                  u8[16]                  0x00692FF5
 declare     dword_6934B4            u8*                     0x006934B4
@@ -334,11 +368,17 @@ declare     se_tmp0                 u8                      0x00695E70
 declare     byte_695E71             u8                      0x00695E71
 declare     byte_695E72             u8                      0x00695E72
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     tmd                     void*                   0x008C6880
+declare     door_tim                void*                   0x008C6884
+declare     byte_8C6888             u8[1928]                0x008C6888
+declare     door_info               DoorInfo                0x008E2880
+declare     door_data               DoorEntity[10]          0x008E2ACC
 declare     cc_work                 CCWork                  0x00980B00
 declare     dword_9885F8            u32                     0x009885F8
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
+declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     fg_system               u32                     0x00989E6C
 declare     fg_status               u32                     0x00989ED0
@@ -347,6 +387,7 @@ declare     fg_use                  u32                     0x00989ED8
 declare     dword_989EDC            u32                     0x00989EDC
 declare     dword_989EE0            u32                     0x00989EE0
 declare     dword_989EE4            u32                     0x00989EE4
+declare     word_989EE8             s16                     0x00989EE8
 declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
@@ -362,7 +403,9 @@ declare     scd_variables_00        u16                     0x0098EAE4
 declare     word_98EAE6             u16                     0x0098EAE6
 declare     last_used_item          u16                     0x0098EAE8
 declare     word_98EAEA             u16                     0x0098EAEA
+declare     word_98EAFC             s16                     0x0098EAFC
 declare     word_98EAFE             s16                     0x0098EAFE
+declare     word_98EB00             s16                     0x0098EB00
 declare     scd_var_temp            u16                     0x0098EB02
 declare     current_stage           u16                     0x0098EB14
 declare     current_room            u16                     0x0098EB16
@@ -390,6 +433,7 @@ declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     byte_98F07A             u8                      0x0098F07A
 declare     doors                   DoorEntity*[9]          0x0099CEA0
+declare     dword_99CEC4            u32                     0x0099CEC4
 
 struct      Unknown6949F8
 declare     var_0C                  u8                      0x0C

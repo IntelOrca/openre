@@ -423,7 +423,7 @@ namespace openre::sce
         if (data->LockId < 128 || (eax = bitarray_get(gGameTable.door_locks, data->LockId & 0x3F)))
         {
             byte_991F80 = 1;
-            dword_988848 = data;
+            gGameTable.door_aot_data = data;
             dword_989ED4 |= 0xFF000000;
             return 0;
         }

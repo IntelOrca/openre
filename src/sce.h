@@ -40,20 +40,20 @@ namespace openre::sce
 
     struct SceAotDoorData
     {
-        int16_t TargetX;
-        int16_t TargetY;
-        int16_t TargetZ;
-        int16_t TargetD;
-        uint8_t TargetStage;
-        uint8_t TargetRoom;
-        uint8_t TargetCut;
-        uint8_t TargetFloor;
-        uint8_t Texture;
-        uint8_t DoorType;
-        uint8_t KnockType;
-        uint8_t LockId;
-        uint8_t KeyType;
-        uint8_t Free;
+        int16_t TargetX;     // 0x00
+        int16_t TargetY;     // 0x02
+        int16_t TargetZ;     // 0x04
+        int16_t TargetD;     // 0x06
+        uint8_t TargetStage; // 0x08
+        uint8_t TargetRoom;  // 0x09
+        uint8_t TargetCut;   // 0x0A
+        uint8_t TargetFloor; // 0x0B
+        uint8_t Texture;     // 0x0C
+        uint8_t DoorType;    // 0x0D
+        uint8_t KnockType;   // 0x0E
+        uint8_t LockId;      // 0x0F
+        uint8_t KeyType;     // 0x10
+        uint8_t Free;        // 0x11
     };
 
     struct SceAotItemData

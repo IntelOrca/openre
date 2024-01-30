@@ -239,7 +239,7 @@ namespace openre::scd
     }
 
     // 0x004E3F60
-    static void event_init(SceTask* task, int evt)
+    void scd_event_init(SceTask* task, int evt)
     {
         task->status = SCD_STATUS_1;
         task->routine = 0;
@@ -294,7 +294,7 @@ namespace openre::scd
         {
             task->sub_ctr = 0;
             memset(task->spd, 0, (size_t)&task->r_no_bak - (size_t)task->spd);
-            event_init(task, evt);
+            scd_event_init(task, evt);
         }
     }
 
@@ -510,7 +510,7 @@ namespace openre::scd
     void scd_init_hooks()
     {
         interop::writeJmp(0x004E39E0, &scd_init);
-        interop::writeJmp(0x004E3F60, &event_init);
+        interop::writeJmp(0x004E3F60, &scd_event_init);
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
 
         set_scd_hook(SCD_NOP, &scd_nop);

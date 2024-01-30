@@ -21,4 +21,8 @@ namespace openre
     void fade_adjust(int no, short kido, int rgb, PsxRect* rect);
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
+    void set_view(const Vec32p& pVp, const Vec32p& pVr);
+    void bg_set_mode(int mode, int rgb);
+    void mapping_tmd(int a1, void* pTmd, int page, int clut);
+    void set_geom_screen(int prj);
 }

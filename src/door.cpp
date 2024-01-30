@@ -72,10 +72,76 @@ namespace openre::door
         interop::call(0x00450350);
     }
 
+    // 0x00432A40
+    static void door_unload(void* pTim, void* pTmd)
+    {
+        using sig = void (*)(void*, void*);
+        auto p = (sig)0x00432A40;
+        p(pTim, pTmd);
+    }
+
     // 0x0044FEF0
     static void door_init()
     {
-        interop::call(0x0044FEF0);
+        gGameTable.dword_6893F0 = 1;
+        marni::out();
+        gGameTable.door = &gGameTable.door_info;
+        gGameTable.fg_system |= 0x2000000;
+        for (auto i = 0; i < 10; i++)
+        {
+            gGameTable.doors[i] = &gGameTable.door_data[i];
+        }
+
+        auto d = gGameTable.doors[0];
+        auto end = (void*)(gGameTable.dword_99CEC4 + 0x146);
+        std::memset(d, 0, (size_t)end - (size_t)d);
+
+        gGameTable.door_tim = (void*)((uintptr_t)&gGameTable.tmd + (uintptr_t)gGameTable.door_tim);
+        gGameTable.tmd = (void*)((uintptr_t)&gGameTable.tmd + (uintptr_t)gGameTable.tmd);
+        gGameTable.word_989EE8 = 7957;
+
+        auto door = gGameTable.door;
+        door->prepacket = gGameTable.door_tim;
+        marni::out();
+        door->tmd_adr = gGameTable.tmd;
+
+        auto doorAotData = (SceAotDoorData*)gGameTable.door_aot_data;
+        if (doorAotData->Texture == 40)
+            mapping_tmd(1, door->tmd_adr, 0, 0);
+        else
+            mapping_tmd(1, door->tmd_adr, 21, 31);
+        door_unload(gGameTable.door_tim, gGameTable.tmd);
+        gGameTable.dword_6893F0 = 0;
+
+        door->tmd_adr = (void*)((uintptr_t)door->tmd_adr + 12);
+        door->var_0C = 3;
+        door->var_10 = 320;
+        door->var_14 = 240;
+        door->ctr2 = 0;
+
+        for (auto i = 10; i < 14; i++)
+        {
+            auto t = get_task(i);
+            t->task_level = i;
+            t->status = SCD_STATUS_EMPTY;
+            t->sub_ctr = 0;
+            t->ifel_ctr[0] = 0xFF;
+            t->loop_ctr[0] = 0xFF;
+        }
+        gGameTable.scd = gGameTable.byte_8C6888;
+        scd_event_init(get_task(10), 0);
+        set_geom_screen(0x122);
+
+        Vec32p p = { 10000, 0, 0, 0 };
+        Vec32p r = { 0, 0, 0, 0 };
+        set_view(p, r);
+
+        bg_set_mode(2, 0);
+        gGameTable.word_98EAFE = 1;
+        gGameTable.word_98EAFC = doorAotData->DoorType & 0x7F;
+        gGameTable.word_98EB00 = doorAotData->DoorType & 0x80;
+        gGameTable.scd_var_temp = doorAotData->Texture;
+        door->sound_flg = 0;
     }
 
     // 0x00450120
@@ -91,7 +157,7 @@ namespace openre::door
             }
 
             auto d = GetDoorEntity(0);
-            if (!(d->var_145 & 0x80))
+            if (!(d->attribute_3 & 0x80))
                 gGameTable.byte_98F07A = 0;
             ctcb.var_09 = 1;
         }
@@ -103,7 +169,7 @@ namespace openre::door
                 gGameTable.word_98EAFE = 0;
             door_scheduler_main();
             door_trans();
-            auto v = gGameTable.door->var_22E;
+            auto v = gGameTable.door->ctr2;
             if (v > 40 && v < 260)
             {
                 if (gGameTable.scd_var_temp == 50)
@@ -111,7 +177,7 @@ namespace openre::door
                 else if (gGameTable.scd_var_temp == 52)
                     mess_print(32, 200, &str_please_wait[_word_525F5A], 0);
             }
-            gGameTable.door->var_22E++;
+            gGameTable.door->ctr2++;
             if ((gGameTable.dword_9885F8 & 0x8D0) != 0)
                 t->status = SCD_STATUS_EMPTY;
             task_sleep(1);
@@ -129,7 +195,7 @@ namespace openre::door
         {
             fade_set(512, 0, 7, 1);
             fade_adjust(0, 0x7FFF, 0xFFFFFF, 0);
-            if (gGameTable.door->var_248 != 0)
+            if (gGameTable.door->sound_flg != 0)
                 snd_se_on(0x10000, gGameTable.player_work->pos);
             marni::unload_door_texture();
             gGameTable.byte_98F07A = 2;

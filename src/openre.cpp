@@ -126,7 +126,7 @@ namespace openre
     // 0x004C4AD0
     bool fade_status(int no)
     {
-        using sig = bool (*)(int);
+        using sig = int (*)(int);
         auto p = (sig)0x004C4AD0;
         return (p(no) & 0xFF) != 0;
     }
@@ -270,8 +270,7 @@ namespace openre
                     }
                 }
                 break;
-            default:
-                return;
+            default: return;
             }
         }
     }
@@ -283,6 +282,36 @@ namespace openre
         auto lo = (uint16_t)(258 * gGameTable.dword_988610) >> 8;
         gGameTable.dword_988610 = lo | (hi << 8);
         return lo;
+    }
+
+    // 0x00502DB0
+    void set_view(const Vec32p& pVp, const Vec32p& pVr)
+    {
+        using sig = void (*)(const Vec32p&, const Vec32p&);
+        auto p = (sig)0x00502DB0;
+        p(pVp, pVr);
+    }
+
+    // 0x004C4690
+    void bg_set_mode(int mode, int rgb)
+    {
+        using sig = void (*)(int, int);
+        auto p = (sig)0x004C4690;
+        p(mode, rgb);
+    }
+
+    // 0x00502D90
+    void mapping_tmd(int a1, void* pTmd, int page, int clut)
+    {
+        using sig = void (*)(int, void*, int, int);
+        auto p = (sig)0x00502D90;
+        p(a1, pTmd, page, clut);
+    }
+
+    // 0x00451570
+    void set_geom_screen(int prj)
+    {
+        gGameTable.global_prj = prj;
     }
 }
 
@@ -317,9 +346,7 @@ static void load_init_table_3()
     load_init_table((void*)0x008BD880, byte_989E7E);
 }
 
-void snd_se_walk(int, int, PlayerEntity* pEm)
-{
-}
+void snd_se_walk(int, int, PlayerEntity* pEm) {}
 
 void onAttach()
 {
