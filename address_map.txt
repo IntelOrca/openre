@@ -13,6 +13,12 @@ struct      InventorySlot
 base        InventoryDef
 declare     unk_04                  u8
 
+struct      ItemboxItem
+declare     Type                    u8
+declare     Num                     u8
+declare     Size                    u8
+declare     var_04                  u8
+
 struct      Vec16
 declare     x                       s16
 declare     y                       s16
@@ -335,10 +341,24 @@ declare     global_prj              s32                     0x00526268
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
+declare     byte_53DB74             u8*                     0x0053DB74
+declare     word_680558             u32                     0x00680558
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
+declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
+declare     _st                     u8                      0x00691F61
+declare     itembox_state           u8                      0x00691F62
+declare     byte_691F63             u8                      0x00691F63
+declare     byte_691F6C             u8                      0x00691F6C
+declare     byte_691F76             u8                      0x00691F76
+declare     itembox_slot_id         u8                      0x00691F84
+declare     byte_691F85             u8                      0x00691F85
+declare     word_691FB0             u16                     0x00691FB0
+declare     word_691FB2             u16                     0x00691FB2
+declare     word_692FBE             u16                     0x00692FBE
+declare     word_692FC0             u16                     0x00692FC0
 declare     vab_id                  u8[16]                  0x00692FF5
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
@@ -369,13 +389,19 @@ declare     se_tmp0                 u8                      0x00695E70
 declare     byte_695E71             u8                      0x00695E71
 declare     byte_695E72             u8                      0x00695E72
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     bg_buffer               u8*                     0x008C1880
 declare     tmd                     void*                   0x008C6880
 declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
 declare     cc_work                 CCWork                  0x00980B00
+declare     fg_message              u16                     0x0098504C
 declare     dword_9885F8            u32                     0x009885F8
+declare     word_9885FC             u16                     0x009885FC
+declare     dword_9885FE            u32                     0x009885FE
+declare     g_key                   u32                     0x00988604
+declare     key_trg                 u32                     0x00988608
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
@@ -432,6 +458,7 @@ declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
+declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98F07A             u8                      0x0098F07A
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4

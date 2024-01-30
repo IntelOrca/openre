@@ -26,6 +26,8 @@ namespace openre::player
     InventorySlot* gSavedInventory = (InventorySlot*)0x9888DC;
 
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
+    static uint8_t*& byte_98ED39 = *((uint8_t**)0x98ED39);
+    static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
 
     static const InventoryDef _initialInventoryAda[FULL_INVENTORY_SIZE] = {
         { ITEM_TYPE_HANDGUN_CLAIRE, 13, 0 },
@@ -136,9 +138,55 @@ namespace openre::player
         return -1;
     }
 
+    // 0x004FC3FD
+    static void loc_4FC3FD()
+    {
+        using sig = void (*)();
+        auto p = (sig)0x004FC3FD;
+        return p();
+    }
+
+    // 0x004FC3CE
+    static void itembox_prev_slot()
+    {
+        gGameTable.byte_691F85 = 0;
+        gHudInfo.var_24 = 0;
+        gGameTable.itembox_slot_id--;
+        gGameTable.itembox_slot_id &= 0x3F;
+        loc_4FC3FD();
+    }
+
+    // 0x005024D0
+    static int set_inventory_item(int slotId, int type, int quantity, int part)
+    {
+        gGameTable.inventory[slotId].Type = type;
+        gGameTable.inventory[slotId].Quantity = quantity;
+        gGameTable.inventory[slotId].Part = part;
+        return slotId;
+    }
+
+    // 0x00502500
+    static void set_inventory_item_quantity(int slotId, int quantity)
+    {
+        gGameTable.inventory[slotId].Quantity = quantity;
+
+        auto part = gGameTable.inventory[slotId].Part;
+        if (part == 1)
+        {
+            byte_98ED39[4 * slotId] = quantity;
+        }
+        if (part == 2)
+        {
+            gGameTable.inventory[slotId].Quantity = quantity;
+        }
+    }
+
     void player_init_hooks()
     {
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
+        interop::writeJmp(0x4FC3CE, itembox_prev_slot);
+        interop::writeJmp(0x5024D0, set_inventory_item);
+        interop::writeJmp(0x502500, set_inventory_item_quantity);
     }
 }

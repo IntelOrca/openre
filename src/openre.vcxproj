@@ -161,6 +161,8 @@
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
+    <ClCompile Include="itembox.cpp" />
+    <ClCompile Include="input.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
@@ -175,6 +177,8 @@
     <ClInclude Include="re2.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
+    <ClInclude Include="itembox.h" />
+    <ClInclude Include="input.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="file.h" />
