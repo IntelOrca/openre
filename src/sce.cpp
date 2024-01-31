@@ -9,6 +9,8 @@
 #include "re2.h"
 #include "scd.h"
 
+#include <cstring>
+
 using namespace openre::audio;
 using namespace openre::hud;
 using namespace openre::player;
