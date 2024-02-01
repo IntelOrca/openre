@@ -402,7 +402,9 @@ struct GameTable
     bool enable_dsound;                 // 0x524EB6
     uint8_t pad_524EB7[5041];           // 0x524EB7
     int32_t global_prj;                 // 0x526268
-    uint8_t pad_52626C[90988];          // 0x52626C
+    uint8_t pad_52626C[85932];          // 0x52626C
+    uint32_t* flag_groups[35];          // 0x53B218
+    uint8_t pad_53B2A4[4916];           // 0x53B2A4
     BgmTableEntry byte_53C5D8[146];     // 0x53C5D8
     uint8_t pad_53C78E[1];              // 0x53C78E
     uint8_t byte_53C78F[70];            // 0x53C78F

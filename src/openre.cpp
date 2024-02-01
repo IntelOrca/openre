@@ -1,5 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
 
+#include "openre.h"
 #include "audio.h"
 #include "door.h"
 #include "file.h"
@@ -75,7 +76,7 @@ namespace openre
     // 0x00509C90
     static uint8_t get_player_num()
     {
-        return (gGameFlags & GAME_FLAG_IS_PLAYER_1) ? 1 : 0;
+        return check_flag(FlagGroup::Status, FG_STATUS_PLAYER) ? 1 : 0;
     }
 
     static void get_rdt_path(char* buffer, uint8_t player, uint8_t stage, uint8_t room)
@@ -312,6 +313,18 @@ namespace openre
     void set_geom_screen(int prj)
     {
         gGameTable.global_prj = prj;
+    }
+
+    bool check_flag(FlagGroup group, uint32_t index)
+    {
+        auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
+        return bitarray_get(addr, index) != 0;
+    }
+
+    void set_flag(FlagGroup group, uint32_t index, bool value)
+    {
+        auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
+        bitarray_set(addr, index, value);
     }
 }
 

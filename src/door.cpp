@@ -88,7 +88,7 @@ namespace openre::door
         gGameTable.dword_6893F0 = 1;
         marni::out();
         gGameTable.door = &gGameTable.door_info;
-        gGameTable.fg_system |= 0x2000000;
+        set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, true);
         for (auto i = 0; i < 10; i++)
         {
             gGameTable.doors[i] = &gGameTable.door_data[i];
@@ -152,7 +152,7 @@ namespace openre::door
         auto& ctcb = *gGameTable.ctcb;
         if (ctcb.var_09 != 1)
         {
-            if (gGameTable.fg_system & 0x10000)
+            if (check_flag(FlagGroup::System, FG_SYSTEM_15))
             {
                 task_sleep(1);
                 return;
@@ -167,7 +167,7 @@ namespace openre::door
         auto t = get_task(10);
         if (t != nullptr && t->status != SCD_STATUS_EMPTY)
         {
-            if ((gGameTable.fg_status & 0x20000) == 0)
+            if (!check_flag(FlagGroup::Status, FG_STATUS_14))
                 gGameTable.word_98EAFE = 0;
             door_scheduler_main();
             door_trans();
@@ -201,7 +201,7 @@ namespace openre::door
                 snd_se_on(0x10000, gGameTable.player_work->pos);
             marni::unload_door_texture();
             gGameTable.byte_98F07A = 2;
-            gGameTable.fg_system &= ~0x2000000;
+            set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, false);
             task_exit();
         }
         else

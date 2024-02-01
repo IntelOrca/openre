@@ -5,6 +5,108 @@
 
 namespace openre
 {
+    enum class FlagGroup : uint8_t
+    {
+        System,
+        Status,
+        Stop,
+        Scenario,
+        Common,
+        Room,
+        Enemy,
+        Enemy2,
+        Item,
+        Map,
+        Use,
+        Message,
+        RoomEnemy,
+        Pbf00,
+        PBF01,
+        PBF02,
+        PBF03,
+        PBF04,
+        PBF05,
+        PBF06,
+        PBF07,
+        PBF08,
+        PBF09,
+        PBF0A,
+        PBF0B,
+        PBF0C,
+        PBF0D,
+        PBF0E,
+        PBF0F,
+        Zapping,
+        RbjSet,
+        Key,
+        MapC,
+        MapI,
+        Item2,
+    };
+
+    // 00 | 00 | 80000000
+    // 01 | 01 | 40000000
+    // 02 | 02 | 20000000
+    // 03 | 03 | 10000000
+    // 04 | 04 | 08000000
+    // 05 | 05 | 04000000
+    // 06 | 06 | 02000000
+    // 07 | 07 | 01000000
+    // 08 | 08 | 00800000
+    // 09 | 09 | 00400000
+    // 10 | 0A | 00200000
+    // 11 | 0B | 00100000
+    // 12 | 0C | 00080000
+    // 13 | 0D | 00040000
+    // 14 | 0E | 00020000
+    // 15 | 0F | 00010000
+    // 16 | 10 | 00008000
+    // 17 | 11 | 00004000
+    // 18 | 12 | 00002000
+    // 19 | 13 | 00001000
+    // 20 | 14 | 00000800
+    // 21 | 15 | 00000400
+    // 22 | 16 | 00000200
+    // 23 | 17 | 00000100
+    // 24 | 18 | 00000080
+    // 25 | 19 | 00000040
+    // 26 | 1A | 00000020
+    // 27 | 1B | 00000010
+    // 28 | 1C | 00000008
+    // 29 | 1D | 00000004
+    // 30 | 1E | 00000002
+    // 31 | 1F | 00000001
+
+    enum
+    {
+        FG_SYSTEM_DOOR_TRANSITION = 6,
+        FG_SYSTEM_7 = 7,
+        FG_SYSTEM_15 = 15,
+        FG_SYSTEM_BGM_DISABLED = 18,
+        FG_SYSTEM_ARRANGE = 25,
+        FG_SYSTEM_28 = 28,
+    };
+
+    enum
+    {
+        FG_STATUS_PLAYER = 0,
+        FG_STATUS_SCENARIO = 1,
+        FG_STATUS_PARTNER = 3,
+        FG_STATUS_EASY = 5,
+        FG_STATUS_BONUS = 6,
+        FG_STATUS_14 = 14,
+        FG_STATUS_SCREEN = 16,
+        FG_STATUS_20 = 20,
+        FG_STATUS_21 = 21,
+        FG_STATUS_CUTSCENE = 27,
+    };
+
+    enum
+    {
+        FG_STOP_06 = 6,
+        FG_STOP_DISABLE_INPUT = 7,
+    };
+
     extern GameTable& gGameTable;
     extern uint32_t& gGameFlags;
     extern uint32_t& gErrorCode;
@@ -25,4 +127,6 @@ namespace openre
     void bg_set_mode(int mode, int rgb);
     void mapping_tmd(int a1, void* pTmd, int page, int clut);
     void set_geom_screen(int prj);
+    bool check_flag(FlagGroup group, uint32_t index);
+    void set_flag(FlagGroup group, uint32_t index, bool value);
 }

@@ -92,6 +92,7 @@ namespace openre::sce
 
     void sce_init_hooks();
     int bitarray_get(uint32_t* bitArray, int index);
+    void bitarray_set(uint32_t* bitArray, int index, bool value);
     void bitarray_set(uint32_t* bitArray, int index);
     void bitarray_clr(uint32_t* bitArray, int index);
     void set_aot_entry(AotId id, SceAotBase* aot);

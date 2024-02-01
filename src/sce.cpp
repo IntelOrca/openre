@@ -111,20 +111,27 @@ namespace openre::sce
         return result;
     }
 
-    // 0x00503120
-    void bitarray_set(uint32_t* bitArray, int index)
+    void bitarray_set(uint32_t* bitArray, int index, bool value)
     {
         auto dwordIndex = index >> 5;
         auto bitIndex = index & 0x1F;
-        bitArray[dwordIndex] |= 0x80000000 >> bitIndex;
+        auto mask = 0x80000000 >> bitIndex;
+        if (value)
+            bitArray[dwordIndex] |= mask;
+        else
+            bitArray[dwordIndex] &= ~mask;
+    }
+
+    // 0x00503120
+    void bitarray_set(uint32_t* bitArray, int index)
+    {
+        bitarray_set(bitArray, index, true);
     }
 
     // 0x00503140
     void bitarray_clr(uint32_t* bitArray, int index)
     {
-        auto dwordIndex = index >> 5;
-        auto bitIndex = index & 0x1F;
-        bitArray[dwordIndex] |= 0x80000000 >> bitIndex;
+        bitarray_set(bitArray, index, false);
     }
 
     // 0x004E3F40
@@ -163,7 +170,8 @@ namespace openre::sce
     {
         scd_init_tasks();
         sce_aot_init();
-        gGameTable.fg_status &= ~0x0C00;
+        set_flag(FlagGroup::Status, FG_STATUS_20, false);
+        set_flag(FlagGroup::Status, FG_STATUS_21, false);
         gGameTable.cc_work.ctex_old = 0xFF;
         gGameTable.c_id = 0xFF;
         gGameTable.c_model_type = 0xFF;
@@ -229,7 +237,7 @@ namespace openre::sce
     // 0x004E3BD0
     void sce_rnd_set()
     {
-        if ((gGameTable.fg_system & 0x1000000) != 0)
+        if (check_flag(FlagGroup::System, FG_SYSTEM_7))
         {
             gGameTable.rng = rnd();
         }
@@ -246,13 +254,11 @@ namespace openre::sce
     // 0x004E40D0
     static void sce_scheduler_set()
     {
-        if (gGameTable.fg_system & 0x1000000)
+        if (check_flag(FlagGroup::System, FG_SYSTEM_7))
         {
             auto mapFlag = sce_get_map_flg(gGameTable.current_stage, gGameTable.current_room);
-            if (bitarray_get(gGameTable.fg_map, mapFlag))
-                bitarray_clr(gGameTable.fg_common, 255);
-            else
-                bitarray_set(gGameTable.fg_common, 255);
+            auto state = check_flag(FlagGroup::Map, mapFlag);
+            set_flag(FlagGroup::Common, 255, !state);
         }
         sce_rnd_set();
         sce_work_clr();
@@ -277,7 +283,7 @@ namespace openre::sce
     // 0x004E42D0
     static void sce_scheduler()
     {
-        if ((gGameTable.fg_stop & 0x2000000) == 0)
+        if (!check_flag(FlagGroup::Stop, FG_STOP_06))
         {
             sce_rnd_set();
             gGameTable.sce_type = SCE_TYPE_MAIN;
@@ -385,7 +391,7 @@ namespace openre::sce
                 break;
             }
             gHudMode = HUD_MODE_ITEM_BOX;
-            gGameFlags |= GAME_FLAG_15;
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
             byte_991F80 = 1;
             _itemBoxSpeed = 0;
             _questionState = ITEMBOX_INTERACT_STATE_CLOSING;
@@ -415,7 +421,9 @@ namespace openre::sce
         if (gPlayerEntity.pOn_om != 0)
             return 0;
 
-        if ((gGameFlags & GAME_FLAG_IS_PLAYER_1) && (gGameFlags & GAME_FLAG_HAS_PARTNER) && (dword_98A110[0] & 1) && (dword_98A110[0x21D] & 0x20))
+        auto isClaire = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
+        auto hasPartner = check_flag(FlagGroup::Status, FG_STATUS_PARTNER);
+        if (isClaire && hasPartner && (dword_98A110[0] & 1) && (dword_98A110[0x21D] & 0x20))
         {
             show_message(0, 0x100, MESSAGE_KIND_LEAVE_SHERRY_BEHIND, 0xFF000000);
             return 0;
@@ -463,6 +471,21 @@ namespace openre::sce
         return 0;
     }
 
+    static int transform_item_amount(const SceAotItemData& data)
+    {
+        switch (data.type)
+        {
+        case ITEM_TYPE_AMMO_HANDGUN: return data.amount == 15 ? 10 : 20;
+        case ITEM_TYPE_AMMO_SHOTGUN: return 5;
+        case ITEM_TYPE_AMMO_MAGNUM: return 6;
+        case ITEM_TYPE_AMMO_EXPLOSIVE_ROUNDS: return 4;
+        case ITEM_TYPE_AMMO_FLAME_ROUNDS: return 4;
+        case ITEM_TYPE_AMMO_ACID_ROUNDS: return 4;
+        case ITEM_TYPE_AMMO_BOWGUN: return 12;
+        default: return data.amount;
+        }
+    }
+
     // 0x004E96C0
     static void sce_item(SceAotItemData* data)
     {
@@ -475,30 +498,7 @@ namespace openre::sce
         }
         if (byte_6805B1 != 0)
         {
-            switch (data->type)
-            {
-            case ITEM_TYPE_AMMO_HANDGUN:
-                data->amount = data->amount == 15 ? 10 : 20;
-                break;
-            case ITEM_TYPE_AMMO_SHOTGUN:
-                data->amount = 5;
-                break;
-            case ITEM_TYPE_AMMO_MAGNUM:
-                data->amount = 6;
-                break;
-            case ITEM_TYPE_AMMO_EXPLOSIVE_ROUNDS:
-                data->amount = 4;
-                break;
-            case ITEM_TYPE_AMMO_FLAME_ROUNDS:
-                data->amount = 4;
-                break;
-            case ITEM_TYPE_AMMO_ACID_ROUNDS:
-                data->amount = 4;
-                break;
-            case ITEM_TYPE_AMMO_BOWGUN:
-                data->amount = 12;
-                break;
-            }
+            data->amount = transform_item_amount(*data);
         }
 
         if ((data->action & 1) != 0)
@@ -513,14 +513,12 @@ namespace openre::sce
             byte_991F80 = 1;
             dword_991FC4 = dword_989ED4;
             gHudMode = HUD_MODE_PICKUP_ITEM;
-            gGameFlags |= GAME_FLAG_15;
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
     }
 
     // 0x004E97C0
-    static void sce_normal(const void*)
-    {
-    }
+    static void sce_normal(const void*) {}
 
     // 0x004E97D0
     static void sce_message(const SceAotMessageData* data)
@@ -531,7 +529,7 @@ namespace openre::sce
     // 0x004E9800
     static void sce_event(const SceAotEventData* data)
     {
-        if (!(gGameTable.fg_stop & 0x2000000))
+        if (!check_flag(FlagGroup::Stop, FG_STOP_06))
         {
             scd_event_exec(data->task_index, data->event_index);
         }
@@ -570,10 +568,8 @@ namespace openre::sce
 
     void sce_init_hooks()
     {
-        interop::writeJmp(0x004E3BD0, &sce_rnd_set);
         interop::writeJmp(0x004E40D0, &sce_scheduler_set);
         interop::writeJmp(0x004E42D0, &sce_scheduler);
-        interop::writeJmp(0x004E4310, &sce_scheduler_main);
         set_sce_hook(SCE_AUTO, reinterpret_cast<SceImpl>(&sce_auto));
         set_sce_hook(SCE_DOOR, reinterpret_cast<SceImpl>(&sce_door));
         set_sce_hook(SCE_ITEM, reinterpret_cast<SceImpl>(&sce_item));

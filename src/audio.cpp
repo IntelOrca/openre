@@ -72,7 +72,7 @@ namespace openre::audio
         if (!gGameTable.enable_dsound)
             return 1;
 
-        if ((gGameTable.fg_system & 0x2000) != 0)
+        if (check_flag(FlagGroup::System, FG_SYSTEM_BGM_DISABLED))
             return 1;
 
         gGameTable.dword_693C4C = 0;
@@ -166,7 +166,7 @@ namespace openre::audio
                 auto temp = 0;
                 if (get_bgm_slot(bgmIndex, i) == 0)
                 {
-                    if ((gGameTable.fg_system & 8) != 0)
+                    if (check_flag(FlagGroup::System, FG_SYSTEM_28))
                     {
                         temp = gGameTable.dword_693804 & 0xFFFF;
                     }
