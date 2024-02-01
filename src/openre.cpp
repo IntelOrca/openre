@@ -10,6 +10,7 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "input.h"
 #include <cassert>
 #include <cstring>
 #include <windows.h>
@@ -22,6 +23,7 @@ using namespace openre::hud;
 using namespace openre::player;
 using namespace openre::scd;
 using namespace openre::sce;
+using namespace openre::input;
 
 namespace openre
 {
@@ -378,6 +380,7 @@ void onAttach()
     player_init_hooks();
     bgm_init_hooks();
     hud_init_hooks();
+    input_init_hooks();
 }
 
 extern "C" {

@@ -51,6 +51,12 @@
     <ClCompile Include="marni.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="itembox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -89,6 +95,12 @@
     <ClInclude Include="marni.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="itembox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>  
   </ItemGroup>
   <ItemGroup>
     <None Include="file.h">

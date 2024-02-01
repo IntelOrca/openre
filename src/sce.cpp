@@ -50,7 +50,6 @@ namespace openre::sce
     static Unknown988628*& dword_988628 = *((Unknown988628**)0x988628);
     static SceAotDoorData*& dword_988848 = *((SceAotDoorData**)0x988848);
     static Unknown6949F8*& dword_9888D0 = *((Unknown6949F8**)0x9888D0);
-    static uint32_t& dword_989E6C = *((uint32_t*)0x989E6C);
     static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
     static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
     static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
@@ -355,7 +354,7 @@ namespace openre::sce
             else
             {
                 byte_991F80 = 1;
-                dword_989E6C |= 0x40000;
+                gGameTable.fg_system |= 0x40000;
             }
         }
     }

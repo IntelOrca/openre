@@ -21,6 +21,7 @@ namespace openre
         ITEM_TYPE_AMMO_BOWGUN = 29,
         ITEM_TYPE_INK_RIBBON = 30,
         ITEM_TYPE_FIRST_AID_SPRAY = 35,
+        ITEM_TYPE_GREEN_HERB = 38,
         ITEM_TYPE_HERB_GGB = 45,
         ITEM_TYPE_LIGHTER = 47,
         ITEM_TYPE_LOCKPICK = 48,
