@@ -15,8 +15,8 @@ declare     unk_04                  u8
 
 struct      ItemboxItem
 declare     Type                    u8
-declare     Num                     u8
-declare     Size                    u8
+declare     Quantity                u8
+declare     Part                    u8
 declare     var_04                  u8
 
 struct      Vec16
