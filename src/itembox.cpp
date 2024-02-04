@@ -1,11 +1,11 @@
 #include "itembox.h"
-#include "re2.h"
 #include "item.h"
 #include "openre.h"
+#include "re2.h"
 #include <algorithm>
-#include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 
 namespace openre::itembox
 {
@@ -32,15 +32,11 @@ namespace openre::itembox
     {
         std::unordered_map<int, int> stackableSlotdIds{};
 
-        // Skip the first two items, they point to items 62 and 63
-        int nextFreeSlot = 2;
+        int nextFreeSlot = 0;
         std::vector<ItemboxItem> sortedItems(ITEMBOX_SIZE);
-        for (uint8_t i = 2; i < ITEMBOX_SIZE; i++)
+        for (uint8_t i = 0; i < ITEMBOX_SIZE; i++)
         {
-            // Adjust the index to wrap around for the first two iterations
-            uint8_t adjustedIndex = i % ITEMBOX_SIZE;
-            
-            auto& item = gGameTable.itembox[adjustedIndex];
+            auto& item = gGameTable.itembox[i];
             if (item.Type != ITEM_TYPE_NONE)
             {
                 if (!is_stackable(item.Type))
@@ -52,7 +48,7 @@ namespace openre::itembox
                 if (stackableSlotdIds.find(item.Type) == stackableSlotdIds.end())
                 {
                     stackableSlotdIds[item.Type] = nextFreeSlot++;
-                    sortedItems[stackableSlotdIds[item.Type]] = item;    
+                    sortedItems[stackableSlotdIds[item.Type]] = item;
                 }
                 else
                 {
@@ -61,7 +57,6 @@ namespace openre::itembox
                     {
                         stackedItem.Quantity += item.Quantity;
                     }
-                    // When stacked item exceed max Quantity create another stack in next itembox slot
                     else
                     {
                         item.Quantity = (stackedItem.Quantity + item.Quantity) - MAX_STACK_SIZE;
@@ -69,12 +64,31 @@ namespace openre::itembox
 
                         auto slotId = stackableSlotdIds[item.Type];
                         sortedItems.insert(sortedItems.begin() + slotId + 1, item);
-                        stackableSlotdIds[item.Type]++;                        
+                        stackableSlotdIds[item.Type]++;
+                        nextFreeSlot++;
                     }
-                }               
+                }
             }
         }
 
+        // Sort item by type.
+        std::sort(sortedItems.begin(), sortedItems.end(), [](ItemboxItem& a, ItemboxItem& b) {
+            if (a.Type == ITEM_TYPE_NONE && b.Type != ITEM_TYPE_NONE)
+            {
+                return false;
+            }
+            else if (a.Type != ITEM_TYPE_NONE && b.Type == ITEM_TYPE_NONE)
+            {
+                return true;
+            }
+
+            return a.Type < b.Type;
+        });
+
+        // Rotate all items two slot to the right.
+        // First two point to items 62 and 63.
+        std::rotate(sortedItems.rbegin(), sortedItems.rbegin() + 2, sortedItems.rend());
+
         std::copy(sortedItems.begin(), sortedItems.end(), gGameTable.itembox);
-    }  
+    }
 };
