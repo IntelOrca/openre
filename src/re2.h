@@ -24,8 +24,8 @@ static_assert(sizeof(InventorySlot) == 0x04);
 struct ItemboxItem
 {
     uint8_t Type;                       // 0x0000
-    uint8_t Num;                        // 0x0001
-    uint8_t Size;                       // 0x0002
+    uint8_t Quantity;                   // 0x0001
+    uint8_t Part;                       // 0x0002
     uint8_t var_04;                     // 0x0003
 };
 static_assert(sizeof(ItemboxItem) == 0x04);
