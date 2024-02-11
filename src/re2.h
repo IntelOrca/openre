@@ -419,14 +419,28 @@ struct GameTable
     uint8_t byte_53C78F[70];            // 0x53C78F
     uint8_t pad_53C7D5[5023];           // 0x53C7D5
     uint8_t* byte_53DB74;               // 0x53DB74
-    uint8_t pad_53DB78[1321440];        // 0x53DB78
-    uint32_t word_680558;               // 0x680558
+    uint8_t pad_53DB78[1243164];        // 0x53DB78
+    uint32_t dword_66D394;              // 0x66D394
+    uint8_t pad_66D398[63128];          // 0x66D398
+    uint8_t input_mapping[31];          // 0x67CA30
+    uint8_t pad_67CA4F[5];              // 0x67CA4F
+    uint32_t dword_67CA54;              // 0x67CA54
+    uint8_t pad_67CA58[464];            // 0x67CA58
+    uint32_t dword_67CC28;              // 0x67CC28
+    uint32_t dword_67CC2C;              // 0x67CC2C
+    uint8_t pad_67CC30[464];            // 0x67CC30
+    uint32_t dword_67CE00;              // 0x67CE00
+    uint8_t pad_67CE04[14160];          // 0x67CE04
+    uint32_t dword_680554;              // 0x680554
+    uint32_t input_keyboard;            // 0x680558
     uint8_t pad_68055C[36500];          // 0x68055C
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
     DoorInfo* door;                     // 0x689400
-    uint8_t pad_689404[2548];           // 0x689404
+    uint8_t pad_689404[2008];           // 0x689404
+    uint32_t dword_689BDC;              // 0x689BDC
+    uint8_t pad_689BE0[536];            // 0x689BE0
     uint32_t dword_689DF8;              // 0x689DF8
     uint8_t pad_689DFC[1032];           // 0x689DFC
     Unknown68A204* ctcb;                // 0x68A204
@@ -591,8 +605,12 @@ struct GameTable
     uint8_t pad_98F07B[56869];          // 0x98F07B
     DoorEntity* doors[9];               // 0x99CEA0
     uint32_t dword_99CEC4;              // 0x99CEC4
+    uint8_t pad_99CEC8[156];            // 0x99CEC8
+    uint32_t dword_99CF64;              // 0x99CF64
+    uint8_t pad_99CF68[8];              // 0x99CF68
+    uint32_t dword_99CF70;              // 0x99CF70
 };
-static_assert(sizeof(GameTable) == 0x99CEC8);
+static_assert(sizeof(GameTable) == 0x99CF74);
 
 struct Unknown6949F8
 {

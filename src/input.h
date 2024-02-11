@@ -16,7 +16,7 @@ namespace openre::input
         INPUT_SELECT = (1 << 8),
         INPUT_START = (1 << 9)
     };
-    
+
     [[nodiscard]] int GetGamepadState();
     void input_init_hooks();
 };

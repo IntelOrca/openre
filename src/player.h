@@ -31,4 +31,7 @@ namespace openre::player
 
     int inventory_find_item(ItemType type);
     void player_init_hooks();
+
+    bool is_aiming();
+    bool is_picking_up_item();
 }
