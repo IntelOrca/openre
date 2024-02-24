@@ -6,6 +6,8 @@
 #include "scd.h"
 #include "sce.h"
 
+#include <cstring>
+
 using namespace openre::sce;
 
 namespace openre::player
