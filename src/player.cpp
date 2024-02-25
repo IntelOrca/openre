@@ -295,7 +295,7 @@ namespace openre::player
         }
 
         gMoveTypeTable[player->routine_0](player);
-        pl_neck(0x1B58u, 1500);
+        pl_neck(7000, 1500);
         rot_neck(player->cdir.y);
         if ((player->type & 0xFFF) == 12)
         {
