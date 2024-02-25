@@ -486,7 +486,7 @@ namespace openre::player
 
         if (*player->pNow_seq & 0x4000)
         {
-            snd_se_walk(0, 3 * ((*player->pNow_seq >> 13) & 1) + 4, player);
+            snd_se_walk(0, 4 + (player_get_floor_sound(player) * 3), player);
             gGameTable.word_989EEE |= 2;
         }
         joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
