@@ -252,7 +252,7 @@ namespace openre::player
             return;
         }
         gGameTable.word_989EEE &= 0xE0;
-        gGameTable.fg_status &= ~0x80;
+        set_flag(FlagGroup::Status, FG_STATUS_24, false);
         if (player->damage_cnt & 0x7F)
         {
             player->damage_cnt--;
@@ -352,7 +352,7 @@ namespace openre::player
             gPlayerEntity.spd.x = 0;
             gPlayerEntity.spd.z = 0;
             gPlayerEntity.move_no = *reinterpret_cast<uint32_t*>(&gPlayerEntity.d_life_u) + 458752;
-            gGameTable.fg_status &= 0xffffffC0;
+            set_flag(FlagGroup::Status, FG_STATUS_31, true);
         }
 
         joint_move(&gPlayerEntity, gPlayerEntity.pKan_t_ptr, gPlayerEntity.pSeq_t_ptr, 512);
