@@ -17,6 +17,16 @@ namespace openre::input
         INPUT_START = (1 << 9)
     };
 
+    enum
+    {
+        KEY_TYPE_1 = 1,
+        KEY_TYPE_BACK = 4,
+        KEY_TYPE_LEFT = 2,
+        KEY_TYPE_RIGHT = 8,
+        KEY_TYPE_RUN_AND_CANCEL = 0x0200,
+        KEY_TYPE_10 = 10,
+    };
+
     [[nodiscard]] int GetGamepadState();
     void input_init_hooks();
 };

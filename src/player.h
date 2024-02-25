@@ -33,5 +33,4 @@ namespace openre::player
     void player_init_hooks();
 
     bool is_aiming();
-    bool is_picking_up_item();
 }

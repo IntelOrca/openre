@@ -1,4 +1,5 @@
 #include "player.h"
+#include "input.h"
 #include "interop.hpp"
 #include "item.h"
 #include "openre.h"
@@ -40,6 +41,8 @@ namespace openre::player
 
     void (*br_tbl[13])(PlayerEntity* player, uint32_t key, uint32_t key_trg);
     void (*mv_tbl[13])(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr);
+
+    const int now_seq_0x4000 = 0x4000;
 
     static const InventoryDef _initialInventoryAda[FULL_INVENTORY_SIZE] = {
         { ITEM_TYPE_HANDGUN_CLAIRE, 13, 0 },
@@ -306,6 +309,11 @@ namespace openre::player
         mag_down();
     }
 
+    int get_floor_sound(PlayerEntity* player)
+    {
+        return (*player->pNow_seq >> 13) & 1;
+    }
+
     // 0x004EDF40
     static void snd_se_walk(int a0, int a1, PlayerEntity* player)
     {
@@ -349,9 +357,9 @@ namespace openre::player
 
         joint_move(&gPlayerEntity, gPlayerEntity.pKan_t_ptr, gPlayerEntity.pSeq_t_ptr, 512);
 
-        if (*gPlayerEntity.pNow_seq & 0x4000)
+        if (*gPlayerEntity.pNow_seq & now_seq_0x4000)
         {
-            snd_se_walk(0, 3 * ((*gPlayerEntity.pNow_seq >> 13) & 1) + 4, &gPlayerEntity);
+            snd_se_walk(0, 4 + (get_floor_sound(&gPlayerEntity) * 3), &gPlayerEntity);
             gGameTable.word_989EEE |= 2;
         }
 
@@ -391,7 +399,7 @@ namespace openre::player
     {
         static uint8_t tbl[] = { 0x28, 0x10, 0x10 };
 
-        if (!player->routine_2 || !player->move_cnt)
+        if (player->routine_2 == 0 || player->move_cnt == 0)
         {
             int t = player->d_life_u;
             player->d_life_u = 0;
@@ -412,25 +420,24 @@ namespace openre::player
                 player->routine_2 = 0;
             }
         }
-        // back is pressed
-        if (key & 4)
+
+        if (key & input::KEY_TYPE_BACK)
         {
-            // left
-            if (key & 2)
+            if (key & input::KEY_TYPE_LEFT)
             {
                 player->cdir.y += tbl[player->d_life_u];
             }
-            // right
-            if (key & 8)
+            if (key & input::KEY_TYPE_RIGHT)
             {
                 player->cdir.y -= tbl[player->d_life_u];
             }
-
-            // run/cancel
-            if (key_trg & 0x0200)
+            if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
             {
                 // trigger quickturn
-                *(uint32_t*)&player->routine_0 = 0xC01;
+                player->routine_0 = 1;
+                player->routine_1 = 0xC;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
                 return;
             }
             if ((key_trg & 0x80) != 0)
@@ -439,21 +446,33 @@ namespace openre::player
             }
             if (key & 0x100 && player->type & 0xFFF)
             {
-                *(uint32_t*)player->routine_0 = 0x501;
+                player->routine_0 = 1;
+                player->routine_1 = 5;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
             }
         }
         else
         {
-            *(uint32_t*)&player->routine_0 = 1;
+            player->routine_0 = 1;
+            player->routine_1 = 0;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
 
-            if (key & 0xA)
+            if (key & input::KEY_TYPE_10)
             {
-                *(uint32_t*)&player->routine_0 = 0x401;
+                player->routine_0 = 1;
+                player->routine_1 = 4;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
             }
 
-            if (key & 1)
+            if (key & input::KEY_TYPE_1)
             {
-                *(uint32_t*)&player->routine_0 = 0x101;
+                player->routine_0 = 1;
+                player->routine_1 = 1;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
             }
         }
     }
@@ -468,8 +487,12 @@ namespace openre::player
         case 0:
             player->routine_2 = 1;
             player->timer0 = 0;
+
             // set base walk animation
-            *(uint32_t*)&player->move_no = 0x070000;
+            player->move_no = 0;
+            player->move_cnt = 0;
+            player->hokan_flg = 0;
+            player->mplay_flg = 0x07;
             [[fallthrough]];
 
         case 1:
@@ -479,14 +502,17 @@ namespace openre::player
             }
             else
             {
-                *(uint32_t*)&player->routine_0 = 1;
+                player->routine_0 = 1;
+                player->routine_1 = 0;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
             }
             break;
         }
 
         if (*player->pNow_seq & 0x4000)
         {
-            snd_se_walk(0, 4 + (player_get_floor_sound(player) * 3), player);
+            snd_se_walk(0, 4 + (get_floor_sound(player) * 3), player);
             gGameTable.word_989EEE |= 2;
         }
         joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
@@ -523,16 +549,7 @@ namespace openre::player
     bool is_aiming()
     {
         return (
-            check_flag(FlagGroup::Status, FG_STATUS_PLAYER) && check_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY)
-            && check_flag(FlagGroup::Status, FG_STATUS_ITEM) && check_flag(FlagGroup::Status, FG_STATUS_24)
-            && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN));
-    }
-
-    bool is_picking_up_item()
-    {
-        return (
-            check_flag(FlagGroup::Status, FG_STATUS_PLAYER) && check_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY)
-            && check_flag(FlagGroup::Status, FG_STATUS_ITEM) && !check_flag(FlagGroup::Status, FG_STATUS_24)
-            && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN));
+            check_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY) && check_flag(FlagGroup::Status, FG_STATUS_ITEM)
+            && check_flag(FlagGroup::Status, FG_STATUS_24) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN));
     }
 }
