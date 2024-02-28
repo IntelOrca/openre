@@ -352,7 +352,12 @@ namespace openre::player
             gPlayerEntity.spd.x = 0;
             gPlayerEntity.spd.z = 0;
             gPlayerEntity.move_no = *reinterpret_cast<uint32_t*>(&gPlayerEntity.d_life_u) + 458752;
-            set_flag(FlagGroup::Status, FG_STATUS_31, true);
+            set_flag(FlagGroup::Status, FG_STATUS_26, false);
+            set_flag(FlagGroup::Status, FG_STATUS_CUTSCENE, false);
+            set_flag(FlagGroup::Status, FG_STATUS_28, false);
+            set_flag(FlagGroup::Status, FG_STATUS_29, false);
+            set_flag(FlagGroup::Status, FG_STATUS_30, false);
+            set_flag(FlagGroup::Status, FG_STATUS_31, false);
         }
 
         joint_move(&gPlayerEntity, gPlayerEntity.pKan_t_ptr, gPlayerEntity.pSeq_t_ptr, 512);

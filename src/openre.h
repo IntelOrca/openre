@@ -101,7 +101,11 @@ namespace openre
         FG_STATUS_21 = 21,
         FG_STATUS_24 = 24,
         FG_STATUS_ITEM = 25,
+        FG_STATUS_26 = 26,
         FG_STATUS_CUTSCENE = 27,
+        FG_STATUS_28 = 28,
+        FG_STATUS_29 = 29,
+        FG_STATUS_30 = 30,
         FG_STATUS_31 = 31,
     };
 
