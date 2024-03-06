@@ -342,10 +342,18 @@ declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
-declare     word_680558             u32                     0x00680558
+declare     dword_66D394            u32                     0x0066D394
+declare     input_mapping           u8[31]                  0x0067CA30
+declare     dword_67CA54            u32                     0x0067CA54
+declare     dword_67CC28            u32                     0x0067CC28
+declare     dword_67CC2C            u32                     0x0067CC2C
+declare     dword_67CE00            u32                     0x0067CE00
+declare     dword_680554            u32                     0x00680554
+declare     input_keyboard          u32                     0x00680558
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
+declare     dword_689BDC            u32                     0x00689BDC
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     _st                     u8                      0x00691F61
@@ -462,6 +470,8 @@ declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98F07A             u8                      0x0098F07A
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
+declare     dword_99CF64            u32                     0x0099CF64
+declare     dword_99CF70            u32                     0x0099CF70
 
 struct      Unknown6949F8
 declare     var_0C                  u8                      0x0C

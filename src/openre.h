@@ -94,11 +94,19 @@ namespace openre
         FG_STATUS_PARTNER = 3,
         FG_STATUS_EASY = 5,
         FG_STATUS_BONUS = 6,
+        FG_STATUS_GAMEPLAY = 8,
         FG_STATUS_14 = 14,
         FG_STATUS_SCREEN = 16,
         FG_STATUS_20 = 20,
         FG_STATUS_21 = 21,
+        FG_STATUS_24 = 24,
+        FG_STATUS_ITEM = 25,
+        FG_STATUS_26 = 26,
         FG_STATUS_CUTSCENE = 27,
+        FG_STATUS_28 = 28,
+        FG_STATUS_29 = 29,
+        FG_STATUS_30 = 30,
+        FG_STATUS_31 = 31,
     };
 
     enum

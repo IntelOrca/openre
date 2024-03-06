@@ -1,10 +1,13 @@
 #include "player.h"
+#include "input.h"
 #include "interop.hpp"
 #include "item.h"
 #include "openre.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+
+#include <cstring>
 
 using namespace openre::sce;
 
@@ -28,6 +31,18 @@ namespace openre::player
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
     static uint8_t*& byte_98ED39 = *((uint8_t**)0x98ED39);
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
+
+    using MoveTypeFunc = int (*)(PlayerEntity*, int, int);
+    static MoveTypeFunc* gMoveTypeTable = (MoveTypeFunc*)0x53A7DC;
+
+    using MoveFunc = void (*)(PlayerEntity*, uint32_t, uint32_t);
+    static MoveFunc* gMoveBrTable = (MoveFunc*)0x53A7FC;
+    static MoveFunc* gMoveMvTable = (MoveFunc*)0x53A82C;
+
+    void (*br_tbl[13])(PlayerEntity* player, uint32_t key, uint32_t key_trg);
+    void (*mv_tbl[13])(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr);
+
+    const int now_seq_0x4000 = 0x4000;
 
     static const InventoryDef _initialInventoryAda[FULL_INVENTORY_SIZE] = {
         { ITEM_TYPE_HANDGUN_CLAIRE, 13, 0 },
@@ -55,6 +70,18 @@ namespace openre::player
         { ITEM_TYPE_NONE, 0, 0 },
         { ITEM_TYPE_NONE, 0, 0 },
         { ITEM_TYPE_PHOTO_SHERRY, 1, 0 },
+    };
+
+    enum
+    {
+        MOVE_TYPE_INIT = 0,
+        MOVE_TYPE_MOVE = 1,
+        MOVE_TYPE_DAMAGE = 2,
+        MOVE_TYPE_DIE = 3,
+        MOVE_TYPE_CUTSCENE = 4,
+        MOVE_TYPE_EM_DAMAGE = 5,
+        MOVE_TYPE_EM_DIE = 6,
+        MOVE_TYPE_DEAD = 7,
     };
 
     // 0x00502190
@@ -181,6 +208,418 @@ namespace openre::player
         }
     }
 
+    // 0x004DABC0
+    static int pl_neck(int a1, int a2)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DABC0;
+        return p(&gPlayerEntity, a1, a2);
+    }
+
+    // 0x004B3540
+    static int rot_neck(int a1)
+    {
+        using sig = int (*)(PlayerEntity*, int);
+        auto p = (sig)0x004B3540;
+        return p(&gPlayerEntity, a1);
+    }
+
+    // 0x004D71C0
+    static int pl_bow()
+    {
+        using sig = int (*)(PlayerEntity*);
+        auto p = (sig)0x004D71C0;
+        return p(&gPlayerEntity);
+    }
+
+    // 0x004D4850
+    static int g_rot()
+    {
+        using sig = int (*)(PlayerEntity*);
+        auto p = (sig)0x004D4850;
+        return p(&gPlayerEntity);
+    }
+
+    // 0x004D4910
+    static int gat_rot()
+    {
+        using sig = int (*)(PlayerEntity*);
+        auto p = (sig)0x004D4910;
+        return p(&gPlayerEntity);
+    }
+
+    // 0x004D46A0
+    static int mag_down()
+    {
+        using sig = int (*)(PlayerEntity*);
+        auto p = (sig)0x004D46A0;
+        return p(&gPlayerEntity);
+    }
+
+    // 0x004D9940
+    static int pl_init(PlayerEntity* player)
+    {
+        using sig = int (*)(PlayerEntity*);
+        auto p = (sig)0x004D9940;
+        return p(player);
+    }
+
+    // 0x004D9D20
+    static void pl_move(PlayerEntity* player, int pKan, int pSeq)
+    {
+        gMoveBrTable[player->routine_1](player, gGameTable.g_key, gGameTable.key_trg);
+        gMoveMvTable[player->routine_1](player, pKan, pSeq);
+    }
+
+    // 0x004DC130
+    static int pl_mv_damage(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DC130;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004DC850
+    static int pl_mv_die(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DC850;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004F6080
+    static int pl_mv_cutscene(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004F6080;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004DC930
+    static int pl_mv_em_damage(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DC930;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004DC980
+    static int pl_mv_em_die(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DC980;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004DC9D0
+    static int pl_mv_dead(PlayerEntity* player, int pKan, int pSeq)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004DC9D0;
+        return p(player, pKan, pSeq);
+    }
+
+    // 0x004D97B0
+    static void player_move(PlayerEntity* player)
+    {
+        if (gGameTable.fg_stop < 0)
+        {
+            return;
+        }
+        gGameTable.word_989EEE &= 0xE0;
+        set_flag(FlagGroup::Status, FG_STATUS_24, false);
+        if (player->damage_cnt & 0x7F)
+        {
+            player->damage_cnt--;
+        }
+
+        if (player->id == 13)
+        {
+            auto v3 = static_cast<uint8_t>((player->life << 15) / (player->max_life) >> 8);
+            auto sinParts = reinterpret_cast<uint8_t*>(&(player->pSin_parts_ptr));
+            sinParts[28] = ((v3 | (v3 << 8)) << 8) + 128;
+            if (player->life < 0)
+            {
+                sinParts[28] = 128;
+            }
+            if (gPoisonStatus)
+            {
+                if (!(player->move_cnt & 1))
+                {
+                    gGameTable.dword_689BDC++;
+                }
+                gGameTable.dword_689BDC = (gGameTable.dword_689BDC & 0xFFFFFF) | 64;
+            }
+            else
+            {
+                if (!(gGameTable.dword_689BDC << 24) && !(player->move_cnt & 1))
+                {
+                    gGameTable.dword_689BDC--;
+                }
+            }
+            sinParts[28] += gGameTable.dword_689BDC << 16;
+        }
+
+        if (gPoisonStatus)
+        {
+            if (gPoisonTimer-- == 0)
+            {
+                gPoisonTimer = 30;
+                if (player->life > 1)
+                {
+                    player->life--;
+                }
+            }
+        }
+
+        auto moveType = player->routine_0;
+        auto pKan = *reinterpret_cast<uint32_t*>(&(player->pKan_t_ptr));
+        auto pSeq = *reinterpret_cast<uint32_t*>(&(player->pSeq_t_ptr));
+        switch (moveType)
+        {
+        case MOVE_TYPE_INIT: pl_init(player); break;
+        case MOVE_TYPE_MOVE: pl_move(player, pKan, pSeq); break;
+        case MOVE_TYPE_DAMAGE: pl_mv_damage(player, pKan, pSeq); break;
+        case MOVE_TYPE_DIE: pl_mv_die(player, pKan, pSeq); break;
+        case MOVE_TYPE_CUTSCENE: pl_mv_cutscene(player, pKan, pSeq); break;
+        case MOVE_TYPE_EM_DAMAGE: pl_mv_em_damage(player, pKan, pSeq); break;
+        case MOVE_TYPE_EM_DIE: pl_mv_em_die(player, pKan, pSeq); break;
+        case MOVE_TYPE_DEAD: pl_mv_dead(player, pKan, pSeq); break;
+        }
+
+        pl_neck(7000, 1500);
+        rot_neck(player->cdir.y);
+        if ((player->type & 0xFFF) == 12)
+        {
+            pl_bow();
+        }
+        g_rot();
+        gat_rot();
+        mag_down();
+    }
+
+    int get_floor_sound(PlayerEntity* player)
+    {
+        return (*player->pNow_seq >> 13) & 1;
+    }
+
+    // 0x004EDF40
+    static void snd_se_walk(int a0, int floor_sound, PlayerEntity* player)
+    {
+        using sig = void (*)(int, int, PlayerEntity*);
+        auto p = (sig)0x004EDF40;
+        return p(a0, floor_sound, player);
+    }
+
+    // 0x004C1C30
+    static void joint_move(PlayerEntity* player, int a1, int a2, int a3)
+    {
+        using sig = void (*)(PlayerEntity*, int, int, int);
+        auto p = (sig)0x004C1C30;
+        return p(player, a1, a2, a3);
+    }
+
+    // 0x004B8470
+    static int esp_call(int a0, int a1, Mat16 matrix, Vec16p vec)
+    {
+        using sig = int (*)(int, int, Mat16, Vec16p);
+        auto p = (sig)0x004B8470;
+        return p(a0, a1, matrix, vec);
+    }
+
+    // 0x004DAE70
+    static void pl_mv_rotate(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr)
+    {
+        Vec16p pVec{ 0, 3, 6 };
+        if (player->routine_2)
+        {
+            if (player->routine_2 != 1)
+            {
+                return;
+            }
+        }
+        else
+        {
+            player->routine_2 = 1;
+            player->spd.x = 0;
+            player->spd.z = 0;
+            player->move_no = (pVec.x + player->d_life_u) + 458752;
+            set_flag(FlagGroup::Status, FG_STATUS_26, false);
+            set_flag(FlagGroup::Status, FG_STATUS_CUTSCENE, false);
+            set_flag(FlagGroup::Status, FG_STATUS_28, false);
+            set_flag(FlagGroup::Status, FG_STATUS_29, false);
+            set_flag(FlagGroup::Status, FG_STATUS_30, false);
+            set_flag(FlagGroup::Status, FG_STATUS_31, false);
+        }
+
+        joint_move(player, pKanPtr, pSeqPtr, 512);
+        if (*player->pNow_seq & now_seq_0x4000)
+        {
+            snd_se_walk(0, 4 + (get_floor_sound(player) * 3), player);
+            gGameTable.word_989EEE |= 2;
+        }
+
+        if (player->water && (player->move_cnt & 1) != 0)
+        {
+            pVec = Vec16p{ 0, 300, 0 };
+            auto sinPartsAddr = player->pSin_parts_ptr + 1892;
+            auto sinParts = reinterpret_cast<uint8_t*>(&sinPartsAddr);
+
+            if (player->water < static_cast<int32_t>(sinParts[24]) + 300)
+            {
+                auto matrix = *reinterpret_cast<Mat16*>(sinParts[72]);
+                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, matrix, pVec);
+            }
+
+            sinParts = reinterpret_cast<uint8_t*>(player->pSin_parts_ptr);
+            if (player->water < static_cast<int32_t>(sinParts[626]) + 300)
+            {
+                auto matrix = *reinterpret_cast<Mat16*>(sinParts[672]);
+                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, matrix, pVec);
+            }
+        }
+    }
+
+    // 0x004DA6C0
+    static void pl_br_03(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    {
+        static uint8_t tbl[] = { 0x28, 0x10, 0x10 };
+
+        if (player->routine_2 == 0 || player->move_cnt == 0)
+        {
+            int t = player->d_life_u;
+            player->d_life_u = 0;
+            if (player->life <= 100)
+            {
+                player->d_life_u = 1;
+            }
+            if (gPoisonStatus)
+            {
+                player->d_life_u = 1;
+            }
+            if (player->life <= 20)
+            {
+                player->d_life_u = 2;
+            }
+            if (t != player->d_life_u)
+            {
+                player->routine_2 = 0;
+            }
+        }
+
+        if (key & input::KEY_TYPE_BACK)
+        {
+            if (key & input::KEY_TYPE_LEFT)
+            {
+                player->cdir.y += tbl[player->d_life_u];
+            }
+            if (key & input::KEY_TYPE_RIGHT)
+            {
+                player->cdir.y -= tbl[player->d_life_u];
+            }
+            if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
+            {
+                // trigger quickturn
+                player->routine_0 = 1;
+                player->routine_1 = 0xC;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+                return;
+            }
+            if ((key_trg & 0x80) != 0)
+            {
+                player->status_flg |= 0x200000;
+            }
+            if (key & 0x100 && player->type & 0xFFF)
+            {
+                player->routine_0 = 1;
+                player->routine_1 = 5;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+        }
+        else
+        {
+            player->routine_0 = 1;
+            player->routine_1 = 0;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+
+            if (key & input::KEY_TYPE_10)
+            {
+                player->routine_0 = 1;
+                player->routine_1 = 4;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+
+            if (key & input::KEY_TYPE_1)
+            {
+                player->routine_0 = 1;
+                player->routine_1 = 1;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+        }
+    }
+
+    // no input code is required for quickturn
+    void pl_br_quickturn(PlayerEntity* player, uint32_t key, uint32_t key_trg) {}
+
+    void pl_mv_quickturn(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr)
+    {
+        switch (player->routine_2)
+        {
+        case 0:
+            player->routine_2 = 1;
+            player->timer0 = 0;
+
+            // set base walk animation
+            player->move_no = 0;
+            player->move_cnt = 0;
+            player->hokan_flg = 0;
+            player->mplay_flg = 0x07;
+            [[fallthrough]];
+
+        case 1:
+            if (player->timer0++ < 8)
+            {
+                player->cdir.y += 2048 / 8;
+            }
+            else
+            {
+                player->routine_0 = 1;
+                player->routine_1 = 0;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+            break;
+        }
+
+        if (*player->pNow_seq & 0x4000)
+        {
+            snd_se_walk(0, 4 + (get_floor_sound(player) * 3), player);
+            gGameTable.word_989EEE |= 2;
+        }
+        joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
+    }
+
+    void init_quickturn_move()
+    {
+        // fill expanded tables with old code
+        std::memcpy(br_tbl, gMoveBrTable, 12 * 4);
+        std::memcpy(mv_tbl, gMoveMvTable, 12 * 4);
+        // set hooks for quickturn
+        br_tbl[03] = pl_br_03;
+        br_tbl[12] = pl_br_quickturn;
+        mv_tbl[12] = pl_mv_quickturn;
+        // replace old table pointers
+        interop::writeMemory(0x53A7FC, br_tbl, 12 * 4);
+        interop::writeMemory(0x53A830, mv_tbl, 12 * 4);
+        gMoveBrTable = br_tbl;
+        gMoveMvTable = mv_tbl;
+    }
+
     void player_init_hooks()
     {
         interop::writeJmp(0x00502190, &partner_switch);
@@ -188,5 +627,16 @@ namespace openre::player
         interop::writeJmp(0x4FC3CE, itembox_prev_slot);
         interop::writeJmp(0x5024D0, set_inventory_item);
         interop::writeJmp(0x502500, set_inventory_item_quantity);
+        interop::writeJmp(0x4D97B0, player_move);
+        interop::writeJmp(0x4D9D20, pl_move);
+        interop::writeJmp(0x4DA6C0, pl_br_03);
+        init_quickturn_move();
+    }
+
+    bool is_aiming()
+    {
+        return (
+            check_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY) && check_flag(FlagGroup::Status, FG_STATUS_ITEM)
+            && check_flag(FlagGroup::Status, FG_STATUS_24) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN));
     }
 }
