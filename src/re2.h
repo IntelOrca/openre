@@ -502,7 +502,9 @@ struct GameTable
     uint8_t se_tmp0;                    // 0x695E70
     uint8_t byte_695E71;                // 0x695E71
     uint8_t byte_695E72;                // 0x695E72
-    uint8_t pad_695E73[267417];         // 0x695E73
+    uint8_t pad_695E73[9];              // 0x695E73
+    uint32_t dword_695E7C;              // 0x695E7C
+    uint8_t pad_695E80[267404];         // 0x695E80
     uint8_t byte_6D730C[24592];         // 0x6D730C
     uint8_t pad_6DD31C[1983844];        // 0x6DD31C
     uint8_t* bg_buffer;                 // 0x8C1880

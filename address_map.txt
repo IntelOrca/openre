@@ -396,6 +396,7 @@ declare     rbj_reset_flg           u8                      0x00695E6F
 declare     se_tmp0                 u8                      0x00695E70
 declare     byte_695E71             u8                      0x00695E71
 declare     byte_695E72             u8                      0x00695E72
+declare     dword_695E7C            u32                     0x00695E7C
 declare     byte_6D730C             u8[24592]               0x006D730C
 declare     bg_buffer               u8*                     0x008C1880
 declare     tmd                     void*                   0x008C6880

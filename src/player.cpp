@@ -8,6 +8,7 @@
 #include "sce.h"
 
 #include <cstring>
+#include <iostream>
 
 using namespace openre::sce;
 
@@ -256,6 +257,22 @@ namespace openre::player
         return p(&gPlayerEntity);
     }
 
+    // 0x004E2680
+    int sca_hit_stairs(PlayerEntity* player, int a1, int a2)
+    {
+        using sig = int (*)(PlayerEntity*, int, int);
+        auto p = (sig)0x004E2680;
+        return p(&gPlayerEntity, a1, a2);
+    }
+
+    // 0x004CDE00
+    static int oma_pl_updown_ck(int a0)
+    {
+        using sig = int (*)(int);
+        auto p = (sig)0x004CDE00;
+        return p(a0);
+    }
+
     // 0x004D9940
     static int pl_init(PlayerEntity* player)
     {
@@ -481,9 +498,9 @@ namespace openre::player
     }
 
     // 0x004DA6C0
-    static void pl_br_03(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    static void pl_br_backward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
-        static uint8_t tbl[] = { 0x28, 0x10, 0x10 };
+        static uint8_t yAxisRotationSpeed[] = { 0x28, 0x10, 0x10 };
 
         if (player->routine_2 == 0 || player->move_cnt == 0)
         {
@@ -511,11 +528,11 @@ namespace openre::player
         {
             if (key & input::KEY_TYPE_LEFT)
             {
-                player->cdir.y += tbl[player->d_life_u];
+                player->cdir.y += yAxisRotationSpeed[player->d_life_u];
             }
             if (key & input::KEY_TYPE_RIGHT)
             {
-                player->cdir.y -= tbl[player->d_life_u];
+                player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
             }
             if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
             {
@@ -526,11 +543,11 @@ namespace openre::player
                 player->routine_3 = 0;
                 return;
             }
-            if ((key_trg & 0x80) != 0)
+            if ((key_trg & input::KEY_TYPE_80) != 0)
             {
                 player->status_flg |= 0x200000;
             }
-            if (key & 0x100 && player->type & 0xFFF)
+            if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
             {
                 player->routine_0 = 1;
                 player->routine_1 = 5;
@@ -604,13 +621,172 @@ namespace openre::player
         joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
     }
 
+    // 0x004D9FA0
+    void pl_br_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    {
+        std::cout << "pl_br_forward" << std::endl;
+        static uint8_t yAxisRotationSpeed[] = { 0x28, 0x20, 0x16 };
+
+        // TODO: Extract to function
+        if (player->routine_2 == 0 || player->move_cnt == 0)
+        {
+            int t = player->d_life_u;
+            player->d_life_u = 0;
+            if (player->life <= 100)
+            {
+                player->d_life_u = 1;
+            }
+            if (gPoisonStatus)
+            {
+                player->d_life_u = 1;
+            }
+            if (player->life <= 20)
+            {
+                player->d_life_u = 2;
+            }
+            if (t != player->d_life_u)
+            {
+                player->routine_2 = 0;
+            }
+        }
+
+        if ((key & input::KEY_TYPE_1) == 0)
+        {
+            std::cout << "Forward to idle" << std::endl;
+            // idle
+            player->routine_0 = 1;
+            player->routine_1 = 0;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+
+             if ((key & input::KEY_TYPE_10) != 0)
+            {
+                std::cout << "Forward to rotate" << std::endl;
+                // rotate
+                player->routine_0 = 1;
+                player->routine_1 = 4;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+
+            if ((key & input::KEY_TYPE_BACK) != 0)
+            {
+                std::cout << "Forward to backward" << std::endl;
+                // backward
+                player->routine_0 = 1;
+                player->routine_1 = 3;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+
+            return;
+        }
+
+        //if ((key & input::KEY_TYPE_10) != 0)
+        //{
+        //    std::cout << "" << std::endl;
+        //    // rotate
+        //    player->routine_0 = 25;
+        //    player->routine_1 = 10;
+        //    player->routine_2 = 0;
+        //    player->routine_3 = 0;
+        //}
+        
+
+        // on release key
+        // if ((key & input::KEY_TYPE_1) == 0)
+        //{
+        //    std::cout << "KEY_TYPE_1" << std::endl;
+        //    // idle
+        //    player->routine_0 = 1;
+        //    player->routine_1 = 0;
+        //    player->routine_2 = 0;
+        //    player->routine_3 = 0;
+
+        //    if ((key & input::KEY_TYPE_10) != 0)
+        //    {
+        //        std::cout << "*********** KEY_TYPE_10 " << std::endl;
+        //        player->routine_0 = 25;
+        //        player->routine_1 = 10;
+        //        player->routine_2 = 0;
+        //        player->routine_3 = 0;
+        //    }
+        //    if ((key & input::KEY_TYPE_BACK) != 0)
+        //    {
+        //        std::cout << "*********** KEY_TYPE_BACK " << std::endl;
+        //        player->routine_0 = 69;
+        //        player->routine_1 = 7;
+        //        player->routine_2 = 0;
+        //        player->routine_3 = 0;
+        //    }
+        //    return;
+        //}
+
+        if (key & input::KEY_TYPE_LEFT)
+        {
+            player->cdir.y += yAxisRotationSpeed[player->d_life_u];
+        }
+        if (key & input::KEY_TYPE_RIGHT)
+        {
+            player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
+        }
+        if (key & input::KEY_TYPE_RUN_AND_CANCEL)
+        {
+            std::cout << "running" << std::endl;
+            player->routine_0 = 1;
+            player->routine_1 = 2;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+        }
+        if (check_flag(FlagGroup::Status, 16))
+        {
+            player->routine_0 = 61;
+            player->routine_1 = 25;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+        }
+        if ((key & input::KEY_TYPE_80) == 0 && (key_trg & input::KEY_TYPE_80) == 0)
+        {
+            goto LABEL_31;
+        }
+        if (player->Sca_info & 0x100000)
+        {
+            sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+            return;
+        }
+        if (oma_pl_updown_ck(player->id + 4) == 0)
+        {
+            if (key_trg & 0x80)
+            {
+                set_flag(FlagGroup::Status, 10, true);
+            }
+
+        LABEL_31:
+            if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
+            {
+                std::cout << "pl_br_forward aim" << std::endl;
+                // player->routine_0 = 81;
+                // player->routine_1 = 12;
+                // player->routine_2 = 0;
+                // player->routine_3 = 0;
+                player->routine_0 = 1;
+                player->routine_1 = 5;
+                player->routine_2 = 0;
+                player->routine_3 = 0;
+            }
+        }
+    }
+
+    // 0x004DA100
+    // void pl_mv_forward(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr) {}
     void init_quickturn_move()
     {
         // fill expanded tables with old code
         std::memcpy(br_tbl, gMoveBrTable, 12 * 4);
         std::memcpy(mv_tbl, gMoveMvTable, 12 * 4);
         // set hooks for quickturn
-        br_tbl[03] = pl_br_03;
+        br_tbl[1] = pl_br_forward;
+        br_tbl[3] = pl_br_backward;
         br_tbl[12] = pl_br_quickturn;
         mv_tbl[12] = pl_mv_quickturn;
         // replace old table pointers
@@ -629,7 +805,10 @@ namespace openre::player
         interop::writeJmp(0x502500, set_inventory_item_quantity);
         interop::writeJmp(0x4D97B0, player_move);
         interop::writeJmp(0x4D9D20, pl_move);
-        interop::writeJmp(0x4DA6C0, pl_br_03);
+        // interop::writeJmp(0x4DA6C0, pl_br_backward);
+        // interop::writeJmp(0x4D9FA0, pl_br_forward);
+        // interop::writeJmp(0x004D9D60, pl_br_forward);
+
         init_quickturn_move();
     }
 
@@ -640,3 +819,27 @@ namespace openre::player
             && check_flag(FlagGroup::Status, FG_STATUS_24) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN));
     }
 }
+
+// AIM routine
+// player->routine_0 = 1;
+// player->routine_1 = 5;
+// player->routine_2 = 0;
+// player->routine_3 = 0;
+
+// Idle
+// player->routine_0 = 1;
+// player->routine_1 = 0;
+// player->routine_2 = 0;
+// player->routine_3 = 0;
+
+// Run forward
+// player->routine_0 = 1;
+// player->routine_1 = 2;
+// player->routine_2 = 0;
+// player->routine_3 = 0;
+
+// Rotate
+// player->routine_0 = 1;
+// player->routine_1 = 4;
+// player->routine_2 = 0;
+// player->routine_3 = 0;
