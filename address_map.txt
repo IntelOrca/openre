@@ -360,6 +360,7 @@ declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
 declare     byte_691F6C             u8                      0x00691F6C
+declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F76             u8                      0x00691F76
 declare     itembox_slot_id         u8                      0x00691F84
 declare     byte_691F85             u8                      0x00691F85
@@ -469,6 +470,8 @@ declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98F07A             u8                      0x0098F07A
+declare     byte_991F80             u8                      0x00991F80
+declare     dword_991FC4            u32                     0x00991FC4
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64

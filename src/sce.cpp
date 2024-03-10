@@ -59,9 +59,7 @@ namespace openre::sce
     static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
     static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
-    static uint8_t& byte_991F80 = *((uint8_t*)0x991F80);
-    static uint32_t& dword_991FC4 = *((uint32_t*)0x991FC4);
+    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);        
 
     constexpr uint8_t KEY_LOCKED = 255;
     constexpr uint8_t KEY_UNLOCK = 254;
@@ -332,7 +330,7 @@ namespace openre::sce
             auto inventoryIndex = inventory_find_item(ITEM_TYPE_INK_RIBBON);
             if (inventoryIndex < 0)
             {
-                dword_989ED4 = dword_991FC4;
+                dword_989ED4 = gGameTable.dword_991FC4;
                 show_message(0, 0x100, MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE, 0xFF000000);
                 dword_98E794 = nullptr;
                 _questionState = STATE_QUESTION;
@@ -349,11 +347,11 @@ namespace openre::sce
             _questionState = STATE_QUESTION;
             if (gQuestionFlags & QUESTION_FLAG_ANSWER_NO)
             {
-                dword_989ED4 = dword_991FC4;
+                dword_989ED4 = gGameTable.dword_991FC4;
             }
             else
             {
-                byte_991F80 = 1;
+                gGameTable.byte_991F80 = 1;
                 gGameTable.fg_system |= 0x40000;
             }
         }
@@ -365,7 +363,7 @@ namespace openre::sce
         switch (_questionState)
         {
         case ITEMBOX_INTERACT_STATE_INIT:
-            dword_991FC4 = dword_989ED4;
+            gGameTable.dword_991FC4 = dword_989ED4;
             dword_989ED4 |= 0x7F000000;
             _itemBoxSpeed = 1;
             _itemBoxAcceleration = 3;
@@ -391,7 +389,7 @@ namespace openre::sce
             }
             gHudMode = HUD_MODE_ITEM_BOX;
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
-            byte_991F80 = 1;
+            gGameTable.byte_991F80 = 1;
             _itemBoxSpeed = 0;
             _questionState = ITEMBOX_INTERACT_STATE_CLOSING;
             [[fallthrough]];
@@ -431,7 +429,7 @@ namespace openre::sce
         int eax;
         if (data->LockId < 128 || (eax = bitarray_get(gGameTable.door_locks, data->LockId & 0x3F)))
         {
-            byte_991F80 = 1;
+            gGameTable.byte_991F80 = 1;
             gGameTable.door_aot_data = data;
             dword_989ED4 |= 0xFF000000;
             return 0;
@@ -509,8 +507,8 @@ namespace openre::sce
         else
         {
             // No pick up animation
-            byte_991F80 = 1;
-            dword_991FC4 = dword_989ED4;
+            gGameTable.byte_991F80 = 1;
+            gGameTable.dword_991FC4 = dword_989ED4;
             gHudMode = HUD_MODE_PICKUP_ITEM;
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
@@ -546,7 +544,7 @@ namespace openre::sce
     {
         dword_98E794 = &sce_save_callback;
         _questionState = 0;
-        dword_991FC4 = dword_989ED4;
+        gGameTable.dword_991FC4 = dword_989ED4;
         dword_989ED4 |= 0xFF000000;
         byte_98E9A7 = dword_6949F8->var_0C;
     }
