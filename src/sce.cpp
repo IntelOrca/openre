@@ -500,9 +500,7 @@ namespace openre::sce
 
         if ((data->action & 1) != 0)
         {
-            // Pick up from floor animation
-            gPlayerEntity.routine_1 = 6;
-            gPlayerEntity.routine_2 = 0;
+            player::set_routine(Routine::PICK_UP_ITEM);
         }
         else
         {

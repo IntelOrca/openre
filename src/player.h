@@ -25,6 +25,19 @@ namespace openre::player
         PLD_SHERRY
     };
 
+    enum class Routine
+    {
+        IDLE,
+        FORWARD,
+        RUN_FORWARD,
+        BACKWARD,
+        ROTATE,
+        AIM,
+        QUICKTURN,
+        PUSH_OBJECT,
+        PICK_UP_ITEM,
+    };
+
     extern uint8_t& gCurrentWeaponIndex;
     extern uint8_t& gInventorySize;
     extern InventorySlot* gInventory;
@@ -33,4 +46,5 @@ namespace openre::player
     void player_init_hooks();
 
     bool is_aiming();
+    void set_routine(Routine routine);
 }

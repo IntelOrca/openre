@@ -86,18 +86,6 @@ namespace openre::player
         MOVE_TYPE_DEAD = 7,
     };
 
-    enum class Routine
-    {
-        IDLE,
-        FORWARD,
-        RUN_FORWARD,
-        BACKWARD,
-        ROTATE,
-        AIM,
-        QUICKTURN,
-        PUSH_OBJECT,
-    };
-
     enum
     {
         PICK_UP_ITEM_INTERACT_STATE_FLOOR = 0,
@@ -123,7 +111,7 @@ namespace openre::player
         BR_TBL_QUICKTURN_IDX = 12,
     };
 
-    static void set_routine(Routine routine)
+    void set_routine(Routine routine)
     {
         switch (routine)
         {
@@ -159,6 +147,10 @@ namespace openre::player
         case Routine::PUSH_OBJECT:
             gPlayerEntity.routine_0 = 1;
             gPlayerEntity.routine_1 = 0xA;
+            break;
+        case Routine::PICK_UP_ITEM:
+            gPlayerEntity.routine_1 = 6;
+            gPlayerEntity.routine_2 = 0;
             break;
         }
         gPlayerEntity.routine_2 = 0;
@@ -364,31 +356,31 @@ namespace openre::player
     // 0x004D9D20
     static void pl_move(PlayerEntity* player, int pKan, int pSeq)
     {
-         if (player->routine_1 <= BR_TBL_ROTATE_IDX)
+        if (player->routine_1 <= BR_TBL_ROTATE_IDX)
         {
-             // Logic shared in br moves from 0 to 4
-             if (player->routine_2 == 0 || player->move_cnt == 0)
-             {
-                 int t = player->d_life_u;
-                 player->d_life_u = 0;
-                 if (player->life <= 100)
-                 {
-                     player->d_life_u = 1;
-                 }
-                 if (gPoisonStatus)
-                 {
-                     player->d_life_u = 1;
-                 }
-                 if (player->life <= 20)
-                 {
-                     player->d_life_u = 2;
-                 }
-                 if (t != player->d_life_u)
-                 {
-                     player->routine_2 = 0;
-                 }
-             }
-         }
+            // Logic shared in br moves from 0 to 4
+            if (player->routine_2 == 0 || player->move_cnt == 0)
+            {
+                int t = player->d_life_u;
+                player->d_life_u = 0;
+                if (player->life <= 100)
+                {
+                    player->d_life_u = 1;
+                }
+                if (gPoisonStatus)
+                {
+                    player->d_life_u = 1;
+                }
+                if (player->life <= 20)
+                {
+                    player->d_life_u = 2;
+                }
+                if (t != player->d_life_u)
+                {
+                    player->routine_2 = 0;
+                }
+            }
+        }
         gMoveBrTable[player->routine_1](player, gGameTable.g_key, gGameTable.key_trg);
         gMoveMvTable[player->routine_1](player, pKan, pSeq);
     }
@@ -760,7 +752,7 @@ namespace openre::player
         if (key & input::KEY_TYPE_RUN_AND_CANCEL)
         {
             set_routine(Routine::RUN_FORWARD);
-        }        
+        }
         if (check_flag(FlagGroup::Status, FG_STATUS_18))
         {
             set_routine(Routine::PUSH_OBJECT);
