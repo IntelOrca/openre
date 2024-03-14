@@ -95,6 +95,7 @@ namespace openre::player
         ROTATE,
         AIM,
         QUICKTURN,
+        PUSH_OBJECT,
     };
 
     enum
@@ -153,6 +154,11 @@ namespace openre::player
         case Routine::QUICKTURN:
             gPlayerEntity.routine_0 = 1;
             gPlayerEntity.routine_1 = 0xC;
+
+            break;
+        case Routine::PUSH_OBJECT:
+            gPlayerEntity.routine_0 = 1;
+            gPlayerEntity.routine_1 = 0xA;
             break;
         }
         gPlayerEntity.routine_2 = 0;
@@ -358,31 +364,31 @@ namespace openre::player
     // 0x004D9D20
     static void pl_move(PlayerEntity* player, int pKan, int pSeq)
     {
-        if (player->routine_1 <= BR_TBL_ROTATE_IDX)
+         if (player->routine_1 <= BR_TBL_ROTATE_IDX)
         {
-            // Logic shared in br moves from 0 to 4
-            if (player->routine_2 == 0 || player->move_cnt == 0)
-            {
-                int t = player->d_life_u;
-                player->d_life_u = 0;
-                if (player->life <= 100)
-                {
-                    player->d_life_u = 1;
-                }
-                if (gPoisonStatus)
-                {
-                    player->d_life_u = 1;
-                }
-                if (player->life <= 20)
-                {
-                    player->d_life_u = 2;
-                }
-                if (t != player->d_life_u)
-                {
-                    player->routine_2 = 0;
-                }
-            }
-        }
+             // Logic shared in br moves from 0 to 4
+             if (player->routine_2 == 0 || player->move_cnt == 0)
+             {
+                 int t = player->d_life_u;
+                 player->d_life_u = 0;
+                 if (player->life <= 100)
+                 {
+                     player->d_life_u = 1;
+                 }
+                 if (gPoisonStatus)
+                 {
+                     player->d_life_u = 1;
+                 }
+                 if (player->life <= 20)
+                 {
+                     player->d_life_u = 2;
+                 }
+                 if (t != player->d_life_u)
+                 {
+                     player->routine_2 = 0;
+                 }
+             }
+         }
         gMoveBrTable[player->routine_1](player, gGameTable.g_key, gGameTable.key_trg);
         gMoveMvTable[player->routine_1](player, pKan, pSeq);
     }
@@ -674,7 +680,6 @@ namespace openre::player
             {
                 set_routine(Routine::ROTATE);
             }
-
             if (key & input::KEY_TYPE_FORWARD)
             {
                 set_routine(Routine::FORWARD);
@@ -755,13 +760,10 @@ namespace openre::player
         if (key & input::KEY_TYPE_RUN_AND_CANCEL)
         {
             set_routine(Routine::RUN_FORWARD);
-        }
-        if (check_flag(FlagGroup::Status, 16))
+        }        
+        if (check_flag(FlagGroup::Status, FG_STATUS_18))
         {
-            player->routine_0 = 61;
-            player->routine_1 = 25;
-            player->routine_2 = 0;
-            player->routine_3 = 0;
+            set_routine(Routine::PUSH_OBJECT);
         }
         if ((key & input::KEY_TYPE_128) == 0 && (key_trg & input::KEY_TYPE_128) == 0)
         {
@@ -776,7 +778,7 @@ namespace openre::player
         {
             if (key_trg & input::KEY_TYPE_128)
             {
-                set_flag(FlagGroup::Status, 10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_10, true);
             }
         LABEL_31:
             if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
@@ -813,7 +815,7 @@ namespace openre::player
         {
             if (key_trg & input::KEY_TYPE_128)
             {
-                set_flag(FlagGroup::Status, 10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_10, true);
             }
 
         LABEL_25:
@@ -865,7 +867,7 @@ namespace openre::player
             result = (result & 0xFFFFFF00) | key_trg;
             if (key_trg & input::KEY_TYPE_128)
             {
-                set_flag(FlagGroup::Status, FG_STATUS_14, true);
+                set_flag(FlagGroup::Status, FG_STATUS_10, true);
             }
         }
         if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
@@ -908,7 +910,7 @@ namespace openre::player
                 result = (result & 0xFFFFFF00) | key_trg;
                 if (key_trg & input::KEY_TYPE_128)
                 {
-                    set_flag(FlagGroup::Status, FG_STATUS_14, true);
+                    set_flag(FlagGroup::Status, FG_STATUS_10, true);
                 }
             }
             if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
@@ -933,7 +935,6 @@ namespace openre::player
                 set_routine(Routine::FORWARD);
             }
         }
-
         return result;
     }
 
