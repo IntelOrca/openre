@@ -98,11 +98,6 @@ namespace openre::player
 
     enum
     {
-        MOVE_NO_CROUCH = 458758,
-    };
-
-    enum
-    {
         BR_TBL_IDLE_IDX = 0,
         BR_TBL_FORWARD_IDX = 1,
         BR_TBL_RUN_FORWARD_IDX = 2,
@@ -600,7 +595,10 @@ namespace openre::player
         switch (player->routine_2)
         {
         case PICK_UP_ITEM_INTERACT_STATE_FLOOR:
-            player->move_no = MOVE_NO_CROUCH;
+            player->move_no = 06;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
             player->routine_2 = 1;
             player->spd.x = 0;
             set_flag(FlagGroup::Status, FG_STATUS_24, true);
@@ -618,7 +616,10 @@ namespace openre::player
             player->routine_2 = 3;
             break;
         case PICK_UP_ITEM_INTERACT_STATE_4:
-            player->move_no = 458758;
+            player->move_no = 06;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
             player->routine_2 = 5;
             goto LABEL_6;
         case PICK_UP_ITEM_INTERACT_STATE_5:
@@ -677,6 +678,7 @@ namespace openre::player
                 set_routine(Routine::FORWARD);
             }
         }
+        return 0;
     }
 
     // no input code is required for quickturn
@@ -778,6 +780,7 @@ namespace openre::player
                 set_routine(Routine::AIM);
             }
         }
+        return 0;
     }
 
     // 0x004D9D60
