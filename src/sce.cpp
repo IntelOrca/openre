@@ -7,12 +7,14 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "relua.h"
 #include "scd.h"
 
 #include <cstring>
 
 using namespace openre::audio;
 using namespace openre::hud;
+using namespace openre::lua;
 using namespace openre::player;
 using namespace openre::rdt;
 using namespace openre::scd;
@@ -59,7 +61,7 @@ namespace openre::sce
     static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
     static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);        
+    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
 
     constexpr uint8_t KEY_LOCKED = 255;
     constexpr uint8_t KEY_UNLOCK = 254;
@@ -287,6 +289,7 @@ namespace openre::sce
             gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
             scd_event_exec(TASK_ID_RESERVED_0, EVT_FRAME);
             sce_scheduler_main();
+            relua_call_hooks(HookKind::Tick);
         }
     }
 
