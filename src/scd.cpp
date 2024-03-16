@@ -33,6 +33,7 @@ namespace openre::scd
         SCD_DOOR_AOT_SE = 0x3B,
         SCD_PLC_MOTION = 0x3F,
         SCD_ITEM_AOT_SET = 0x4E,
+        SCD_SCE_KEY_CK = 0x4F,
         SCD_SCE_BGM_CONTROL = 0x51,
         SCD_SCE_BGMTBL_SET = 0x57,
         SCD_AOT_SET_4P = 0x67,
@@ -146,6 +147,13 @@ namespace openre::scd
         uint16_t roomstage;
         uint16_t var_04;
         uint16_t var_06;
+    };
+
+    struct ScdSceKeyCk
+    {
+        uint8_t Opcode;
+        uint8_t flag;
+        uint16_t key;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -502,6 +510,18 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E8230
+    static int scd_sce_key_ck(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdSceKeyCk*>(sce->data);
+        sce->data += 4;
+        if ((gGameTable.g_key & opcode->key) == 0)
+        {
+            return opcode->flag ^ 1;
+        }
+        return opcode->flag;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -525,6 +545,7 @@ namespace openre::scd
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
+        set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
