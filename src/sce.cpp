@@ -8,12 +8,14 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "relua.h"
 #include "scd.h"
 
 #include <cstring>
 
 using namespace openre::audio;
 using namespace openre::hud;
+using namespace openre::lua;
 using namespace openre::player;
 using namespace openre::rdt;
 using namespace openre::scd;
@@ -263,6 +265,7 @@ namespace openre::sce
             gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
             scd_event_exec(TASK_ID_RESERVED_0, EVT_FRAME);
             sce_scheduler_main();
+            relua_call_hooks(HookKind::Tick);
         }
     }
 

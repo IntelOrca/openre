@@ -93,6 +93,12 @@
     <ClCompile Include="shell.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mod.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="relua.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -168,6 +174,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shell.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="relua.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mod.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
