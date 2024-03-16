@@ -7,6 +7,7 @@
 #include "sce.h"
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 using namespace openre::audio;
 using namespace openre::sce;
@@ -28,6 +29,7 @@ namespace openre::scd
         SCD_IFEL_CK = 0x06,
         SCD_END_IF = 0x08,
         SCD_SCE_RND = 0x28,
+        SCD_CUT_CH = 0x29,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -154,6 +156,12 @@ namespace openre::scd
         uint8_t Opcode;
         uint8_t flag;
         uint16_t key;
+    };
+
+    struct ScdCutCh
+    {
+        uint8_t Opcode;
+        uint8_t Id;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -522,6 +530,47 @@ namespace openre::scd
         return opcode->flag;
     }
 
+    // 0x004C4E90
+    static int cut_search(uint8_t cut_id)
+    {
+        using sig = int (*)(int);
+        auto p = (sig)0x004C4E90;
+        return p(cut_id);
+    }
+
+    // 0x004C4E60
+    static int cut_change(uint8_t cut_id)
+    {
+        gGameTable.can_draw = 0;
+        gGameTable.byte_989EEA = cut_id;
+        gGameTable.dword_988634 = cut_search(cut_id);
+        return gGameTable.dword_988634;
+    }
+
+    // 0x004E5020
+    int sub_4E5020(uint8_t cut_id)
+    {
+        gGameTable.byte_98F07B = 1;
+        gGameTable.cut_old = static_cast<uint8_t>(gGameTable.current_cut);
+        gGameTable.current_cut = cut_id;
+        return cut_change(cut_id);
+    }
+
+    // 0x004E4F80
+    static int scd_cut_ch(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdCutCh*>(sce->data);
+        set_flag(FlagGroup::Status, FG_STATUS_23, true);
+        sub_4E5020(opcode->Id & 0x7F);
+        set_flag(FlagGroup::Status, FG_STATUS_11, true);
+        if (opcode->Id & 0x80)
+        {
+            gGameTable.byte_98F07B = 0;
+        }
+        sce->data += 2;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -532,6 +581,8 @@ namespace openre::scd
         interop::writeJmp(0x004E39E0, &scd_init);
         interop::writeJmp(0x004E3F60, &scd_event_init);
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
+        interop::writeJmp(0x004E5020, &sub_4E5020);
+        interop::writeJmp(0x004C4E60, &cut_change);
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
@@ -541,6 +592,7 @@ namespace openre::scd
         set_scd_hook(SCD_IFEL_CK, &scd_ifel_ck);
         set_scd_hook(SCD_END_IF, &scd_end_if);
         set_scd_hook(SCD_SCE_RND, &scd_sce_rnd);
+        set_scd_hook(SCD_CUT_CH, &scd_cut_ch);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
