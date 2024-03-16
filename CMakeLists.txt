@@ -13,6 +13,9 @@ file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm)
+target_include_directories(openre PRIVATE "lib/include")
+target_link_directories(openre PRIVATE "lib/lib")
+
+target_link_libraries(openre PRIVATE ddraw dxguid gdi32 lua54 ole32 winmm)
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
