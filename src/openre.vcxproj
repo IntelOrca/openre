@@ -48,6 +48,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
+      <AdditionalDependencies>lua54.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -86,10 +87,12 @@
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="marni.cpp" />
     <ClCompile Include="math.cpp" />
+    <ClCompile Include="mod.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
+    <ClCompile Include="relua.cpp" />
     <ClCompile Include="room.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
@@ -109,11 +112,13 @@
     <ClInclude Include="itembox.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="math.h" />
+    <ClInclude Include="mod.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
+    <ClInclude Include="relua.h" />
     <ClInclude Include="room.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
