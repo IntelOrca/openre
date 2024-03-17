@@ -5,12 +5,12 @@
 #include "door.h"
 #include "file.h"
 #include "hud.h"
+#include "input.h"
 #include "interop.hpp"
 #include "player.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
-#include "input.h"
 #include <cassert>
 #include <cstring>
 #include <windows.h>
@@ -327,6 +327,16 @@ namespace openre
     {
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
         bitarray_set(addr, index, value);
+    }
+
+    void* work_alloc(size_t len)
+    {
+        auto mem = gGameTable.mem_top;
+        gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
+#ifdef DEBUG
+        std::memset(mem, 0xCD, len);
+#endif
+        return mem;
     }
 }
 
