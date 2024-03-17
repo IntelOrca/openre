@@ -667,7 +667,7 @@ namespace openre::scd
         auto mem = gGameTable.mem_top;
         gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
 #ifdef DEBUG
-        std::memset(mem, 0xCD, len);
+        // std::memset(mem, 0xCD, len);
 #endif
         return mem;
     }
@@ -678,7 +678,7 @@ namespace openre::scd
     }
 
     // 0x004E77D0
-    static int sce_em_set(SceTask* sce)
+    static int sce_em_set_new(SceTask* sce)
     {
         auto opcode = reinterpret_cast<ScdSceEmSet*>(sce->data);
         sce->data += sizeof(ScdSceEmSet);
@@ -730,6 +730,7 @@ namespace openre::scd
 
         em->id = opcode->type;
         em->type = opcode->pose;
+        em->var_10F = opcode->behaviour;
         em->var_1CE = opcode->globalId;
         em->var_1CF = opcode->texture;
         em->nFloor = opcode->floor;
@@ -819,6 +820,7 @@ namespace openre::scd
         auto v16 = partswork_set(em, v5);
         auto v17 = partswork_link(em, v16, em->pKan_t_ptr, 0);
         sa_dat_set(em, em->pSa_dat);
+        gGameTable.mem_top = v17;
         if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
             gGameTable.mem_top = mirror_model_cp(em, v17);
 
@@ -829,6 +831,28 @@ namespace openre::scd
             em->var_1C0 = 0x92;
 
         return SCD_EVT_NEXT;
+    }
+
+    static int sce_em_old(SceTask* sce)
+    {
+        using sig = int (*)(SceTask*);
+        auto p = (sig)0x004E77D0;
+        return p(sce);
+    }
+
+    static int sce_em_set(SceTask* sce)
+    {
+        // return sce_em_old(sce);
+        std::memset(gGameTable.mem_top, 0xCD, 1024 * 200);
+
+        // interop::memory_comparer mc(0x524EB6, 0x99CF70);
+        
+        // sce_em_old(sce);
+        // mc.write("M:\\temp\\old.dat");
+        
+        sce_em_set_new(sce);
+        // mc.compare("M:\\temp\\old.dat");
+        return SCD_RESULT_NEXT;
     }
 
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
