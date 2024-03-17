@@ -1,8 +1,19 @@
 #include "enemy.h"
 #include "interop.hpp"
+#include "openre.h"
 
 namespace openre::enemy
 {
+    bool is_enemy_dead(uint8_t globalId)
+    {
+        auto fgEnemy = FlagGroup::Enemy2;
+        if (gGameTable.current_stage < 3 && !check_flag(FlagGroup::Status, FG_STATUS_BONUS))
+        {
+            fgEnemy = FlagGroup::Enemy;
+        }
+        return globalId != 0xFF && check_flag(fgEnemy, globalId);
+    }
+
     // 0x004B20B0
     void em_bin_load(uint8_t type)
     {

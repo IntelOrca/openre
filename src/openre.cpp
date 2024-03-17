@@ -330,6 +330,16 @@ namespace openre
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
         bitarray_set(addr, index, value);
     }
+
+    void* work_alloc(size_t len)
+    {
+        auto mem = gGameTable.mem_top;
+        gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
+#ifdef DEBUG
+        std::memset(mem, 0xCD, len);
+#endif
+        return mem;
+    }
 }
 
 static void load_init_table(void* tempBuffer, uint8_t index)

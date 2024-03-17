@@ -146,4 +146,10 @@ namespace openre
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
+
+    void* work_alloc(size_t len);
+    template<typename T> static T* work_alloc()
+    {
+        return reinterpret_cast<T*>(work_alloc(sizeof(T)));
+    }
 }
