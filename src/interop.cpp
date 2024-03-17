@@ -405,11 +405,13 @@ namespace openre::interop
 
     void memory_comparer::reset()
     {
+        _first = save_state(_begin, _end);
         _pre.reset();
     }
 
     void memory_comparer::log()
     {
+        _second = save_state(_begin, _end);
         save_state::logDiff(_first, _second);
     }
 
