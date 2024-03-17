@@ -125,10 +125,48 @@ declare     tpage                   u8
 declare     clut                    u8
 declare     nFloor                  u8
 declare     parts_num               u8
-declare     pKan_t_ptr              s32
+declare     pKan_t_ptr              void*
 declare     water                   s16
 declare     type                    u8
 declare     var_10F                 u8
+
+struct      EnemyEntity
+base        Entity
+declare     unk_x                   s16         0x118
+declare     unk_z                   s16         0x11A
+declare     var_14A                 u8          0x14A
+declare     var_14C                 u8          0x14C
+declare     var_150                 u8          0x150
+declare     var_154                 u16         0x154
+declare     var_158                 u16         0x158
+declare     var_15A                 u16         0x15A
+declare     var_17C                 s32         0x17C
+declare     var_180                 s32         0x180
+declare     var_184                 s32         0x184
+declare     var_188                 s32         0x188
+declare     var_18C                 s32         0x18C
+declare     pSa_dat                 void*       0x1BC
+declare     var_1C0                 u8          0x1C0
+declare     var_1C2                 s16         0x1C2
+declare     var_1CC                 u16         0x1CC
+declare     var_1CE                 u8          0x1CE
+declare     var_1CF                 u8          0x1CF
+declare     var_1D0                 u16         0x1D0
+declare     var_1D3                 u8          0x1D3
+declare     var_1D4                 u16         0x1D4
+declare     var_1D6                 u16         0x1D6
+declare     var_1D8                 u16         0x1D8
+declare     var_1DA                 u16         0x1DA
+declare     var_1DE                 s16         0x1DE
+declare     var_1E4                 u32         0x1E4
+declare     var_1E8                 u32         0x1E8
+declare     var_1F0                 u32         0x1F0
+declare     var_1F4                 u32         0x1F4
+declare     sound_bank              u8          0x1FA
+declare     var_204                 u32         0x204
+declare     var_208                 u32         0x208
+declare     var_212                 u16         0x212
+declare     pad_247                 u8          0x247
 
 struct      PlayerEntity
 base        Entity
@@ -423,6 +461,7 @@ declare     key_trg                 u32                     0x00988608
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
+declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[19]               0x00988630
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
@@ -435,12 +474,13 @@ declare     dword_989EE0            u32                     0x00989EE0
 declare     dword_989EE4            u32                     0x00989EE4
 declare     word_989EE8             s16                     0x00989EE8
 declare     byte_989EEA             u8                      0x00989EEA
+declare     enemy_count             u8                      0x00989EEB
 declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
 declare     player_work             PlayerEntity*           0x0098A10C
 declare     splayer_work            PlayerEntity*           0x0098A110
-declare     enemies                 Entity*[16]             0x0098A114
+declare     enemies                 EnemyEntity*[16]        0x0098A114
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4

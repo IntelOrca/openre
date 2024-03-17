@@ -101,7 +101,7 @@ namespace openre
         FG_STATUS_12 = 12,
         FG_STATUS_13 = 13,
         FG_STATUS_14 = 14,
-        FG_STATUS_15 = 15,
+        FG_STATUS_MIRROR = 15,
         FG_STATUS_SCREEN = 16,
         // Pushing object ???
         FG_STATUS_18 = 18,

@@ -1,6 +1,7 @@
 #include "scd.h"
 #include "audio.h"
 #include "camera.h"
+#include "enemy.h"
 #include "interop.hpp"
 #include "openre.h"
 #include "rdt.h"
@@ -10,6 +11,7 @@
 #include <cstring>
 
 using namespace openre::audio;
+using namespace openre::enemy;
 using namespace openre::sce;
 using namespace openre::rdt;
 using namespace openre::camera;
@@ -37,6 +39,7 @@ namespace openre::scd
         SCD_DOOR_AOT_SE = 0x3B,
         SCE_CUT_AUTO = 0x3C,
         SCD_PLC_MOTION = 0x3F,
+        SCD_SCE_EM_SET = 0x44,
         SCD_CUT_REPLACE = 0x4B,
         SCD_ITEM_AOT_SET = 0x4E,
         SCD_SCE_KEY_CK = 0x4F,
@@ -184,6 +187,26 @@ namespace openre::scd
         uint8_t Opcode;
         uint8_t Id;
         uint8_t value;
+    };
+
+    struct ScdSceEmSet
+    {
+        uint8_t opcode;
+        uint8_t pad_01;
+        uint8_t id;
+        uint8_t type;
+        uint8_t pose;
+        uint8_t behaviour;
+        uint8_t floor;
+        uint8_t soundBank;
+        uint8_t texture;
+        uint8_t globalId;
+        int16_t x;
+        int16_t y;
+        int16_t z;
+        int16_t d;
+        int16_t animation;
+        int16_t var_14;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -629,6 +652,185 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    static bool is_enemy_dead(uint8_t globalId)
+    {
+        auto fgEnemy = FlagGroup::Enemy2;
+        if (gGameTable.current_stage < 3 && !check_flag(FlagGroup::Status, FG_STATUS_BONUS))
+        {
+            fgEnemy = FlagGroup::Enemy;
+        }
+        return globalId != 0xFF && check_flag(fgEnemy, globalId);
+    }
+
+    static void* psx_alloc(size_t len)
+    {
+        auto mem = gGameTable.mem_top;
+        gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
+#ifdef DEBUG
+        std::memset(mem, 0xCD, len);
+#endif
+        return mem;
+    }
+
+    template<typename T> static T* psx_alloc()
+    {
+        return reinterpret_cast<T*>(psx_alloc(sizeof(T)));
+    }
+
+    // 0x004E77D0
+    static int sce_em_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdSceEmSet*>(sce->data);
+        sce->data += sizeof(ScdSceEmSet);
+
+        if (is_enemy_dead(opcode->globalId))
+        {
+            return SCD_RESULT_NEXT;
+        }
+
+        em_bin_load(opcode->type);
+        auto ctcb = gGameTable.ctcb;
+        if (ctcb->var_13 != 0)
+            return SCD_RESULT_NEXT;
+
+        auto v3 = 2 + opcode->id;
+        if (opcode->id != 0xFF)
+            gGameTable.enemy_count++;
+
+        auto em = psx_alloc<EnemyEntity>();
+        em->work_no = 2 + opcode->id;
+        gGameTable.enemies[opcode->id] = em;
+        if (gGameTable.dword_98862C < em)
+            gGameTable.dword_98862C = em;
+
+        em->be_flg = 1;
+        em->sound_bank = opcode->soundBank;
+
+        if (gGameTable.se_tmp0 != opcode->soundBank)
+        {
+            if (gGameTable.se_tmp0 == 0)
+                gGameTable.se_tmp0 = opcode->soundBank;
+            else
+                gGameTable.byte_695E71 = opcode->soundBank;
+        }
+
+        em->pos.x = opcode->x;
+        em->pos.y = opcode->y;
+        em->pos.z = opcode->z;
+        em->old_pos.x = opcode->x;
+        em->old_pos.y = opcode->y;
+        em->old_pos.z = opcode->z;
+
+        em->unk_x = opcode->x;
+        em->unk_z = opcode->z;
+
+        em->cdir.x = 0;
+        em->cdir.y = opcode->d;
+        em->cdir.z = 0;
+
+        em->id = opcode->type;
+        em->type = opcode->pose;
+        em->var_1CE = opcode->globalId;
+        em->var_1CF = opcode->texture;
+        em->nFloor = opcode->floor;
+        em->routine_0 = 0;
+        em->routine_1 = 0;
+        em->routine_2 = 0;
+        em->routine_3 = 0;
+        em->var_1D0 = 0;
+        em->var_1D3 = 0;
+        em->var_154 = 0;
+        em->var_14A = 0;
+        em->var_1CC = 0;
+        em->var_1DE = 1000;
+        em->var_1C2 = opcode->floor * -1800;
+        em->var_1D6 = 0;
+        em->var_1D8 = 0;
+        em->var_1DA = 0;
+        em->var_204 = 0;
+        em->var_208 = 0;
+        em->var_1E4 = 0;
+        em->var_212 = 0;
+        em->water = 0;
+        em->var_1F0 = 0;
+        em->var_1F4 = 0;
+        if (em->id >= 0x40)
+            em->sc_id = 0x80;
+        else
+            em->sc_id = 0x04;
+        em->var_1E8 = 0;
+
+        uint16_t* atd = (uint16_t*)&em->atd;
+        atd[(0x94 - 0x84) / 2] = 0;
+        atd[(0x98 - 0x84) / 2] = 64006;
+        atd[(0x96 - 0x84) / 2] = 0;
+        atd[(0x9A - 0x84) / 2] = 450;
+        atd[(0x9E - 0x84) / 2] = 1530;
+        atd[(0x9C - 0x84) / 2] = 450;
+        atd[(0x90 - 0x84) / 2] = 450;
+        atd[(0x92 - 0x84) / 2] = 450;
+
+        em->var_150 = em->work_no;
+
+        auto v5 = gGameTable.mem_top;
+        if (em->id == gGameTable.c_id)
+        {
+            auto ecx = static_cast<EnemyEntity*>(gGameTable.c_em);
+            em->pKan_t_ptr = ecx->pKan_t_ptr;
+            em->var_17C = ecx->var_17C;
+            em->pTmd = ecx->pTmd;
+            em->pTmd2 = ecx->pTmd2;
+            em->var_180 = ecx->var_180;
+            em->var_184 = ecx->var_184;
+            em->var_188 = ecx->var_188;
+            em->var_18C = ecx->var_18C;
+            em->pSa_dat = ecx->pSa_dat;
+            em->tpage = ecx->tpage;
+            em->clut = ecx->clut;
+            mem_ck_parts_work(em->id, gGameTable.c_id);
+        }
+        else
+        {
+            auto edi = static_cast<EnemyEntity*>(gGameTable.c_em);
+            gGameTable.c_id = em->id;
+            gGameTable.c_model_type = em->var_1CF;
+            gGameTable.c_em = em;
+            auto dl = em->id;
+            auto eax = em_kind_search(em->id);
+            if (eax != gGameTable.c_kind)
+                em->var_1CF &= ~0x80;
+            gGameTable.c_kind = eax;
+
+            v5 = emd_load(gGameTable.c_id, em, gGameTable.mem_top);
+            if (gGameTable.ctcb->var_13 != 0)
+                return SCD_EVT_NEXT;
+
+            gGameTable.sce_type = 0;
+            gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
+            if (!(em->var_1CF & 0x80))
+            {
+                em->var_180 = edi->var_180;
+                em->var_184 = edi->var_184;
+                em->var_188 = edi->var_188;
+                em->var_18C = edi->var_18C;
+            }
+        }
+
+        auto v16 = partswork_set(em, v5);
+        auto v17 = partswork_link(em, v16, em->pKan_t_ptr, 0);
+        sa_dat_set(em, em->pSa_dat);
+        if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
+            gGameTable.mem_top = mirror_model_cp(em, v17);
+
+        em->var_14C = 0;
+        em->var_158 = opcode->animation;
+        em->var_15A = opcode->var_14;
+        if (em->var_10F & 0x40)
+            em->var_1C0 = 0x92;
+
+        return SCD_EVT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -657,6 +859,7 @@ namespace openre::scd
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
         set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
+        set_scd_hook(SCD_SCE_EM_SET, &sce_em_set);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);

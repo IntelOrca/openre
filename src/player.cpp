@@ -719,7 +719,7 @@ namespace openre::player
             snd_se_walk(0, 4 + (get_floor_sound(player) * 3), player);
             gGameTable.word_989EEE |= 2;
         }
-        joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
+        joint_move(player, (int)player->pKan_t_ptr, player->pSeq_t_ptr, 512);
         return 0;
     }
 

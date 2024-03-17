@@ -156,12 +156,70 @@ struct Entity
     uint8_t clut;                       // 0x0105
     uint8_t nFloor;                     // 0x0106
     uint8_t parts_num;                  // 0x0107
-    int32_t pKan_t_ptr;                 // 0x0108
+    void* pKan_t_ptr;                   // 0x0108
     int16_t water;                      // 0x010C
     uint8_t type;                       // 0x010E
     uint8_t var_10F;                    // 0x010F
 };
 static_assert(sizeof(Entity) == 0x110);
+
+struct EnemyEntity : Entity
+{
+    uint8_t pad_0110[8];                // 0x0110
+    int16_t unk_x;                      // 0x0118
+    int16_t unk_z;                      // 0x011A
+    uint8_t pad_011C[46];               // 0x011C
+    uint8_t var_14A;                    // 0x014A
+    uint8_t pad_014B[1];                // 0x014B
+    uint8_t var_14C;                    // 0x014C
+    uint8_t pad_014D[3];                // 0x014D
+    uint8_t var_150;                    // 0x0150
+    uint8_t pad_0151[3];                // 0x0151
+    uint16_t var_154;                   // 0x0154
+    uint8_t pad_0156[2];                // 0x0156
+    uint16_t var_158;                   // 0x0158
+    uint16_t var_15A;                   // 0x015A
+    uint8_t pad_015C[32];               // 0x015C
+    int32_t var_17C;                    // 0x017C
+    int32_t var_180;                    // 0x0180
+    int32_t var_184;                    // 0x0184
+    int32_t var_188;                    // 0x0188
+    int32_t var_18C;                    // 0x018C
+    uint8_t pad_0190[44];               // 0x0190
+    void* pSa_dat;                      // 0x01BC
+    uint8_t var_1C0;                    // 0x01C0
+    uint8_t pad_01C1[1];                // 0x01C1
+    int16_t var_1C2;                    // 0x01C2
+    uint8_t pad_01C4[8];                // 0x01C4
+    uint16_t var_1CC;                   // 0x01CC
+    uint8_t var_1CE;                    // 0x01CE
+    uint8_t var_1CF;                    // 0x01CF
+    uint16_t var_1D0;                   // 0x01D0
+    uint8_t pad_01D2[1];                // 0x01D2
+    uint8_t var_1D3;                    // 0x01D3
+    uint16_t var_1D4;                   // 0x01D4
+    uint16_t var_1D6;                   // 0x01D6
+    uint16_t var_1D8;                   // 0x01D8
+    uint16_t var_1DA;                   // 0x01DA
+    uint8_t pad_01DC[2];                // 0x01DC
+    int16_t var_1DE;                    // 0x01DE
+    uint8_t pad_01E0[4];                // 0x01E0
+    uint32_t var_1E4;                   // 0x01E4
+    uint32_t var_1E8;                   // 0x01E8
+    uint8_t pad_01EC[4];                // 0x01EC
+    uint32_t var_1F0;                   // 0x01F0
+    uint32_t var_1F4;                   // 0x01F4
+    uint8_t pad_01F8[2];                // 0x01F8
+    uint8_t sound_bank;                 // 0x01FA
+    uint8_t pad_01FB[9];                // 0x01FB
+    uint32_t var_204;                   // 0x0204
+    uint32_t var_208;                   // 0x0208
+    uint8_t pad_020C[6];                // 0x020C
+    uint16_t var_212;                   // 0x0212
+    uint8_t pad_0214[51];               // 0x0214
+    uint8_t pad_247;                    // 0x0247
+};
+static_assert(sizeof(EnemyEntity) == 0x248);
 
 struct PlayerEntity : Entity
 {
@@ -546,7 +604,8 @@ struct GameTable
     Rdt* rdt;                           // 0x98861C
     uint8_t pad_988620[4];              // 0x988620
     void* mem_top;                      // 0x988624
-    uint8_t pad_988628[8];              // 0x988628
+    uint8_t pad_988628[4];              // 0x988628
+    void* dword_98862C;                 // 0x98862C
     VCut* vcut_data[19];                // 0x988630
     uint8_t pad_98867C[460];            // 0x98867C
     void* door_aot_data;                // 0x988848
@@ -563,14 +622,14 @@ struct GameTable
     uint32_t dword_989EE4;              // 0x989EE4
     int16_t word_989EE8;                // 0x989EE8
     uint8_t byte_989EEA;                // 0x989EEA
-    uint8_t pad_989EEB[1];              // 0x989EEB
+    uint8_t enemy_count;                // 0x989EEB
     uint16_t fg_room_enemy;             // 0x989EEC
     uint16_t word_989EEE;               // 0x989EEE
     PlayerEntity pl;                    // 0x989EF0
     uint8_t pad_98A104[8];              // 0x98A104
     PlayerEntity* player_work;          // 0x98A10C
     PlayerEntity* splayer_work;         // 0x98A110
-    Entity* enemies[16];                // 0x98A114
+    EnemyEntity* enemies[16];           // 0x98A114
     uint8_t pad_98A154[17364];          // 0x98A154
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
