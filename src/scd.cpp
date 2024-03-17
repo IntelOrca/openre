@@ -693,15 +693,24 @@ namespace openre::scd
         if (ctcb->var_13 != 0)
             return SCD_RESULT_NEXT;
 
-        auto v3 = 2 + opcode->id;
-        if (opcode->id != 0xFF)
-            gGameTable.enemy_count++;
-
         auto em = psx_alloc<EnemyEntity>();
-        em->work_no = 2 + opcode->id;
-        gGameTable.enemies[opcode->id] = em;
-        if (gGameTable.dword_98862C < em)
-            gGameTable.dword_98862C = em;
+        if (opcode->id != 0xFF)
+        {
+            gGameTable.enemy_count++;
+            em->work_no = 2 + opcode->id;
+            gGameTable.enemies[opcode->id] = em;
+            auto& nextEntry = gGameTable.enemies[opcode->id + 1];
+            if (gGameTable.dword_98862C < &nextEntry)
+                gGameTable.dword_98862C = &nextEntry;
+        }
+        else
+        {
+            em->work_no = 1;
+            gGameTable.splayer_work = em;
+            auto& nextEntry = gGameTable.enemies[0];
+            if (gGameTable.dword_98862C < &nextEntry)
+                gGameTable.dword_98862C = &nextEntry;
+        }
 
         em->be_flg = 1;
         em->sound_bank = opcode->soundBank;
@@ -740,10 +749,11 @@ namespace openre::scd
         em->routine_3 = 0;
         em->var_1D0 = 0;
         em->var_1D3 = 0;
+        em->var_1D4 = 0;
         em->var_154 = 0;
         em->var_14A = 0;
         em->var_1CC = 0;
-        em->var_1DE = 1000;
+        em->var_1DE = 0x1000;
         em->var_1C2 = opcode->floor * -1800;
         em->var_1D6 = 0;
         em->var_1D8 = 0;
@@ -788,7 +798,7 @@ namespace openre::scd
             em->pSa_dat = ecx->pSa_dat;
             em->tpage = ecx->tpage;
             em->clut = ecx->clut;
-            mem_ck_parts_work(em->id, gGameTable.c_id);
+            mem_ck_parts_work(em->work_no, gGameTable.c_id);
         }
         else
         {
@@ -808,7 +818,7 @@ namespace openre::scd
 
             gGameTable.sce_type = 0;
             gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
-            if (!(em->var_1CF & 0x80))
+            if (em->var_1CF & 0x80)
             {
                 em->var_180 = edi->var_180;
                 em->var_184 = edi->var_184;
@@ -830,7 +840,7 @@ namespace openre::scd
         if (em->var_10F & 0x40)
             em->var_1C0 = 0x92;
 
-        return SCD_EVT_NEXT;
+        return SCD_RESULT_NEXT;
     }
 
     static int sce_em_old(SceTask* sce)
@@ -840,19 +850,30 @@ namespace openre::scd
         return p(sce);
     }
 
+    static int _temp = 0;
     static int sce_em_set(SceTask* sce)
     {
+#if 0
+        _temp++;
+        if (_temp == 1)
+            return sce_em_old(sce);
+
         // return sce_em_old(sce);
         std::memset(gGameTable.mem_top, 0xCD, 1024 * 200);
 
-        // interop::memory_comparer mc(0x524EB6, 0x99CF70);
+        interop::memory_comparer mc(0x524EB6, 0x99CF70);
         
-        // sce_em_old(sce);
+        sce_em_old(sce);
+        mc.reset();
         // mc.write("M:\\temp\\old.dat");
         
         sce_em_set_new(sce);
+        mc.log();
         // mc.compare("M:\\temp\\old.dat");
         return SCD_RESULT_NEXT;
+#else
+        return sce_em_set_new(sce);
+#endif
     }
 
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)

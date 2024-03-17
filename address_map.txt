@@ -479,7 +479,7 @@ declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
 declare     player_work             PlayerEntity*           0x0098A10C
-declare     splayer_work            PlayerEntity*           0x0098A110
+declare     splayer_work            EnemyEntity*            0x0098A110
 declare     enemies                 EnemyEntity*[16]        0x0098A114
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C

@@ -628,7 +628,7 @@ struct GameTable
     PlayerEntity pl;                    // 0x989EF0
     uint8_t pad_98A104[8];              // 0x98A104
     PlayerEntity* player_work;          // 0x98A10C
-    PlayerEntity* splayer_work;         // 0x98A110
+    EnemyEntity* splayer_work;          // 0x98A110
     EnemyEntity* enemies[16];           // 0x98A114
     uint8_t pad_98A154[17364];          // 0x98A154
     uint8_t aot_count;                  // 0x98E528
