@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <algorithm>
 #include <cinttypes>
 #include <cstring>
@@ -332,31 +334,40 @@ namespace openre::interop
 #endif // _WIN32
     }
 
+    save_state::save_state() {}
+
     save_state::save_state(uintptr_t begin, uintptr_t end)
-        : begin(begin)
-        , end(end)
+        : _begin(begin)
+        , _end(end)
     {
-        state.resize(end - begin);
-        readMemory(begin, state.data(), state.size());
+        _state.resize(end - begin);
+        readMemory(begin, _state.data(), _state.size());
+    }
+
+    save_state::save_state(uintptr_t begin, const std::vector<std::byte>& data)
+        : _begin(begin)
+        , _end(begin + data.size())
+    {
+        _state = data;
     }
 
     void save_state::reset()
     {
-        interop::writeMemory(begin, state.data(), state.size());
+        interop::writeMemory(_begin, _state.data(), _state.size());
     }
 
     void save_state::logDiff(const save_state& lhs, const save_state& rhs)
     {
         // TODO should we allow different base addresses?
         //      if so then we need to do extra work for that.
-        auto length = std::min(lhs.state.size(), rhs.state.size());
+        auto length = std::min(lhs._state.size(), rhs._state.size());
         for (size_t i = 0; i < length; i++)
         {
-            auto left = lhs.state[i];
-            auto right = rhs.state[i];
+            auto left = lhs._state[i];
+            auto right = rhs._state[i];
             if (left != right)
             {
-                uint32_t addr = lhs.begin + i;
+                uint32_t addr = lhs._begin + i;
                 std::printf("0x%06" PRIX32 ": %02" PRIX8 "  %02" PRIX8 "\n", addr, (uint8_t)left, (uint8_t)right);
             }
         }
@@ -364,15 +375,71 @@ namespace openre::interop
 
     bool operator==(const save_state& lhs, const save_state& rhs)
     {
-        return std::equal(
-            lhs.getState().begin(),
-            lhs.getState().end(),
-            rhs.getState().begin(),
-            rhs.getState().end());
+        return std::equal(lhs.getState().begin(), lhs.getState().end(), rhs.getState().begin(), rhs.getState().end());
     }
 
     bool operator!=(const save_state& lhs, const save_state& rhs)
     {
         return !(lhs == rhs);
+    }
+
+    memory_comparer::memory_comparer(uintptr_t b, uintptr_t e)
+        : _begin(b)
+        , _end(e)
+    {
+        _pre = save_state(b, e);
+    }
+
+    void memory_comparer::write(const std::string_view path)
+    {
+        auto data = save_state(_begin, _end).getState();
+        writeFile(path, data);
+    }
+
+    void memory_comparer::compare(const std::string_view path)
+    {
+        save_state current(_begin, _end);
+        save_state saved(_begin, readFile(path));
+        save_state::logDiff(saved, current);
+    }
+
+    void memory_comparer::reset()
+    {
+        _pre.reset();
+    }
+
+    void memory_comparer::log()
+    {
+        save_state::logDiff(_first, _second);
+    }
+
+    std::vector<std::byte> memory_comparer::readFile(std::string_view path)
+    {
+        std::vector<std::byte> result;
+
+        std::string szpath(path);
+        auto f = std::fopen(szpath.c_str(), "rb");
+        if (f == nullptr)
+            throw std::runtime_error("Unable to open " + szpath);
+
+        std::fseek(f, 0, SEEK_END);
+        auto len = std::ftell(f);
+        std::fseek(f, 0, SEEK_SET);
+
+        result.resize(len);
+        std::fread(result.data(), 1, len, f);
+        std::fclose(f);
+        return result;
+    }
+
+    void memory_comparer::writeFile(std::string_view path, std::vector<std::byte> data)
+    {
+        std::string szpath(path);
+        auto f = std::fopen(szpath.c_str(), "wb");
+        if (f == nullptr)
+            throw std::runtime_error("Unable to open " + szpath);
+
+        std::fwrite(data.data(), 1, data.size(), f);
+        std::fclose(f);
     }
 }
