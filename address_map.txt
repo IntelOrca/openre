@@ -380,6 +380,10 @@ declare     var_09                  u8                      0x09
 declare     var_0D                  u8                      0x0D
 declare     var_13                  u8                      0x13
 
+struct      EnemyInitEntry
+declare     type                    u16
+declare     enabled                 u16
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
@@ -481,6 +485,10 @@ declare     pl                      PlayerEntity            0x00989EF0
 declare     player_work             PlayerEntity*           0x0098A10C
 declare     splayer_work            EnemyEntity*            0x0098A110
 declare     enemies                 EnemyEntity*[16]        0x0098A114
+declare     enemy_init_map          void*[96]               0x0098A154
+declare     enemy_init_table        void*[192]              0x0098A2D4
+declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
+declare     pOm                     ObjectEntity            0x0098A61C
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4

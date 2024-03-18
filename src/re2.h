@@ -473,6 +473,13 @@ struct Unknown68A204
 };
 static_assert(sizeof(Unknown68A204) == 0x14);
 
+struct EnemyInitEntry
+{
+    uint16_t type;                      // 0x0000
+    uint16_t enabled;                   // 0x0002
+};
+static_assert(sizeof(EnemyInitEntry) == 0x04);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -630,7 +637,12 @@ struct GameTable
     PlayerEntity* player_work;          // 0x98A10C
     EnemyEntity* splayer_work;          // 0x98A110
     EnemyEntity* enemies[16];           // 0x98A114
-    uint8_t pad_98A154[17364];          // 0x98A154
+    void* enemy_init_map[96];           // 0x98A154
+    void* enemy_init_table[192];        // 0x98A2D4
+    uint8_t pad_98A5D4[64];             // 0x98A5D4
+    EnemyInitEntry enemy_init_entries[2];// 0x98A614
+    ObjectEntity pOm;                   // 0x98A61C
+    uint8_t pad_98A814[15636];          // 0x98A814
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C
