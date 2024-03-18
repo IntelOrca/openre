@@ -15,11 +15,47 @@ namespace openre::enemy
     }
 
     // 0x004B20B0
-    void em_bin_load(uint8_t type)
+    void em_bin_load_old(uint8_t type)
     {
         using sig = void (*)(uint8_t);
         auto p = (sig)0x004B20B0;
         p(type);
+    }
+
+    using EnemyInitFunc = void (*)(EnemyEntity*);
+
+    static EnemyInitFunc get_enemy_init_func(uint8_t type, int slot)
+    {
+        auto index = (slot * 96) + type;
+        return reinterpret_cast<EnemyInitFunc>(gGameTable.enemy_init_table[index]);
+    }
+
+    static bool is_zombie(uint8_t type)
+    {
+        return type >= ZOMBIE_COP && type <= ZOMBIE_RANDOM;
+    }
+
+    // 0x004B20B0
+    void em_bin_load(uint8_t type)
+    {
+        auto func = get_enemy_init_func(type, 0);
+        if (func == nullptr)
+            return;
+
+        // Share same init function for all zombies
+        auto sharedType = is_zombie(type) ? ZOMBIE_COP : type;
+
+        auto entries = gGameTable.enemy_init_entries;
+        int slot;
+        for (slot = 0; slot < 2; slot++)
+        {
+            if (entries[slot].type == sharedType || entries[slot].enabled == 0)
+                break;
+        }
+
+        entries[slot].type = sharedType;
+        entries[slot].enabled = 1;
+        gGameTable.enemy_init_map[type] = get_enemy_init_func(type, slot);
     }
 
     // 0x004E3AB0
