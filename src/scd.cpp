@@ -7,7 +7,6 @@
 #include "sce.h"
 #include <cassert>
 #include <cstring>
-#include <iostream>
 
 using namespace openre::audio;
 using namespace openre::sce;
@@ -30,6 +29,7 @@ namespace openre::scd
         SCD_END_IF = 0x08,
         SCD_SCE_RND = 0x28,
         SCD_CUT_CH = 0x29,
+        SCD_CUT_OLD = 0x2A,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
@@ -162,6 +162,11 @@ namespace openre::scd
     {
         uint8_t Opcode;
         uint8_t Id;
+    };
+
+    struct ScdCutOld
+    {
+        uint8_t Opcode;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -571,6 +576,22 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E4FE0
+    static int scd_cut_old(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdCutOld*>(sce->data);
+        sub_4E5020(gGameTable.cut_old);
+        set_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY, false);
+        set_flag(FlagGroup::Status, FG_STATUS_9, false);
+        set_flag(FlagGroup::Status, FG_STATUS_10, false);
+        set_flag(FlagGroup::Status, FG_STATUS_11, true);
+        set_flag(FlagGroup::Status, FG_STATUS_12, false);
+        set_flag(FlagGroup::Status, FG_STATUS_13, false);
+        set_flag(FlagGroup::Status, FG_STATUS_14, false);
+        sce->data++;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -593,6 +614,7 @@ namespace openre::scd
         set_scd_hook(SCD_END_IF, &scd_end_if);
         set_scd_hook(SCD_SCE_RND, &scd_sce_rnd);
         set_scd_hook(SCD_CUT_CH, &scd_cut_ch);
+        set_scd_hook(SCD_CUT_OLD, &scd_cut_old);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);

@@ -95,8 +95,11 @@ namespace openre
         FG_STATUS_EASY = 5,
         FG_STATUS_BONUS = 6,
         FG_STATUS_GAMEPLAY = 8,
+        FG_STATUS_9 = 9,
         FG_STATUS_10 = 10,
         FG_STATUS_11 = 11,
+        FG_STATUS_12 = 12,
+        FG_STATUS_13 = 13,
         FG_STATUS_14 = 14,
         FG_STATUS_SCREEN = 16,
         // Pushing object ???
