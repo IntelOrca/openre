@@ -3,6 +3,7 @@
 #include "openre.h"
 #include "audio.h"
 #include "door.h"
+#include "enemy.h"
 #include "file.h"
 #include "hud.h"
 #include "input.h"
@@ -18,6 +19,7 @@
 using namespace openre;
 using namespace openre::audio;
 using namespace openre::door;
+using namespace openre::enemy;
 using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
@@ -391,6 +393,7 @@ void onAttach()
     bgm_init_hooks();
     hud_init_hooks();
     input_init_hooks();
+    enemy_init_hooks();
 }
 
 extern "C" {
