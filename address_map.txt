@@ -350,6 +350,7 @@ declare     dword_67CC2C            u32                     0x0067CC2C
 declare     dword_67CE00            u32                     0x0067CE00
 declare     dword_680554            u32                     0x00680554
 declare     input_keyboard          u32                     0x00680558
+declare     can_draw                u16                     0x0068058D
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
@@ -415,6 +416,7 @@ declare     key_trg                 u32                     0x00988608
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
+declare     dword_988634            u32                     0x00988634
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     fg_system               u32                     0x00989E6C
@@ -425,6 +427,7 @@ declare     dword_989EDC            u32                     0x00989EDC
 declare     dword_989EE0            u32                     0x00989EE0
 declare     dword_989EE4            u32                     0x00989EE4
 declare     word_989EE8             s16                     0x00989EE8
+declare     byte_989EEA             u8                      0x00989EEA
 declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
@@ -470,6 +473,7 @@ declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98F07A             u8                      0x0098F07A
+declare     byte_98F07B             u8                      0x0098F07B
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
 declare     doors                   DoorEntity*[9]          0x0099CEA0

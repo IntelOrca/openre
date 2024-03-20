@@ -433,7 +433,9 @@ struct GameTable
     uint8_t pad_67CE04[14160];          // 0x67CE04
     uint32_t dword_680554;              // 0x680554
     uint32_t input_keyboard;            // 0x680558
-    uint8_t pad_68055C[36500];          // 0x68055C
+    uint8_t pad_68055C[49];             // 0x68055C
+    uint16_t can_draw;                  // 0x68058D
+    uint8_t pad_68058F[36449];          // 0x68058F
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
@@ -534,7 +536,9 @@ struct GameTable
     Rdt* rdt;                           // 0x98861C
     uint8_t pad_988620[4];              // 0x988620
     void* mem_top;                      // 0x988624
-    uint8_t pad_988628[544];            // 0x988628
+    uint8_t pad_988628[12];             // 0x988628
+    uint32_t dword_988634;              // 0x988634
+    uint8_t pad_988638[528];            // 0x988638
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850
@@ -548,7 +552,8 @@ struct GameTable
     uint32_t dword_989EE0;              // 0x989EE0
     uint32_t dword_989EE4;              // 0x989EE4
     int16_t word_989EE8;                // 0x989EE8
-    uint8_t pad_989EEA[2];              // 0x989EEA
+    uint8_t byte_989EEA;                // 0x989EEA
+    uint8_t pad_989EEB[1];              // 0x989EEB
     uint16_t fg_room_enemy;             // 0x989EEC
     uint16_t word_989EEE;               // 0x989EEE
     PlayerEntity pl;                    // 0x989EF0
@@ -606,7 +611,8 @@ struct GameTable
     ItemboxItem itembox[64];            // 0x98ED60
     uint8_t pad_98EE60[538];            // 0x98EE60
     uint8_t byte_98F07A;                // 0x98F07A
-    uint8_t pad_98F07B[12037];          // 0x98F07B
+    uint8_t byte_98F07B;                // 0x98F07B
+    uint8_t pad_98F07C[12036];          // 0x98F07C
     uint8_t byte_991F80;                // 0x991F80
     uint8_t pad_991F81[67];             // 0x991F81
     uint32_t dword_991FC4;              // 0x991FC4
