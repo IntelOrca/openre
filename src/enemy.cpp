@@ -1,10 +1,12 @@
 #include "enemy.h"
 #include "interop.hpp"
 #include "openre.h"
+#include <array>
 
 namespace openre::enemy
 {
     using EnemyFunc = void (*)(EnemyEntity*);
+    using EnemyRoutineFunc = void (*)(EnemyEntity*, void*, int);
 
     static void em_zombie(EnemyEntity* enemy);
     static void em_20(EnemyEntity* enemy);
@@ -194,16 +196,109 @@ namespace openre::enemy
         return p(workNo, id);
     }
 
+    // 0x004CC680
+    static void oba_ck_em(EnemyEntity* enemy)
+    {
+        using sig = void (*)(EnemyEntity*);
+        auto p = (sig)0x004CC680;
+        return p(enemy);
+    }
+
+    // 0x004CC730
+    static void sca_ck_em(EnemyEntity* enemy, int a1)
+    {
+        using sig = void (*)(EnemyEntity*, int);
+        auto p = (sig)0x004CC730;
+        return p(enemy, a1);
+    }
+
     // 0x004517F0
     static void em_zombie(EnemyEntity* enemy)
     {
         ((EnemyFunc)0x004517F0)(enemy);
     }
 
+    enum
+    {
+        EM_20_ROUTINE_INIT,
+        EM_20_ROUTINE_NORMAL,
+        EM_20_ROUTINE_HURT,
+        EM_20_ROUTINE_DIE,
+        EM_20_ROUTINE_4,
+        EM_20_ROUTINE_5,
+        EM_20_ROUTINE_6,
+        EM_20_ROUTINE_DEAD,
+    };
+
+    // 0x0045F470
+    static void em_20_dead(EnemyEntity* enemy, void*, int)
+    {
+        if (enemy->routine_1 == 0)
+        {
+            enemy->be_flg |= 2;
+            enemy->routine_1 = 1;
+        }
+
+        auto kage = enemy->kage;
+        if (enemy->var_221 == 0)
+        {
+            enemy->var_221 = 1;
+            auto colour = gGameTable.blood_censor ? 0xBF10BF : 0xBFBF10;
+            if (kage != nullptr)
+            {
+                kage->var_1C = (kage->var_1C & 0xFF000000) | colour;
+                kage->var_44 = (kage->var_44 & 0xFF000000) | colour;
+            }
+            enemy->var_16B = 90;
+        }
+        else if (enemy->var_221 != 1)
+        {
+            return;
+        }
+
+        if (kage != nullptr)
+        {
+            kage->var_04 += 8;
+            kage->var_06 += 8;
+        }
+
+        enemy->var_16B--;
+        if (enemy->var_16B == 0)
+            enemy->var_221 = 2;
+    }
+
+    static EnemyRoutineFunc em_20_routines[] = { (EnemyRoutineFunc)0x0045C140,
+                                                 (EnemyRoutineFunc)0x0045C420,
+                                                 (EnemyRoutineFunc)0x0045E430,
+                                                 (EnemyRoutineFunc)0x0045EE20,
+                                                 (EnemyRoutineFunc)0x00492990,
+                                                 nullptr,
+                                                 nullptr,
+                                                 em_20_dead
+
+    };
+
     // 0x0045C0A0
     static void em_20(EnemyEntity* enemy)
     {
-        ((EnemyFunc)0x0045C0A0)(enemy);
+        if (check_flag(FlagGroup::Stop, FG_STOP_02))
+            return;
+
+        if ((enemy->var_1D3 & 0x7F) != 0)
+            enemy->var_1D3--;
+
+        if (enemy->var_232 != 0)
+            enemy->var_232--;
+
+        if (enemy->routine_0 < std::size(em_20_routines))
+            em_20_routines[enemy->routine_0](enemy, enemy->pKan_t_ptr, enemy->var_17C);
+        oba_ck_em(enemy);
+        sca_ck_em(enemy, 1024);
+
+        if ((enemy->pos.x == enemy->old_pos.x && enemy->pos.z == enemy->old_pos.z) || enemy->at_em_no != 0xFF)
+            enemy->var_230++;
+        else
+            enemy->var_230 = 0;
     }
 
     // 0x0045FC10

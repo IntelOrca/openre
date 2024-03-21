@@ -121,6 +121,18 @@ struct PartsW
 };
 static_assert(sizeof(PartsW) == 0xAC);
 
+struct Kage
+{
+    uint8_t pad_0000[4];                // 0x0000
+    uint16_t var_04;                    // 0x0004
+    uint16_t var_06;                    // 0x0006
+    uint8_t pad_0008[20];               // 0x0008
+    uint32_t var_1C;                    // 0x001C
+    uint8_t pad_0020[36];               // 0x0020
+    uint32_t var_44;                    // 0x0044
+};
+static_assert(sizeof(Kage) == 0x48);
+
 struct Entity
 {
     int32_t be_flg;                     // 0x0000
@@ -179,7 +191,10 @@ struct EnemyEntity : Entity
     uint8_t pad_0156[2];                // 0x0156
     uint16_t var_158;                   // 0x0158
     uint16_t var_15A;                   // 0x015A
-    uint8_t pad_015C[32];               // 0x015C
+    uint8_t pad_015C[15];               // 0x015C
+    uint8_t var_16B;                    // 0x016B
+    Kage* kage;                         // 0x016C
+    uint8_t pad_0170[12];               // 0x0170
     int32_t var_17C;                    // 0x017C
     int32_t var_180;                    // 0x0180
     int32_t var_184;                    // 0x0184
@@ -216,7 +231,13 @@ struct EnemyEntity : Entity
     uint32_t var_208;                   // 0x0208
     uint8_t pad_020C[6];                // 0x020C
     uint16_t var_212;                   // 0x0212
-    uint8_t pad_0214[51];               // 0x0214
+    uint8_t pad_0214[13];               // 0x0214
+    uint8_t var_221;                    // 0x0221
+    uint8_t pad_0222[14];               // 0x0222
+    uint8_t var_230;                    // 0x0230
+    uint8_t pad_0231[1];                // 0x0231
+    uint8_t var_232;                    // 0x0232
+    uint8_t pad_0233[20];               // 0x0233
     uint8_t pad_247;                    // 0x0247
 };
 static_assert(sizeof(EnemyEntity) == 0x248);
@@ -510,7 +531,9 @@ struct GameTable
     uint32_t input_keyboard;            // 0x680558
     uint8_t pad_68055C[49];             // 0x68055C
     uint16_t can_draw;                  // 0x68058D
-    uint8_t pad_68058F[36449];          // 0x68058F
+    uint8_t pad_68058F[11];             // 0x68058F
+    uint8_t blood_censor;               // 0x68059A
+    uint8_t pad_68059B[36437];          // 0x68059B
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
