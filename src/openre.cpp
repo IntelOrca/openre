@@ -2,15 +2,16 @@
 
 #include "openre.h"
 #include "audio.h"
+#include "camera.h"
 #include "door.h"
 #include "file.h"
 #include "hud.h"
+#include "input.h"
 #include "interop.hpp"
 #include "player.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
-#include "input.h"
 #include <cassert>
 #include <cstring>
 #include <windows.h>
@@ -24,6 +25,7 @@ using namespace openre::player;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
+using namespace openre::camera;
 
 namespace openre
 {
@@ -381,6 +383,7 @@ void onAttach()
     bgm_init_hooks();
     hud_init_hooks();
     input_init_hooks();
+    camera_init_hooks();
 }
 
 extern "C" {

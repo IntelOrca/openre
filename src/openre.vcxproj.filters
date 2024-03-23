@@ -57,6 +57,9 @@
     <ClCompile Include="input.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -100,11 +103,12 @@
     </ClInclude>
     <ClInclude Include="input.h">
       <Filter>Header Files</Filter>
-    </ClInclude>  
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="file.h">
+    </ClInclude>
+    <ClInclude Include="file.h">
       <Filter>Header Files</Filter>
-    </None>
+    </ClInclude>
+    <ClInclude Include="camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

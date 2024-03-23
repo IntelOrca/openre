@@ -1,5 +1,6 @@
 #include "scd.h"
 #include "audio.h"
+#include "camera.h"
 #include "interop.hpp"
 #include "openre.h"
 #include "rdt.h"
@@ -7,10 +8,12 @@
 #include "sce.h"
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 using namespace openre::audio;
 using namespace openre::sce;
 using namespace openre::rdt;
+using namespace openre::camera;
 
 namespace openre::scd
 {
@@ -33,7 +36,9 @@ namespace openre::scd
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_DOOR_AOT_SE = 0x3B,
+        SCE_CUT_AUTO = 0x3C,
         SCD_PLC_MOTION = 0x3F,
+        SCD_CUT_REPLACE = 0x4B,
         SCD_ITEM_AOT_SET = 0x4E,
         SCD_SCE_KEY_CK = 0x4F,
         SCD_SCE_BGM_CONTROL = 0x51,
@@ -167,6 +172,19 @@ namespace openre::scd
     struct ScdCutOld
     {
         uint8_t Opcode;
+    };
+
+    struct ScdCutAuto
+    {
+        uint8_t Opcode;
+        uint8_t on;
+    };
+
+    struct ScdCutReplace
+    {
+        uint8_t Opcode;
+        uint8_t Id;
+        uint8_t value;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -535,37 +553,11 @@ namespace openre::scd
         return opcode->flag;
     }
 
-    // 0x004C4E90
-    static int cut_search(uint8_t cut_id)
-    {
-        using sig = int (*)(int);
-        auto p = (sig)0x004C4E90;
-        return p(cut_id);
-    }
-
-    // 0x004C4E60
-    static int cut_change(uint8_t cut_id)
-    {
-        gGameTable.can_draw = 0;
-        gGameTable.byte_989EEA = cut_id;
-        gGameTable.dword_988634 = cut_search(cut_id);
-        return gGameTable.dword_988634;
-    }
-
-    // 0x004E5020
-    int sub_4E5020(uint8_t cut_id)
-    {
-        gGameTable.byte_98F07B = 1;
-        gGameTable.cut_old = static_cast<uint8_t>(gGameTable.current_cut);
-        gGameTable.current_cut = cut_id;
-        return cut_change(cut_id);
-    }
-
     // 0x004E4F80
     static int scd_cut_ch(SceTask* sce)
     {
         auto opcode = reinterpret_cast<ScdCutCh*>(sce->data);
-        set_flag(FlagGroup::Status, FG_STATUS_23, true);
+        set_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED, true);
         sub_4E5020(opcode->Id & 0x7F);
         set_flag(FlagGroup::Status, FG_STATUS_11, true);
         if (opcode->Id & 0x80)
@@ -579,16 +571,62 @@ namespace openre::scd
     // 0x004E4FE0
     static int scd_cut_old(SceTask* sce)
     {
-        auto opcode = reinterpret_cast<ScdCutOld*>(sce->data);
         sub_4E5020(gGameTable.cut_old);
-        set_flag(FlagGroup::Status, FG_STATUS_GAMEPLAY, false);
-        set_flag(FlagGroup::Status, FG_STATUS_9, false);
-        set_flag(FlagGroup::Status, FG_STATUS_10, false);
+        set_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED, false);
         set_flag(FlagGroup::Status, FG_STATUS_11, true);
-        set_flag(FlagGroup::Status, FG_STATUS_12, false);
-        set_flag(FlagGroup::Status, FG_STATUS_13, false);
-        set_flag(FlagGroup::Status, FG_STATUS_14, false);
         sce->data++;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E5050
+    static int scd_cut_auto(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdCutAuto*>(sce->data);
+        set_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED, opcode->on);
+        sce->data += 2;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E5090
+    static int scd_cut_replace(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdCutReplace*>(sce->data);
+        auto rvd = rdt_get_offset<uintptr_t>(RdtOffsetKind::RVD);
+        auto vCuts = reinterpret_cast<VCut*>((uint32_t)rvd + 2);
+
+        if (vCuts->be_flg != -1)
+        {
+            auto nextBeFlg = 0;
+            do
+            {
+                if (uint8_t(vCuts->be_flg) == opcode->Id)
+                {
+                    vCuts->be_flg = opcode->value;
+                }
+                else if (uint8_t(vCuts->be_flg) == opcode->value)
+                {
+                    vCuts->be_flg = opcode->Id;
+                }
+
+                if (uint8_t(vCuts->nFloor) == opcode->Id)
+                {
+                    vCuts->nFloor = opcode->value;
+                }
+                else if (uint8_t(vCuts->nFloor) == opcode->value)
+                {
+                    vCuts->nFloor = opcode->Id;
+                }
+                nextBeFlg = vCuts[1].be_flg;
+                ++vCuts;
+
+            } while (nextBeFlg != -1);
+        }
+
+        if (gGameTable.vcut_data[1]->fCut == opcode->Id)
+        {
+            cut_change(opcode->value);
+        }
+        sce->data += 3;
         return SCD_RESULT_NEXT;
     }
 
@@ -602,8 +640,6 @@ namespace openre::scd
         interop::writeJmp(0x004E39E0, &scd_init);
         interop::writeJmp(0x004E3F60, &scd_event_init);
         interop::writeJmp(0x004E4310, &sce_scheduler_main);
-        interop::writeJmp(0x004E5020, &sub_4E5020);
-        interop::writeJmp(0x004C4E60, &cut_change);
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
@@ -618,7 +654,9 @@ namespace openre::scd
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
+        set_scd_hook(SCE_CUT_AUTO, &scd_cut_auto);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
+        set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
