@@ -90,6 +90,8 @@ namespace openre::enemy
         gGameTable.enemy_init_table[EM_3E] = em_3E;
         gGameTable.enemy_init_table[EM_3F] = em_3F;
 
+        gGameTable.enemy_init_table[0x35] = em_30;
+
         for (auto i = 0; i < 96; i++)
         {
             gGameTable.enemy_init_table[96 + i] = gGameTable.enemy_init_table[i];
@@ -210,6 +212,42 @@ namespace openre::enemy
         using sig = void (*)(EnemyEntity*, int);
         auto p = (sig)0x004CC730;
         return p(enemy, a1);
+    }
+
+    // 0x00445840
+    void sub_445840(void* a0, int a1)
+    {
+        using sig = void (*)(void*, int);
+        auto p = (sig)0x00445840;
+        p(a0, a1);
+    }
+
+    struct UnknownA3
+    {
+        uint8_t pad_00[0xA0 - 0x00];
+        uint16_t var_A0;
+    };
+
+    // 0x004C0E40
+    static void ko_joint_trans2(Entity* entity, PartsW* part, uint16_t beFlg, Mat16* workm)
+    {
+        using sig = void (*)(Entity*, PartsW*, uint16_t, Mat16*);
+        auto p = (sig)0x004C0E40;
+        p(entity, part, beFlg, workm);
+    }
+
+    static int16_t word_52DA48[] = { 30,   59,   87,   114,  140,  165,  189,  212,  234,  255,  275,  294,  312,  329,  345,
+                                     360,  374,  387,  399,  410,  420,  429,  437,  444,  450,  455,  459,  462,  464,  465,
+                                     180,  354,  522,  684,  840,  990,  1134, 1272, 1404, 1530, 1650, 1764, 1872, 1974, 2070,
+                                     2160, 2244, 2322, 2394, 2460, 2520, 2574, 2622, 2664, 2700, 2730, 2754, 2772, 2784, 2790 };
+
+    // 0x004C5230
+    static void bomb_parts_sort_gt(void* a0, void* a1, UnknownA3* a2)
+    {
+        auto a = a2->var_A0 & 0x7FFF;
+        auto b = (a2->var_A0 >> 15) * 30;
+        auto c = word_52DA48[a + b];
+        sub_445840(a1, c);
     }
 
     // 0x004517F0
@@ -460,5 +498,6 @@ namespace openre::enemy
     void enemy_init_hooks()
     {
         interop::writeJmp(0x004B1DD0, em_move_tbl_set);
+        interop::writeJmp(0x004C5230, bomb_parts_sort_gt);
     }
 }
