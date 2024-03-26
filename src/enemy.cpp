@@ -98,7 +98,7 @@ namespace openre::enemy
         }
     }
 
-    bool is_enemy_dead(uint8_t globalId)
+    [[nodiscard]] bool is_enemy_dead(uint8_t globalId)
     {
         auto fgEnemy = FlagGroup::Enemy2;
         if (gGameTable.current_stage < 3 && !check_flag(FlagGroup::Status, FG_STATUS_BONUS))
@@ -108,13 +108,13 @@ namespace openre::enemy
         return globalId != 0xFF && check_flag(fgEnemy, globalId);
     }
 
-    static EnemyFunc get_enemy_init_func(uint8_t type, int slot)
+    [[nodiscard]] static EnemyFunc get_enemy_init_func(uint8_t type, int slot)
     {
         auto index = (slot * 96) + type;
         return reinterpret_cast<EnemyFunc>(gGameTable.enemy_init_table[index]);
     }
 
-    static bool is_zombie(uint8_t type)
+    [[nodiscard]] static bool is_zombie(uint8_t type)
     {
         return type >= EM_ZOMBIE_COP && type <= EM_ZOMBIE_RANDOM;
     }
@@ -143,7 +143,7 @@ namespace openre::enemy
     }
 
     // 0x004E3AB0
-    uint8_t em_kind_search(uint8_t id)
+    [[nodiscard]] uint8_t em_kind_search(uint8_t id)
     {
         using sig = uint8_t (*)(uint8_t);
         auto p = (sig)0x004E3AB0;
@@ -277,7 +277,7 @@ namespace openre::enemy
             enemy->routine_1 = 1;
         }
 
-        auto kage = enemy->kage;
+        auto kage = enemy->pKage_work;
         if (enemy->var_221 == 0)
         {
             enemy->var_221 = 1;
@@ -287,7 +287,7 @@ namespace openre::enemy
                 kage->var_1C = (kage->var_1C & 0xFF000000) | colour;
                 kage->var_44 = (kage->var_44 & 0xFF000000) | colour;
             }
-            enemy->var_16B = 90;
+            enemy->timer3 = 90;
         }
         else if (enemy->var_221 != 1)
         {
@@ -300,8 +300,8 @@ namespace openre::enemy
             kage->var_06 += 8;
         }
 
-        enemy->var_16B--;
-        if (enemy->var_16B == 0)
+        enemy->timer3--;
+        if (enemy->timer3 == 0)
             enemy->var_221 = 2;
     }
 
@@ -322,14 +322,14 @@ namespace openre::enemy
         if (check_flag(FlagGroup::Stop, FG_STOP_02))
             return;
 
-        if ((enemy->var_1D3 & 0x7F) != 0)
-            enemy->var_1D3--;
+        if ((enemy->damage_cnt & 0x7F) != 0)
+            enemy->damage_cnt--;
 
         if (enemy->var_232 != 0)
             enemy->var_232--;
 
         if (enemy->routine_0 < std::size(em_20_routines))
-            em_20_routines[enemy->routine_0](enemy, enemy->pKan_t_ptr, enemy->var_17C);
+            em_20_routines[enemy->routine_0](enemy, enemy->pKan_t_ptr, enemy->pSeq_t_ptr);
         oba_ck_em(enemy);
         sca_ck_em(enemy, 1024);
 

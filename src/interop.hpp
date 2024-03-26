@@ -409,7 +409,6 @@ namespace openre::interop
         uintptr_t _end = 0;
         save_state _pre;
         save_state _first;
-        save_state _second;
 
     public:
         memory_comparer(uintptr_t begin, uintptr_t end);

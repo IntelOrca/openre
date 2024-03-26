@@ -175,78 +175,12 @@ struct Entity
 };
 static_assert(sizeof(Entity) == 0x110);
 
-struct EnemyEntity : Entity
-{
-    uint8_t pad_0110[8];                // 0x0110
-    int16_t unk_x;                      // 0x0118
-    int16_t unk_z;                      // 0x011A
-    uint8_t pad_011C[46];               // 0x011C
-    uint8_t var_14A;                    // 0x014A
-    uint8_t pad_014B[1];                // 0x014B
-    uint8_t var_14C;                    // 0x014C
-    uint8_t pad_014D[3];                // 0x014D
-    uint8_t var_150;                    // 0x0150
-    uint8_t pad_0151[3];                // 0x0151
-    uint16_t var_154;                   // 0x0154
-    uint8_t pad_0156[2];                // 0x0156
-    uint16_t var_158;                   // 0x0158
-    uint16_t var_15A;                   // 0x015A
-    uint8_t pad_015C[15];               // 0x015C
-    uint8_t var_16B;                    // 0x016B
-    Kage* kage;                         // 0x016C
-    uint8_t pad_0170[12];               // 0x0170
-    int32_t var_17C;                    // 0x017C
-    int32_t var_180;                    // 0x0180
-    int32_t var_184;                    // 0x0184
-    int32_t var_188;                    // 0x0188
-    int32_t var_18C;                    // 0x018C
-    uint8_t pad_0190[44];               // 0x0190
-    void* pSa_dat;                      // 0x01BC
-    uint8_t var_1C0;                    // 0x01C0
-    uint8_t pad_01C1[1];                // 0x01C1
-    int16_t var_1C2;                    // 0x01C2
-    uint8_t pad_01C4[8];                // 0x01C4
-    uint16_t var_1CC;                   // 0x01CC
-    uint8_t var_1CE;                    // 0x01CE
-    uint8_t var_1CF;                    // 0x01CF
-    uint16_t var_1D0;                   // 0x01D0
-    uint8_t pad_01D2[1];                // 0x01D2
-    uint8_t var_1D3;                    // 0x01D3
-    uint16_t var_1D4;                   // 0x01D4
-    uint16_t var_1D6;                   // 0x01D6
-    uint16_t var_1D8;                   // 0x01D8
-    uint16_t var_1DA;                   // 0x01DA
-    uint8_t pad_01DC[2];                // 0x01DC
-    int16_t var_1DE;                    // 0x01DE
-    uint8_t pad_01E0[4];                // 0x01E0
-    uint32_t var_1E4;                   // 0x01E4
-    uint32_t var_1E8;                   // 0x01E8
-    uint8_t pad_01EC[4];                // 0x01EC
-    uint32_t var_1F0;                   // 0x01F0
-    uint32_t var_1F4;                   // 0x01F4
-    uint8_t pad_01F8[2];                // 0x01F8
-    uint8_t sound_bank;                 // 0x01FA
-    uint8_t pad_01FB[9];                // 0x01FB
-    uint32_t var_204;                   // 0x0204
-    uint32_t var_208;                   // 0x0208
-    uint8_t pad_020C[6];                // 0x020C
-    uint16_t var_212;                   // 0x0212
-    uint8_t pad_0214[13];               // 0x0214
-    uint8_t var_221;                    // 0x0221
-    uint8_t pad_0222[14];               // 0x0222
-    uint8_t var_230;                    // 0x0230
-    uint8_t pad_0231[1];                // 0x0231
-    uint8_t var_232;                    // 0x0232
-    uint8_t pad_0233[20];               // 0x0233
-    uint8_t pad_247;                    // 0x0247
-};
-static_assert(sizeof(EnemyEntity) == 0x248);
-
-struct PlayerEntity : Entity
+struct ActorEntity : Entity
 {
     int32_t Sca_info;                   // 0x0110
     int32_t field_114;                  // 0x0114
-    int32_t field_118;                  // 0x0118
+    int16_t sca_old_x;                  // 0x0118
+    int16_t sca_old_z;                  // 0x011A
     int32_t field_11C;                  // 0x011C
     int32_t field_120;                  // 0x0120
     int32_t field_124;                  // 0x0124
@@ -277,7 +211,7 @@ struct PlayerEntity : Entity
     Vec16 base_pos;                     // 0x0164
     uint8_t timer2;                     // 0x016A
     uint8_t timer3;                     // 0x016B
-    int32_t pKage_work;                 // 0x016C
+    Kage* pKage_work;                   // 0x016C
     int32_t field_170;                  // 0x0170
     int32_t field_174;                  // 0x0174
     uint32_t* pNow_seq;                 // 0x0178
@@ -297,7 +231,7 @@ struct PlayerEntity : Entity
     int32_t pM_Kage_work;               // 0x01B0
     int32_t pEnemy_ptr;                 // 0x01B4
     int32_t pEnemy_neck;                // 0x01B8
-    int32_t pSa_dat;                    // 0x01BC
+    void* pSa_dat;                      // 0x01BC
     uint8_t neck_flg;                   // 0x01C0
     uint8_t neck_no;                    // 0x01C1
     int16_t ground;                     // 0x01C2
@@ -318,23 +252,45 @@ struct PlayerEntity : Entity
     uint16_t sce_free3;                 // 0x01DA
     uint16_t spl_flg;                   // 0x01DC
     uint16_t parts0_pos_y;              // 0x01DE
-    int32_t pOn_om;                     // 0x01E0
-    int32_t field_1E8;                  // 0x01E4
-    int32_t field_1EC;                  // 0x01E8
-    int32_t field_1F0;                  // 0x01EC
-    int32_t field_1F4;                  // 0x01F0
-    int32_t field_1F8;                  // 0x01F4
-    int32_t field_1FC;                  // 0x01F8
-    int32_t field_200;                  // 0x01FC
-    void* pTbefore_func;                // 0x0200
-    void* pTafter_func;                 // 0x0204
-    int32_t field_20C;                  // 0x0208
-    int32_t field_210;                  // 0x020C
-    int16_t poison_timer;               // 0x0210
-    uint8_t pison_down;                 // 0x0212
-    uint8_t field_217;                  // 0x0213
+    uint32_t pT_xz;                     // 0x01E0
+    int32_t pOn_om;                     // 0x01E4
+    int32_t field_1E8;                  // 0x01E8
+    int32_t field_1EC;                  // 0x01EC
+    int32_t field_1F0;                  // 0x01F0
+    int32_t field_1F4;                  // 0x01F4
+    int16_t field_1F8;                  // 0x01F8
+    uint8_t sound_bank;                 // 0x01FA
+    uint8_t pad_1FB;                    // 0x01FB
+    int32_t field_1FC;                  // 0x01FC
+    int32_t field_200;                  // 0x0200
+    void* pTbefore_func;                // 0x0204
+    void* pTafter_func;                 // 0x0208
+    int32_t field_20C;                  // 0x020C
+    int16_t field_210;                  // 0x0210
+    int16_t field_212;                  // 0x0212
+    int16_t poison_timer;               // 0x0214
+    uint8_t pison_down;                 // 0x0216
 };
-static_assert(sizeof(PlayerEntity) == 0x214);
+static_assert(sizeof(ActorEntity) == 0x217);
+
+struct EnemyEntity : ActorEntity
+{
+    uint8_t pad_0217[10];               // 0x0217
+    uint8_t var_221;                    // 0x0221
+    uint8_t pad_0222[14];               // 0x0222
+    uint8_t var_230;                    // 0x0230
+    uint8_t pad_0231[1];                // 0x0231
+    uint8_t var_232;                    // 0x0232
+    uint8_t pad_0233[20];               // 0x0233
+    uint8_t pad_247;                    // 0x0247
+};
+static_assert(sizeof(EnemyEntity) == 0x248);
+
+struct PlayerEntity : ActorEntity
+{
+    uint8_t field_217;                  // 0x0217
+};
+static_assert(sizeof(PlayerEntity) == 0x218);
 
 struct ObjectEntity : Entity
 {
@@ -656,7 +612,9 @@ struct GameTable
     uint16_t fg_room_enemy;             // 0x989EEC
     uint16_t word_989EEE;               // 0x989EEE
     PlayerEntity pl;                    // 0x989EF0
-    uint8_t pad_98A104[8];              // 0x98A104
+    uint16_t poison_status;             // 0x98A108
+    uint8_t poison_timer;               // 0x98A10A
+    uint8_t pad_98A10B[1];              // 0x98A10B
     PlayerEntity* player_work;          // 0x98A10C
     EnemyEntity* splayer_work;          // 0x98A110
     EnemyEntity* enemies[16];           // 0x98A114

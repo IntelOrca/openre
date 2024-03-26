@@ -729,8 +729,8 @@ namespace openre::scd
         em->old_pos.y = opcode->y;
         em->old_pos.z = opcode->z;
 
-        em->unk_x = opcode->x;
-        em->unk_z = opcode->z;
+        em->sca_old_x = opcode->x;
+        em->sca_old_z = opcode->z;
 
         em->cdir.x = 0;
         em->cdir.y = opcode->d;
@@ -739,36 +739,36 @@ namespace openre::scd
         em->id = opcode->type;
         em->type = opcode->pose;
         em->var_10F = opcode->behaviour;
-        em->var_1CE = opcode->globalId;
-        em->var_1CF = opcode->texture;
+        em->em_set_flg = opcode->globalId;
+        em->model_type = opcode->texture;
         em->nFloor = opcode->floor;
         em->routine_0 = 0;
         em->routine_1 = 0;
         em->routine_2 = 0;
         em->routine_3 = 0;
-        em->var_1D0 = 0;
-        em->var_1D3 = 0;
-        em->var_1D4 = 0;
-        em->var_154 = 0;
-        em->var_14A = 0;
-        em->var_1CC = 0;
-        em->var_1DE = 0x1000;
-        em->var_1C2 = opcode->floor * -1800;
-        em->var_1D6 = 0;
-        em->var_1D8 = 0;
-        em->var_1DA = 0;
-        em->var_204 = 0;
-        em->var_208 = 0;
-        em->var_1E4 = 0;
-        em->var_212 = 0;
+        em->damage_flg = 0;
+        em->damage_cnt = 0;
+        em->sce_free0 = 0;
+        em->status_flg = 0;
+        em->in_screen = 0;
+        em->sce_flg = 0;
+        em->parts0_pos_y = 0x1000;
+        em->ground = opcode->floor * -1800;
+        em->sce_free1 = 0;
+        em->sce_free2 = 0;
+        em->sce_free3 = 0;
+        em->pTbefore_func = nullptr;
+        em->pTafter_func = nullptr;
+        em->pOn_om = 0;
+        em->field_212 = 0;
         em->water = 0;
-        em->var_1F0 = 0;
-        em->var_1F4 = 0;
+        em->field_1F0 = 0;
+        em->field_1F4 = 0;
         if (em->id >= 0x40)
             em->sc_id = 0x80;
         else
             em->sc_id = 0x04;
-        em->var_1E8 = 0;
+        em->field_1E8 = 0;
 
         uint16_t* atd = (uint16_t*)&em->atd;
         atd[0x08] = 0;
@@ -780,19 +780,19 @@ namespace openre::scd
         atd[0x06] = 450;
         atd[0x07] = 450;
 
-        em->var_150 = em->work_no;
+        em->root_ck_cnt = em->work_no;
 
         auto lastEnemy = static_cast<EnemyEntity*>(gGameTable.c_em);
         if (em->id == gGameTable.c_id)
         {
             em->pKan_t_ptr = lastEnemy->pKan_t_ptr;
-            em->var_17C = lastEnemy->var_17C;
+            em->pSeq_t_ptr = lastEnemy->pSeq_t_ptr;
             em->pTmd = lastEnemy->pTmd;
             em->pTmd2 = lastEnemy->pTmd2;
-            em->var_180 = lastEnemy->var_180;
-            em->var_184 = lastEnemy->var_184;
-            em->var_188 = lastEnemy->var_188;
-            em->var_18C = lastEnemy->var_18C;
+            em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
+            em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
+            em->field_188 = lastEnemy->field_188;
+            em->field_18C = lastEnemy->field_18C;
             em->pSa_dat = lastEnemy->pSa_dat;
             em->tpage = lastEnemy->tpage;
             em->clut = lastEnemy->clut;
@@ -801,11 +801,11 @@ namespace openre::scd
         else
         {
             gGameTable.c_id = em->id;
-            gGameTable.c_model_type = em->var_1CF;
+            gGameTable.c_model_type = em->model_type;
             gGameTable.c_em = em;
             auto kind = em_kind_search(em->id);
             if (kind != gGameTable.c_kind)
-                em->var_1CF &= ~0x80;
+                em->model_type &= ~0x80;
             gGameTable.c_kind = kind;
 
             auto emdResult = emd_load(em->id, em, gGameTable.mem_top);
@@ -815,12 +815,12 @@ namespace openre::scd
             gGameTable.mem_top = emdResult;
             gGameTable.sce_type = 0;
             gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
-            if (em->var_1CF & 0x80)
+            if (em->model_type & 0x80)
             {
-                em->var_180 = lastEnemy->var_180;
-                em->var_184 = lastEnemy->var_184;
-                em->var_188 = lastEnemy->var_188;
-                em->var_18C = lastEnemy->var_18C;
+                em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
+                em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
+                em->field_188 = lastEnemy->field_188;
+                em->field_18C = lastEnemy->field_18C;
             }
         }
 
@@ -830,11 +830,11 @@ namespace openre::scd
         if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
             gGameTable.mem_top = mirror_model_cp(em, gGameTable.mem_top);
 
-        em->var_14C = 0;
-        em->var_158 = opcode->animation;
-        em->var_15A = opcode->var_14;
+        em->move_no = 0;
+        em->timer0 = opcode->animation;
+        em->timer1 = opcode->var_14;
         if (em->var_10F & 0x40)
-            em->var_1C0 = 0x92;
+            em->neck_flg = 0x92;
 
         return SCD_RESULT_NEXT;
     }

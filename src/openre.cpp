@@ -338,6 +338,8 @@ namespace openre
         auto mem = gGameTable.mem_top;
         gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
 #ifdef DEBUG
+        // Fill allocated memory with standard MS uninitialised byte
+        // helps track what bytes have not been initialised.
         std::memset(mem, 0xCD, len);
 #endif
         return mem;
