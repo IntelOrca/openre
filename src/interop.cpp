@@ -411,8 +411,8 @@ namespace openre::interop
 
     void memory_comparer::log()
     {
-        _second = save_state(_begin, _end);
-        save_state::logDiff(_first, _second);
+        auto second = save_state(_begin, _end);
+        save_state::logDiff(_first, second);
     }
 
     std::vector<std::byte> memory_comparer::readFile(std::string_view path)
