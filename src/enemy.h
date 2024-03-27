@@ -92,6 +92,9 @@ namespace openre::enemy
         int16_t Unknown{};
     };
 
+    using EnemyFunc = void (*)(EnemyEntity*);
+    using EnemyRoutineFunc = void (*)(EnemyEntity*, void*, int);
+
     bool is_enemy_dead(uint8_t globalId);
 
     void em_bin_load(uint8_t type);
@@ -103,8 +106,13 @@ namespace openre::enemy
     void* sa_dat_set(Entity* entity, void* arg1);
     void* mirror_model_cp(Entity* entity, void* arg1);
     int* mem_ck_parts_work(int workNo, int id);
+    void oba_ck_em(EnemyEntity* enemy);
+    void sca_ck_em(EnemyEntity* enemy, int a1);
+    void add_speed_xz(Entity* entity, int16_t d);
 
     bool spawn_enemy(const EnemySpawnInfo& info);
+
+    void em_dog(EnemyEntity* enemy);
 
     void enemy_init_hooks();
 }

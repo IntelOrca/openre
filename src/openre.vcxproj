@@ -73,6 +73,7 @@
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="door.cpp" />
+    <ClCompile Include="em_dog.cpp" />
     <ClCompile Include="enemy.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />

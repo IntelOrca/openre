@@ -243,6 +243,7 @@ declare     pison_down              u8
 struct      EnemyEntity
 base        ActorEntity
 declare     var_221                 u8          0x221
+declare     var_223                 u8          0x223
 declare     var_230                 u8          0x230
 declare     var_232                 u8          0x232
 declare     pad_247                 u8          0x247
