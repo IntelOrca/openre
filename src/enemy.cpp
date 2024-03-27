@@ -1,7 +1,10 @@
 #include "enemy.h"
 #include "interop.hpp"
 #include "openre.h"
+#include "rdt.h"
 #include <array>
+
+using namespace openre::rdt;
 
 namespace openre::enemy
 {
@@ -228,6 +231,159 @@ namespace openre::enemy
         auto b = (a2->var_A0 >> 15) * 30;
         auto c = word_52DA48[a + b];
         sub_445840(a1, c);
+    }
+
+    bool spawn_enemy(const EnemySpawnInfo& info)
+    {
+        em_bin_load(info.Type);
+        auto ctcb = gGameTable.ctcb;
+        if (ctcb->var_13 != 0)
+            return false;
+
+        auto em = work_alloc<EnemyEntity>();
+        if (info.Id != 0xFF)
+        {
+            gGameTable.enemy_count++;
+            em->work_no = 2 + info.Id;
+            gGameTable.enemies[info.Id] = em;
+            auto& nextEntry = gGameTable.enemies[info.Id + 1];
+            if (gGameTable.dword_98862C < &nextEntry)
+                gGameTable.dword_98862C = &nextEntry;
+        }
+        else
+        {
+            em->work_no = 1;
+            gGameTable.splayer_work = em;
+            auto& nextEntry = gGameTable.enemies[0];
+            if (gGameTable.dword_98862C < &nextEntry)
+                gGameTable.dword_98862C = &nextEntry;
+        }
+
+        em->be_flg = 1;
+        em->sound_bank = info.SoundBank;
+        if (gGameTable.se_tmp0 != info.SoundBank)
+        {
+            if (gGameTable.se_tmp0 == 0)
+                gGameTable.se_tmp0 = info.SoundBank;
+            else
+                gGameTable.byte_695E71 = info.SoundBank;
+        }
+
+        em->pos.x = info.Position.x;
+        em->pos.y = info.Position.y;
+        em->pos.z = info.Position.z;
+        em->old_pos.x = info.Position.x;
+        em->old_pos.y = info.Position.y;
+        em->old_pos.z = info.Position.z;
+
+        em->sca_old_x = info.Position.x;
+        em->sca_old_z = info.Position.z;
+
+        em->cdir.x = 0;
+        em->cdir.y = info.Position.d;
+        em->cdir.z = 0;
+
+        em->id = info.Type;
+        em->type = info.Pose;
+        em->var_10F = info.Behaviour;
+        em->em_set_flg = info.GlobalId;
+        em->model_type = info.Texture;
+        em->nFloor = info.Floor;
+        em->routine_0 = 0;
+        em->routine_1 = 0;
+        em->routine_2 = 0;
+        em->routine_3 = 0;
+        em->damage_flg = 0;
+        em->damage_cnt = 0;
+        em->sce_free0 = 0;
+        em->status_flg = 0;
+        em->in_screen = 0;
+        em->sce_flg = 0;
+        em->parts0_pos_y = 0x1000;
+        em->ground = info.Floor * -1800;
+        em->sce_free1 = 0;
+        em->sce_free2 = 0;
+        em->sce_free3 = 0;
+        em->pTbefore_func = nullptr;
+        em->pTafter_func = nullptr;
+        em->pOn_om = 0;
+        em->field_212 = 0;
+        em->water = 0;
+        em->field_1F0 = 0;
+        em->field_1F4 = 0;
+        if (em->id >= 0x40)
+            em->sc_id = 0x80;
+        else
+            em->sc_id = 0x04;
+        em->field_1E8 = 0;
+
+        uint16_t* atd = (uint16_t*)&em->atd;
+        atd[0x08] = 0;
+        atd[0x0A] = 64006;
+        atd[0x09] = 0;
+        atd[0x0B] = 450;
+        atd[0x0D] = 1530;
+        atd[0x0C] = 450;
+        atd[0x06] = 450;
+        atd[0x07] = 450;
+
+        em->root_ck_cnt = em->work_no;
+
+        auto lastEnemy = static_cast<EnemyEntity*>(gGameTable.c_em);
+        if (em->id == gGameTable.c_id)
+        {
+            em->pKan_t_ptr = lastEnemy->pKan_t_ptr;
+            em->pSeq_t_ptr = lastEnemy->pSeq_t_ptr;
+            em->pTmd = lastEnemy->pTmd;
+            em->pTmd2 = lastEnemy->pTmd2;
+            em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
+            em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
+            em->field_188 = lastEnemy->field_188;
+            em->field_18C = lastEnemy->field_18C;
+            em->pSa_dat = lastEnemy->pSa_dat;
+            em->tpage = lastEnemy->tpage;
+            em->clut = lastEnemy->clut;
+            mem_ck_parts_work(em->work_no, em->id);
+        }
+        else
+        {
+            gGameTable.c_id = em->id;
+            gGameTable.c_model_type = em->model_type;
+            gGameTable.c_em = em;
+            auto kind = em_kind_search(em->id);
+            if (kind != gGameTable.c_kind)
+                em->model_type &= ~0x80;
+            gGameTable.c_kind = kind;
+
+            auto emdResult = emd_load(em->id, em, gGameTable.mem_top);
+            if (gGameTable.ctcb->var_13 != 0)
+                return false;
+
+            gGameTable.mem_top = emdResult;
+            gGameTable.sce_type = 0;
+            gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
+            if (em->model_type & 0x80)
+            {
+                em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
+                em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
+                em->field_188 = lastEnemy->field_188;
+                em->field_18C = lastEnemy->field_18C;
+            }
+        }
+
+        auto parts = partswork_set(em, gGameTable.mem_top);
+        gGameTable.mem_top = partswork_link(em, parts, em->pKan_t_ptr, 0);
+        sa_dat_set(em, em->pSa_dat);
+        if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
+            gGameTable.mem_top = mirror_model_cp(em, gGameTable.mem_top);
+
+        em->move_no = 0;
+        em->timer0 = info.Animation;
+        em->timer1 = info.Unknown;
+        if (em->var_10F & 0x40)
+            em->neck_flg = 0x92;
+
+        return true;
     }
 
     // 0x004517F0

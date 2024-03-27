@@ -28,6 +28,10 @@ struct      Vec16p
 base        Vec16
 declare     pad_6                   s16
 
+struct      Vec16d
+base        Vec16
+declare     d                       s16
+
 struct      Vec32
 declare     x                       s32
 declare     y                       s32
@@ -36,6 +40,10 @@ declare     z                       s32
 struct      Vec32p
 base        Vec32
 declare     pad_0C                  s32
+
+struct      Vec32d
+base        Vec32
+declare     d                       s32
 
 struct      Mat16
 declare     m                       s16[9]

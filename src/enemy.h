@@ -1,5 +1,6 @@
 #pragma once
 
+#include "re2.h"
 #include <cstdint>
 
 struct Entity;
@@ -76,6 +77,21 @@ namespace openre::enemy
         EM_NONE = 0xFF,
     };
 
+    struct EnemySpawnInfo
+    {
+        uint8_t Id{};
+        uint8_t Type{};
+        uint8_t Pose{};
+        uint8_t Behaviour{};
+        uint8_t Floor{};
+        uint8_t SoundBank{};
+        uint8_t Texture{};
+        uint8_t GlobalId{};
+        Vec32d Position{};
+        int16_t Animation{};
+        int16_t Unknown{};
+    };
+
     bool is_enemy_dead(uint8_t globalId);
 
     void em_bin_load(uint8_t type);
@@ -87,6 +103,8 @@ namespace openre::enemy
     void* sa_dat_set(Entity* entity, void* arg1);
     void* mirror_model_cp(Entity* entity, void* arg1);
     int* mem_ck_parts_work(int workNo, int id);
+
+    bool spawn_enemy(const EnemySpawnInfo& info);
 
     void enemy_init_hooks();
 }
