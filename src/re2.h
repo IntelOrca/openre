@@ -44,6 +44,12 @@ struct Vec16p : Vec16
 };
 static_assert(sizeof(Vec16p) == 0x08);
 
+struct Vec16d : Vec16
+{
+    int16_t d;                          // 0x0006
+};
+static_assert(sizeof(Vec16d) == 0x08);
+
 struct Vec32
 {
     int32_t x;                          // 0x0000
@@ -57,6 +63,12 @@ struct Vec32p : Vec32
     int32_t pad_0C;                     // 0x000C
 };
 static_assert(sizeof(Vec32p) == 0x10);
+
+struct Vec32d : Vec32
+{
+    int32_t d;                          // 0x000C
+};
+static_assert(sizeof(Vec32d) == 0x10);
 
 struct Mat16
 {
