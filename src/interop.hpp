@@ -150,6 +150,14 @@ namespace openre::interop
     int32_t call(int32_t address);
     int32_t call(int32_t address, registers& registers);
 
+    template<typename TReturn, typename... TArgs>
+    TReturn call(uintptr_t addr, TArgs... args)
+    {
+        using func_t = TReturn (*)(TArgs...);
+        func_t func = (func_t)addr;
+        return func(args...);
+    }
+
     template<typename T, uintptr_t TAddress>
     struct loco_global
     {
