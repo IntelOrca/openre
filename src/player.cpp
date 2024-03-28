@@ -1,4 +1,5 @@
 #include "player.h"
+#include "entity.h"
 #include "input.h"
 #include "interop.hpp"
 #include "item.h"
@@ -517,14 +518,6 @@ namespace openre::player
         using sig = void (*)(int, int, PlayerEntity*);
         auto p = (sig)0x004EDF40;
         return p(a0, floor_sound, player);
-    }
-
-    // 0x004C1C30
-    static int joint_move(PlayerEntity* player, int pKanPtr, int pSeqPtr, int lateFlag)
-    {
-        using sig = int (*)(PlayerEntity*, int, int, int);
-        auto p = (sig)0x004C1C30;
-        return p(player, pKanPtr, pSeqPtr, lateFlag);
     }
 
     // 0x004B8470
