@@ -1,4 +1,5 @@
-#include "enemy.h"
+﻿#include "enemy.h"
+#include "entity.h"
 #include "interop.hpp"
 #include "openre.h"
 
@@ -24,9 +25,69 @@ namespace openre::enemy
         (EnemyRoutineFunc)0x0045EBD0, (EnemyRoutineFunc)0x0045EB60, (EnemyRoutineFunc)0x0045ED50, (EnemyRoutineFunc)0x0045EB60
     };
 
+    static void sub_45F630(EnemyEntity* enemy, int a1, int a2)
+    {
+        interop::call<void, EnemyEntity*, int, int>(0x0045F630, enemy, a1, a2);
+    }
+
+    static void sub_45EDD0(EnemyEntity* enemy, int a1)
+    {
+        interop::call<void, EnemyEntity*, int>(0x0045EDD0, enemy, a1);
+    }
+
     static void sub_45E680(EnemyEntity* enemy, void* a1, int a2)
     {
-        interop::call<void, EnemyEntity*, void*, int>(0x0045E680, enemy, a1, a2);
+        auto pl = enemy->var_227 == 0 ? (Entity*)gGameTable.player_work : (Entity*)gGameTable.splayer_work;
+        if (enemy->var_220 == 0)
+        {
+            add_speed_xz(enemy, enemy->timer0);
+            sub_45F630(enemy, 10, 0);
+        }
+
+        auto result = joint_move(enemy, (int)a1, a2, enemy->timer1);
+        if (result == 0)
+            return;
+
+        switch (enemy->routine_3)
+        {
+        case 0:
+            enemy->routine_3 = 1;
+            enemy->var_223 = (enemy->var_223 & 0xC2) | 2;
+            enemy->move_no = 18;
+            enemy->move_cnt = 0;
+            enemy->hokan_flg = enemy->hokan_flg;
+            enemy->mplay_flg = 0;
+            break;
+        case 1:
+            enemy->routine_3 = 2;
+            enemy->move_no = 7;
+            enemy->move_cnt = 0;
+            enemy->hokan_flg = 15;
+            enemy->mplay_flg = 0;
+            enemy->timer1 = 256;
+            break;
+        case 2:
+            sub_45EDD0(enemy, 1);
+            enemy->var_10F &= ~0x20;
+            enemy->var_223 = 0;
+            enemy->damage_cnt &= ~0x80;
+            if (enemy->var_22D == 0)
+            {
+                auto r = goto00_ck(enemy, pl->pos.x, pl->pos.z, 512);
+                enemy->routine_0 = ROUTINE_NORMAL;
+                enemy->routine_1 = r == 0 ? 5 : 6;
+                enemy->routine_2 = 0;
+                enemy->routine_3 = 0;
+            }
+            else
+            {
+                enemy->routine_0 = ROUTINE_NORMAL;
+                enemy->routine_1 = 13;
+                enemy->routine_2 = 1;
+                enemy->routine_3 = 0;
+            }
+            break;
+        }
     }
 
     static void sub_45EAF0(EnemyEntity* enemy, void* a1, int a2)

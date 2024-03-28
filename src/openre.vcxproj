@@ -74,6 +74,7 @@
     <ClCompile Include="door.cpp" />
     <ClCompile Include="em_dog.cpp" />
     <ClCompile Include="enemy.cpp" />
+    <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
@@ -91,6 +92,7 @@
     <ClInclude Include="audio.h" />
     <ClInclude Include="door.h" />
     <ClInclude Include="enemy.h" />
+    <ClInclude Include="entity.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
