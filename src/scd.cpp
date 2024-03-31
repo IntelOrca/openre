@@ -581,7 +581,7 @@ namespace openre::scd
     static int scd_cut_auto(SceTask* sce)
     {
         auto opcode = reinterpret_cast<ScdCutAuto*>(sce->data);
-        set_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED, opcode->on);
+        set_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED, !opcode->on);
         sce->data += 2;
         return SCD_RESULT_NEXT;
     }
