@@ -8,7 +8,6 @@
 #include "sce.h"
 #include <cassert>
 #include <cstring>
-#include <iostream>
 
 using namespace openre::audio;
 using namespace openre::sce;
