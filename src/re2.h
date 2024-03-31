@@ -66,6 +66,16 @@ struct Mat16
 };
 static_assert(sizeof(Mat16) == 0x20);
 
+struct VCut
+{
+    int8_t be_flg;                      // 0x0000
+    uint8_t nFloor;                     // 0x0001
+    uint8_t fCut;                       // 0x0002
+    uint8_t tCut;                       // 0x0003
+    uint16_t xz[8];                     // 0x0004
+};
+static_assert(sizeof(VCut) == 0x14);
+
 struct PartsW
 {
     uint32_t Be_flg;                    // 0x0000
@@ -536,9 +546,9 @@ struct GameTable
     Rdt* rdt;                           // 0x98861C
     uint8_t pad_988620[4];              // 0x988620
     void* mem_top;                      // 0x988624
-    uint8_t pad_988628[12];             // 0x988628
-    uint32_t dword_988634;              // 0x988634
-    uint8_t pad_988638[528];            // 0x988638
+    uint8_t pad_988628[8];              // 0x988628
+    VCut* vcut_data[19];                // 0x988630
+    uint8_t pad_98867C[460];            // 0x98867C
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850

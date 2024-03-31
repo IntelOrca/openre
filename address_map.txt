@@ -42,6 +42,13 @@ declare     m                       s16[9]
 declare     field_12                s16
 declare     t                       s32[3]
 
+struct      VCut
+declare     be_flg                  s8
+declare     nFloor                  u8
+declare     fCut                    u8
+declare     tCut                    u8
+declare     xz                      u16[8]
+
 struct      PartsW
 declare     Be_flg                  u32
 declare     Attribute               u8
@@ -416,7 +423,7 @@ declare     key_trg                 u32                     0x00988608
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
-declare     dword_988634            u32                     0x00988634
+declare     vcut_data               VCut*[19]               0x00988630
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     fg_system               u32                     0x00989E6C
