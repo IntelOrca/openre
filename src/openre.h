@@ -3,6 +3,8 @@
 #include "re2.h"
 #include <cstdint>
 
+struct Md1;
+
 namespace openre
 {
     enum class FlagGroup : uint8_t
@@ -125,6 +127,13 @@ namespace openre
         FG_STOP_DISABLE_INPUT = 7,
     };
 
+    enum
+    {
+        FG_ZAPPING_5 = 5,
+        FG_ZAPPING_6 = 6,
+        FG_ZAPPING_15 = 15,
+    };
+
     extern GameTable& gGameTable;
     extern uint32_t& gGameFlags;
     extern uint32_t& gErrorCode;
@@ -143,7 +152,7 @@ namespace openre
     uint8_t rnd();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
-    void mapping_tmd(int a1, void* pTmd, int page, int clut);
+    int mapping_tmd(int a1, Md1* pTmd, int page, int clut);
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);

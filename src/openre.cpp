@@ -307,12 +307,13 @@ namespace openre
         p(mode, rgb);
     }
 
-    // 0x00502D90
-    void mapping_tmd(int a1, void* pTmd, int page, int clut)
+    /**
+     * Changes the mesh offsets to pointers.
+     * 0x00502D90
+     */
+    int mapping_tmd(int a1, Md1* pTmd, int page, int clut)
     {
-        using sig = void (*)(int, void*, int, int);
-        auto p = (sig)0x00502D90;
-        p(a1, pTmd, page, clut);
+        return interop::call<int, int, Md1*, int, int>(0x00502D90, a1, pTmd, page, clut);
     }
 
     // 0x00451570

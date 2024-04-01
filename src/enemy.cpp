@@ -1,10 +1,41 @@
+#pragma warning(disable : 4200)
+
 #include "enemy.h"
+#include "file.h"
 #include "interop.hpp"
+#include "marni.h"
 #include "openre.h"
 #include "rdt.h"
 #include <array>
 
+using namespace openre::file;
 using namespace openre::rdt;
+
+#pragma pack(push, 1)
+struct TmdEntry
+{
+    void* PositionData;
+    size_t PositionCount;
+    void* NormalData;
+    size_t NormalCount;
+    void* PrimitiveData;
+    size_t PrimitiveCount;
+    void* TextureData;
+};
+
+struct Tmd
+{
+    uint32_t NumEntries;
+    TmdEntry Entries[];
+};
+
+struct Md1
+{
+    uint32_t Length;
+    uint32_t pad_04;
+    Tmd Data;
+};
+#pragma pack(pop)
 
 namespace openre::enemy
 {
@@ -13,6 +44,73 @@ namespace openre::enemy
         uint8_t pad_00[0xA0 - 0x00];
         uint16_t var_A0;
     };
+
+#pragma pack(push, 1)
+    struct EmdFileHeader
+    {
+        uint32_t Footer;
+    };
+
+    struct EmdFileFooter
+    {
+        uint32_t Dat;
+        uint32_t Edd0;
+        uint32_t Emr0;
+        uint32_t Edd1;
+        uint32_t Emr1;
+        uint32_t Edd2;
+        uint32_t Emr2;
+        uint32_t Md1;
+    };
+
+    struct EmdFile
+    {
+        EmdFileHeader Header;
+
+        void* GetDat() const
+        {
+            return GetPointer<void>(GetFooter()->Dat);
+        }
+
+        void* GetEdd(int index) const
+        {
+            if (index == 0)
+                return GetPointer<void>(GetFooter()->Edd0);
+            if (index == 1)
+                return GetPointer<void>(GetFooter()->Edd1);
+            if (index == 2)
+                return GetPointer<void>(GetFooter()->Edd2);
+            return nullptr;
+        }
+
+        void* GetEmr(int index) const
+        {
+            if (index == 0)
+                return GetPointer<void>(GetFooter()->Emr0);
+            if (index == 1)
+                return GetPointer<void>(GetFooter()->Emr1);
+            if (index == 2)
+                return GetPointer<void>(GetFooter()->Emr2);
+            return nullptr;
+        }
+
+        Md1* GetMd1() const
+        {
+            return GetPointer<Md1>(GetFooter()->Md1);
+        }
+
+    private:
+        EmdFileFooter* GetFooter() const
+        {
+            return GetPointer<EmdFileFooter>(Header.Footer);
+        }
+
+        template<typename T> T* GetPointer(uint32_t offset) const
+        {
+            return (T*)((uintptr_t)this + offset);
+        }
+    };
+#pragma pack(pop)
 
     static void em_zombie(EnemyEntity* enemy);
     static void em_21(EnemyEntity* enemy);
@@ -130,7 +228,7 @@ namespace openre::enemy
     }
 
     // 0x004B20B0
-    void em_bin_load(uint8_t type)
+    static void em_bin_load(uint8_t type)
     {
         auto func = get_enemy_init_func(type, 0);
         if (func == nullptr)
@@ -153,15 +251,132 @@ namespace openre::enemy
     }
 
     // 0x004E3AB0
-    [[nodiscard]] uint8_t em_kind_search(uint8_t id)
+    [[nodiscard]] static uint8_t em_kind_search(uint8_t id)
     {
         return interop::call<uint8_t, uint8_t>(0x004E3AB0, id);
     }
 
-    // 0x004B1660
-    void* emd_load(int id, Entity* entity, void* buffer)
+    // 0x00442F50
+    static void em_set_flags(int id)
     {
-        return interop::call<void*, int, Entity*, void*>(0x004B1660, id, entity, buffer);
+        return interop::call<void, int>(0x00442F50, id);
+    }
+
+    // 0x00443F70
+    static void pl_load_texture(int workNo, void* pTim, int tpage, int clut, int id)
+    {
+        return interop::call<void, int, void*, int, int, int>(0x00443F70, workNo, pTim, tpage, clut, id);
+    }
+
+    static int get_customised_emd_id(int id)
+    {
+        if (id >= EM_LEON_RPD && id <= EM_LEON_LEATHER)
+        {
+            if (id & 1)
+            {
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_6))
+                    return EM_CLAIRE_COWGIRL;
+            }
+            else
+            {
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_5))
+                    return EM_LEON_TANKTOP;
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_15))
+                    return EM_LEON_LEATHER;
+            }
+        }
+        return id;
+    }
+
+    static const char* get_emd_path(char* buffer, size_t bufferLen, const char* extension, int id)
+    {
+        auto player = check_flag(FlagGroup::Status, FG_STATUS_PLAYER) ? 1 : 0;
+        snprintf(buffer, bufferLen, "pl%d\\emd%d\\em%d%02X%s", player, player, player, id, extension);
+        return buffer;
+    }
+
+    // 0x004B1660
+    static void* emd_load(int id, EnemyEntity* entity, void* buffer)
+    {
+        char filename[64];
+        auto g = (uint8_t*)gGameTable.pGG;
+
+        // Load texture
+        if (gGameTable.ctcb->var_0E != 0)
+        {
+            if (gGameTable.ctcb->var_0E != 1)
+                return nullptr;
+        }
+        else
+        {
+            em_set_flags(id);
+            gGameTable.idd = get_customised_emd_id(entity->id);
+
+            get_emd_path(filename, sizeof(filename), ".tim", gGameTable.idd);
+            if (read_file_into_buffer(filename, buffer, 8) == 0)
+            {
+                file_error();
+                return nullptr;
+            }
+
+            entity->clut = g[0x3A09];
+            entity->tpage = g[0x3A08];
+            marni::out();
+            pl_load_texture(entity->work_no, buffer, entity->tpage, entity->clut, entity->id);
+        }
+
+        // Load mesh and animations
+        get_emd_path(filename, sizeof(filename), ".emd", gGameTable.idd);
+        auto emdFileSize = read_file_into_buffer(filename, buffer, 8);
+        if (emdFileSize == 0)
+        {
+            file_error();
+            return nullptr;
+        }
+
+        auto emdFile = reinterpret_cast<EmdFile*>(buffer);
+        auto emdFileEnd = (uintptr_t)emdFile + emdFileSize;
+        entity->pSa_dat = emdFile->GetDat();
+        entity->pSeq_t_ptr = (int32_t)emdFile->GetEdd(0);
+        entity->pKan_t_ptr = emdFile->GetEmr(0);
+        entity->pSub0_seq_t_ptr = (int32_t)emdFile->GetEdd(1);
+        entity->pSub0_kan_t_ptr = (int32_t)emdFile->GetEmr(1);
+        entity->pSub1_seq_t_ptr = (int32_t)emdFile->GetEdd(2);
+        entity->pSub1_kan_t_ptr = (int32_t)emdFile->GetEmr(2);
+        entity->pTmd = (TmdEntry*)emdFile->GetMd1();
+        entity->poly_rgb = 0x808080;
+
+        if (entity->model_type & 0x80)
+        {
+            // Remove edd1,emr1,edd2,emr2
+            std::memcpy(emdFile->GetEdd(1), emdFile->GetMd1(), emdFileEnd - (uintptr_t)emdFile->GetMd1());
+            entity->pTmd = (TmdEntry*)entity->pSub0_seq_t_ptr;
+        }
+        if (entity->model_type & 0x40)
+        {
+            // Untested
+            // Remove edd0,emr0
+            auto shift = emdFileEnd - (uintptr_t)emdFile->GetEdd(1);
+            std::memcpy(emdFile->GetEdd(0), emdFile->GetEdd(1), shift);
+            entity->pSub0_seq_t_ptr -= shift;
+            entity->pSub0_kan_t_ptr -= shift;
+            entity->pSub1_seq_t_ptr -= shift;
+            entity->pSub1_kan_t_ptr -= shift;
+            entity->pTmd -= shift;
+
+            entity->pSeq_t_ptr = *(reinterpret_cast<int32_t*>(&g[0x3B8C]));
+            entity->pKan_t_ptr = reinterpret_cast<void*>(*(reinterpret_cast<int32_t*>(&g[0x3B18])));
+        }
+
+        auto md1 = (Md1*)entity->pTmd;
+        auto tmdLen = mapping_tmd(0, md1, entity->tpage, entity->clut);
+        marni::mapping_tmd(entity->work_no, md1, entity->id);
+        entity->pTmd = &md1->Data.Entries[0];
+        entity->pTmd2 = &md1->Data.Entries[1];
+        gGameTable.ctcb->var_0E = 0;
+
+        auto result = (void*)((uintptr_t)md1 + ((tmdLen >> 2) << 2));
+        return result;
     }
 
     // 0x004C1270
@@ -340,8 +555,8 @@ namespace openre::enemy
             em->pTmd2 = lastEnemy->pTmd2;
             em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
             em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
-            em->field_188 = lastEnemy->field_188;
-            em->field_18C = lastEnemy->field_18C;
+            em->pSub1_kan_t_ptr = lastEnemy->pSub1_kan_t_ptr;
+            em->pSub1_seq_t_ptr = lastEnemy->pSub1_seq_t_ptr;
             em->pSa_dat = lastEnemy->pSa_dat;
             em->tpage = lastEnemy->tpage;
             em->clut = lastEnemy->clut;
@@ -368,8 +583,8 @@ namespace openre::enemy
             {
                 em->pSub0_kan_t_ptr = lastEnemy->pSub0_kan_t_ptr;
                 em->pSub0_seq_t_ptr = lastEnemy->pSub0_seq_t_ptr;
-                em->field_188 = lastEnemy->field_188;
-                em->field_18C = lastEnemy->field_18C;
+                em->pSub1_kan_t_ptr = lastEnemy->pSub1_kan_t_ptr;
+                em->pSub1_seq_t_ptr = lastEnemy->pSub1_seq_t_ptr;
             }
         }
 

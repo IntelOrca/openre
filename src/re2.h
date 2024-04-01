@@ -88,6 +88,8 @@ struct VCut
 };
 static_assert(sizeof(VCut) == 0x14);
 
+struct TmdEntry;
+
 struct PartsW
 {
     uint32_t Be_flg;                    // 0x0000
@@ -95,9 +97,9 @@ struct PartsW
     uint8_t field_5;                    // 0x0005
     uint8_t field_6;                    // 0x0006
     uint8_t field_7;                    // 0x0007
-    uint32_t pTmd;                      // 0x0008
+    TmdEntry* pTmd;                     // 0x0008
     uint32_t pPacket;                   // 0x000C
-    uint32_t pTmd2;                     // 0x0010
+    TmdEntry* pTmd2;                    // 0x0010
     uint32_t pPacket2;                  // 0x0014
     uint16_t M[9];                      // 0x0018
     uint16_t field_2A;                  // 0x002A
@@ -160,9 +162,9 @@ struct Entity
     uint8_t at_em_no;                   // 0x000D
     int16_t at_em_flg;                  // 0x000E
     int32_t attribute;                  // 0x0010
-    int32_t pTmd;                       // 0x0014
+    TmdEntry* pTmd;                     // 0x0014
     int32_t pPacket;                    // 0x0018
-    int32_t pTmd2;                      // 0x001C
+    TmdEntry* pTmd2;                    // 0x001C
     int32_t pPacket2;                   // 0x0020
     uint16_t m[9];                      // 0x0024
     int16_t m_pad;                      // 0x0036
@@ -230,8 +232,8 @@ struct ActorEntity : Entity
     int32_t pSeq_t_ptr;                 // 0x017C
     int32_t pSub0_kan_t_ptr;            // 0x0180
     int32_t pSub0_seq_t_ptr;            // 0x0184
-    int32_t field_188;                  // 0x0188
-    int32_t field_18C;                  // 0x018C
+    int32_t pSub1_kan_t_ptr;            // 0x0188
+    int32_t pSub1_seq_t_ptr;            // 0x018C
     int32_t field_190;                  // 0x0190
     int32_t field_194;                  // 0x0194
     int32_t pSin_parts_ptr;             // 0x0198
@@ -400,7 +402,7 @@ static_assert(sizeof(Rdt) == 0x64);
 struct DoorInfo
 {
     void* prepacket;                    // 0x0000
-    void* tmd_adr;                      // 0x0004
+    TmdEntry* tmd_adr;                  // 0x0004
     void* packettop;                    // 0x0008
     int32_t var_0C;                     // 0x000C
     int32_t var_10;                     // 0x0010
@@ -464,7 +466,8 @@ struct Unknown68A204
     uint8_t var_09;                     // 0x0009
     uint8_t pad_000A[3];                // 0x000A
     uint8_t var_0D;                     // 0x000D
-    uint8_t pad_000E[5];                // 0x000E
+    uint8_t var_0E;                     // 0x000E
+    uint8_t pad_000F[4];                // 0x000F
     uint8_t var_13;                     // 0x0013
 };
 static_assert(sizeof(Unknown68A204) == 0x14);
@@ -482,7 +485,9 @@ struct GameTable
     bool enable_dsound;                 // 0x524EB6
     uint8_t pad_524EB7[5041];           // 0x524EB7
     int32_t global_prj;                 // 0x526268
-    uint8_t pad_52626C[85932];          // 0x52626C
+    uint8_t pad_52626C[25156];          // 0x52626C
+    void* pGG;                          // 0x52C4B0
+    uint8_t pad_52C4B4[60772];          // 0x52C4B4
     uint32_t* flag_groups[35];          // 0x53B218
     uint8_t pad_53B2A4[4916];           // 0x53B2A4
     BgmTableEntry byte_53C5D8[146];     // 0x53C5D8
@@ -513,7 +518,9 @@ struct GameTable
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
     DoorInfo* door;                     // 0x689400
-    uint8_t pad_689404[2008];           // 0x689404
+    uint8_t pad_689404[908];            // 0x689404
+    uint32_t idd;                       // 0x689790
+    uint8_t pad_689794[1096];           // 0x689794
     uint32_t dword_689BDC;              // 0x689BDC
     uint8_t pad_689BE0[536];            // 0x689BE0
     uint32_t dword_689DF8;              // 0x689DF8
@@ -586,7 +593,7 @@ struct GameTable
     uint8_t pad_6DD31C[1983844];        // 0x6DD31C
     uint8_t* bg_buffer;                 // 0x8C1880
     uint8_t pad_8C1884[20476];          // 0x8C1884
-    void* tmd;                          // 0x8C6880
+    TmdEntry* tmd;                      // 0x8C6880
     void* door_tim;                     // 0x8C6884
     uint8_t byte_8C6888[1928];          // 0x8C6888
     uint8_t pad_8C7010[112752];         // 0x8C7010

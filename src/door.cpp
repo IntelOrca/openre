@@ -99,7 +99,7 @@ namespace openre::door
         std::memset(d, 0, (size_t)end - (size_t)d);
 
         gGameTable.door_tim = (void*)((uintptr_t)&gGameTable.tmd + (uintptr_t)gGameTable.door_tim);
-        gGameTable.tmd = (void*)((uintptr_t)&gGameTable.tmd + (uintptr_t)gGameTable.tmd);
+        gGameTable.tmd = (TmdEntry*)((uintptr_t)&gGameTable.tmd + (uintptr_t)gGameTable.tmd);
         gGameTable.word_989EE8 = 7957;
 
         auto door = gGameTable.door;
@@ -109,13 +109,13 @@ namespace openre::door
 
         auto doorAotData = (SceAotDoorData*)gGameTable.door_aot_data;
         if (doorAotData->Texture == 40)
-            mapping_tmd(1, door->tmd_adr, 0, 0);
+            mapping_tmd(1, (Md1*)door->tmd_adr, 0, 0);
         else
-            mapping_tmd(1, door->tmd_adr, 21, 31);
+            mapping_tmd(1, (Md1*)door->tmd_adr, 21, 31);
         door_unload(gGameTable.door_tim, gGameTable.tmd);
         gGameTable.dword_6893F0 = 0;
 
-        door->tmd_adr = (void*)((uintptr_t)door->tmd_adr + 12);
+        door->tmd_adr = (TmdEntry*)((uintptr_t)door->tmd_adr + 12);
         door->var_0C = 3;
         door->var_10 = 320;
         door->var_14 = 240;

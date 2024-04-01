@@ -57,15 +57,17 @@ declare     fCut                    u8
 declare     tCut                    u8
 declare     xz                      u16[8]
 
+struct      TmdEntry
+
 struct      PartsW
 declare     Be_flg                  u32
 declare     Attribute               u8
 declare     field_5                 u8
 declare     field_6                 u8
 declare     field_7                 u8
-declare     pTmd                    u32
+declare     pTmd                    TmdEntry*
 declare     pPacket                 u32
-declare     pTmd2                   u32
+declare     pTmd2                   TmdEntry*
 declare     pPacket2                u32
 declare     M                       u16[9]
 declare     field_2A                u16
@@ -119,9 +121,9 @@ declare     work_no                 u8
 declare     at_em_no                u8
 declare     at_em_flg               s16
 declare     attribute               s32
-declare     pTmd                    s32
+declare     pTmd                    TmdEntry*
 declare     pPacket                 s32
-declare     pTmd2                   s32
+declare     pTmd2                   TmdEntry*
 declare     pPacket2                s32
 declare     m                       u16[9]
 declare     m_pad                   s16
@@ -187,8 +189,8 @@ declare     pNow_seq                u32*
 declare     pSeq_t_ptr              s32
 declare     pSub0_kan_t_ptr         s32
 declare     pSub0_seq_t_ptr         s32
-declare     field_188               s32
-declare     field_18C               s32
+declare     pSub1_kan_t_ptr         s32
+declare     pSub1_seq_t_ptr         s32
 declare     field_190               s32
 declare     field_194               s32
 declare     pSin_parts_ptr          s32
@@ -327,7 +329,7 @@ declare     offsets                 void*[23]
 
 struct      DoorInfo
 declare     prepacket               void*
-declare     tmd_adr                 void*
+declare     tmd_adr                 TmdEntry*
 declare     packettop               void*
 declare     var_0C                  s32
 declare     var_10                  s32
@@ -373,6 +375,7 @@ struct      Unknown68A204
 declare     var_08                  u8                      0x08
 declare     var_09                  u8                      0x09
 declare     var_0D                  u8                      0x0D
+declare     var_0E                  u8                      0x0E
 declare     var_13                  u8                      0x13
 
 struct      EnemyInitEntry
@@ -382,6 +385,7 @@ declare     enabled                 u16
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
+declare     pGG                     void*                   0x0052C4B0
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
@@ -399,6 +403,7 @@ declare     blood_censor            u8                      0x0068059A
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
+declare     idd                     u32                     0x00689790
 declare     dword_689BDC            u32                     0x00689BDC
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
@@ -446,7 +451,7 @@ declare     byte_695E72             u8                      0x00695E72
 declare     dword_695E7C            u32                     0x00695E7C
 declare     byte_6D730C             u8[24592]               0x006D730C
 declare     bg_buffer               u8*                     0x008C1880
-declare     tmd                     void*                   0x008C6880
+declare     tmd                     TmdEntry*               0x008C6880
 declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
