@@ -151,6 +151,20 @@ struct Kage
 };
 static_assert(sizeof(Kage) == 0x48);
 
+struct At
+{
+    Vec32 pos;                          // 0x0000
+    int16_t w;                          // 0x000C
+    int16_t d;                          // 0x000E
+    Vec16 ofs;                          // 0x0010
+    int16_t at_w;                       // 0x0016
+    int16_t at_d;                       // 0x0018
+    int16_t at_h;                       // 0x001A
+    int16_t atw_x;                      // 0x001C
+    int16_t atw_z;                      // 0x001E
+};
+static_assert(sizeof(At) == 0x20);
+
 struct Entity
 {
     int32_t be_flg;                     // 0x0000
@@ -181,15 +195,14 @@ struct Entity
     int16_t dummy01;                    // 0x007A
     int32_t poly_rgb;                   // 0x007C
     Mat16* pSuper;                      // 0x0080
-    int32_t atd[32];                    // 0x0084
+    At atd[4];                          // 0x0084
     uint8_t tpage;                      // 0x0104
     uint8_t clut;                       // 0x0105
     uint8_t nFloor;                     // 0x0106
     uint8_t parts_num;                  // 0x0107
     Emr* pKan_t_ptr;                    // 0x0108
     int16_t water;                      // 0x010C
-    uint8_t type;                       // 0x010E
-    uint8_t var_10F;                    // 0x010F
+    uint16_t type;                      // 0x010E
 };
 static_assert(sizeof(Entity) == 0x110);
 
@@ -272,28 +285,31 @@ struct ActorEntity : Entity
     uint16_t parts0_pos_y;              // 0x01DE
     uint32_t pT_xz;                     // 0x01E0
     int32_t pOn_om;                     // 0x01E4
-    int32_t field_1E8;                  // 0x01E8
-    int32_t field_1EC;                  // 0x01EC
-    int32_t field_1F0;                  // 0x01F0
-    int32_t field_1F4;                  // 0x01F4
-    int16_t field_1F8;                  // 0x01F8
+    int32_t nOba;                       // 0x01E8
+    uint8_t attw_timer;                 // 0x01EC
+    uint8_t attw_seq_no;                // 0x01ED
+    uint16_t eff_at_r;                  // 0x01EE
+    int32_t l_pl;                       // 0x01F0
+    int32_t l_spl;                      // 0x01F4
+    int16_t dir_spl;                    // 0x01F8
     uint8_t sound_bank;                 // 0x01FA
-    uint8_t pad_1FB;                    // 0x01FB
-    int32_t field_1FC;                  // 0x01FC
-    int32_t field_200;                  // 0x0200
+    uint8_t area_no;                    // 0x01FB
+    int32_t tmp_routine;                // 0x01FC
+    int32_t pDamage_work;               // 0x0200
     void* pTbefore_func;                // 0x0204
     void* pTafter_func;                 // 0x0208
-    int32_t field_20C;                  // 0x020C
-    int16_t field_210;                  // 0x0210
-    int16_t field_212;                  // 0x0212
+    Vec16 spd_base;                     // 0x020C
+    int16_t kage_ofs;                   // 0x0212
     int16_t poison_timer;               // 0x0214
     uint8_t pison_down;                 // 0x0216
+    uint8_t field_217;                  // 0x0217
 };
-static_assert(sizeof(ActorEntity) == 0x217);
+static_assert(sizeof(ActorEntity) == 0x218);
 
 struct EnemyEntity : ActorEntity
 {
-    uint8_t pad_0217[9];                // 0x0217
+    uint8_t var_218;                    // 0x0218
+    uint8_t pad_0219[7];                // 0x0219
     uint8_t var_220;                    // 0x0220
     uint8_t var_221;                    // 0x0221
     uint8_t pad_0222[1];                // 0x0222
@@ -302,7 +318,8 @@ struct EnemyEntity : ActorEntity
     uint8_t var_227;                    // 0x0227
     uint8_t pad_0228[5];                // 0x0228
     uint8_t var_22D;                    // 0x022D
-    uint8_t pad_022E[2];                // 0x022E
+    uint8_t var_22E;                    // 0x022E
+    uint8_t pad_022F[1];                // 0x022F
     uint8_t var_230;                    // 0x0230
     uint8_t pad_0231[1];                // 0x0231
     uint8_t var_232;                    // 0x0232
@@ -313,9 +330,7 @@ static_assert(sizeof(EnemyEntity) == 0x248);
 
 struct PlayerEntity : ActorEntity
 {
-    uint8_t field_217;                  // 0x0217
 };
-static_assert(sizeof(PlayerEntity) == 0x218);
 
 struct ObjectEntity : Entity
 {
@@ -517,7 +532,9 @@ struct GameTable
     uint16_t can_draw;                  // 0x68058D
     uint8_t pad_68058F[11];             // 0x68058F
     uint8_t blood_censor;               // 0x68059A
-    uint8_t pad_68059B[36437];          // 0x68059B
+    uint8_t pad_68059B[22];             // 0x68059B
+    uint8_t hard_mode;                  // 0x6805B1
+    uint8_t pad_6805B2[36414];          // 0x6805B2
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8

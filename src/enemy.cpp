@@ -422,6 +422,7 @@ namespace openre::enemy
         interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
     }
 
+    // part of 0x004E77D0
     bool spawn_enemy(const EnemySpawnInfo& info)
     {
         em_bin_load(info.Type);
@@ -473,8 +474,7 @@ namespace openre::enemy
         em->cdir.z = 0;
 
         em->id = info.Type;
-        em->type = info.Pose;
-        em->var_10F = info.Behaviour;
+        em->type = info.Pose | (info.Behaviour << 8);
         em->em_set_flg = info.GlobalId;
         em->model_type = info.Texture;
         em->nFloor = info.Floor;
@@ -496,25 +496,25 @@ namespace openre::enemy
         em->pTbefore_func = nullptr;
         em->pTafter_func = nullptr;
         em->pOn_om = 0;
-        em->field_212 = 0;
+        em->kage_ofs = 0;
         em->water = 0;
-        em->field_1F0 = 0;
-        em->field_1F4 = 0;
+        em->l_pl = 0;
+        em->l_spl = 0;
         if (em->id >= 0x40)
             em->sc_id = 0x80;
         else
             em->sc_id = 0x04;
-        em->field_1E8 = 0;
+        em->nOba = 0;
 
         uint16_t* atd = (uint16_t*)&em->atd;
-        atd[0x08] = 0;
-        atd[0x0A] = 64006;
-        atd[0x09] = 0;
-        atd[0x0B] = 450;
-        atd[0x0D] = 1530;
-        atd[0x0C] = 450;
         atd[0x06] = 450;
         atd[0x07] = 450;
+        atd[0x08] = 0;
+        atd[0x09] = 0;
+        atd[0x0A] = -1530;
+        atd[0x0B] = 450;
+        atd[0x0C] = 450;
+        atd[0x0D] = 1530;
 
         em->root_ck_cnt = em->work_no;
 
@@ -569,7 +569,7 @@ namespace openre::enemy
         em->move_no = 0;
         em->timer0 = info.Animation;
         em->timer1 = info.Unknown;
-        if (em->var_10F & 0x40)
+        if (em->type & 0x4000)
             em->neck_flg = 0x92;
 
         return true;

@@ -122,7 +122,16 @@ namespace interopgen
             {
                 if (s.Members.Count == 0)
                 {
-                    sb.AppendLine($"struct {s.Name};");
+                    if (s.Base == null)
+                    {
+                        sb.AppendLine($"struct {s.Name};");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"struct {s.Name} : {s.Base}");
+                        sb.AppendLine("{");
+                        sb.AppendLine("};");
+                    }
                 }
                 else
                 {
@@ -251,9 +260,19 @@ namespace interopgen
                 }
             }
 
-            if (s.Size == null && s.Members.Count != 0)
+            if (s.Size == null)
             {
-                s.Size = baseSize + (address - s.Members[0].Address);
+                if (s.Members.Count == 0)
+                {
+                    if (s.Base != null)
+                    {
+                        s.Size = baseSize;
+                    }
+                }
+                else
+                {
+                    s.Size = baseSize + (address - s.Members[0].Address);
+                }
             }
 
             s.Processed = true;

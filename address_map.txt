@@ -109,6 +109,17 @@ declare     var_06                  u16         0x06
 declare     var_1C                  u32         0x1C
 declare     var_44                  u32         0x44
 
+struct      At
+declare     pos                     Vec32
+declare     w                       s16
+declare     d                       s16
+declare     ofs                     Vec16
+declare     at_w                    s16
+declare     at_d                    s16
+declare     at_h                    s16
+declare     atw_x                   s16
+declare     atw_z                   s16
+
 struct      Entity
 declare     be_flg                  s32
 declare     routine_0               u8
@@ -138,15 +149,14 @@ declare     cdir                    Vec16
 declare     dummy01                 s16
 declare     poly_rgb                s32
 declare     pSuper                  Mat16*
-declare     atd                     s32[32]
+declare     atd                     At[4]
 declare     tpage                   u8
 declare     clut                    u8
 declare     nFloor                  u8
 declare     parts_num               u8
 declare     pKan_t_ptr              Emr*
 declare     water                   s16
-declare     type                    u8
-declare     var_10F                 u8
+declare     type                    u16
 
 struct      ActorEntity
 base        Entity
@@ -227,37 +237,40 @@ declare     spl_flg                 u16
 declare     parts0_pos_y            u16
 declare     pT_xz                   u32
 declare     pOn_om                  s32
-declare     field_1E8               s32
-declare     field_1EC               s32
-declare     field_1F0               s32
-declare     field_1F4               s32
-declare     field_1F8               s16
+declare     nOba                    s32
+declare     attw_timer              u8
+declare     attw_seq_no             u8
+declare     eff_at_r                u16
+declare     l_pl                    s32
+declare     l_spl                   s32
+declare     dir_spl                 s16
 declare     sound_bank              u8
-declare     pad_1FB                 u8
-declare     field_1FC               s32
-declare     field_200               s32
+declare     area_no                 u8
+declare     tmp_routine             s32
+declare     pDamage_work            s32
 declare     pTbefore_func           void*
 declare     pTafter_func            void*
-declare     field_20C               s32
-declare     field_210               s16
-declare     field_212               s16
+declare     spd_base                Vec16
+declare     kage_ofs                s16
 declare     poison_timer            s16
 declare     pison_down              u8
+declare     field_217               u8
 
 struct      EnemyEntity
 base        ActorEntity
+declare     var_218                 u8          0x218
 declare     var_220                 u8          0x220
 declare     var_221                 u8          0x221
 declare     var_223                 u8          0x223
 declare     var_227                 u8          0x227
 declare     var_22D                 u8          0x22D
+declare     var_22E                 u8          0x22E
 declare     var_230                 u8          0x230
 declare     var_232                 u8          0x232
 declare     pad_247                 u8          0x247
 
 struct      PlayerEntity
 base        ActorEntity
-declare     field_217               u8          0x217
 
 struct      ObjectEntity
 base        Entity
@@ -402,6 +415,7 @@ declare     dword_680554            u32                     0x00680554
 declare     input_keyboard          u32                     0x00680558
 declare     can_draw                u16                     0x0068058D
 declare     blood_censor            u8                      0x0068059A
+declare     hard_mode               u8                      0x006805B1
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400

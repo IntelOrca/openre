@@ -3,6 +3,13 @@
 
 namespace openre
 {
+    // 0x004B2CE0
+    Kage* kage_work_set(Kage** pK, uint32_t offset, uint32_t half, uint32_t color, const Vec32* pPos)
+    {
+        return interop::call<Kage*, Kage**, uint32_t, uint32_t, uint32_t, const Vec32*>(
+            0x004B2CE0, pK, offset, half, color, pPos);
+    }
+
     // 0x004C1C30
     int joint_move(Entity* entity, Emr* pKanPtr, Edd* pSeqPtr, int lateFlag)
     {
