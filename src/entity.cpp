@@ -4,9 +4,9 @@
 namespace openre
 {
     // 0x004C1C30
-    int joint_move(Entity* entity, int pKanPtr, int pSeqPtr, int lateFlag)
+    int joint_move(Entity* entity, Emr* pKanPtr, Edd* pSeqPtr, int lateFlag)
     {
-        return interop::call<int, Entity*, int, int, int>(0x004C1C30, entity, pKanPtr, pSeqPtr, lateFlag);
+        return interop::call<int, Entity*, Emr*, Edd*, int>(0x004C1C30, entity, pKanPtr, pSeqPtr, lateFlag);
     }
 
     // 0x004B2440

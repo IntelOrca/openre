@@ -152,7 +152,6 @@ namespace openre
     uint8_t rnd();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
-    int mapping_tmd(int a1, Md1* pTmd, int page, int clut);
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
@@ -161,5 +160,13 @@ namespace openre
     template<typename T> static T* work_alloc()
     {
         return reinterpret_cast<T*>(work_alloc(sizeof(T)));
+    }
+
+    template<typename T> static T align(T value, size_t a = sizeof(size_t))
+    {
+        auto iValue = (uintptr_t)value;
+        auto mask = a - 1;
+        auto remainder = iValue & mask;
+        return (T)(remainder == 0 ? iValue : iValue + a - remainder);
     }
 }

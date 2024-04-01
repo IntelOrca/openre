@@ -1,41 +1,14 @@
-#pragma warning(disable : 4200)
-
 #include "enemy.h"
 #include "file.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "model.h"
 #include "openre.h"
 #include "rdt.h"
 #include <array>
 
 using namespace openre::file;
 using namespace openre::rdt;
-
-#pragma pack(push, 1)
-struct TmdEntry
-{
-    void* PositionData;
-    size_t PositionCount;
-    void* NormalData;
-    size_t NormalCount;
-    void* PrimitiveData;
-    size_t PrimitiveCount;
-    void* TextureData;
-};
-
-struct Tmd
-{
-    uint32_t NumEntries;
-    TmdEntry Entries[];
-};
-
-struct Md1
-{
-    uint32_t Length;
-    uint32_t pad_04;
-    Tmd Data;
-};
-#pragma pack(pop)
 
 namespace openre::enemy
 {
@@ -72,25 +45,25 @@ namespace openre::enemy
             return GetPointer<void>(GetFooter()->Dat);
         }
 
-        void* GetEdd(int index) const
+        Edd* GetEdd(int index) const
         {
             if (index == 0)
-                return GetPointer<void>(GetFooter()->Edd0);
+                return GetPointer<Edd>(GetFooter()->Edd0);
             if (index == 1)
-                return GetPointer<void>(GetFooter()->Edd1);
+                return GetPointer<Edd>(GetFooter()->Edd1);
             if (index == 2)
-                return GetPointer<void>(GetFooter()->Edd2);
+                return GetPointer<Edd>(GetFooter()->Edd2);
             return nullptr;
         }
 
-        void* GetEmr(int index) const
+        Emr* GetEmr(int index) const
         {
             if (index == 0)
-                return GetPointer<void>(GetFooter()->Emr0);
+                return GetPointer<Emr>(GetFooter()->Emr0);
             if (index == 1)
-                return GetPointer<void>(GetFooter()->Emr1);
+                return GetPointer<Emr>(GetFooter()->Emr1);
             if (index == 2)
-                return GetPointer<void>(GetFooter()->Emr2);
+                return GetPointer<Emr>(GetFooter()->Emr2);
             return nullptr;
         }
 
@@ -337,46 +310,45 @@ namespace openre::enemy
         auto emdFile = reinterpret_cast<EmdFile*>(buffer);
         auto emdFileEnd = (uintptr_t)emdFile + emdFileSize;
         entity->pSa_dat = emdFile->GetDat();
-        entity->pSeq_t_ptr = (int32_t)emdFile->GetEdd(0);
+        entity->pSeq_t_ptr = emdFile->GetEdd(0);
         entity->pKan_t_ptr = emdFile->GetEmr(0);
-        entity->pSub0_seq_t_ptr = (int32_t)emdFile->GetEdd(1);
-        entity->pSub0_kan_t_ptr = (int32_t)emdFile->GetEmr(1);
-        entity->pSub1_seq_t_ptr = (int32_t)emdFile->GetEdd(2);
-        entity->pSub1_kan_t_ptr = (int32_t)emdFile->GetEmr(2);
-        entity->pTmd = (TmdEntry*)emdFile->GetMd1();
+        entity->pSub0_seq_t_ptr = emdFile->GetEdd(1);
+        entity->pSub0_kan_t_ptr = emdFile->GetEmr(1);
+        entity->pSub1_seq_t_ptr = emdFile->GetEdd(2);
+        entity->pSub1_kan_t_ptr = emdFile->GetEmr(2);
+        auto md1 = emdFile->GetMd1();
         entity->poly_rgb = 0x808080;
 
-        if (entity->model_type & 0x80)
+        if (entity->model_type & MODEL_FLAG_7)
         {
             // Remove edd1,emr1,edd2,emr2
             std::memcpy(emdFile->GetEdd(1), emdFile->GetMd1(), emdFileEnd - (uintptr_t)emdFile->GetMd1());
-            entity->pTmd = (TmdEntry*)entity->pSub0_seq_t_ptr;
+            md1 = (Md1*)entity->pSub0_seq_t_ptr;
         }
-        if (entity->model_type & 0x40)
+        if (entity->model_type & MODEL_FLAG_6)
         {
             // Untested
             // Remove edd0,emr0
             auto shift = emdFileEnd - (uintptr_t)emdFile->GetEdd(1);
             std::memcpy(emdFile->GetEdd(0), emdFile->GetEdd(1), shift);
-            entity->pSub0_seq_t_ptr -= shift;
-            entity->pSub0_kan_t_ptr -= shift;
-            entity->pSub1_seq_t_ptr -= shift;
-            entity->pSub1_kan_t_ptr -= shift;
-            entity->pTmd -= shift;
+            entity->pSub0_seq_t_ptr = (Edd*)((uintptr_t)entity->pSub0_seq_t_ptr - shift);
+            entity->pSub0_kan_t_ptr = (Emr*)((uintptr_t)entity->pSub0_kan_t_ptr - shift);
+            entity->pSub1_seq_t_ptr = (Edd*)((uintptr_t)entity->pSub1_seq_t_ptr - shift);
+            entity->pSub1_kan_t_ptr = (Emr*)((uintptr_t)entity->pSub1_kan_t_ptr - shift);
+            md1 = (Md1*)((uintptr_t)entity->pTmd - shift);
 
-            entity->pSeq_t_ptr = *(reinterpret_cast<int32_t*>(&g[0x3B8C]));
-            entity->pKan_t_ptr = reinterpret_cast<void*>(*(reinterpret_cast<int32_t*>(&g[0x3B18])));
+            entity->pSeq_t_ptr = reinterpret_cast<Edd*>(&g[0x3B8C]);
+            entity->pKan_t_ptr = reinterpret_cast<Emr*>(&g[0x3B18]);
         }
 
-        auto md1 = (Md1*)entity->pTmd;
-        auto tmdLen = mapping_tmd(0, md1, entity->tpage, entity->clut);
+        auto md1Len = mapping_tmd(0, md1, entity->tpage, entity->clut);
         marni::mapping_tmd(entity->work_no, md1, entity->id);
         entity->pTmd = &md1->Data.Entries[0];
         entity->pTmd2 = &md1->Data.Entries[1];
         gGameTable.ctcb->var_0E = 0;
 
-        auto result = (void*)((uintptr_t)md1 + ((tmdLen >> 2) << 2));
-        return result;
+        auto result = reinterpret_cast<void*>((uintptr_t)md1 + md1Len);
+        return align(result);
     }
 
     // 0x004C1270

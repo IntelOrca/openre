@@ -58,6 +58,8 @@ declare     tCut                    u8
 declare     xz                      u16[8]
 
 struct      TmdEntry
+struct      Edd
+struct      Emr
 
 struct      PartsW
 declare     Be_flg                  u32
@@ -141,7 +143,7 @@ declare     tpage                   u8
 declare     clut                    u8
 declare     nFloor                  u8
 declare     parts_num               u8
-declare     pKan_t_ptr              void*
+declare     pKan_t_ptr              Emr*
 declare     water                   s16
 declare     type                    u8
 declare     var_10F                 u8
@@ -186,11 +188,11 @@ declare     pKage_work              Kage*
 declare     field_170               s32
 declare     field_174               s32
 declare     pNow_seq                u32*
-declare     pSeq_t_ptr              s32
-declare     pSub0_kan_t_ptr         s32
-declare     pSub0_seq_t_ptr         s32
-declare     pSub1_kan_t_ptr         s32
-declare     pSub1_seq_t_ptr         s32
+declare     pSeq_t_ptr              Edd*
+declare     pSub0_kan_t_ptr         Emr*
+declare     pSub0_seq_t_ptr         Edd*
+declare     pSub1_kan_t_ptr         Emr*
+declare     pSub1_seq_t_ptr         Edd*
 declare     field_190               s32
 declare     field_194               s32
 declare     pSin_parts_ptr          s32

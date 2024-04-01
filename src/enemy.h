@@ -93,7 +93,7 @@ namespace openre::enemy
     };
 
     using EnemyFunc = void (*)(EnemyEntity*);
-    using EnemyRoutineFunc = void (*)(EnemyEntity*, void*, int);
+    using EnemyRoutineFunc = void (*)(EnemyEntity*, Emr*, Edd*);
 
     bool is_enemy_dead(uint8_t globalId);
 

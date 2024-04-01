@@ -35,7 +35,7 @@ namespace openre::enemy
         interop::call<void, EnemyEntity*, int>(0x0045EDD0, enemy, a1);
     }
 
-    static void sub_45E680(EnemyEntity* enemy, void* a1, int a2)
+    static void sub_45E680(EnemyEntity* enemy, Emr* emr, Edd* edd)
     {
         auto pl = enemy->var_227 == 0 ? (Entity*)gGameTable.player_work : (Entity*)gGameTable.splayer_work;
         if (enemy->var_220 == 0)
@@ -44,7 +44,7 @@ namespace openre::enemy
             sub_45F630(enemy, 10, 0);
         }
 
-        auto result = joint_move(enemy, (int)a1, a2, enemy->timer1);
+        auto result = joint_move(enemy, emr, edd, enemy->timer1);
         if (result == 0)
             return;
 
@@ -90,7 +90,7 @@ namespace openre::enemy
         }
     }
 
-    static void sub_45EAF0(EnemyEntity* enemy, void* a1, int a2)
+    static void sub_45EAF0(EnemyEntity* enemy, Emr* kan, Edd* seq)
     {
         if (enemy->timer2 == 0)
         {
@@ -102,7 +102,7 @@ namespace openre::enemy
                 enemy->cdir.y += rnd() - 128;
             }
         }
-        sub_45E680(enemy, a1, a2);
+        sub_45E680(enemy, kan, seq);
         if (enemy->routine_3 > 1)
             enemy->var_223 &= ~0x40;
     }
@@ -117,13 +117,13 @@ namespace openre::enemy
     }
 
     // 0x0045E430
-    static void em_20_hurt(EnemyEntity* enemy, void* a1, int a2)
+    static void em_20_hurt(EnemyEntity* enemy, Emr* emr, Edd* seq)
     {
         auto cl = enemy->var_223;
         if (cl & 0x80)
         {
             // While in hurt state
-            _funcs_45E8B5[enemy->routine_2](enemy, a1, a2);
+            _funcs_45E8B5[enemy->routine_2](enemy, emr, seq);
             sub_45F9A0(enemy, rnd() & 15, 0);
             sub_45F9A0(enemy, rnd() & 15, 0);
             return sub_45F9A0(enemy, rnd() & 0xF, 5);
@@ -131,12 +131,12 @@ namespace openre::enemy
         else
         {
             // While in normal/other state
-            return _funcs_45E447[enemy->routine_1](enemy, a1, a2);
+            return _funcs_45E447[enemy->routine_1](enemy, emr, seq);
         }
     }
 
     // 0x0045F470
-    static void em_20_dead(EnemyEntity* enemy, void*, int)
+    static void em_20_dead(EnemyEntity* enemy, Emr*, Edd*)
     {
         if (enemy->routine_1 == 0)
         {

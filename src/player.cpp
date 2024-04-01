@@ -36,14 +36,15 @@ namespace openre::player
     using MoveTypeFunc = int (*)(PlayerEntity*, int, int);
     static MoveTypeFunc* gMoveTypeTable = (MoveTypeFunc*)0x53A7DC;
 
-    using MoveFunc = int (*)(PlayerEntity*, uint32_t, uint32_t);
-    static MoveFunc* gMoveBrTable = (MoveFunc*)0x53A7FC;
+    using MoveKeyFunc = int (*)(PlayerEntity*, uint32_t, uint32_t);
+    using MoveFunc = int (*)(PlayerEntity*, Emr*, Edd*);
+    static MoveKeyFunc* gMoveBrTable = (MoveKeyFunc*)0x53A7FC;
     static MoveFunc* gMoveMvTable = (MoveFunc*)0x53A82C;
     static MoveFunc* gMoveDamageTable = (MoveFunc*)0x53A85C;
 
     int (*br_tbl[13])(PlayerEntity* player, uint32_t key, uint32_t key_trg);
-    int (*mv_tbl[13])(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr);
-    int (*dmg_tbl[6])(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr);
+    int (*mv_tbl[13])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
+    int (*dmg_tbl[6])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
 
     const int now_seq_0x4000 = 0x4000;
 
@@ -350,7 +351,7 @@ namespace openre::player
     }
 
     // 0x004D9D20
-    static void pl_move(PlayerEntity* player, int pKan, int pSeq)
+    static void pl_move(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
         if (player->routine_1 <= BR_TBL_ROTATE_IDX)
         {
@@ -382,50 +383,40 @@ namespace openre::player
     }
 
     // 0x004DC130
-    static int pl_mv_damage(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
         set_flag(FlagGroup::Status, FG_STATUS_25, true);
         return gMoveDamageTable[player->routine_1](player, pKan, pSeq);
     }
 
     // 0x004DC850
-    static int pl_mv_die(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        using sig = int (*)(PlayerEntity*, int, int);
-        auto p = (sig)0x004DC850;
-        return p(player, pKan, pSeq);
+        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC850, player, pKan, pSeq);
     }
 
     // 0x004F6080
-    static int pl_mv_cutscene(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_cutscene(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        using sig = int (*)(PlayerEntity*, int, int);
-        auto p = (sig)0x004F6080;
-        return p(player, pKan, pSeq);
+        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004F6080, player, pKan, pSeq);
     }
 
     // 0x004DC930
-    static int pl_mv_em_damage(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_em_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        using sig = int (*)(PlayerEntity*, int, int);
-        auto p = (sig)0x004DC930;
-        return p(player, pKan, pSeq);
+        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC930, player, pKan, pSeq);
     }
 
     // 0x004DC980
-    static int pl_mv_em_die(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_em_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        using sig = int (*)(PlayerEntity*, int, int);
-        auto p = (sig)0x004DC980;
-        return p(player, pKan, pSeq);
+        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC980, player, pKan, pSeq);
     }
 
     // 0x004DC9D0
-    static int pl_mv_dead(PlayerEntity* player, int pKan, int pSeq)
+    static int pl_mv_dead(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        using sig = int (*)(PlayerEntity*, int, int);
-        auto p = (sig)0x004DC9D0;
-        return p(player, pKan, pSeq);
+        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC9D0, player, pKan, pSeq);
     }
 
     // 0x004D97B0
@@ -482,8 +473,8 @@ namespace openre::player
         }
 
         auto moveType = player->routine_0;
-        auto pKan = *reinterpret_cast<uint32_t*>(&(player->pKan_t_ptr));
-        auto pSeq = *reinterpret_cast<uint32_t*>(&(player->pSeq_t_ptr));
+        auto pKan = player->pKan_t_ptr;
+        auto pSeq = player->pSeq_t_ptr;
         switch (moveType)
         {
         case MOVE_TYPE_INIT: pl_init(player); break;
@@ -529,7 +520,7 @@ namespace openre::player
     }
 
     // 0x004DAE70
-    static void pl_mv_rotate(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr)
+    static void pl_mv_rotate(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
     {
         Vec16p pVec{ 0, 3, 6 };
         if (player->routine_2)
@@ -582,7 +573,7 @@ namespace openre::player
     }
 
     // 0x004DAFF0
-    int pl_mv_pick_up_item(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr)
+    int pl_mv_pick_up_item(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
     {
         int lateFlag = 0;
         switch (player->routine_2)
@@ -680,7 +671,7 @@ namespace openre::player
         return 0;
     }
 
-    int pl_mv_quickturn(PlayerEntity* player, uint32_t pKanPtr, uint32_t pSeqPtr)
+    int pl_mv_quickturn(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
     {
         switch (player->routine_2)
         {
@@ -712,7 +703,7 @@ namespace openre::player
             snd_se_walk(0, 4 + (get_floor_sound(player) * 3), player);
             gGameTable.word_989EEE |= 2;
         }
-        joint_move(player, (int)player->pKan_t_ptr, player->pSeq_t_ptr, 512);
+        joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
         return 0;
     }
 

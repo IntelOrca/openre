@@ -1,6 +1,7 @@
 #include "audio.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "model.h"
 #include "openre.h"
 #include "re2.h"
 #include "scd.h"

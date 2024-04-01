@@ -90,6 +90,10 @@ static_assert(sizeof(VCut) == 0x14);
 
 struct TmdEntry;
 
+struct Edd;
+
+struct Emr;
+
 struct PartsW
 {
     uint32_t Be_flg;                    // 0x0000
@@ -182,7 +186,7 @@ struct Entity
     uint8_t clut;                       // 0x0105
     uint8_t nFloor;                     // 0x0106
     uint8_t parts_num;                  // 0x0107
-    void* pKan_t_ptr;                   // 0x0108
+    Emr* pKan_t_ptr;                    // 0x0108
     int16_t water;                      // 0x010C
     uint8_t type;                       // 0x010E
     uint8_t var_10F;                    // 0x010F
@@ -229,11 +233,11 @@ struct ActorEntity : Entity
     int32_t field_170;                  // 0x0170
     int32_t field_174;                  // 0x0174
     uint32_t* pNow_seq;                 // 0x0178
-    int32_t pSeq_t_ptr;                 // 0x017C
-    int32_t pSub0_kan_t_ptr;            // 0x0180
-    int32_t pSub0_seq_t_ptr;            // 0x0184
-    int32_t pSub1_kan_t_ptr;            // 0x0188
-    int32_t pSub1_seq_t_ptr;            // 0x018C
+    Edd* pSeq_t_ptr;                    // 0x017C
+    Emr* pSub0_kan_t_ptr;               // 0x0180
+    Edd* pSub0_seq_t_ptr;               // 0x0184
+    Emr* pSub1_kan_t_ptr;               // 0x0188
+    Edd* pSub1_seq_t_ptr;               // 0x018C
     int32_t field_190;                  // 0x0190
     int32_t field_194;                  // 0x0194
     int32_t pSin_parts_ptr;             // 0x0198

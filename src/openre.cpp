@@ -307,15 +307,6 @@ namespace openre
         p(mode, rgb);
     }
 
-    /**
-     * Changes the mesh offsets to pointers.
-     * 0x00502D90
-     */
-    int mapping_tmd(int a1, Md1* pTmd, int page, int clut)
-    {
-        return interop::call<int, int, Md1*, int, int>(0x00502D90, a1, pTmd, page, clut);
-    }
-
     // 0x00451570
     void set_geom_screen(int prj)
     {
