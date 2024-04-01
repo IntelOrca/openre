@@ -247,7 +247,7 @@ struct ActorEntity : Entity
     int32_t pM_option_tmd;              // 0x01A8
     int32_t pM_option_packet;           // 0x01AC
     int32_t pM_Kage_work;               // 0x01B0
-    int32_t pEnemy_ptr;                 // 0x01B4
+    Entity* pEnemy_ptr;                 // 0x01B4
     int32_t pEnemy_neck;                // 0x01B8
     void* pSa_dat;                      // 0x01BC
     uint8_t neck_flg;                   // 0x01C0
@@ -622,8 +622,9 @@ struct GameTable
     void* mem_top;                      // 0x988624
     uint8_t pad_988628[4];              // 0x988628
     void* dword_98862C;                 // 0x98862C
-    VCut* vcut_data[19];                // 0x988630
-    uint8_t pad_98867C[460];            // 0x98867C
+    VCut* vcut_data[2];                 // 0x988630
+    void* em_damage_table_16[48];       // 0x988638
+    void* em_die_table[84];             // 0x9886F8
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850

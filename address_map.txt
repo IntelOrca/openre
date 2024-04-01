@@ -202,7 +202,7 @@ declare     pM_uint8_t_ptr          s32
 declare     pM_option_tmd           s32
 declare     pM_option_packet        s32
 declare     pM_Kage_work            s32
-declare     pEnemy_ptr              s32
+declare     pEnemy_ptr              Entity*
 declare     pEnemy_neck             s32
 declare     pSa_dat                 void*
 declare     neck_flg                u8
@@ -469,7 +469,9 @@ declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
 declare     dword_98862C            void*                   0x0098862C
-declare     vcut_data               VCut*[19]               0x00988630
+declare     vcut_data               VCut*[2]                0x00988630
+declare     em_damage_table_16      void*[48]               0x00988638
+declare     em_die_table            void*[84]               0x009886F8
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     fg_system               u32                     0x00989E6C

@@ -401,16 +401,26 @@ namespace openre::player
         return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004F6080, player, pKan, pSeq);
     }
 
+    static int pl_mv_em_damage_internal(PlayerEntity* player, MoveFunc* table)
+    {
+        set_flag(FlagGroup::Status, FG_STATUS_25, true);
+        player->be_flg &= ~0x04;
+
+        auto enemy = reinterpret_cast<EnemyEntity*>(player->pEnemy_ptr);
+        auto cb = table[enemy->id];
+        return cb(player, player->pSub1_kan_t_ptr, player->pSub1_seq_t_ptr);
+    }
+
     // 0x004DC930
     static int pl_mv_em_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC930, player, pKan, pSeq);
+        return pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_damage_table_16 - 16));
     }
 
     // 0x004DC980
     static int pl_mv_em_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC980, player, pKan, pSeq);
+        return pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_die_table));
     }
 
     // 0x004DC9D0
