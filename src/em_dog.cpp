@@ -41,6 +41,7 @@ namespace openre::enemy
     };
 
     static uint8_t _byte_527588[] = { 0, 1, 2, 4, 10, 12, 14, 13, 15, 0, 0, 0, 0, 0, 0, 0 };
+    static uint8_t _byte_527550[] = { 7, 31, 15, 15, 15, 15, 7, 31 };
 
     static void sub_45F630(EnemyEntity* enemy, int a1, int a2)
     {
@@ -252,6 +253,138 @@ namespace openre::enemy
         gGameTable.em_die_table[enemy->id] = em_dog_pl_die;
     }
 
+    // 0x0045FB70
+    static void sub_45FB70(EnemyEntity* enemy)
+    {
+        if (check_flag(FlagGroup::RoomEnemy, FG_ROOM_ENEMY_25))
+        {
+            enemy->routine_1 = 11;
+            enemy->routine_2 = 0;
+            enemy->routine_3 = 0;
+        }
+    }
+
+    // 0x0045F5B0
+    static void sub_45F5B0(EnemyEntity* enemy)
+    {
+        enemy->neck_no = 2;
+        rot_neck_em(enemy, enemy->cdir.y);
+        enemy->neck_no = 3;
+        rot_neck_em(enemy, enemy->cdir.y);
+        enemy->neck_no = 2;
+    }
+
+    // 0x0045C4E0
+    static int sub_45C4E0(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        auto result = 0;
+        switch (enemy->routine_2)
+        {
+        case 0:
+            enemy->routine_2 = 1;
+            enemy->spd.x = 30;
+            enemy->spd.z = 0;
+            enemy->neck_flg |= 2;
+            enemy->be_flg |= 0x4000000;
+            enemy->be_flg &= ~0x10000000;
+            enemy->var_219 = 0;
+            enemy->var_22D = 0;
+            enemy->damage_cnt &= ~0x80;
+            break;
+        case 1:
+            add_speed_xz(enemy, 0);
+            if (enemy->Sca_info & 1)
+            {
+                enemy->routine_2 = (rnd() & 0x1F) == 0 ? 2 : 3;
+                enemy->var_218 = rnd_area();
+                if (enemy->routine_2 == 2)
+                {
+                    enemy->timer1 = 90;
+                    enemy->move_no = 0;
+                    enemy->move_cnt = 0;
+                    enemy->hokan_flg = 15;
+                    enemy->mplay_flg = 0;
+                }
+            }
+            break;
+        case 2:
+            if (--enemy->timer1 == 0)
+            {
+                enemy->routine_2 = 3;
+                enemy->move_no = 1;
+                enemy->move_cnt = 0;
+                enemy->hokan_flg = 15;
+                enemy->mplay_flg = 0;
+            }
+            break;
+        case 3:
+            result = root_ck(enemy, 0, enemy->var_218, 1);
+            goto00(enemy, enemy->dest_x, enemy->dest_z, 16);
+            add_speed_xz(enemy, 0);
+            if ((enemy->Sca_info & 1) == 0)
+                enemy->routine_2 = 1;
+            break;
+        }
+        joint_move(enemy, emr, edd, 256);
+        sub_45F5B0(enemy);
+        if (enemy->var_21F == 0 && (rnd() & 0x3F) == 0)
+        {
+            enemy->routine_3 = _byte_527550[rnd() & 7];
+        }
+        sub_45F9A0(enemy, 4, 6);
+        return result;
+    }
+
+    // 0x0045C460
+    static void em_dog_normal_00(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        auto v3 = sub_45C4E0(enemy, emr, edd);
+        if (gGameTable.pl.nFloor == enemy->nFloor)
+        {
+            if (enemy->l_pl < 4000 || v3 == 1 || check_flag(FlagGroup::RoomEnemy, FG_ROOM_ENEMY_26))
+            {
+                enemy->routine_1 = 1;
+                enemy->routine_2 = 0;
+                enemy->routine_3 = 0;
+            }
+            else if (gGameTable.word_989EEE & 1)
+            {
+                enemy->routine_1 = 2;
+                enemy->routine_2 = 0;
+                enemy->routine_3 = 0;
+            }
+        }
+        sub_45FB70(enemy);
+    }
+
+    static EnemyRoutineFunc _routineTableNormal[] = {
+        em_dog_normal_00,
+        (EnemyRoutineFunc)0x0045C680,
+        (EnemyRoutineFunc)0x0045C8A0,
+        (EnemyRoutineFunc)0x0045CDA0,
+        (EnemyRoutineFunc)0x0045D200,
+        (EnemyRoutineFunc)0x0045D3D0,
+        (EnemyRoutineFunc)0x0045D470,
+        (EnemyRoutineFunc)0x0045D520,
+        (EnemyRoutineFunc)0x0045D860,
+        (EnemyRoutineFunc)0x0045D940,
+        (EnemyRoutineFunc)0x0045D9B0,
+        (EnemyRoutineFunc)0x0045DA10,
+        (EnemyRoutineFunc)0x0045DB20,
+        (EnemyRoutineFunc)0x0045DCD0,
+        (EnemyRoutineFunc)0x0045DF80,
+        (EnemyRoutineFunc)0x0045E110,
+        (EnemyRoutineFunc)0x0045E300,
+    };
+
+    // 0x0045C420
+    static void em_dog_normal(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        _routineTableNormal[enemy->routine_1](enemy, emr, edd);
+        if (*enemy->pNow_seq & 0x40000)
+            snd_se_enem(8, enemy);
+    }
+
     // 0x0045E430
     static void em_dog_hurt(EnemyEntity* enemy, Emr* emr, Edd* seq)
     {
@@ -308,16 +441,11 @@ namespace openre::enemy
             enemy->var_221 = 2;
     }
 
-    static EnemyRoutineFunc _routines[] = { em_dog_init,
-                                            (EnemyRoutineFunc)0x0045C420,
-                                            em_dog_hurt,
-                                            (EnemyRoutineFunc)0x0045EE20,
-                                            (EnemyRoutineFunc)0x00492990,
-                                            nullptr,
-                                            nullptr,
-                                            em_dog_dead
+    static EnemyRoutineFunc _routines[]
+        = { em_dog_init, em_dog_normal, em_dog_hurt, (EnemyRoutineFunc)0x0045EE20, (EnemyRoutineFunc)0x00492990,
+            nullptr,     nullptr,       em_dog_dead
 
-    };
+          };
 
     // 0x0045C0A0
     void em_dog(EnemyEntity* enemy)

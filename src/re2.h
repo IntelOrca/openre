@@ -309,7 +309,9 @@ static_assert(sizeof(ActorEntity) == 0x218);
 struct EnemyEntity : ActorEntity
 {
     uint8_t var_218;                    // 0x0218
-    uint8_t pad_0219[7];                // 0x0219
+    uint8_t var_219;                    // 0x0219
+    uint8_t pad_021A[5];                // 0x021A
+    uint8_t var_21F;                    // 0x021F
     uint8_t var_220;                    // 0x0220
     uint8_t var_221;                    // 0x0221
     uint8_t pad_0222[1];                // 0x0222

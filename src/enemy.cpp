@@ -422,6 +422,30 @@ namespace openre::enemy
         interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
     }
 
+    // 0x004DF320
+    int root_ck(Entity* entity, int a1, int a2, int a3)
+    {
+        return interop::call<int, Entity*, int, int, int>(0x004DF320, entity, a1, a2, a3);
+    }
+
+    // 0x004B23C0
+    void goto00(Entity* entity, int x, int z, int t)
+    {
+        return interop::call<void, Entity*, int, int, int>(0x004B23C0, entity, x, z, t);
+    }
+
+    // 0x004B3990
+    void rot_neck_em(Entity* entity, int d)
+    {
+        return interop::call<void, Entity*, int>(0x004B3990, entity, d);
+    }
+
+    // 0x004EDE30
+    void snd_se_enem(uint8_t id, EnemyEntity* enemy)
+    {
+        interop::call<void, uint8_t, void*>(0x004EDE30, id, enemy);
+    }
+
     // part of 0x004E77D0
     bool spawn_enemy(const EnemySpawnInfo& info)
     {

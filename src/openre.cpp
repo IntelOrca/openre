@@ -10,6 +10,7 @@
 #include "input.h"
 #include "interop.hpp"
 #include "player.h"
+#include "rdt.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
@@ -24,6 +25,7 @@ using namespace openre::enemy;
 using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
+using namespace openre::rdt;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
@@ -289,6 +291,17 @@ namespace openre
         auto lo = (uint16_t)(258 * gGameTable.dword_988610) >> 8;
         gGameTable.dword_988610 = lo | (hi << 8);
         return lo;
+    }
+
+    // 0x004DF4D0
+    uint8_t rnd_area()
+    {
+        auto blk = rdt_get_offset<uint16_t>(RdtOffsetKind::BLK);
+        auto v = *blk;
+        if (v == 0)
+            return 0xFF;
+
+        return rnd() % v;
     }
 
     // 0x00502DB0

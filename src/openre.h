@@ -130,6 +130,12 @@ namespace openre
 
     enum
     {
+        FG_ROOM_ENEMY_25 = 25,
+        FG_ROOM_ENEMY_26 = 26,
+    };
+
+    enum
+    {
         FG_ZAPPING_5 = 5,
         FG_ZAPPING_6 = 6,
         FG_ZAPPING_15 = 15,
@@ -151,6 +157,7 @@ namespace openre
     void fade_adjust(int no, short kido, int rgb, PsxRect* rect);
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
+    uint8_t rnd_area();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
     void set_geom_screen(int prj);

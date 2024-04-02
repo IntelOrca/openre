@@ -259,6 +259,8 @@ declare     field_217               u8
 struct      EnemyEntity
 base        ActorEntity
 declare     var_218                 u8          0x218
+declare     var_219                 u8          0x219
+declare     var_21F                 u8          0x21F
 declare     var_220                 u8          0x220
 declare     var_221                 u8          0x221
 declare     var_223                 u8          0x223
