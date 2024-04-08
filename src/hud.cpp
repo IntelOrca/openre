@@ -1,10 +1,10 @@
 #include "hud.h"
 #include "audio.h"
 #include "file.h"
+#include "interop.hpp"
 #include "item.h"
 #include "itembox.h"
 #include "openre.h"
-#include "re2.h"
 
 using namespace openre::audio;
 using namespace openre::file;
@@ -53,11 +53,88 @@ namespace openre::hud
     }
 
     // 0x004C49C0
-    static void hud_fade_set(int a0, int a1, int a2, int a3)
+    void hud_fade_set(short a0, short add, char mask, char pri)
     {
-        using sig = void (*)(int, int, int, int);
-        auto p = (sig)0x004C49C0;
-        p(a0, a1, a2, a3);
+        auto fadeIdx = a0 & 0xFF;
+        auto fade = gGameTable.fade_table[fadeIdx];
+        fade.pri = pri;
+        fade.hrate = (a0 >> 8) & 0xFF;
+        fade.add = add;
+        fade.psxRect = { 0, 0, 1572, 8960 };
+        fade.mask_r = -((mask & 4) != 0);
+        fade.mask_g = -((mask & 2) != 0);
+        fade.mask_b = -((mask & 1) != 0);
+        if (add < 0)
+        {
+            fade.kido = add + 0x8000;
+        }
+        else
+        {
+            fade.kido = 0;
+        }
+        gGameTable.fade_table[fadeIdx] = fade;
+    }
+
+    // 0x004C4A50
+    void hud_fade_adjust(int no, int16_t kido, uint32_t rgb, PsxRect* rect)
+    {
+        auto fade = gGameTable.fade_table[no];
+        fade.kido = kido;
+
+        uint32_t rgbc = (fade.tiles[0].code << 24) | rgb;
+        auto tileIdx = static_cast<uint8_t>(gGameTable.dword_9888D8);
+        fade.tiles[tileIdx].r = (rgbc >> 24 & 0xff);
+        fade.tiles[tileIdx].g = (rgbc >> 16 & 0xff);
+        fade.tiles[tileIdx].b = (rgbc >> 8 & 0xff);
+        fade.tiles[tileIdx].code = (rgbc & 0xff);
+
+        if (rect != nullptr)
+        {
+            fade.psxRect = *rect;
+        }
+        else
+        {
+            fade.psxRect = PsxRect{ 0, 0, 1572, 8960 };
+        }
+        gGameTable.fade_table[no] = fade;
+    }
+
+    // 0x004D0EC0
+    void hud_fade_adjust2(int no, int16_t kido, uint32_t rgb, PsxRect* rect)
+    {
+        auto fade = gGameTable.fade_table[no];
+        fade.kido = kido;
+        int rgbc = (gGameTable.byte_98F98F[no] << 24) | rgb;
+
+        for (int i = 0; i < 2; i++)
+        {
+            fade.tiles[i].r = (rgbc >> 24 & 0xff);
+            fade.tiles[i].g = (rgbc >> 16 & 0xff);
+            fade.tiles[i].b = (rgbc >> 8 & 0xff);
+            fade.tiles[i].code = (rgbc & 0xff);
+
+            if (rect != nullptr)
+            {
+                fade.tiles[i].psxRect = *rect;
+            }
+            else
+            {
+                fade.tiles[i].psxRect = PsxRect{ 0, 0, 1572, 8960 };
+            }
+        }
+        gGameTable.fade_table[no] = fade;
+    }
+
+    // 0x004C4AD0
+    bool hud_fade_status(int no)
+    {        
+        return gGameTable.fade_table[no].kido < 0;
+    }
+
+    // 0x004C4AB0
+    void hud_fade_off(int no)
+    {        
+        gGameTable.fade_table[no].kido = -1;
     }
 
     // 0x00502460
@@ -330,7 +407,11 @@ namespace openre::hud
                     snd_se_on(0x4060000);
                     gGameTable.itembox_slot_id = (gGameTable.itembox_slot_id - 5) & 0x3F;
                     const auto& type = gGameTable.itembox[(gGameTable.itembox_slot_id - 1) & 0x3F].Type;
-                    hud_render_inventory_text(gGameTable.word_691FB0 + 7, gGameTable.word_691FB0 + gGameTable.byte_691F85 + 9, 6, type != ITEM_TYPE_NONE ? type : 100);
+                    hud_render_inventory_text(
+                        gGameTable.word_691FB0 + 7,
+                        gGameTable.word_691FB0 + gGameTable.byte_691F85 + 9,
+                        6,
+                        type != ITEM_TYPE_NONE ? type : 100);
                     break;
                 }
                 snd_se_on(0x4050000);
@@ -406,7 +487,8 @@ namespace openre::hud
             }
             const auto& item = gGameTable.itembox[(gGameTable.itembox_slot_id + 5) & 0x3F];
             auto text = item.Type == ITEM_TYPE_NONE ? 100 : item.Type;
-            hud_render_inventory_text(gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 129, 6, text);
+            hud_render_inventory_text(
+                gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 129, 6, text);
             goto default_case;
         }
         case ITEM_BOX_STATE_EXCHANGE:
@@ -466,5 +548,11 @@ namespace openre::hud
     {
         set_hud_hook(3, &hud_itembox_1);
         set_hud_hook(4, &hud_itembox_2);
+
+        interop::writeJmp(0x004C49C0, &hud_fade_set);
+        interop::writeJmp(0x004C4A50, &hud_fade_adjust);
+        interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
+        interop::writeJmp(0x004C4AD0, &hud_fade_status);
+        interop::writeJmp(0x004C4AB0, &hud_fade_off);        
     }
 }

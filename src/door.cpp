@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
 #include "openre.h"
@@ -11,6 +12,7 @@
 using namespace openre::audio;
 using namespace openre::scd;
 using namespace openre::sce;
+using namespace openre::hud;
 
 namespace openre::door
 {
@@ -193,10 +195,10 @@ namespace openre::door
     // 0x004502D0
     static void door_exit()
     {
-        if (fade_status(0))
+        if (hud_fade_status(0))
         {
-            fade_set(512, 0, 7, 1);
-            fade_adjust(0, 0x7FFF, 0xFFFFFF, 0);
+            hud_fade_set(512, 0, 7, 1);
+            hud_fade_adjust(0, 0x7FFF, 0xFFFFFF, 0);
             if (gGameTable.door->sound_flg != 0)
                 snd_se_on(0x10000, gGameTable.player_work->pos);
             marni::unload_door_texture();

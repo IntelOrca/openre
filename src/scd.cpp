@@ -1,18 +1,23 @@
 #include "scd.h"
 #include "audio.h"
 #include "camera.h"
+#include "hud.h"
 #include "interop.hpp"
+#include "marni.h"
 #include "openre.h"
 #include "rdt.h"
 #include "re2.h"
 #include "sce.h"
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 
 using namespace openre::audio;
 using namespace openre::sce;
 using namespace openre::rdt;
 using namespace openre::camera;
+using namespace openre::marni;
+using namespace openre::hud;
 
 namespace openre::scd
 {
@@ -41,10 +46,12 @@ namespace openre::scd
         SCD_ITEM_AOT_SET = 0x4E,
         SCD_SCE_KEY_CK = 0x4F,
         SCD_SCE_BGM_CONTROL = 0x51,
+        SCD_SCE_FADE_SET = 0x53,
         SCD_SCE_BGMTBL_SET = 0x57,
         SCD_AOT_SET_4P = 0x67,
         SCD_DOOR_AOT_SET_4P = 0x68,
         SCD_ITEM_AOT_SET_4P = 0x69,
+        SCD_SCE_FADE_ADJUST = 0x74,
         SCD_HEAL = 0x83,
         SCD_POISON_CK = 0x86,
         SCD_POISON_CLR = 0x87,
@@ -184,6 +191,23 @@ namespace openre::scd
         uint8_t Opcode;
         uint8_t Id;
         uint8_t value;
+    };
+
+    struct ScdSceFadeAdjust
+    {
+        uint8_t Opcode;
+        uint8_t var_01;
+        int16_t var_02;
+    };
+
+    struct ScdSceFadeSet
+    {
+        uint8_t Opcode;
+        // fade_id ???
+        uint8_t var_01;
+        uint8_t var_02;
+        uint8_t var_03;
+        uint16_t var_04;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -629,6 +653,81 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E8320
+    // Not working
+    static int scd_sce_fade_set(SceTask* sce)
+    {        
+        auto opcode = reinterpret_cast<ScdSceFadeSet*>(sce);
+        hud_fade_set(int16_t((opcode->var_02 << 8) | opcode->var_01), opcode->var_04, opcode->var_03, 7);
+        PsxRect rect{ 0, 0, 320, 240 };
+        hud_fade_adjust(opcode->var_01, 0, 0, &rect);
+        if (opcode->var_04 <= 0)
+        {
+            gGameTable.fade_table[opcode->var_01].kido = opcode->var_04 + 0x8000;
+        }
+        else
+        {
+            gGameTable.fade_table[opcode->var_01].kido = 0;
+        }
+        sce->data += 6;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E83C0
+    // Not working
+    static int scd_sce_fade_adjust(SceTask* sce)
+    {        
+        auto opcode = reinterpret_cast<ScdSceFadeAdjust*>(sce);
+        auto flag = 0;
+        bool adjustFade = false;
+
+        if (!check_flag(FlagGroup::Status, FG_STATUS_12))
+        {
+            if (gGameTable.current_stage == 5)
+            {
+                goto LABEL_6;
+            }
+        LABEL_10:
+            hud_fade_adjust(opcode->var_01, opcode->var_02, 0, nullptr);
+            goto LABEL_11;
+        }
+
+        if (gGameTable.current_stage != 5)
+        {
+            goto LABEL_10;
+        }
+
+        switch (gGameTable.current_room)
+        {
+        case 9:
+        case 10:
+        case 11:
+        case 12:
+        case 14:
+        case 15:
+        case 16:
+        case 22: flag = 1; break;
+        default: break;
+        }
+
+    LABEL_6:
+        if (gGameTable.current_room == 13)
+        {
+            adjustFade = !sub_442E40();
+        }
+        else
+        {
+            adjustFade = flag == 0;
+        }
+        if (adjustFade)
+        {
+            goto LABEL_10;
+        }
+    LABEL_11:
+        sce->data += 4;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -658,8 +757,10 @@ namespace openre::scd
         set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
+        // set_scd_hook(SCD_SCE_FADE_SET, &scd_sce_fade_set);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
+        // set_scd_hook(SCD_SCE_FADE_ADJUST, &scd_sce_fade_adjust);
         set_scd_hook(SCD_HEAL, &scd_heal);
         set_scd_hook(SCD_POISON_CK, &scd_poison_ck);
         set_scd_hook(SCD_POISON_CLR, &scd_poison_clr);
