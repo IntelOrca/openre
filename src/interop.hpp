@@ -150,6 +150,14 @@ namespace openre::interop
     int32_t call(int32_t address);
     int32_t call(int32_t address, registers& registers);
 
+    template<typename TReturn, typename... TArgs>
+    TReturn call(uintptr_t addr, TArgs... args)
+    {
+        using func_t = TReturn (*)(TArgs...);
+        func_t func = (func_t)addr;
+        return func(args...);
+    }
+
     template<typename T, uintptr_t TAddress>
     struct loco_global
     {
@@ -381,17 +389,19 @@ namespace openre::interop
     class save_state
     {
     private:
-        uintptr_t begin = 0;
-        uintptr_t end = 0;
-        std::vector<std::byte> state;
+        uintptr_t _begin = 0;
+        uintptr_t _end = 0;
+        std::vector<std::byte> _state;
 
     public:
         const std::vector<std::byte>& getState() const
         {
-            return state;
+            return _state;
         }
 
-        save_state(uintptr_t begin, uintptr_t end);
+        save_state();
+        save_state(uintptr_t b, uintptr_t e);
+        save_state(uintptr_t b, const std::vector<std::byte>& d);
         void reset();
 
         static void logDiff(const save_state& lhs, const save_state& rhs);
@@ -399,6 +409,27 @@ namespace openre::interop
 
     bool operator==(const save_state& lhs, const save_state& rhs);
     bool operator!=(const save_state& lhs, const save_state& rhs);
+
+    class memory_comparer
+    {
+    private:
+        uintptr_t _begin = 0;
+        uintptr_t _end = 0;
+        save_state _pre;
+        save_state _first;
+
+    public:
+        memory_comparer(uintptr_t begin, uintptr_t end);
+
+        void write(const std::string_view path);
+        void compare(const std::string_view path);
+        void reset();
+        void log();
+
+    private:
+        static std::vector<std::byte> readFile(std::string_view path);
+        static void writeFile(std::string_view path, std::vector<std::byte>);
+    };
 
     void readMemory(uint32_t address, void* data, size_t size);
     void writeMemory(uint32_t address, const void* data, size_t size);

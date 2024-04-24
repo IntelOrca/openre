@@ -35,7 +35,6 @@ namespace openre::sce
     static uint8_t& _questionState = *((uint8_t*)0x98E542);
     static ObjectEntity* _objectEntities = (ObjectEntity*)0x98A61C;
 
-    static uint8_t& byte_6805B1 = *((uint8_t*)0x6805B1);
     static uint8_t& _censorshipOff = *((uint8_t*)0x6805B3);
     static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
     static int16_t& _itemBoxAcceleration = *((int16_t*)0x689C98);
@@ -59,7 +58,7 @@ namespace openre::sce
     static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
     static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
     static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);        
+    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
 
     constexpr uint8_t KEY_LOCKED = 255;
     constexpr uint8_t KEY_UNLOCK = 254;
@@ -188,7 +187,7 @@ namespace openre::sce
         gGameTable.c_em = GetEnemyEntity(0);
         gGameTable.cd_vol_0 = 120;
         gGameTable.pl.be_flg &= ~0x0400;
-        gGameTable.pl.var_10F &= 0x0F;
+        gGameTable.pl.type &= 0x0FFF;
     }
 
     // 0x004E3AE0
@@ -493,7 +492,7 @@ namespace openre::sce
         {
             data->amount = 2;
         }
-        if (byte_6805B1 != 0)
+        if (gGameTable.hard_mode != 0)
         {
             data->amount = transform_item_amount(*data);
         }

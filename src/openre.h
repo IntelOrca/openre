@@ -3,6 +3,8 @@
 #include "re2.h"
 #include <cstdint>
 
+struct Md1;
+
 namespace openre
 {
     enum class FlagGroup : uint8_t
@@ -84,6 +86,7 @@ namespace openre
         FG_SYSTEM_15 = 15,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_ARRANGE = 25,
+        FG_SYSTEM_EASY = 26,
         FG_SYSTEM_28 = 28,
     };
 
@@ -101,7 +104,7 @@ namespace openre
         FG_STATUS_12 = 12,
         FG_STATUS_13 = 13,
         FG_STATUS_14 = 14,
-        FG_STATUS_15 = 15,
+        FG_STATUS_MIRROR = 15,
         FG_STATUS_SCREEN = 16,
         // Pushing object ???
         FG_STATUS_18 = 18,
@@ -120,8 +123,22 @@ namespace openre
 
     enum
     {
+        FG_STOP_02 = 2,
         FG_STOP_06 = 6,
         FG_STOP_DISABLE_INPUT = 7,
+    };
+
+    enum
+    {
+        FG_ROOM_ENEMY_25 = 25,
+        FG_ROOM_ENEMY_26 = 26,
+    };
+
+    enum
+    {
+        FG_ZAPPING_5 = 5,
+        FG_ZAPPING_6 = 6,
+        FG_ZAPPING_15 = 15,
     };
 
     extern GameTable& gGameTable;
@@ -137,10 +154,24 @@ namespace openre
     void task_exit();
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
+    uint8_t rnd_area();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
-    void mapping_tmd(int a1, void* pTmd, int page, int clut);
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
+
+    void* work_alloc(size_t len);
+    template<typename T> static T* work_alloc()
+    {
+        return reinterpret_cast<T*>(work_alloc(sizeof(T)));
+    }
+
+    template<typename T> static T align(T value, size_t a = sizeof(size_t))
+    {
+        auto iValue = (uintptr_t)value;
+        auto mask = a - 1;
+        auto remainder = iValue & mask;
+        return (T)(remainder == 0 ? iValue : iValue + a - remainder);
+    }
 }
