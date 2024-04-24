@@ -128,30 +128,6 @@ namespace openre
         interop::call(0x00508D10);
     }
 
-    // 0x004C4AD0
-    bool fade_status(int no)
-    {
-        using sig = int (*)(int);
-        auto p = (sig)0x004C4AD0;
-        return (p(no) & 0xFF) != 0;
-    }
-
-    // 0x004C49C0
-    void fade_set(short a0, short add, char mask, char pri)
-    {
-        using sig = void (*)(short, short, char, char);
-        auto p = (sig)0x004C49C0;
-        p(a0, add, mask, pri);
-    }
-
-    // 0x004C4A50
-    void fade_adjust(int no, short kido, int rgb, PsxRect* rect)
-    {
-        using sig = void (*)(int, short, int, PsxRect*);
-        auto p = (sig)0x004C4A50;
-        p(no, kido, rgb, rect);
-    }
-
     // 0x004CA2F9
     void mess_print(int x, int y, const uint8_t* str, short a4)
     {

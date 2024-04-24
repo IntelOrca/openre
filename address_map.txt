@@ -319,6 +319,31 @@ declare     y                       s16
 declare     w                       s16
 declare     h                       s16
 
+struct      Tile
+declare     tag                     u32
+declare     r                       u8
+declare     g                       u8
+declare     b                       u8
+declare     code                    u8
+declare     psxRect                 PsxRect
+
+struct      DrMode
+declare     tag                     u32
+declare     code                    u32[2]
+
+struct      Fade
+declare     kido                    s16
+declare     add                     s16
+declare     hrate                   u8
+declare     mask_r                  u8
+declare     mask_g                  u8
+declare     mask_b                  u8
+declare     pri                     u8
+declare     dm00                    u8[3]
+declare     tiles                   Tile[2]
+declare     dr_modes                DrMode[2]
+declare     psxRect                 PsxRect
+
 struct      CCPartsWork
 declare     cc_ctr                  u8
 declare     cc_cnt                  u8
@@ -426,6 +451,7 @@ declare     mem_top                 void*                   0x00988624
 declare     vcut_data               VCut*[19]               0x00988630
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
+declare     dword_9888D8            u16                     0x009888D8
 declare     fg_system               u32                     0x00989E6C
 declare     fg_status               u32                     0x00989ED0
 declare     fg_stop                 u32                     0x00989ED4
@@ -481,6 +507,8 @@ declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
+declare     fade_table              Fade[4]                 0x0098F07C
+declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
 declare     doors                   DoorEntity*[9]          0x0099CEA0

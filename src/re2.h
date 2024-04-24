@@ -380,6 +380,40 @@ struct PsxRect
 };
 static_assert(sizeof(PsxRect) == 0x08);
 
+struct Tile
+{
+    uint32_t tag;                       // 0x0000
+    uint8_t r;                          // 0x0004
+    uint8_t g;                          // 0x0005
+    uint8_t b;                          // 0x0006
+    uint8_t code;                       // 0x0007
+    PsxRect psxRect;                    // 0x0008
+};
+static_assert(sizeof(Tile) == 0x10);
+
+struct DrMode
+{
+    uint32_t tag;                       // 0x0000
+    uint32_t code[2];                   // 0x0004
+};
+static_assert(sizeof(DrMode) == 0x0C);
+
+struct Fade
+{
+    int16_t kido;                       // 0x0000
+    int16_t add;                        // 0x0002
+    uint8_t hrate;                      // 0x0004
+    uint8_t mask_r;                     // 0x0005
+    uint8_t mask_g;                     // 0x0006
+    uint8_t mask_b;                     // 0x0007
+    uint8_t pri;                        // 0x0008
+    uint8_t dm00[3];                    // 0x0009
+    Tile tiles[2];                      // 0x000C
+    DrMode dr_modes[2];                 // 0x002C
+    PsxRect psxRect;                    // 0x0044
+};
+static_assert(sizeof(Fade) == 0x4C);
+
 struct CCPartsWork
 {
     uint8_t cc_ctr;                     // 0x0000
@@ -552,7 +586,9 @@ struct GameTable
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850
-    uint8_t pad_9888D0[5532];           // 0x9888D0
+    uint8_t pad_9888D0[8];              // 0x9888D0
+    uint16_t dword_9888D8;              // 0x9888D8
+    uint8_t pad_9888DA[5522];           // 0x9888DA
     uint32_t fg_system;                 // 0x989E6C
     uint8_t pad_989E70[96];             // 0x989E70
     uint32_t fg_status;                 // 0x989ED0
@@ -622,7 +658,10 @@ struct GameTable
     uint8_t pad_98EE60[538];            // 0x98EE60
     uint8_t byte_98F07A;                // 0x98F07A
     uint8_t byte_98F07B;                // 0x98F07B
-    uint8_t pad_98F07C[12036];          // 0x98F07C
+    Fade fade_table[4];                 // 0x98F07C
+    uint8_t pad_98F1AC[2019];           // 0x98F1AC
+    uint8_t byte_98F98F[4];             // 0x98F98F
+    uint8_t pad_98F993[9709];           // 0x98F993
     uint8_t byte_991F80;                // 0x991F80
     uint8_t pad_991F81[67];             // 0x991F81
     uint32_t dword_991FC4;              // 0x991FC4
