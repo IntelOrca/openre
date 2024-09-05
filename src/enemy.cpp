@@ -6,6 +6,7 @@
 #include "openre.h"
 #include "rdt.h"
 #include <array>
+#include <cstring>
 
 using namespace openre::file;
 using namespace openre::rdt;

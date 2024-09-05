@@ -2,6 +2,7 @@
 #include "entity.h"
 #include "interop.hpp"
 #include "openre.h"
+#include <cstring>
 
 namespace openre::enemy
 {
