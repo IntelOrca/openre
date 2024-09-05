@@ -120,37 +120,53 @@ namespace interopgen
             sb.AppendLine();
             foreach (var s in _structs)
             {
-                if (s.Base == null)
+                if (s.Members.Count == 0)
                 {
-                    sb.AppendLine($"struct {s.Name}");
+                    if (s.Base == null)
+                    {
+                        sb.AppendLine($"struct {s.Name};");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"struct {s.Name} : {s.Base}");
+                        sb.AppendLine("{");
+                        sb.AppendLine("};");
+                    }
                 }
                 else
                 {
-                    sb.AppendLine($"struct {s.Name} : {s.Base}");
-                }
-                sb.AppendLine("{");
-                foreach (var m in s.Members)
-                {
-                    var sb2 = new StringBuilder();
-                    sb2.Append("    ");
-                    sb2.Append(GetRealTypeName(m.Type));
-                    sb2.Append(' ');
-                    sb2.Append(m.Name);
-                    if (m.ArrayLength != null)
+                    if (s.Base == null)
                     {
-                        sb2.Append('[');
-                        sb2.Append(m.ArrayLength);
-                        sb2.Append(']');
+                        sb.AppendLine($"struct {s.Name}");
                     }
-                    sb2.Append(';');
-
-                    while (sb2.Length < 40)
+                    else
+                    {
+                        sb.AppendLine($"struct {s.Name} : {s.Base}");
+                    }
+                    sb.AppendLine("{");
+                    foreach (var m in s.Members)
+                    {
+                        var sb2 = new StringBuilder();
+                        sb2.Append("    ");
+                        sb2.Append(GetRealTypeName(m.Type));
                         sb2.Append(' ');
-                    sb2.AppendFormat("// 0x{0:X4}", m.Address);
-                    sb.AppendLine(sb2.ToString());
+                        sb2.Append(m.Name);
+                        if (m.ArrayLength != null)
+                        {
+                            sb2.Append('[');
+                            sb2.Append(m.ArrayLength);
+                            sb2.Append(']');
+                        }
+                        sb2.Append(';');
+
+                        while (sb2.Length < 40)
+                            sb2.Append(' ');
+                        sb2.AppendFormat("// 0x{0:X4}", m.Address);
+                        sb.AppendLine(sb2.ToString());
+                    }
+                    sb.AppendLine("};");
+                    sb.AppendLine($"static_assert(sizeof({s.Name}) == 0x{s.Size:X2});");
                 }
-                sb.AppendLine("};");
-                sb.AppendLine($"static_assert(sizeof({s.Name}) == 0x{s.Size:X2});");
                 sb.AppendLine();
             }
 
@@ -246,7 +262,17 @@ namespace interopgen
 
             if (s.Size == null)
             {
-                s.Size = baseSize + (address - s.Members[0].Address);
+                if (s.Members.Count == 0)
+                {
+                    if (s.Base != null)
+                    {
+                        s.Size = baseSize;
+                    }
+                }
+                else
+                {
+                    s.Size = baseSize + (address - s.Members[0].Address);
+                }
             }
 
             s.Processed = true;

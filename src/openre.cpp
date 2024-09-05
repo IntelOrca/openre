@@ -4,11 +4,13 @@
 #include "audio.h"
 #include "camera.h"
 #include "door.h"
+#include "enemy.h"
 #include "file.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
 #include "player.h"
+#include "rdt.h"
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
@@ -19,9 +21,11 @@
 using namespace openre;
 using namespace openre::audio;
 using namespace openre::door;
+using namespace openre::enemy;
 using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
+using namespace openre::rdt;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
@@ -265,6 +269,17 @@ namespace openre
         return lo;
     }
 
+    // 0x004DF4D0
+    uint8_t rnd_area()
+    {
+        auto blk = rdt_get_offset<uint16_t>(RdtOffsetKind::BLK);
+        auto v = *blk;
+        if (v == 0)
+            return 0xFF;
+
+        return rnd() % v;
+    }
+
     // 0x00502DB0
     void set_view(const Vec32p& pVp, const Vec32p& pVr)
     {
@@ -279,14 +294,6 @@ namespace openre
         using sig = void (*)(int, int);
         auto p = (sig)0x004C4690;
         p(mode, rgb);
-    }
-
-    // 0x00502D90
-    void mapping_tmd(int a1, void* pTmd, int page, int clut)
-    {
-        using sig = void (*)(int, void*, int, int);
-        auto p = (sig)0x00502D90;
-        p(a1, pTmd, page, clut);
     }
 
     // 0x00451570
@@ -305,6 +312,18 @@ namespace openre
     {
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
         bitarray_set(addr, index, value);
+    }
+
+    void* work_alloc(size_t len)
+    {
+        auto mem = gGameTable.mem_top;
+        gGameTable.mem_top = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(mem) + len);
+#ifdef DEBUG
+        // Fill allocated memory with standard MS uninitialised byte
+        // helps track what bytes have not been initialised.
+        std::memset(mem, 0xCD, len);
+#endif
+        return mem;
     }
 }
 
@@ -360,6 +379,7 @@ void onAttach()
     hud_init_hooks();
     input_init_hooks();
     camera_init_hooks();
+    enemy_init_hooks();
 }
 
 extern "C" {

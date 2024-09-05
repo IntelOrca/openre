@@ -73,6 +73,9 @@
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="door.cpp" />
+    <ClCompile Include="em_dog.cpp" />
+    <ClCompile Include="enemy.cpp" />
+    <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
@@ -80,6 +83,7 @@
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="marni.cpp" />
+    <ClCompile Include="model.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
@@ -90,6 +94,8 @@
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="door.h" />
+    <ClInclude Include="enemy.h" />
+    <ClInclude Include="entity.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
@@ -97,6 +103,7 @@
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
     <ClInclude Include="marni.h" />
+    <ClInclude Include="model.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />

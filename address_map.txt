@@ -28,6 +28,10 @@ struct      Vec16p
 base        Vec16
 declare     pad_6                   s16
 
+struct      Vec16d
+base        Vec16
+declare     d                       s16
+
 struct      Vec32
 declare     x                       s32
 declare     y                       s32
@@ -36,6 +40,10 @@ declare     z                       s32
 struct      Vec32p
 base        Vec32
 declare     pad_0C                  s32
+
+struct      Vec32d
+base        Vec32
+declare     d                       s32
 
 struct      Mat16
 declare     m                       s16[9]
@@ -49,15 +57,19 @@ declare     fCut                    u8
 declare     tCut                    u8
 declare     xz                      u16[8]
 
+struct      TmdEntry
+struct      Edd
+struct      Emr
+
 struct      PartsW
 declare     Be_flg                  u32
 declare     Attribute               u8
 declare     field_5                 u8
 declare     field_6                 u8
 declare     field_7                 u8
-declare     pTmd                    u32
+declare     pTmd                    TmdEntry*
 declare     pPacket                 u32
-declare     pTmd2                   u32
+declare     pTmd2                   TmdEntry*
 declare     pPacket2                u32
 declare     M                       u16[9]
 declare     field_2A                u16
@@ -91,6 +103,23 @@ declare     dummy03                 u16
 declare     oya_parts               PartsW*
 declare     free                    u16[10]
 
+struct      Kage
+declare     var_04                  u16         0x04
+declare     var_06                  u16         0x06
+declare     var_1C                  u32         0x1C
+declare     var_44                  u32         0x44
+
+struct      At
+declare     pos                     Vec32
+declare     w                       s16
+declare     d                       s16
+declare     ofs                     Vec16
+declare     at_w                    s16
+declare     at_d                    s16
+declare     at_h                    s16
+declare     atw_x                   s16
+declare     atw_z                   s16
+
 struct      Entity
 declare     be_flg                  s32
 declare     routine_0               u8
@@ -105,9 +134,9 @@ declare     work_no                 u8
 declare     at_em_no                u8
 declare     at_em_flg               s16
 declare     attribute               s32
-declare     pTmd                    s32
+declare     pTmd                    TmdEntry*
 declare     pPacket                 s32
-declare     pTmd2                   s32
+declare     pTmd2                   TmdEntry*
 declare     pPacket2                s32
 declare     m                       u16[9]
 declare     m_pad                   s16
@@ -120,21 +149,21 @@ declare     cdir                    Vec16
 declare     dummy01                 s16
 declare     poly_rgb                s32
 declare     pSuper                  Mat16*
-declare     atd                     s32[32]
+declare     atd                     At[4]
 declare     tpage                   u8
 declare     clut                    u8
 declare     nFloor                  u8
 declare     parts_num               u8
-declare     pKan_t_ptr              s32
+declare     pKan_t_ptr              Emr*
 declare     water                   s16
-declare     type                    u8
-declare     var_10F                 u8
+declare     type                    u16
 
-struct      PlayerEntity
+struct      ActorEntity
 base        Entity
 declare     Sca_info                s32
 declare     field_114               s32
-declare     field_118               s32
+declare     sca_old_x               s16
+declare     sca_old_z               s16
 declare     field_11C               s32
 declare     field_120               s32
 declare     field_124               s32
@@ -165,15 +194,15 @@ declare     max_life                s16
 declare     base_pos                Vec16
 declare     timer2                  u8
 declare     timer3                  u8
-declare     pKage_work              s32
+declare     pKage_work              Kage*
 declare     field_170               s32
 declare     field_174               s32
 declare     pNow_seq                u32*
-declare     pSeq_t_ptr              s32
-declare     pSub0_kan_t_ptr         s32
-declare     pSub0_seq_t_ptr         s32
-declare     field_188               s32
-declare     field_18C               s32
+declare     pSeq_t_ptr              Edd*
+declare     pSub0_kan_t_ptr         Emr*
+declare     pSub0_seq_t_ptr         Edd*
+declare     pSub1_kan_t_ptr         Emr*
+declare     pSub1_seq_t_ptr         Edd*
 declare     field_190               s32
 declare     field_194               s32
 declare     pSin_parts_ptr          s32
@@ -183,9 +212,9 @@ declare     pM_uint8_t_ptr          s32
 declare     pM_option_tmd           s32
 declare     pM_option_packet        s32
 declare     pM_Kage_work            s32
-declare     pEnemy_ptr              s32
+declare     pEnemy_ptr              Entity*
 declare     pEnemy_neck             s32
-declare     pSa_dat                 s32
+declare     pSa_dat                 void*
 declare     neck_flg                u8
 declare     neck_no                 u8
 declare     ground                  s16
@@ -206,21 +235,44 @@ declare     sce_free2               u16
 declare     sce_free3               u16
 declare     spl_flg                 u16
 declare     parts0_pos_y            u16
+declare     pT_xz                   u32
 declare     pOn_om                  s32
-declare     field_1E8               s32
-declare     field_1EC               s32
-declare     field_1F0               s32
-declare     field_1F4               s32
-declare     field_1F8               s32
-declare     field_1FC               s32
-declare     field_200               s32
+declare     nOba                    s32
+declare     attw_timer              u8
+declare     attw_seq_no             u8
+declare     eff_at_r                u16
+declare     l_pl                    s32
+declare     l_spl                   s32
+declare     dir_spl                 s16
+declare     sound_bank              u8
+declare     area_no                 u8
+declare     tmp_routine             s32
+declare     pDamage_work            s32
 declare     pTbefore_func           void*
 declare     pTafter_func            void*
-declare     field_20C               s32
-declare     field_210               s32
+declare     spd_base                Vec16
+declare     kage_ofs                s16
 declare     poison_timer            s16
 declare     pison_down              u8
 declare     field_217               u8
+
+struct      EnemyEntity
+base        ActorEntity
+declare     var_218                 u8          0x218
+declare     var_219                 u8          0x219
+declare     var_21F                 u8          0x21F
+declare     var_220                 u8          0x220
+declare     var_221                 u8          0x221
+declare     var_223                 u8          0x223
+declare     var_227                 u8          0x227
+declare     var_22D                 u8          0x22D
+declare     var_22E                 u8          0x22E
+declare     var_230                 u8          0x230
+declare     var_232                 u8          0x232
+declare     pad_247                 u8          0x247
+
+struct      PlayerEntity
+base        ActorEntity
 
 struct      ObjectEntity
 base        Entity
@@ -294,7 +346,7 @@ declare     offsets                 void*[23]
 
 struct      DoorInfo
 declare     prepacket               void*
-declare     tmd_adr                 void*
+declare     tmd_adr                 TmdEntry*
 declare     packettop               void*
 declare     var_0C                  s32
 declare     var_10                  s32
@@ -365,11 +417,17 @@ struct      Unknown68A204
 declare     var_08                  u8                      0x08
 declare     var_09                  u8                      0x09
 declare     var_0D                  u8                      0x0D
+declare     var_0E                  u8                      0x0E
 declare     var_13                  u8                      0x13
+
+struct      EnemyInitEntry
+declare     type                    u16
+declare     enabled                 u16
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
+declare     pGG                     void*                   0x0052C4B0
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
@@ -383,9 +441,12 @@ declare     dword_67CE00            u32                     0x0067CE00
 declare     dword_680554            u32                     0x00680554
 declare     input_keyboard          u32                     0x00680558
 declare     can_draw                u16                     0x0068058D
+declare     blood_censor            u8                      0x0068059A
+declare     hard_mode               u8                      0x006805B1
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
+declare     idd                     u32                     0x00689790
 declare     dword_689BDC            u32                     0x00689BDC
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
@@ -433,7 +494,7 @@ declare     byte_695E72             u8                      0x00695E72
 declare     dword_695E7C            u32                     0x00695E7C
 declare     byte_6D730C             u8[24592]               0x006D730C
 declare     bg_buffer               u8*                     0x008C1880
-declare     tmd                     void*                   0x008C6880
+declare     tmd                     TmdEntry*               0x008C6880
 declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
@@ -448,7 +509,10 @@ declare     key_trg                 u32                     0x00988608
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     mem_top                 void*                   0x00988624
-declare     vcut_data               VCut*[19]               0x00988630
+declare     dword_98862C            void*                   0x0098862C
+declare     vcut_data               VCut*[2]                0x00988630
+declare     em_damage_table_16      void*[48]               0x00988638
+declare     em_die_table            void*[84]               0x009886F8
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     dword_9888D8            u16                     0x009888D8
@@ -461,12 +525,19 @@ declare     dword_989EE0            u32                     0x00989EE0
 declare     dword_989EE4            u32                     0x00989EE4
 declare     word_989EE8             s16                     0x00989EE8
 declare     byte_989EEA             u8                      0x00989EEA
+declare     enemy_count             u8                      0x00989EEB
 declare     fg_room_enemy           u16                     0x00989EEC
 declare     word_989EEE             u16                     0x00989EEE
 declare     pl                      PlayerEntity            0x00989EF0
+declare     poison_status           u16                     0x0098A108
+declare     poison_timer            u8                      0x0098A10A
 declare     player_work             PlayerEntity*           0x0098A10C
-declare     splayer_work            PlayerEntity*           0x0098A110
-declare     enemies                 Entity*[16]             0x0098A114
+declare     splayer_work            EnemyEntity*            0x0098A110
+declare     enemies                 EnemyEntity*[16]        0x0098A114
+declare     enemy_init_map          void*[96]               0x0098A154
+declare     enemy_init_table        void*[192]              0x0098A2D4
+declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
+declare     pOm                     ObjectEntity            0x0098A61C
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
