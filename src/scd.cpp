@@ -27,6 +27,7 @@ namespace openre::scd
         SCD_NOP = 0x00,
         SCD_EVT_END = 0x01,
         SCD_EVT_NEXT = 0x02,
+        SCD_EVT_CHAIN = 0X03,
         SCD_EVT_EXEC = 0x04,
         SCD_EVT_KILL = 0x05,
         SCD_IFEL_CK = 0x06,
@@ -468,6 +469,13 @@ namespace openre::scd
         return SCD_RESULT_NEXT_TICK;
     }
 
+    // 0x004E4440
+    static int scd_evt_chain(SceTask* sce)
+    {
+        scd_event_init(sce, *(sce->data + 3));
+        return SCD_RESULT_NEXT;
+    }
+
     // 0x004E43D0
     static int scd_evt_end(SceTask* sce)
     {
@@ -722,6 +730,7 @@ namespace openre::scd
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);
+        set_scd_hook(SCD_EVT_CHAIN, &scd_evt_chain);
         set_scd_hook(SCD_EVT_END, &scd_evt_end);
         set_scd_hook(SCD_EVT_EXEC, &scd_evt_exec);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
