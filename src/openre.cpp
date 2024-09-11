@@ -15,6 +15,8 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "title.h"
+#include <cassert>
 #include <cstring>
 #include <windows.h>
 
@@ -31,6 +33,7 @@ using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
 using namespace openre::camera;
+using namespace openre::title;
 
 namespace openre
 {
@@ -384,6 +387,7 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
 
+    title_init_hooks();
     door_init_hooks();
     scd_init_hooks();
     sce_init_hooks();
