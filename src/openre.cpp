@@ -380,6 +380,7 @@ void onAttach()
     input_init_hooks();
     camera_init_hooks();
     enemy_init_hooks();
+    file_init_hooks();
 }
 
 extern "C" {

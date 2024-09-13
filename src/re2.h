@@ -645,7 +645,11 @@ struct GameTable
     uint8_t byte_695E72;                // 0x695E72
     uint8_t pad_695E73[9];              // 0x695E73
     uint32_t dword_695E7C;              // 0x695E7C
-    uint8_t pad_695E80[267404];         // 0x695E80
+    uint8_t pad_695E80[10688];          // 0x695E80
+    uint8_t* psp_lookup;                // 0x698840
+    uint8_t pad_698844[4220];           // 0x698844
+    uint8_t osp_mask_flag;              // 0x6998C0
+    uint8_t pad_6998C1[252491];         // 0x6998C1
     uint8_t byte_6D730C[24592];         // 0x6D730C
     uint8_t pad_6DD31C[1983844];        // 0x6DD31C
     uint8_t* bg_buffer;                 // 0x8C1880
