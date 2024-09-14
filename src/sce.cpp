@@ -184,6 +184,7 @@ namespace openre::sce
         gGameTable.rbj_reset_flg = 0;
         gGameTable.cc_work.ccol_no = 0;
         gGameTable.se_tmp0 = 0;
+        gGameTable.byte_695E71 = 0;
         gGameTable.c_em = GetEnemyEntity(0);
         gGameTable.cd_vol_0 = 120;
         gGameTable.pl.be_flg &= ~0x0400;
