@@ -1,6 +1,7 @@
 #define USE_ORIGINAL_FILEIO
 
 #include "file.h"
+#include "interop.hpp"
 #include "openre.h"
 #include <windows.h>
 
@@ -51,10 +52,34 @@ namespace openre::file
     }
 
     // 0x00509540
-    uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t unk)
+    uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t mode)
     {
         using sig = uint32_t (*)(const char*, void*, size_t, size_t, size_t);
         auto p = (sig)0x00509540;
-        return p(path, buffer, offset, length, unk);
+        return p(path, buffer, offset, length, mode);
+    }
+
+    // 0x004DD360
+    static int osp_read()
+    {
+        const char* ospFilepath = "common\\bin\\osp.bin";
+
+        gGameTable.osp_mask_flag = 1;
+        const size_t length = 4224;
+        const size_t offset = length * (gGameTable.current_room + 32 * gGameTable.current_stage);
+
+        auto bytesRead = read_partial_file_into_buffer(ospFilepath, gGameTable.psp_lookup, offset, length, 4);
+        if (bytesRead == 0)
+        {
+            gErrorCode = 0;
+            gGameTable.osp_mask_flag = 0;
+        }
+        return bytesRead;
+    }
+
+    void file_init_hooks()
+    {
+
+        interop::writeJmp(0x004DD360, &osp_read);
     }
 }
