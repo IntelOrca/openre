@@ -542,7 +542,9 @@ struct GameTable
     int32_t global_prj;                 // 0x526268
     uint8_t pad_52626C[25156];          // 0x52626C
     void* pGG;                          // 0x52C4B0
-    uint8_t pad_52C4B4[60772];          // 0x52C4B4
+    uint8_t pad_52C4B4[5068];           // 0x52C4B4
+    Mat16 g_identity_mat;               // 0x52D880
+    uint8_t pad_52D8A0[55672];          // 0x52D8A0
     uint32_t* flag_groups[35];          // 0x53B218
     uint8_t pad_53B2A4[4916];           // 0x53B2A4
     BgmTableEntry byte_53C5D8[146];     // 0x53C5D8
