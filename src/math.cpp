@@ -3,8 +3,6 @@
 #include "openre.h"
 #include "re2.h"
 
-#include <iostream>
-
 namespace openre::math
 {
     // 0x00451710
@@ -23,29 +21,6 @@ namespace openre::math
     static void mul_matrix0(Mat16* m1, Mat16* m2, Mat16* res)
     {
         interop::call<void, Mat16*, Mat16*, Mat16*>(0x00450C20, m1, m2, res);
-
-        // std::cout << "mul_matrix0\n";
-        //// Row 1
-        // res->m[0] = m1->m[0] * m2->m[0] + m1->m[1] * m2->m[3] + m1->m[2] * m2->m[6];
-        // res->m[1] = m1->m[0] * m2->m[1] + m1->m[1] * m2->m[4] + m1->m[2] * m2->m[7];
-        // res->m[2] = m1->m[0] * m2->m[2] + m1->m[1] * m2->m[5] + m1->m[2] * m2->m[8];
-
-        //// Row 2
-        // res->m[3] = m1->m[3] * m2->m[0] + m1->m[4] * m2->m[3] + m1->m[5] * m2->m[6];
-        // res->m[4] = m1->m[3] * m2->m[1] + m1->m[4] * m2->m[4] + m1->m[5] * m2->m[7];
-        // res->m[5] = m1->m[3] * m2->m[2] + m1->m[4] * m2->m[5] + m1->m[5] * m2->m[8];
-
-        //// Row 3
-        // res->m[6] = m1->m[6] * m2->m[0] + m1->m[7] * m2->m[3] + m1->m[8] * m2->m[6];
-        // res->m[7] = m1->m[6] * m2->m[1] + m1->m[7] * m2->m[4] + m1->m[8] * m2->m[7];
-        // res->m[8] = m1->m[6] * m2->m[2] + m1->m[7] * m2->m[5] + m1->m[8] * m2->m[8];
-
-        // res->field_12 = 0;
-        //  res->t[0] = 0;
-        //  res->t[1] = 0;
-        //  res->t[2] = 0;
-
-        // return res;
     }
 
     // 0x00451120
@@ -105,7 +80,6 @@ namespace openre::math
     // 0x004512E0
     static void scale_matrix(Mat16* a1, const Vec32& a2)
     {
-        std::cout << "scale_matrix\n";
         // Row 1
         a1->m[0] *= a2.x / 4096;
         a1->m[1] *= a2.y / 4096;
@@ -127,6 +101,5 @@ namespace openre::math
         interop::writeJmp(0x004510B0, &rotate_matrix_y);
         interop::writeJmp(0x00451040, &rotate_matrix_x);
         interop::writeJmp(0x004512E0, &scale_matrix);
-        // interop::writeJmp(0x00450C20, &mul_matrix0);
     }
 }
