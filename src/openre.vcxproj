@@ -83,6 +83,7 @@
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="marni.cpp" />
+    <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
@@ -103,6 +104,7 @@
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
     <ClInclude Include="marni.h" />
+    <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />

@@ -9,6 +9,7 @@
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
+#include "math.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
@@ -24,6 +25,7 @@ using namespace openre::door;
 using namespace openre::enemy;
 using namespace openre::file;
 using namespace openre::hud;
+using namespace openre::math;
 using namespace openre::player;
 using namespace openre::rdt;
 using namespace openre::scd;
@@ -381,6 +383,7 @@ void onAttach()
     camera_init_hooks();
     enemy_init_hooks();
     file_init_hooks();
+    math_init_hooks();
 }
 
 extern "C" {
