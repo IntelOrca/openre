@@ -8,7 +8,16 @@ namespace openre::math
     // 0x00451710
     static int rsin(int32_t angle)
     {
-        return interop::call<int32_t, int32_t>(0x00451710, angle);
+        const uint32_t idx = angle & 0x7FF;
+        const uint32_t sign = (angle & 0x800) != 0 ? -1 : 1;
+
+        // cosine
+        if (idx >= 1024)
+        {
+            return sign * *((uint16_t*)0x0000527270 - idx);
+        }
+
+        return sign * static_cast<uint16_t>(gGameTable.sin_table[idx]);
     }
 
     // 0x00451760
@@ -101,5 +110,7 @@ namespace openre::math
         interop::writeJmp(0x004510B0, &rotate_matrix_y);
         interop::writeJmp(0x00451040, &rotate_matrix_x);
         interop::writeJmp(0x004512E0, &scale_matrix);
+        interop::writeJmp(0x00451710, &rsin);
+        interop::writeJmp(0x00451760, &rcos);
     }
 }
