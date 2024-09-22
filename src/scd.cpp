@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "enemy.h"
 #include "interop.hpp"
+#include "math.h"
 #include "openre.h"
 #include "rdt.h"
 #include "re2.h"
@@ -15,6 +16,7 @@ using namespace openre::enemy;
 using namespace openre::sce;
 using namespace openre::rdt;
 using namespace openre::camera;
+using namespace openre::math;
 
 namespace openre::scd
 {
@@ -37,6 +39,7 @@ namespace openre::scd
         SCD_CUT_OLD = 0x2A,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
+        SCD_SCE_ESPR_ON = 0x3A,
         SCD_DOOR_AOT_SE = 0x3B,
         SCE_CUT_AUTO = 0x3C,
         SCD_PLC_MOTION = 0x3F,
@@ -208,6 +211,21 @@ namespace openre::scd
         int16_t d;
         int16_t animation;
         int16_t var_14;
+    };
+
+    struct ScdSceEsprOn
+    {
+        uint8_t opcode;
+        uint8_t nop;
+        uint8_t esp_id;
+        uint8_t esp_dt;
+        uint8_t work_kind;
+        uint8_t work_no;
+        uint16_t espmv;
+        int16_t svec_x;
+        int16_t svec_y;
+        int16_t svec_z;
+        uint16_t dir_y;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -717,6 +735,42 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004B8470
+    static int esp_call(int a0, int a1, Mat16& matrix, Vec16p& vec)
+    {
+        using sig = int (*)(int, int, Mat16&, Vec16p&);
+        auto p = (sig)0x004B8470;
+        return p(a0, a1, matrix, vec);
+    }
+
+    // 0x004E6E30
+    static int scd_sce_espr_on(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdSceEsprOn*>(sce->data);
+        sce->data += sizeof(ScdSceEsprOn);
+        uint32_t esp_id = opcode->esp_id;
+
+        Mat16& matrix = get_matrix(opcode->work_kind, opcode->work_no);
+        Vec16p vec16p{ opcode->svec_x, opcode->svec_y, opcode->svec_z };
+
+        if ((gGameTable.current_stage == 4 && gGameTable.current_room != 0) || gGameTable.current_stage != 3
+            || gGameTable.current_room != 10)
+        {
+            esp_call(opcode->espmv | (((esp_id << 16) | (esp_id & 0xFFFFFF00)) << 8), opcode->dir_y, matrix, vec16p);
+            return SCD_RESULT_NEXT;
+        }
+
+        if (opcode->work_kind)
+        {
+            esp_call(opcode->espmv | (((esp_id << 16) | esp_id & 0xFFFFFF00) << 8), opcode->dir_y, matrix, vec16p);
+            return SCD_RESULT_NEXT;
+        }
+
+        auto v5 = (gGameTable.blood_censor | (esp_id << 8)) << 8;
+        esp_call(opcode->espmv | ((esp_id | v5) << 8), opcode->dir_y, matrix, vec16p);
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -741,6 +795,7 @@ namespace openre::scd
         set_scd_hook(SCD_CUT_OLD, &scd_cut_old);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
+        set_scd_hook(SCD_SCE_ESPR_ON, &scd_sce_espr_on);
         set_scd_hook(SCD_DOOR_AOT_SE, &scd_door_aot_se);
         set_scd_hook(SCE_CUT_AUTO, &scd_cut_auto);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
