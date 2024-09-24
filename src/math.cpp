@@ -1,7 +1,6 @@
 #include "math.h"
 #include "interop.hpp"
 #include "openre.h"
-#include "re2.h"
 
 namespace openre::math
 {
@@ -92,6 +91,12 @@ namespace openre::math
         a1.m[6] *= a2.x / 4096;
         a1.m[7] *= a2.y / 4096;
         a1.m[8] *= a2.z / 4096;
+    }
+
+    // 0x004E7210
+    Mat16& get_matrix(uint8_t type, uint8_t a2)
+    {
+        return interop::call<Mat16&, uint8_t, uint8_t>(0x004E7210, type, a2);
     }
 
     void math_init_hooks()
