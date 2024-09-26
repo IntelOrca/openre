@@ -160,9 +160,9 @@ namespace openre::math
     }
 
     // 0x00450C20
-    static void mul_matrix0(Mat16& m1, Mat16& m2, Mat16& res)
+    static void mul_matrix0(const Mat16& m1, Mat16& m2, Mat16& res)
     {
-        interop::call<void, Mat16&, Mat16&, Mat16&>(0x00450C20, m1, m2, res);
+        interop::call<void, const Mat16&, Mat16&, Mat16&>(0x00450C20, m1, m2, res);
     }
 
     // 0x00451120
@@ -242,6 +242,48 @@ namespace openre::math
         return interop::call<Mat16&, uint8_t, uint8_t>(0x004E7210, type, a2);
     }
 
+    // 0x00450950
+    static void apply_matrix(const Mat16& m, const Vec16& v, Vec32& res)
+    {
+        res.x = (v.x * m.m[0] + v.y * m.m[1] + v.z * m.m[2]) >> 12;
+        res.y = (v.x * m.m[3] + v.y * m.m[4] + v.z * m.m[5]) >> 12;
+        res.z = (v.x * m.m[6] + v.y * m.m[7] + v.z * m.m[8]) >> 12;
+    }
+
+    // 0x00450A10
+    static void apply_matrixlv(const Mat16& m, const Vec32& v, Vec32& res)
+    {
+        res.x = (v.x * m.m[0] + v.y * m.m[1] + v.z * m.m[2]) >> 12;
+        res.y = (v.x * m.m[3] + v.y * m.m[4] + v.z * m.m[5]) >> 12;
+        res.z = (v.x * m.m[6] + v.y * m.m[7] + v.z * m.m[8]) >> 12;
+    }
+
+    // 0x004509D0
+    static void apply_matrixsv(const Mat16& m, const Vec16& v1, Vec16& res)
+    {
+        Vec32 vec32;
+        apply_matrix(m, v1, vec32);
+        res.x = vec32.x;
+        res.y = vec32.y;
+        res.z = vec32.z;
+    }
+
+    // 0x00450E10
+    static void compare_matrix(const Mat16& m1, Mat16& m2, Mat16& res)
+    {
+        Mat16 resVal;
+        Vec32 resValT;
+        const Vec32 m2_t{ m2.t[0], m2.t[1], m2.t[2] };
+
+        mul_matrix0(m1, m2, resVal);
+        apply_matrixlv(m1, m2_t, resValT);
+        resVal.t[0] = resValT.x + m1.t[0];
+        resVal.t[1] = resValT.y + m1.t[1];
+        resVal.t[2] = resValT.z + m1.t[2];
+
+        memcpy(&res, &resVal, sizeof(Mat16));
+    }
+
     void math_init_hooks()
     {
         interop::writeJmp(0x00450F60, &rotate_matrix);
@@ -251,5 +293,9 @@ namespace openre::math
         interop::writeJmp(0x004512E0, &scale_matrix);
         interop::writeJmp(0x00451710, &rsin);
         interop::writeJmp(0x00451760, &rcos);
+        interop::writeJmp(0x00450950, &apply_matrix);
+        interop::writeJmp(0x00450A10, &apply_matrixlv);
+        interop::writeJmp(0x004509D0, &apply_matrixsv);
+        interop::writeJmp(0x00450E10, &compare_matrix);
     }
 }
