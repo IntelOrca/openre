@@ -15,7 +15,6 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
-#include <cassert>
 #include <cstring>
 #include <windows.h>
 

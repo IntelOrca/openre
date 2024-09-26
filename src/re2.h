@@ -540,7 +540,9 @@ struct GameTable
     bool enable_dsound;                 // 0x524EB6
     uint8_t pad_524EB7[5041];           // 0x524EB7
     int32_t global_prj;                 // 0x526268
-    uint8_t pad_52626C[25156];          // 0x52626C
+    uint8_t pad_52626C[4];              // 0x52626C
+    int16_t math_const_table[1224];     // 0x526270
+    uint8_t pad_526C00[22704];          // 0x526C00
     void* pGG;                          // 0x52C4B0
     uint8_t pad_52C4B4[5068];           // 0x52C4B4
     Mat16 g_identity_mat;               // 0x52D880

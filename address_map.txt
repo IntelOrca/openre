@@ -427,6 +427,7 @@ declare     enabled                 u16
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
+declare     math_const_table        s16[1224]               0x00526270
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
 declare     flag_groups             u32*[35]                0x0053B218
