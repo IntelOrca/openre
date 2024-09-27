@@ -28,7 +28,10 @@ namespace openre::door
 
     static void door_init();
     static void door_move();
+    static void door_scheduler_main();
     static void door_exit();
+    static void door_trans();
+    static void door_unload(void* pTim, void* pTmd);
 
     // 0x00526254
     static DoorAction _doorActions[] = {
@@ -63,26 +66,6 @@ namespace openre::door
             if (ctcb.var_13 == 0)
                 gGameTable.door_state++;
         }
-    }
-
-    // 0x00450230
-    static void door_scheduler_main()
-    {
-        interop::call(0x00450230);
-    }
-
-    // 0x00450350
-    static void door_trans()
-    {
-        interop::call(0x00450350);
-    }
-
-    // 0x00432A40
-    static void door_unload(void* pTim, void* pTmd)
-    {
-        using sig = void (*)(void*, void*);
-        auto p = (sig)0x00432A40;
-        p(pTim, pTmd);
     }
 
     // 0x0044FEF0
@@ -149,7 +132,7 @@ namespace openre::door
         door->sound_flg = 0;
     }
 
-    // 0x00450120
+        // 0x00450120
     static void door_move()
     {
         auto& ctcb = *gGameTable.ctcb;
@@ -193,6 +176,12 @@ namespace openre::door
         }
     }
 
+    // 0x00450230
+    static void door_scheduler_main()
+    {
+        interop::call(0x00450230);
+    }
+
     // 0x004502D0
     static void door_exit()
     {
@@ -211,6 +200,44 @@ namespace openre::door
         {
             task_sleep(1);
         }
+    }
+
+    // 0x00450350
+    static void door_trans()
+    {
+        interop::call(0x00450350);
+    }
+
+    // 0x004504d0
+    static void Door_model_set()
+	{
+		interop::call(0x004504d0);
+	}
+    
+    // 0x004505c0
+    static void Door_load()
+    {
+        interop::call(0x004505c0);
+    }
+
+    // 0x004507E0
+    static void Door_snd_trans()
+    {
+        interop::call(0x004507E0);
+    }
+
+    // 0x00432A40
+    static void door_unload(void* pTim, void* pTmd)
+    {
+        using sig = void (*)(void*, void*);
+        auto p = (sig)0x00432A40;
+        p(pTim, pTmd);
+    }
+
+    // 0x00432B30
+    static void Door_model_init()
+    {
+        interop::call(0x00432B30);
     }
 
     void door_init_hooks()
