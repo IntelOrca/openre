@@ -17,6 +17,8 @@
 #include "sce.h"
 #include <cstring>
 #include <windows.h>
+#include "marni.h"
+using namespace openre::marni;
 
 using namespace openre;
 using namespace openre::audio;
@@ -372,6 +374,7 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
 
+    marni_out_hooks();
     door_init_hooks();
     scd_init_hooks();
     sce_init_hooks();
