@@ -367,8 +367,6 @@ namespace openre::hud
                 sort_itembox();
                 snd_se_on(0x4060000);
             }
-
-            goto default_case;
             break;
         }
         case ITEM_BOX_STATE_SELECT_BOX:
@@ -382,23 +380,23 @@ namespace openre::hud
                         snd_se_on(0x4060000);
                         gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                     }
-                    goto default_case;
+                    break;
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 0x1000) // up
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_UP;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 0x4000) // down
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_DOWN;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 4)
             {
@@ -416,7 +414,7 @@ namespace openre::hud
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
             if (!(gGameTable.word_9885FC & 8)) // inventory item selected
             {
@@ -427,16 +425,16 @@ namespace openre::hud
                         snd_se_on(0x4060000);
                         gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                     }
-                    goto default_case;
+                    break;
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
 
             snd_se_on(0x4060000);
             gGameTable.itembox_slot_id = (gGameTable.itembox_slot_id + 5) & 0x3F;
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_SCROLL_UP:
         {
@@ -462,7 +460,7 @@ namespace openre::hud
             const auto& item = gGameTable.itembox[(gGameTable.itembox_slot_id - 1) & 0x3F];
             auto text = item.Type == ITEM_TYPE_NONE ? 100 : item.Type;
             hud_render_inventory_text(gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 9, 6, text);
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_SCROLL_DOWN:
         {
@@ -489,14 +487,14 @@ namespace openre::hud
             auto text = item.Type == ITEM_TYPE_NONE ? 100 : item.Type;
             hud_render_inventory_text(
                 gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 129, 6, text);
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_EXCHANGE:
         {
             gGameTable.byte_691F76 = 0;
             gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
             exchange_item();
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_5:
         {
@@ -508,17 +506,10 @@ namespace openre::hud
             hud_render_selection(gGameTable.inventory[gGameTable.byte_691F6C].Part);
             return;
         }
-        default:
-        {
-        default_case:
-            const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
-            hud_render_inventory_text(16, 175, 6, item.Type);
-            hud_render_selection(item.Part);
-            break;
-        }
         }
 
         const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
+        hud_render_inventory_text(16, 175, 6, item.Type);
         hud_render_selection(item.Part);
     }
 
