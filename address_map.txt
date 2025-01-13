@@ -504,7 +504,7 @@ declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
 declare     cc_work                 CCWork                  0x00980B00
-declare     fg_message              u16                     0x0098504C
+declare     fg_message              s8                      0x0098504C
 declare     dword_9885F8            u32                     0x009885F8
 declare     word_9885FC             u16                     0x009885FC
 declare     dword_9885FE            u32                     0x009885FE

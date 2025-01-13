@@ -127,13 +127,13 @@ namespace openre::hud
 
     // 0x004C4AD0
     bool hud_fade_status(int no)
-    {        
+    {
         return gGameTable.fade_table[no].kido < 0;
     }
 
     // 0x004C4AB0
     void hud_fade_off(int no)
-    {        
+    {
         gGameTable.fade_table[no].kido = -1;
     }
 
@@ -501,11 +501,12 @@ namespace openre::hud
         case ITEM_BOX_STATE_5:
         {
             gGameTable.byte_691F76 = 0;
-            if (!(gGameTable.fg_message & 0x8000))
+            if (gGameTable.fg_message >= 0)
             {
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_BOX;
             }
-            break;
+            hud_render_selection(gGameTable.inventory[gGameTable.byte_691F6C].Part);
+            return;
         }
         default:
         {
@@ -553,6 +554,6 @@ namespace openre::hud
         interop::writeJmp(0x004C4A50, &hud_fade_adjust);
         interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
-        interop::writeJmp(0x004C4AB0, &hud_fade_off);        
+        interop::writeJmp(0x004C4AB0, &hud_fade_off);
     }
 }

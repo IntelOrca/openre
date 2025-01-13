@@ -667,8 +667,8 @@ struct GameTable
     uint8_t pad_8E37C4[643900];         // 0x8E37C4
     CCWork cc_work;                     // 0x980B00
     uint8_t pad_9813EC[15456];          // 0x9813EC
-    uint16_t fg_message;                // 0x98504C
-    uint8_t pad_98504E[13738];          // 0x98504E
+    int8_t fg_message;                  // 0x98504C
+    uint8_t pad_98504D[13739];          // 0x98504D
     uint32_t dword_9885F8;              // 0x9885F8
     uint16_t word_9885FC;               // 0x9885FC
     uint32_t dword_9885FE;              // 0x9885FE
