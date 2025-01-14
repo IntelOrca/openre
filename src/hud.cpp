@@ -127,13 +127,13 @@ namespace openre::hud
 
     // 0x004C4AD0
     bool hud_fade_status(int no)
-    {        
+    {
         return gGameTable.fade_table[no].kido < 0;
     }
 
     // 0x004C4AB0
     void hud_fade_off(int no)
-    {        
+    {
         gGameTable.fade_table[no].kido = -1;
     }
 
@@ -367,8 +367,6 @@ namespace openre::hud
                 sort_itembox();
                 snd_se_on(0x4060000);
             }
-
-            goto default_case;
             break;
         }
         case ITEM_BOX_STATE_SELECT_BOX:
@@ -382,23 +380,23 @@ namespace openre::hud
                         snd_se_on(0x4060000);
                         gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                     }
-                    goto default_case;
+                    break;
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 0x1000) // up
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_UP;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 0x4000) // down
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_DOWN;
-                goto default_case;
+                break;
             }
             if (gGameTable.word_9885FC & 4)
             {
@@ -416,7 +414,7 @@ namespace openre::hud
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
             if (!(gGameTable.word_9885FC & 8)) // inventory item selected
             {
@@ -427,16 +425,16 @@ namespace openre::hud
                         snd_se_on(0x4060000);
                         gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                     }
-                    goto default_case;
+                    break;
                 }
                 snd_se_on(0x4050000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
-                goto default_case;
+                break;
             }
 
             snd_se_on(0x4060000);
             gGameTable.itembox_slot_id = (gGameTable.itembox_slot_id + 5) & 0x3F;
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_SCROLL_UP:
         {
@@ -462,7 +460,7 @@ namespace openre::hud
             const auto& item = gGameTable.itembox[(gGameTable.itembox_slot_id - 1) & 0x3F];
             auto text = item.Type == ITEM_TYPE_NONE ? 100 : item.Type;
             hud_render_inventory_text(gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 9, 6, text);
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_SCROLL_DOWN:
         {
@@ -489,35 +487,29 @@ namespace openre::hud
             auto text = item.Type == ITEM_TYPE_NONE ? 100 : item.Type;
             hud_render_inventory_text(
                 gGameTable.word_691FB0 + 7, gGameTable.word_691FB2 + gGameTable.byte_691F85 + 129, 6, text);
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_EXCHANGE:
         {
             gGameTable.byte_691F76 = 0;
             gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
             exchange_item();
-            goto default_case;
+            break;
         }
         case ITEM_BOX_STATE_5:
         {
             gGameTable.byte_691F76 = 0;
-            if (!(gGameTable.fg_message & 0x8000))
+            if (gGameTable.fg_message >= 0)
             {
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_BOX;
             }
-            break;
-        }
-        default:
-        {
-        default_case:
-            const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
-            hud_render_inventory_text(16, 175, 6, item.Type);
-            hud_render_selection(item.Part);
-            break;
+            hud_render_selection(gGameTable.inventory[gGameTable.byte_691F6C].Part);
+            return;
         }
         }
 
         const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
+        hud_render_inventory_text(16, 175, 6, item.Type);
         hud_render_selection(item.Part);
     }
 
@@ -553,6 +545,6 @@ namespace openre::hud
         interop::writeJmp(0x004C4A50, &hud_fade_adjust);
         interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
-        interop::writeJmp(0x004C4AB0, &hud_fade_off);        
+        interop::writeJmp(0x004C4AB0, &hud_fade_off);
     }
 }
