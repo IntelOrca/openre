@@ -520,6 +520,37 @@ namespace openre::hud
         hud_select_item_m,
     };
 
+    /**
+     * 0x00502620
+     *
+     * For type == ITEM_TYPE_NONE, returns first empty inventory slot index or -1 if the inventory is full.
+     * For type != ITEM_TYPE_NONE, returns the count of empty inventory slots.
+     */
+    static int8_t search_item(ItemType type)
+    {
+        if (type == ITEM_TYPE_NONE)
+        {
+            for (int i = 0; i < gGameTable.inventory_size; i++)
+            {
+                if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        auto emptySlotCount = 0;
+        for (int i = 0; i < gGameTable.inventory_size; i++)
+        {
+            if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+            {
+                emptySlotCount++;
+            }
+        }
+        return emptySlotCount;
+    }
+
     static void hud_itembox_2()
     {
         gGameTable.byte_691F76 = 1;
@@ -546,5 +577,6 @@ namespace openre::hud
         interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
+        interop::writeJmp(0x00502620, &search_item);
     }
 }
