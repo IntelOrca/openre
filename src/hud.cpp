@@ -558,7 +558,7 @@ namespace openre::hud
     // 0x00502690
     static void sort_inventory()
     {
-        auto freeSlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
+        auto freeSlotId = search_item(ITEM_TYPE_NONE);
         // Inventory is full
         if (freeSlotId == -1 || freeSlotId + 1 == 10)
         {
