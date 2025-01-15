@@ -520,6 +520,10 @@ namespace openre::hud
         hud_select_item_m,
     };
 
+    // TODO: Replace these ones with data from the game table once PR #27 is merged
+    static uint8_t& byte_691F68 = *((uint8_t*)0x00691F68);
+    static uint8_t& byte_692D64 = *((uint8_t*)0x00692D64);
+
     /**
      * 0x00502620
      *
@@ -551,6 +555,47 @@ namespace openre::hud
         return emptySlotCount;
     }
 
+    // 0x00502690
+    static void sort_inventory()
+    {
+        auto freeSlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
+        // Inventory is full
+        if (freeSlotId == -1 || freeSlotId + 1 == 10)
+        {
+            return;
+        }
+
+        if (freeSlotId + 1 == 9)
+        {
+            gGameTable.inventory[10].Type = 0;
+            gGameTable.inventory[10].Quantity = 0;
+            gGameTable.inventory[10].Part = 0;
+            return;
+        }
+
+        auto index = freeSlotId + 1;
+        do
+        {
+            gGameTable.inventory[index - 1].Type = gGameTable.inventory[index].Type;
+            gGameTable.inventory[index - 1].Quantity = gGameTable.inventory[index].Quantity;
+            gGameTable.inventory[index - 1].Part = gGameTable.inventory[index].Part;
+
+            if (byte_691F68 == index)
+            {
+                byte_691F68--;
+            }
+            if (byte_692D64 == index)
+            {
+                byte_692D64--;
+            }
+            index++;
+        } while (index < gGameTable.inventory_size);
+
+        gGameTable.inventory[index - 1].Type = 0;
+        gGameTable.inventory[index - 1].Quantity = 0;
+        gGameTable.inventory[index - 1].Part = 0;
+    }
+
     static void hud_itembox_2()
     {
         gGameTable.byte_691F76 = 1;
@@ -578,5 +623,6 @@ namespace openre::hud
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
         interop::writeJmp(0x00502620, &search_item);
+        interop::writeJmp(0x00502690, &sort_inventory);
     }
 }
