@@ -92,7 +92,7 @@ namespace openre::enemy
             enemy->damage_cnt &= ~0x80;
             if (enemy->var_22D == 0)
             {
-                auto r = goto00_ck(enemy, pl->pos.x, pl->pos.z, 512);
+                auto r = goto00_ck(enemy, pl->m.pos.x, pl->m.pos.z, 512);
                 enemy->routine_0 = ROUTINE_NORMAL;
                 enemy->routine_1 = r == 0 ? 5 : 6;
                 enemy->routine_2 = 0;
@@ -156,7 +156,7 @@ namespace openre::enemy
         enemy->d_life_d = 13;
         enemy->d_life_c = 13;
         enemy->d_life_u = 13;
-        kage_work_set(&enemy->pKage_work, 0, 0x025804B0, 0x00000000, &enemy->pos);
+        kage_work_set(&enemy->pKage_work, 0, 0x025804B0, 0x00000000, &enemy->m.pos);
         enemy->nOba = 1;
         enemy->atd[0].ofs.x = 500;
         enemy->atd[0].ofs.y = -1000;
@@ -465,7 +465,7 @@ namespace openre::enemy
         oba_ck_em(enemy);
         sca_ck_em(enemy, 1024);
 
-        if ((enemy->pos.x == enemy->old_pos.x && enemy->pos.z == enemy->old_pos.z) || enemy->at_em_no != 0xFF)
+        if ((enemy->m.pos.x == enemy->old_pos.x && enemy->m.pos.z == enemy->old_pos.z) || enemy->at_em_no != 0xFF)
             enemy->var_230++;
         else
             enemy->var_230 = 0;
