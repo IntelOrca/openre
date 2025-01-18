@@ -30,7 +30,6 @@ namespace openre::player
     InventorySlot* gSavedInventory = (InventorySlot*)0x9888DC;
 
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
-    static uint8_t*& byte_98ED39 = *((uint8_t**)0x98ED39);
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
 
     using MoveTypeFunc = int (*)(PlayerEntity*, int, int);
@@ -270,7 +269,7 @@ namespace openre::player
         auto part = gGameTable.inventory[slotId].Part;
         if (part == 1)
         {
-            byte_98ED39[4 * slotId] = quantity;
+            gGameTable.inventory[slotId + 1].Quantity = quantity;
         }
         if (part == 2)
         {
