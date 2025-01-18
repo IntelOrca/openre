@@ -49,7 +49,7 @@ namespace openre::scd
         SCD_SCE_KEY_CK = 0x4F,
         SCD_SCE_BGM_CONTROL = 0x51,
         SCD_SCE_BGMTBL_SET = 0x57,
-        SCD_CUT_BE_SET = 0X61,
+        SCD_CUT_BE_SET = 0x61,
         SCD_AOT_SET_4P = 0x67,
         SCD_DOOR_AOT_SET_4P = 0x68,
         SCD_ITEM_AOT_SET_4P = 0x69,
