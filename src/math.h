@@ -4,7 +4,7 @@
 
 namespace openre::math
 {
-    Mat16& get_matrix(uint8_t type, uint8_t a2);
+    Mat16& get_matrix(uint8_t type, uint8_t id);
 
     void math_init_hooks();
 }

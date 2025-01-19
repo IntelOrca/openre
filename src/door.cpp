@@ -201,7 +201,7 @@ namespace openre::door
             hud_fade_set(512, 0, 7, 1);
             hud_fade_adjust(0, 0x7FFF, 0xFFFFFF, 0);
             if (gGameTable.door->sound_flg != 0)
-                snd_se_on(0x10000, gGameTable.player_work->pos);
+                snd_se_on(0x10000, gGameTable.player_work->m.pos);
             marni::unload_door_texture();
             gGameTable.byte_98F07A = 2;
             set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, false);

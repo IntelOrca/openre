@@ -48,7 +48,7 @@ declare     d                       s32
 struct      Mat16
 declare     m                       s16[9]
 declare     field_12                s16
-declare     t                       s32[3]
+declare     pos                     Vec32
 
 struct      VCut
 declare     be_flg                  s8
@@ -138,9 +138,7 @@ declare     pTmd                    TmdEntry*
 declare     pPacket                 s32
 declare     pTmd2                   TmdEntry*
 declare     pPacket2                s32
-declare     m                       u16[9]
-declare     m_pad                   s16
-declare     pos                     Vec32
+declare     m                       Mat16
 declare     old_pos                 Vec16
 declare     old_pos_2               Vec16
 declare     dummy00                 s32
@@ -205,7 +203,7 @@ declare     pSub1_kan_t_ptr         Emr*
 declare     pSub1_seq_t_ptr         Edd*
 declare     field_190               s32
 declare     field_194               s32
-declare     pSin_parts_ptr          s32
+declare     pSin_parts_ptr          PartsW*
 declare     pParts_tmd              s32
 declare     pParts_packet           s32
 declare     pM_uint8_t_ptr          s32
@@ -541,7 +539,7 @@ declare     enemies                 EnemyEntity*[16]        0x0098A114
 declare     enemy_init_map          void*[96]               0x0098A154
 declare     enemy_init_table        void*[192]              0x0098A2D4
 declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
-declare     pOm                     ObjectEntity            0x0098A61C
+declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     aot_count               u8                      0x0098E528
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
