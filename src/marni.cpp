@@ -28,4 +28,10 @@ namespace openre::marni
         auto p = (sig)0x00442E40;
         return p();
     }
+
+    // 0x0043F550
+    void unload_texture_page(int page)
+    {
+        interop::call<void, int>(0x0043F550, page);
+    }
 }
