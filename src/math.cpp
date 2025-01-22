@@ -237,9 +237,36 @@ namespace openre::math
     }
 
     // 0x004E7210
-    Mat16& get_matrix(uint8_t type, uint8_t a2)
+    Mat16& get_matrix(uint8_t type, uint8_t id)
     {
-        return interop::call<Mat16&, uint8_t, uint8_t>(0x004E7210, type, a2);
+        auto signedType = static_cast<int8_t>(type);
+        if (signedType < 0)
+        {
+            auto v3 = (signedType >> 5) & 3;
+            if (v3)
+            {
+                auto v4 = v3 - 1;
+                if (v4 == 1)
+                {
+                    return gGameTable.enemies[id]->pSin_parts_ptr->workm;
+                }
+
+                return gGameTable.splayer_work->pSin_parts_ptr->workm;
+            }
+
+            return gGameTable.player_work->pSin_parts_ptr->workm;
+        }
+
+        switch (type)
+        {
+        case 0: return gGameTable.g_identity_mat;
+        case 1: return gGameTable.player_work->m;
+        case 2: return gGameTable.splayer_work->m;
+        case 3: return gGameTable.enemies[id]->m;
+        case 4: return gGameTable.pOm[id].workm;
+        }
+
+        return gGameTable.g_identity_mat;
     }
 
     // 0x00450950
@@ -273,13 +300,13 @@ namespace openre::math
     {
         Mat16 resVal;
         Vec32 resValT;
-        const Vec32 m2_t{ m2.t[0], m2.t[1], m2.t[2] };
+        const Vec32 m2_t{ m2.pos.x, m2.pos.y, m2.pos.z };
 
         mul_matrix0(m1, m2, resVal);
         apply_matrixlv(m1, m2_t, resValT);
-        resVal.t[0] = resValT.x + m1.t[0];
-        resVal.t[1] = resValT.y + m1.t[1];
-        resVal.t[2] = resValT.z + m1.t[2];
+        resVal.pos.x = resValT.x + m1.pos.x;
+        resVal.pos.y = resValT.y + m1.pos.y;
+        resVal.pos.z = resValT.z + m1.pos.z;
 
         memcpy(&res, &resVal, sizeof(Mat16));
     }
@@ -297,5 +324,6 @@ namespace openre::math
         interop::writeJmp(0x00450A10, &apply_matrixlv);
         interop::writeJmp(0x004509D0, &apply_matrixsv);
         interop::writeJmp(0x00450E10, &compare_matrix);
+        interop::writeJmp(0x004E7210, &get_matrix);
     }
 }

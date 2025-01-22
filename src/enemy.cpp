@@ -484,9 +484,9 @@ namespace openre::enemy
                 gGameTable.byte_695E71 = info.SoundBank;
         }
 
-        em->pos.x = info.Position.x;
-        em->pos.y = info.Position.y;
-        em->pos.z = info.Position.z;
+        em->m.pos.x = info.Position.x;
+        em->m.pos.y = info.Position.y;
+        em->m.pos.z = info.Position.z;
         em->old_pos.x = info.Position.x;
         em->old_pos.y = info.Position.y;
         em->old_pos.z = info.Position.z;

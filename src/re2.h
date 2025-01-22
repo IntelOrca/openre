@@ -74,7 +74,7 @@ struct Mat16
 {
     int16_t m[9];                       // 0x0000
     int16_t field_12;                   // 0x0012
-    int32_t t[3];                       // 0x0014
+    Vec32 pos;                          // 0x0014
 };
 static_assert(sizeof(Mat16) == 0x20);
 
@@ -184,9 +184,7 @@ struct Entity
     int32_t pPacket;                    // 0x0018
     TmdEntry* pTmd2;                    // 0x001C
     int32_t pPacket2;                   // 0x0020
-    uint16_t m[9];                      // 0x0024
-    int16_t m_pad;                      // 0x0036
-    Vec32 pos;                          // 0x0038
+    Mat16 m;                            // 0x0024
     Vec16 old_pos;                      // 0x0044
     Vec16 old_pos_2;                    // 0x004A
     int32_t dummy00;                    // 0x0050
@@ -253,7 +251,7 @@ struct ActorEntity : Entity
     Edd* pSub1_seq_t_ptr;               // 0x018C
     int32_t field_190;                  // 0x0190
     int32_t field_194;                  // 0x0194
-    int32_t pSin_parts_ptr;             // 0x0198
+    PartsW* pSin_parts_ptr;             // 0x0198
     int32_t pParts_tmd;                 // 0x019C
     int32_t pParts_packet;              // 0x01A0
     int32_t pM_uint8_t_ptr;             // 0x01A4
@@ -716,8 +714,8 @@ struct GameTable
     void* enemy_init_table[192];        // 0x98A2D4
     uint8_t pad_98A5D4[64];             // 0x98A5D4
     EnemyInitEntry enemy_init_entries[2];// 0x98A614
-    ObjectEntity pOm;                   // 0x98A61C
-    uint8_t pad_98A814[15636];          // 0x98A814
+    ObjectEntity pOm[32];               // 0x98A61C
+    uint8_t pad_98E51C[12];             // 0x98E51C
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[627];            // 0x98E529
     uint8_t table_start;                // 0x98E79C
