@@ -133,6 +133,12 @@ namespace openre
         interop::call(0x00508D10);
     }
 
+    // 0x00508CC0
+    void task_execute(int index, void* fn)
+    {
+        interop::call<void, int, void*>(0x00508CC0, index, fn);
+    }
+
     // 0x004CA2F9
     void mess_print(int x, int y, const uint8_t* str, short a4)
     {
@@ -313,6 +319,12 @@ namespace openre
     {
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
         bitarray_set(addr, index, value);
+    }
+
+    // 0x004DEF00
+    void set_stage()
+    {
+        interop::call(0x004DEF00);
     }
 
     void* work_alloc(size_t len)

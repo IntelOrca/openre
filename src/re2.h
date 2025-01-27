@@ -568,7 +568,9 @@ struct GameTable
     uint32_t input_keyboard;            // 0x680558
     uint8_t pad_68055C[49];             // 0x68055C
     uint16_t can_draw;                  // 0x68058D
-    uint8_t pad_68058F[11];             // 0x68058F
+    uint8_t pad_68058F[9];              // 0x68058F
+    uint8_t byte_680598;                // 0x680598
+    uint8_t pad_680599[1];              // 0x680599
     uint8_t blood_censor;               // 0x68059A
     uint8_t pad_68059B[22];             // 0x68059B
     uint8_t hard_mode;                  // 0x6805B1
@@ -664,7 +666,9 @@ struct GameTable
     DoorEntity door_data[10];           // 0x8E2ACC
     uint8_t pad_8E37C4[643900];         // 0x8E37C4
     CCWork cc_work;                     // 0x980B00
-    uint8_t pad_9813EC[15456];          // 0x9813EC
+    uint8_t pad_9813EC[178];            // 0x9813EC
+    uint8_t door_trans_mv;              // 0x98149E
+    uint8_t pad_98149F[15277];          // 0x98149F
     int8_t fg_message;                  // 0x98504C
     uint8_t pad_98504D[13739];          // 0x98504D
     uint32_t dword_9885F8;              // 0x9885F8

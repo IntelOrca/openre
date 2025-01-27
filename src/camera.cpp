@@ -27,6 +27,12 @@ namespace openre::camera
         return gGameTable.vcut_data[1];
     }
 
+    // 0x004C4DE0
+    void cut_check(uint8_t cut_id)
+    {
+        interop::call<void, uint8_t>(0x004C4DE0, cut_id);
+    }
+
     // 0x004E5020
     VCut* sub_4E5020(uint8_t cut_id)
     {

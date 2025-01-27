@@ -441,6 +441,7 @@ declare     dword_67CE00            u32                     0x0067CE00
 declare     dword_680554            u32                     0x00680554
 declare     input_keyboard          u32                     0x00680558
 declare     can_draw                u16                     0x0068058D
+declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
 declare     hard_mode               u8                      0x006805B1
 declare     dword_6893F0            u32                     0x006893F0
@@ -502,6 +503,7 @@ declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
 declare     cc_work                 CCWork                  0x00980B00
+declare     door_trans_mv           u8                      0x0098149E
 declare     fg_message              s8                      0x0098504C
 declare     dword_9885F8            u32                     0x009885F8
 declare     word_9885FC             u16                     0x009885FC
