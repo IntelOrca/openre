@@ -56,6 +56,7 @@ namespace openre::scd
         SCD_HEAL = 0x83,
         SCD_POISON_CK = 0x86,
         SCD_POISON_CLR = 0x87,
+        SCD_SCE_HEAL_PARTNER = 0x89,
     };
 
     enum
@@ -794,6 +795,17 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E8D70
+    static int scd_sce_heal_partner(SceTask* sce)
+    {
+        gGameTable.byte_98EE7B = 0;
+        gGameTable.saved_splayer_health = 200;
+        gGameTable.splayer_work->life = 200;
+        gGameTable.splayer_work->max_life = 200;
+        sce->data++;
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -832,5 +844,6 @@ namespace openre::scd
         set_scd_hook(SCD_HEAL, &scd_heal);
         set_scd_hook(SCD_POISON_CK, &scd_poison_ck);
         set_scd_hook(SCD_POISON_CLR, &scd_poison_clr);
+        set_scd_hook(SCD_SCE_HEAL_PARTNER, &scd_sce_heal_partner);
     }
 }

@@ -580,6 +580,8 @@ declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32[2]                  0x0098ED2C
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
+declare     byte_98EE7B             u8                      0x0098EE7B
+declare     saved_splayer_health    s16                     0x0098EE7C
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
