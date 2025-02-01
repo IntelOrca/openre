@@ -767,7 +767,10 @@ struct GameTable
     uint32_t door_locks[2];             // 0x98ED2C
     InventorySlot inventory[11];        // 0x98ED34
     ItemboxItem itembox[64];            // 0x98ED60
-    uint8_t pad_98EE60[538];            // 0x98EE60
+    uint8_t pad_98EE60[27];             // 0x98EE60
+    uint8_t byte_98EE7B;                // 0x98EE7B
+    int16_t saved_splayer_health;       // 0x98EE7C
+    uint8_t pad_98EE7E[508];            // 0x98EE7E
     uint8_t byte_98F07A;                // 0x98F07A
     uint8_t byte_98F07B;                // 0x98F07B
     Fade fade_table[4];                 // 0x98F07C
