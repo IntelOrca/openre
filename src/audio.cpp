@@ -228,9 +228,7 @@ namespace openre::audio
     // 0x004EC450
     void snd_load_core(uint8_t id, uint8_t arg1)
     {
-        using sig = void (*)(uint8_t, uint8_t);
-        auto p = (sig)0x004ED950;
-        p(id, arg1);
+        interop::call<void, uint8_t, uint8_t>(0x004EC450, id, arg1);
     }
 
     // 0x004EC7D0
