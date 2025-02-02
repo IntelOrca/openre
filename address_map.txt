@@ -258,15 +258,27 @@ struct      EnemyEntity
 base        ActorEntity
 declare     var_218                 u8          0x218
 declare     var_219                 u8          0x219
+declare     var_21C                 u8          0x21C
+declare     var_21D                 u8          0x21D
+declare     var_21E                 u8          0x21E
 declare     var_21F                 u8          0x21F
 declare     var_220                 u8          0x220
 declare     var_221                 u8          0x221
+declare     var_222                 u8          0x222
 declare     var_223                 u8          0x223
 declare     var_227                 u8          0x227
+declare     var_22C                 u8          0x22C
 declare     var_22D                 u8          0x22D
 declare     var_22E                 u8          0x22E
 declare     var_230                 u8          0x230
 declare     var_232                 u8          0x232
+declare     var_233                 u8          0x233
+declare     var_234                 u8          0x234
+declare     var_235                 u8          0x235
+declare     var_23A                 s8          0x23A
+declare     var_23C                 u8          0x23C
+declare     var_23D                 u8          0x23D
+declare     var_23F                 u8          0x23F
 declare     pad_247                 u8          0x247
 
 struct      PlayerEntity

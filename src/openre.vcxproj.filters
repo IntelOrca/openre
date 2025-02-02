@@ -78,6 +78,9 @@
     <ClCompile Include="title.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="em_spider.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
