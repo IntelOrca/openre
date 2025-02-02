@@ -74,6 +74,7 @@
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="door.cpp" />
     <ClCompile Include="em_dog.cpp" />
+    <ClCompile Include="em_spider.cpp" />
     <ClCompile Include="enemy.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />

@@ -308,22 +308,36 @@ struct EnemyEntity : ActorEntity
 {
     uint8_t var_218;                    // 0x0218
     uint8_t var_219;                    // 0x0219
-    uint8_t pad_021A[5];                // 0x021A
+    uint8_t pad_021A[2];                // 0x021A
+    uint8_t var_21C;                    // 0x021C
+    uint8_t var_21D;                    // 0x021D
+    uint8_t var_21E;                    // 0x021E
     uint8_t var_21F;                    // 0x021F
     uint8_t var_220;                    // 0x0220
     uint8_t var_221;                    // 0x0221
-    uint8_t pad_0222[1];                // 0x0222
+    uint8_t var_222;                    // 0x0222
     uint8_t var_223;                    // 0x0223
     uint8_t pad_0224[3];                // 0x0224
     uint8_t var_227;                    // 0x0227
-    uint8_t pad_0228[5];                // 0x0228
+    uint8_t pad_0228[4];                // 0x0228
+    uint8_t var_22C;                    // 0x022C
     uint8_t var_22D;                    // 0x022D
     uint8_t var_22E;                    // 0x022E
     uint8_t pad_022F[1];                // 0x022F
     uint8_t var_230;                    // 0x0230
     uint8_t pad_0231[1];                // 0x0231
     uint8_t var_232;                    // 0x0232
-    uint8_t pad_0233[20];               // 0x0233
+    uint8_t var_233;                    // 0x0233
+    uint8_t var_234;                    // 0x0234
+    uint8_t var_235;                    // 0x0235
+    uint8_t pad_0236[4];                // 0x0236
+    int8_t var_23A;                     // 0x023A
+    uint8_t pad_023B[1];                // 0x023B
+    uint8_t var_23C;                    // 0x023C
+    uint8_t var_23D;                    // 0x023D
+    uint8_t pad_023E[1];                // 0x023E
+    uint8_t var_23F;                    // 0x023F
+    uint8_t pad_0240[7];                // 0x0240
     uint8_t pad_247;                    // 0x0247
 };
 static_assert(sizeof(EnemyEntity) == 0x248);
