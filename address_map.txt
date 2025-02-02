@@ -432,6 +432,7 @@ declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
+declare     item_data_tbl           u8*                     0x0053DE28
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
 declare     input_mapping           u8[31]                  0x0067CA30
@@ -466,7 +467,10 @@ declare     word_691DA2             s16                     0x00691DA2
 declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
-declare     byte_691F6C             u8                      0x00691F6C
+declare     byte_691F68             u8                      0x00691F68
+declare     byte_691F69             u8                      0x00691F69
+declare     byte_691F6A             u8                      0x00691F6A
+declare     inventory_cursor        u8                      0x00691F6C
 declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F76             u8                      0x00691F76
 declare     itembox_slot_id         u8                      0x00691F84

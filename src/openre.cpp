@@ -324,10 +324,19 @@ namespace openre
         bitarray_set(addr, index, value);
     }
 
+
     // 0x004DEF00
     void set_stage()
     {
         interop::call(0x004DEF00);
+    }
+
+    // 0x004C89B2
+    void show_message(int a0, int a1, int a2, int a3)
+    {
+        using sig = void (*)(int, int, int, int);
+        auto p = (sig)0x004C89B2;
+        p(a0, a1, a2, a3);
     }
 
     void* work_alloc(size_t len)
