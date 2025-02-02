@@ -19,7 +19,15 @@ namespace openre::hud
         ITEM_BOX_STATE_SCROLL_UP,
         ITEM_BOX_STATE_SCROLL_DOWN,
         ITEM_BOX_STATE_EXCHANGE,
-        ITEM_BOX_STATE_5,
+        ITEM_BOX_STATE_NOT_ENOUGH_SPACE,
+    };
+
+    enum
+    {
+        EXCHANGE_ITEM_STATE_0,
+        EXCHANGE_ITEM_STATE_1,
+        EXCHANGE_ITEM_STATE_2,
+        EXCHANGE_ITEM_STATE_3,
     };
 
     using Action = void (*)();
@@ -244,12 +252,245 @@ namespace openre::hud
         }
     }
 
+    // 0x00502690
+    static void sort_item()
+    {
+        interop::call<void>(0x00502690);
+    }
+
+    // 0x00502620
+    static int search_item(int a0)
+    {
+        return interop::call<int, int>(0x00502620, a0);
+    }
+
+    // 0x00502720
+    static void sub_502720(int a0)
+    {
+        using sig = void (*)(int);
+        auto p = (sig)0x00502720;
+        p(a0);
+    }
+
     // 0x004FC5B0
     static void exchange_item()
     {
-        using sig = void (*)();
-        auto p = (sig)0x004FC5B0;
-        p();
+        // TODO: Remove these variables and use game table
+        static InventorySlot* item_twork = (InventorySlot*)0x98ED30;
+        static uint8_t* item_data_tbl = (uint8_t*)0x53DE28;
+
+        auto* inventorySlot = &gGameTable.inventory[gGameTable.inventory_cursor];
+        const auto boxSlotId = (gGameTable.itembox_slot_id + 2) & 0x3f;
+        auto& boxSlot = gGameTable.itembox[boxSlotId];
+
+        auto numParts = inventorySlot->Part != 0 ? 2 : 0;
+        if (boxSlot.Part)
+        {
+            numParts++;
+        }
+
+        // Moving stackable item from itembox to inventory
+        if (boxSlot.Type >= ITEM_TYPE_AMMO_HANDGUN && boxSlot.Type < ITEM_TYPE_HANDGUN_PARTS)
+        {
+            if (boxSlot.Type == inventorySlot->Type)
+            {
+                // TODO: Use game table
+                // const auto v5 = gGameTable.item_data_tbl[8 * boxSlot.Type];
+                const auto v5 = item_data_tbl[8 * boxSlot.Type];
+
+                if (inventorySlot->Quantity == v5)
+                {
+                    const auto aux = inventorySlot->Quantity;
+                    inventorySlot->Quantity = boxSlot.Quantity;
+                    boxSlot.Quantity = aux;
+                    return;
+                }
+
+                const auto v6 = boxSlot.Quantity + inventorySlot->Quantity;
+                if (v6 > v5)
+                {
+                    inventorySlot->Quantity = v5;
+                    boxSlot.Quantity = v6 - v5;
+                    return;
+                }
+
+                inventorySlot->Quantity += boxSlot.Quantity;
+                boxSlot = ItemboxItem{};
+                return;
+            }
+        }
+
+        // Placing itembox item into an empty inventory slot
+        if (inventorySlot->Type == ITEM_TYPE_NONE)
+        {
+            // Check first if item can be stacked, otherwise use first empty slot (switch case)
+            for (int i = 0; i < gGameTable.inventory_size; i++)
+            {
+                auto& slot = gGameTable.inventory[i];
+                // TODO: Use game table
+                // if (boxSlot.Type == slot.Type && slot.Quantity <= gGameTable.item_data_tbl[8 * slot.Type] - boxSlot.Quantity)
+                if (boxSlot.Type == slot.Type && slot.Quantity <= item_data_tbl[8 * slot.Type] - boxSlot.Quantity)
+                {
+                    slot.Quantity += boxSlot.Quantity;
+                    boxSlot = ItemboxItem{};
+                    return;
+                }
+            }
+        }
+
+        switch (numParts)
+        {
+        // Exchange two items with one part (inventory to box)
+        case EXCHANGE_ITEM_STATE_0:
+        {
+            if (gGameTable.byte_691F68 == gGameTable.inventory_cursor)
+            {
+                gGameTable.byte_691F68 = 0x80;
+                gGameTable.byte_691F6A = 0;
+            }
+            const auto item = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
+            if (item < gGameTable.inventory_cursor)
+            {
+                inventorySlot = &gGameTable.inventory[item];
+            }
+
+            const auto boxSlotType = inventorySlot->Type;
+            const auto boxSlotQuantity = inventorySlot->Quantity;
+            const auto boxSlotPart = inventorySlot->Part;
+            inventorySlot->Type = boxSlot.Type;
+            inventorySlot->Quantity = boxSlot.Quantity;
+            inventorySlot->Part = boxSlot.Part;
+            boxSlot.Type = boxSlotType;
+            boxSlot.Quantity = boxSlotQuantity;
+            boxSlot.Part = boxSlotPart;
+            sort_item();
+            return;
+        }
+        // Exchange one part item with two part item (box to inventory)
+        case EXCHANGE_ITEM_STATE_1:
+        {
+            const auto inventorySlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
+            if (inventorySlotId == -1 || inventorySlotId + 2 > gGameTable.inventory_size)
+            {
+                show_message(11468816, 0xe400, 8, 0);
+                gGameTable.itembox_state = ITEM_BOX_STATE_NOT_ENOUGH_SPACE;
+                return;
+            }
+            if (gGameTable.byte_691F68 == gGameTable.inventory_cursor)
+            {
+                gGameTable.byte_691F68 = 0x80;
+                gGameTable.byte_691F6A = 0;
+            }
+            const auto boxSlotType = inventorySlot->Type;
+            const auto boxSlotQuantity = inventorySlot->Quantity;
+            const auto boxSlotPart = inventorySlot->Part;
+            inventorySlot->Type = ITEM_TYPE_NONE;
+            sort_item();
+            sub_502720(1);
+            gGameTable.inventory[0].Type = boxSlot.Type;
+            gGameTable.inventory[0].Quantity = boxSlot.Quantity;
+            gGameTable.inventory[0].Part = 1;
+            gGameTable.inventory[1].Type = boxSlot.Type;
+            gGameTable.inventory[1].Quantity = boxSlot.Quantity;
+            gGameTable.inventory[1].Part = 2;
+            boxSlot.Type = boxSlotType;
+            boxSlot.Quantity = boxSlotQuantity;
+            boxSlot.Part = boxSlotPart;
+            return;
+        }
+        // Move two part item from inventory to box
+        case EXCHANGE_ITEM_STATE_2:
+        {
+            const auto newBoxSlotType = inventorySlot->Type;
+            const auto newBoxSlotQuantity = inventorySlot->Quantity;
+
+            if (inventorySlot->Part == 2)
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor - 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+                inventorySlot->Type = ITEM_TYPE_NONE;
+                sort_item();
+                item_twork[gGameTable.inventory_cursor].Type = ITEM_TYPE_NONE;
+            }
+            else
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor + 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+                inventorySlot->Type = ITEM_TYPE_NONE;
+                sort_item();
+                inventorySlot->Type = ITEM_TYPE_NONE;
+            }
+
+            const auto inventorySlotId = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
+            gGameTable.inventory[inventorySlotId].Type = boxSlot.Type;
+            gGameTable.inventory[inventorySlotId].Quantity = boxSlot.Quantity;
+            gGameTable.inventory[inventorySlotId].Part = boxSlot.Part;
+            boxSlot.Part = 3;
+            boxSlot.Type = newBoxSlotType;
+            boxSlot.Quantity = newBoxSlotQuantity;
+            sort_item();
+            break;
+        }
+        // Exchange two items both with 2 parts
+        case EXCHANGE_ITEM_STATE_3:
+        {
+            ItemType newBoxSlotType = ITEM_TYPE_NONE;
+            uint8_t newBoxSlotQuantity = 0;
+            if (inventorySlot->Part == 1)
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor + 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+
+                newBoxSlotType = inventorySlot->Type;
+                newBoxSlotQuantity = inventorySlot->Quantity;
+                // First part
+                inventorySlot->Type = boxSlot.Type;
+                inventorySlot->Quantity = boxSlot.Quantity;
+                inventorySlot->Part = 1;
+                // Second part
+                inventorySlot++;
+                inventorySlot->Type = boxSlot.Type;
+                inventorySlot->Quantity = boxSlot.Quantity;
+                inventorySlot->Part = 2;
+            }
+            // Unreachable code path ???
+            else
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor - 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+
+                item_twork[gGameTable.inventory_cursor].Type = boxSlot.Type;
+                inventorySlot->Type = boxSlot.Type;
+                newBoxSlotType = inventorySlot->Type;
+                newBoxSlotQuantity = inventorySlot->Quantity;
+                inventorySlot->Part = 2;
+                item_twork[gGameTable.inventory_cursor].Quantity = boxSlot.Quantity;
+                item_twork[gGameTable.inventory_cursor].Part = 1;
+            }
+
+            inventorySlot->Quantity = boxSlot.Quantity;
+            boxSlot.Part = 3;
+            boxSlot.Type = newBoxSlotType;
+            boxSlot.Quantity = newBoxSlotQuantity;
+            break;
+        }
+        }
     }
 
     // 0x004FC0C0
@@ -258,7 +499,7 @@ namespace openre::hud
         if ((gGameTable.word_9885FC & 0x4000) != 0)
         {
             gGameTable._st++;
-            gGameTable.byte_691F6C = 1;
+            gGameTable.inventory_cursor = 1;
             snd_se_on(0x4040000);
         }
         else if ((gGameTable.key_trg & 0x3000) != 0)
@@ -277,7 +518,7 @@ namespace openre::hud
         {
             if (gGameTable.fg_system & 0x80000000)
             {
-                auto selection = gGameTable.byte_691F6C;
+                auto selection = gGameTable.inventory_cursor;
                 auto prevSelection = selection;
                 auto inventorySize = gGameTable.inventory_size;
                 if (gGameTable.word_9885FC & 0x2000) // right
@@ -335,7 +576,7 @@ namespace openre::hud
                 }
                 if (prevSelection != selection)
                 {
-                    gGameTable.byte_691F6C = selection;
+                    gGameTable.inventory_cursor = selection;
                     snd_se_on(0x4040000);
                 }
             }
@@ -496,20 +737,19 @@ namespace openre::hud
             exchange_item();
             break;
         }
-        case ITEM_BOX_STATE_5:
+        case ITEM_BOX_STATE_NOT_ENOUGH_SPACE:
         {
             gGameTable.byte_691F76 = 0;
             if (gGameTable.fg_message >= 0)
             {
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_BOX;
             }
-            hud_render_selection(gGameTable.inventory[gGameTable.byte_691F6C].Part);
+            hud_render_selection(gGameTable.inventory[gGameTable.inventory_cursor].Part);
             return;
         }
         }
 
-        const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
-        hud_render_inventory_text(16, 175, 6, item.Type);
+        const auto& item = gGameTable.inventory[gGameTable.inventory_cursor];
         hud_render_selection(item.Part);
     }
 
@@ -546,5 +786,6 @@ namespace openre::hud
         interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
+        interop::writeJmp(0x004FC5B0, &exchange_item);
     }
 }

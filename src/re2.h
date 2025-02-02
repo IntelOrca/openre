@@ -552,7 +552,9 @@ struct GameTable
     uint8_t byte_53C78F[70];            // 0x53C78F
     uint8_t pad_53C7D5[5023];           // 0x53C7D5
     uint8_t* byte_53DB74;               // 0x53DB74
-    uint8_t pad_53DB78[1243164];        // 0x53DB78
+    uint8_t pad_53DB78[688];            // 0x53DB78
+    uint8_t* item_data_tbl;             // 0x53DE28
+    uint8_t pad_53DE2C[1242472];        // 0x53DE2C
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[63072];          // 0x66D398
     uint8_t vk_press;                   // 0x67C9F8
@@ -612,8 +614,12 @@ struct GameTable
     uint8_t _st;                        // 0x691F61
     uint8_t itembox_state;              // 0x691F62
     uint8_t byte_691F63;                // 0x691F63
-    uint8_t pad_691F64[8];              // 0x691F64
-    uint8_t byte_691F6C;                // 0x691F6C
+    uint8_t pad_691F64[4];              // 0x691F64
+    uint8_t byte_691F68;                // 0x691F68
+    uint8_t byte_691F69;                // 0x691F69
+    uint8_t byte_691F6A;                // 0x691F6A
+    uint8_t pad_691F6B[1];              // 0x691F6B
+    uint8_t inventory_cursor;           // 0x691F6C
     uint8_t pad_691F6D[3];              // 0x691F6D
     uint8_t byte_691F70;                // 0x691F70
     uint8_t pad_691F71[5];              // 0x691F71

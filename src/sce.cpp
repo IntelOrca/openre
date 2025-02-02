@@ -302,15 +302,7 @@ namespace openre::sce
             gGameTable.aot_count--;
         }
         entry = aot;
-    }
-
-    // 0x004C89B2
-    static void show_message(int a0, int a1, int a2, int a3)
-    {
-        using sig = void (*)(int, int, int, int);
-        auto p = (sig)0x004C89B2;
-        p(a0, a1, a2, a3);
-    }
+    }    
 
     static int sub_4E95F0()
     {
