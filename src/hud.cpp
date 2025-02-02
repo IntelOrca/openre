@@ -24,10 +24,10 @@ namespace openre::hud
 
     enum
     {
-        EXCHANGE_ITEM_STATE_0,
-        EXCHANGE_ITEM_STATE_1,
-        EXCHANGE_ITEM_STATE_2,
-        EXCHANGE_ITEM_STATE_3,
+        EXCHANGE_INVENTORY_TO_BOX_SINGLE,
+        EXCHANGE_BOX_TO_INVENTORY_WIDE,
+        EXCHANGE_INVENTORY_TO_BOX_WIDE_SINGLE,
+        EXCHANGE_INVENTORY_TO_BOX_WIDE,
     };
 
     using Action = void (*)();
@@ -340,8 +340,7 @@ namespace openre::hud
 
         switch (numParts)
         {
-        // Exchange two items with one part (inventory to box)
-        case EXCHANGE_ITEM_STATE_0:
+        case EXCHANGE_INVENTORY_TO_BOX_SINGLE:
         {
             if (gGameTable.byte_691F68 == gGameTable.inventory_cursor)
             {
@@ -366,8 +365,7 @@ namespace openre::hud
             sort_item();
             return;
         }
-        // Exchange one part item with two part item (box to inventory)
-        case EXCHANGE_ITEM_STATE_1:
+        case EXCHANGE_BOX_TO_INVENTORY_WIDE:
         {
             const auto inventorySlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
             if (inventorySlotId == -1 || inventorySlotId + 2 > gGameTable.inventory_size)
@@ -398,8 +396,7 @@ namespace openre::hud
             boxSlot.Part = boxSlotPart;
             return;
         }
-        // Move two part item from inventory to box
-        case EXCHANGE_ITEM_STATE_2:
+        case EXCHANGE_INVENTORY_TO_BOX_WIDE_SINGLE:
         {
             const auto newBoxSlotType = inventorySlot->Type;
             const auto newBoxSlotQuantity = inventorySlot->Quantity;
@@ -439,8 +436,7 @@ namespace openre::hud
             sort_item();
             break;
         }
-        // Exchange two items both with 2 parts
-        case EXCHANGE_ITEM_STATE_3:
+        case EXCHANGE_INVENTORY_TO_BOX_WIDE:
         {
             ItemType newBoxSlotType = ITEM_TYPE_NONE;
             uint8_t newBoxSlotQuantity = 0;
@@ -465,7 +461,7 @@ namespace openre::hud
                 inventorySlot->Quantity = boxSlot.Quantity;
                 inventorySlot->Part = 2;
             }
-            // Unreachable code path ???
+            // Unreachable code path ?
             else
             {
                 if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
