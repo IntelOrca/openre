@@ -5,6 +5,7 @@
 #include "camera.h"
 #include "door.h"
 #include "enemy.h"
+#include "entity.h"
 #include "file.h"
 #include "hud.h"
 #include "input.h"
@@ -340,6 +341,12 @@ namespace openre
         std::memset(mem, 0xCD, len);
 #endif
         return mem;
+    }
+
+    // 0x004428F0
+    int set_game_seconds(int a0)
+    {
+        return interop::call<int, int>(0x004428F0, a0);
     }
 }
 

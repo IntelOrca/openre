@@ -120,7 +120,7 @@ namespace openre::enemy
                                      2160, 2244, 2322, 2394, 2460, 2520, 2574, 2622, 2664, 2700, 2730, 2754, 2772, 2784, 2790 };
 
     // 0x004B1DD0
-    static void em_move_tbl_set()
+    void em_move_tbl_set()
     {
         gGameTable.enemy_init_entries[0].type = EM_NONE;
         gGameTable.enemy_init_entries[1].type = EM_NONE;
