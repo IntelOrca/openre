@@ -276,7 +276,6 @@ namespace openre::hud
     static void exchange_item()
     {
         // TODO: Remove these variables and use game table
-        static InventorySlot* item_twork = (InventorySlot*)0x98ED30;
         static uint8_t* item_data_tbl = (uint8_t*)0x53DE28;
 
         auto* inventorySlot = &gGameTable.inventory[gGameTable.inventory_cursor];
@@ -411,10 +410,27 @@ namespace openre::hud
                 }
                 inventorySlot->Type = ITEM_TYPE_NONE;
                 sort_item();
-                item_twork[gGameTable.inventory_cursor].Type = ITEM_TYPE_NONE;
+                auto* itemTwork = &gGameTable.item_twork;
+                if (gGameTable.inventory_cursor > 0)
+                {
+                    itemTwork = &gGameTable.inventory[gGameTable.inventory_cursor - 1];
+                }
+                itemTwork->Type = ITEM_TYPE_NONE;
             }
             else
             {
+                if (inventorySlot->Part != 1)
+                {
+                LABEL_41:
+                    const auto inventorySlotId = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
+                    gGameTable.inventory[inventorySlotId].Type = boxSlot.Type;
+                    gGameTable.inventory[inventorySlotId].Quantity = boxSlot.Quantity;
+                    gGameTable.inventory[inventorySlotId].Part = boxSlot.Part;
+                    boxSlot.Part = 3;
+                    boxSlot.Type = newBoxSlotType;
+                    boxSlot.Quantity = newBoxSlotQuantity;
+                    break;
+                }
                 if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
                     || gGameTable.byte_691F68 == gGameTable.inventory_cursor + 1)
                 {
@@ -425,16 +441,8 @@ namespace openre::hud
                 sort_item();
                 inventorySlot->Type = ITEM_TYPE_NONE;
             }
-
-            const auto inventorySlotId = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
-            gGameTable.inventory[inventorySlotId].Type = boxSlot.Type;
-            gGameTable.inventory[inventorySlotId].Quantity = boxSlot.Quantity;
-            gGameTable.inventory[inventorySlotId].Part = boxSlot.Part;
-            boxSlot.Part = 3;
-            boxSlot.Type = newBoxSlotType;
-            boxSlot.Quantity = newBoxSlotQuantity;
             sort_item();
-            break;
+            goto LABEL_41;
         }
         case EXCHANGE_INVENTORY_TO_BOX_WIDE:
         {
@@ -461,7 +469,6 @@ namespace openre::hud
                 inventorySlot->Quantity = boxSlot.Quantity;
                 inventorySlot->Part = 2;
             }
-            // Unreachable code path ?
             else
             {
                 if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
@@ -471,13 +478,19 @@ namespace openre::hud
                     gGameTable.byte_691F6A = 0;
                 }
 
-                item_twork[gGameTable.inventory_cursor].Type = boxSlot.Type;
-                inventorySlot->Type = boxSlot.Type;
+                auto* itemTwork = &gGameTable.item_twork;
+                if (gGameTable.inventory_cursor > 0)
+                {
+                    itemTwork = &gGameTable.inventory[gGameTable.inventory_cursor - 1];
+                }
+
                 newBoxSlotType = inventorySlot->Type;
                 newBoxSlotQuantity = inventorySlot->Quantity;
+                itemTwork->Type = boxSlot.Type;
+                inventorySlot->Type = boxSlot.Type;
                 inventorySlot->Part = 2;
-                item_twork[gGameTable.inventory_cursor].Quantity = boxSlot.Quantity;
-                item_twork[gGameTable.inventory_cursor].Part = 1;
+                itemTwork->Quantity = boxSlot.Quantity;
+                itemTwork->Part = 1;
             }
 
             inventorySlot->Quantity = boxSlot.Quantity;

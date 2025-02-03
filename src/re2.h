@@ -793,7 +793,8 @@ struct GameTable
     uint8_t pad_98EC18[8];              // 0x98EC18
     uint32_t pri_be_flg[64];            // 0x98EC20
     uint8_t pad_98ED20[12];             // 0x98ED20
-    uint32_t door_locks[2];             // 0x98ED2C
+    uint32_t door_locks;                // 0x98ED2C
+    InventorySlot item_twork;           // 0x98ED30
     InventorySlot inventory[11];        // 0x98ED34
     ItemboxItem itembox[64];            // 0x98ED60
     uint8_t pad_98EE60[27];             // 0x98EE60
