@@ -367,7 +367,8 @@ namespace openre::hud
         case EXCHANGE_BOX_TO_INVENTORY_WIDE:
         {
             const auto inventorySlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
-            if (inventorySlotId == -1 || inventorySlotId + 2 > gGameTable.inventory_size)
+            if (inventorySlotId == -1
+                || (inventorySlotId + 1 > gGameTable.inventory_size && inventorySlot->Type != ITEM_TYPE_NONE))
             {
                 show_message(11468816, 0xe400, 8, 0);
                 gGameTable.itembox_state = ITEM_BOX_STATE_NOT_ENOUGH_SPACE;
