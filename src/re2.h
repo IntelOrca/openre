@@ -7,6 +7,25 @@
 
 using ItemType = uint8_t;
 
+struct ItemMixDefinition
+{
+    uint8_t object_item_id;             // 0x0000
+    uint8_t mix_type;                   // 0x0001
+    uint8_t result_item;                // 0x0002
+    uint8_t mixed_pix_no;               // 0x0003
+};
+static_assert(sizeof(ItemMixDefinition) == 0x04);
+
+struct ItemTypeDefinition
+{
+    uint8_t max;                        // 0x0000
+    uint8_t var_01;                     // 0x0001
+    uint8_t var_02;                     // 0x0002
+    uint8_t var_03;                     // 0x0003
+    ItemMixDefinition* mix;             // 0x0004
+};
+static_assert(sizeof(ItemTypeDefinition) == 0x08);
+
 struct InventoryDef
 {
     ItemType Type;                      // 0x0000
@@ -553,8 +572,8 @@ struct GameTable
     uint8_t pad_53C7D5[5023];           // 0x53C7D5
     uint8_t* byte_53DB74;               // 0x53DB74
     uint8_t pad_53DB78[688];            // 0x53DB78
-    uint8_t* item_data_tbl;             // 0x53DE28
-    uint8_t pad_53DE2C[1242472];        // 0x53DE2C
+    ItemTypeDefinition item_def_tbl[64];// 0x53DE28
+    uint8_t pad_53E028[1241964];        // 0x53E028
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[63072];          // 0x66D398
     uint8_t vk_press;                   // 0x67C9F8

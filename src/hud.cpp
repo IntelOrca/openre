@@ -275,9 +275,6 @@ namespace openre::hud
     // 0x004FC5B0
     static void exchange_item()
     {
-        // TODO: Remove these variables and use game table
-        static uint8_t* item_data_tbl = (uint8_t*)0x53DE28;
-
         auto* inventorySlot = &gGameTable.inventory[gGameTable.inventory_cursor];
         const auto boxSlotId = (gGameTable.itembox_slot_id + 2) & 0x3f;
         auto& boxSlot = gGameTable.itembox[boxSlotId];
@@ -293,11 +290,9 @@ namespace openre::hud
         {
             if (boxSlot.Type == inventorySlot->Type)
             {
-                // TODO: Use game table
-                // const auto v5 = gGameTable.item_data_tbl[8 * boxSlot.Type];
-                const auto v5 = item_data_tbl[8 * boxSlot.Type];
+                const auto max = gGameTable.item_def_tbl[boxSlot.Type].max;
 
-                if (inventorySlot->Quantity == v5)
+                if (inventorySlot->Quantity == max)
                 {
                     const auto aux = inventorySlot->Quantity;
                     inventorySlot->Quantity = boxSlot.Quantity;
@@ -306,10 +301,10 @@ namespace openre::hud
                 }
 
                 const auto v6 = boxSlot.Quantity + inventorySlot->Quantity;
-                if (v6 > v5)
+                if (v6 > max)
                 {
-                    inventorySlot->Quantity = v5;
-                    boxSlot.Quantity = v6 - v5;
+                    inventorySlot->Quantity = max;
+                    boxSlot.Quantity = v6 - max;
                     return;
                 }
 
@@ -326,9 +321,8 @@ namespace openre::hud
             for (int i = 0; i < gGameTable.inventory_size; i++)
             {
                 auto& slot = gGameTable.inventory[i];
-                // TODO: Use game table
-                // if (boxSlot.Type == slot.Type && slot.Quantity <= gGameTable.item_data_tbl[8 * slot.Type] - boxSlot.Quantity)
-                if (boxSlot.Type == slot.Type && slot.Quantity <= item_data_tbl[8 * slot.Type] - boxSlot.Quantity)
+                const auto max = gGameTable.item_def_tbl[slot.Type].max;
+                if (boxSlot.Type == slot.Type && slot.Quantity <= max - boxSlot.Quantity)
                 {
                     slot.Quantity += boxSlot.Quantity;
                     boxSlot = ItemboxItem{};
