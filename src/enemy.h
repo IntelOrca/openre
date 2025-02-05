@@ -113,6 +113,7 @@ namespace openre::enemy
     void em_dog(EnemyEntity* enemy);
     void em_spider(EnemyEntity* enemy);
     void em_move_tbl_set();
+    void em_init_move();
 
     void enemy_init_hooks();
 }

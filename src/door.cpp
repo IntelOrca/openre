@@ -7,6 +7,7 @@
 #include "model.h"
 #include "openre.h"
 #include "re2.h"
+#include "room.h"
 #include "scd.h"
 #include "sce.h"
 
@@ -17,6 +18,7 @@ using namespace openre::camera;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::hud;
+using namespace openre::room;
 
 namespace openre::door
 {
@@ -265,12 +267,6 @@ namespace openre::door
         }
     }
 
-    // 0x004DE7B0
-    static void set_room()
-    {
-        interop::call(0x004DE7B0);
-    }
-
     // 0x004505C0
     static void door_load()
     {
@@ -392,7 +388,7 @@ namespace openre::door
                     kage_work9_init();
                     ctcb.var_09 = 8;
                 LABEL_27:
-                    set_room();
+                    room_set();
                     if (!ctcb.var_13)
                     {
                         ctcb.var_09 = 10;

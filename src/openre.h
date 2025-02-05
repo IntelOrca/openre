@@ -86,7 +86,7 @@ namespace openre
         FG_SYSTEM_4 = 4,
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_EX_BATTLE = 7,
-        FG_SYSTEM_8 = 8,    
+        FG_SYSTEM_8 = 8,
         FG_SYSTEM_12 = 12,
         FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
@@ -158,6 +158,8 @@ namespace openre
     extern PlayerEntity& gPlayerEntity;
     extern uint16_t& gPoisonStatus;
     extern uint8_t& gPoisonTimer;
+
+    static const char* gStageSymbols = "123456789abcdefg";
 
     void task_sleep(int frames);
     void task_exit();

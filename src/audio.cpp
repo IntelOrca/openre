@@ -243,6 +243,24 @@ namespace openre::audio
         interop::call(0x004EC7D0);
     }
 
+    // 0x004EC9C0
+    void snd_bgm_set()
+    {
+        interop::call(0x004EC9C0);
+    }
+
+    // 0x004ECCE0
+    void snd_bgm_play_ck()
+    {
+        interop::call(0x004ECCE0);
+    }
+
+    // 0x004EC8A0
+    void snd_load_enemy()
+    {
+        interop::call(0x004EC8A0);
+    }
+
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004ECDA0, snd_bgm_main);

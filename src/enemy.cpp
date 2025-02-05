@@ -180,6 +180,12 @@ namespace openre::enemy
         }
     }
 
+    // 0x004DF180
+    void em_init_move()
+    {
+        interop::call(0x004DF180);
+    }
+
     [[nodiscard]] bool is_enemy_dead(uint8_t globalId)
     {
         auto fgEnemy = FlagGroup::Enemy2;

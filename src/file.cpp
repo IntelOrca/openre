@@ -66,7 +66,7 @@ namespace openre::file
     }
 
     // 0x004DD360
-    static int osp_read()
+    int osp_read()
     {
         const char* ospFilepath = "common\\bin\\osp.bin";
 
@@ -83,9 +83,39 @@ namespace openre::file
         return bytesRead;
     }
 
+    // 0x00441630
+    void* file_alloc(const size_t size)
+    {
+        // TODO
+        // if (gGameTable.dword_67C9D0)
+        // {
+        //     operator_delete(&gGameTable.dword_67C9D0);
+        //     gGameTable.dword_67C9D0 = 0;
+        // }
+        //
+        // if (!size)
+        // {
+        //     return 0;
+        // }
+        // auto res = operator_new(size);
+        // gGameTable.dword_67C9D0 = size;
+        // return res;
+        return interop::call<void*, size_t>(0x00441630, size);
+    }
+    // 0x0043C590
+    int load_adt(const char* path, uint32_t* bufferSize, int mode)
+    {
+        return interop::call<int, const char*, uint32_t*, int>(0x0043C590, path, bufferSize, mode);
+    }
+
+    // 0x0043FF40
+    int tim_buffer_to_surface(int* timPtr, int page, int mode)
+    {
+        return interop::call<int, int*, int, int>(0x0043FF40, timPtr, page, mode);
+    }
+
     void file_init_hooks()
     {
-
         interop::writeJmp(0x004DD360, &osp_read);
     }
 }
