@@ -17,6 +17,7 @@ namespace openre::hud
     void hud_fade_set(short a0, short add, char mask, char pri);
     void hud_fade_adjust(int no, int16_t kido, uint32_t rgb, PsxRect* rect);
     bool hud_fade_status(int no);
+    void hud_fade_off(int no);
 
     void hud_init_hooks();
 }

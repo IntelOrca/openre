@@ -429,7 +429,7 @@ namespace openre::player
     }
 
     // 0x004D97B0
-    static void player_move(PlayerEntity* player)
+    void player_move(PlayerEntity* player)
     {
         if (gGameTable.fg_stop < 0)
         {
@@ -949,6 +949,12 @@ namespace openre::player
         gMoveBrTable = br_tbl;
         gMoveMvTable = mv_tbl;
         gMoveDamageTable = dmg_tbl;
+    }
+
+    // 0x004D93A0
+    void player_set(PlayerEntity* player)
+    {
+        interop::call<void, PlayerEntity*>(0x004D93A0, player);
     }
 
     void player_init_hooks()

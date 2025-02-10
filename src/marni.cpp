@@ -11,9 +11,7 @@ namespace openre::marni
     }
 
     // 0x004DBFD0
-    void out()
-    {
-    }
+    void out() {}
 
     // 0x00432BB0
     void unload_door_texture()
@@ -30,8 +28,14 @@ namespace openre::marni
     }
 
     // 0x0043F550
-    void unload_texture_page(int page)
+    int unload_texture_page(int page)
     {
-        interop::call<void, int>(0x0043F550, page);
+        return interop::call<int, int>(0x0043F550, page);
+    }
+
+    // 0x00441710
+    void flush_surfaces()
+    {
+        interop::call(0x00441710);
     }
 }

@@ -263,7 +263,7 @@ namespace openre::scd
     }
 
     // 0x004E39E0
-    static void scd_init()
+    void scd_init()
     {
         auto maxTasks = get_max_tasks();
         for (auto i = 0; i < maxTasks; i++)
