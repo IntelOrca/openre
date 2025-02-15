@@ -108,8 +108,7 @@ namespace openre
         FG_STATUS_14 = 14,
         FG_STATUS_MIRROR = 15,
         FG_STATUS_SCREEN = 16,
-        // Pushing object ???
-        FG_STATUS_18 = 18,
+        FG_STATUS_PUSH_OBJECT = 18,
         FG_STATUS_20 = 20,
         FG_STATUS_21 = 21,
         FG_STATUS_CAMERA_LOCKED = 23,

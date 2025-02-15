@@ -417,12 +417,6 @@ namespace openre::enemy
         sub_445840(a1, c);
     }
 
-    // 0x004B21D0
-    void add_speed_xz(Entity* entity, int16_t d)
-    {
-        interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
-    }
-
     // 0x004DF320
     int root_ck(Entity* entity, int a1, int a2, int a3)
     {

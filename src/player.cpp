@@ -1,4 +1,5 @@
 #include "player.h"
+#include "audio.h"
 #include "entity.h"
 #include "input.h"
 #include "interop.hpp"
@@ -10,6 +11,7 @@
 
 #include <cstring>
 
+using namespace openre::audio;
 using namespace openre::sce;
 
 namespace openre::player
@@ -105,6 +107,18 @@ namespace openre::player
         BR_TBL_BACKWARD_IDX = 3,
         BR_TBL_ROTATE_IDX = 4,
         BR_TBL_QUICKTURN_IDX = 12,
+    };
+
+    enum
+    {
+        PUSH_OBJ_STATE_0,
+        PUSH_OBJ_STATE_1,
+        PUSH_OBJ_STATE_2,
+        PUSH_OBJ_STATE_3,
+        PUSH_OBJ_STATE_START_PUSHING,
+        PUSH_OBJ_STATE_PUSHING,
+        PUSH_OBJ_STATE_STOP_PUSHING,
+        PUSH_OBJ_STATE_END,
     };
 
     void set_routine(Routine routine)
@@ -347,6 +361,12 @@ namespace openre::player
         using sig = int (*)(PlayerEntity*);
         auto p = (sig)0x004D9940;
         return p(player);
+    }
+
+    // 0x004B2B00
+    static int foot_set_pl(PlayerEntity* player, int a1, int a2)
+    {
+        return interop::call<int, PlayerEntity*, int, int>(0x004B2B00, player, a1, a2);
     }
 
     // 0x004D9D20
@@ -742,7 +762,7 @@ namespace openre::player
         {
             set_routine(Routine::RUN_FORWARD);
         }
-        if (check_flag(FlagGroup::Status, FG_STATUS_18))
+        if (check_flag(FlagGroup::Status, FG_STATUS_PUSH_OBJECT))
         {
             set_routine(Routine::PUSH_OBJECT);
         }
@@ -854,6 +874,114 @@ namespace openre::player
         }
     }
 
+    // 0x004DBD90
+    void pl_br_push_object(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    {
+        if ((!(key & 0x10) || !check_flag(FlagGroup::Status, FG_STATUS_PUSH_OBJECT)) && player->routine_2 == 5)
+        {
+            // End push object animation
+            player->routine_2 = 6;
+            player->move_no = 7;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            snd_se_on(0x2000001, player->m.pos);
+        }
+    }
+
+    // 0x004DBDE0
+    void pl_mv_push_object(PlayerEntity* player, Emr* emr, Edd* edd)
+    {
+        static uint8_t pushSpeed[] = { 0, 3, 6 };
+        switch (player->routine_2)
+        {
+        case PUSH_OBJ_STATE_0:
+        {
+            player->routine_2 = 1;
+            player->move_no = pushSpeed[player->d_life_u];
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
+            [[fallthrough]];
+        }
+        case PUSH_OBJ_STATE_1:
+        {
+            auto nowSeq = *player->pNow_seq;
+            if (nowSeq & 0x4000)
+            {
+                snd_se_walk(1, 3 * ((nowSeq >> 13) & 1) + 4, player);
+                gGameTable.word_989EEE |= 4;
+            }
+            auto joinMoveRes = joint_move(player, player->pSub0_kan_t_ptr, player->pSub0_seq_t_ptr, 512);
+            joinMoveRes = (joinMoveRes << 16) | player->cdir.y;
+            if (joinMoveRes & 0x200)
+            {
+                player->cdir.y = joinMoveRes + ((joinMoveRes & 0xff) >> 2);
+            }
+            else
+            {
+                player->cdir.y = joinMoveRes - ((joinMoveRes & 0xff) >> 2);
+            }
+            if (!(player->cdir.y & 0x3E0))
+            {
+                player->routine_2 = 2;
+            }
+            return;
+        }
+        case PUSH_OBJ_STATE_2:
+        {
+            player->routine_2 = 3;
+            player->move_no = 7;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
+            [[fallthrough]];
+        }
+        case PUSH_OBJ_STATE_3:
+        {
+            player->routine_2 += joint_move(player, emr, edd, 512);
+            break;
+        }
+        case PUSH_OBJ_STATE_START_PUSHING:
+        {
+            player->routine_2 = 5;
+            player->move_no = 8;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
+            [[fallthrough]];
+        }
+        case PUSH_OBJ_STATE_PUSHING:
+        {
+            if (player->move_no == 1)
+            {
+                snd_se_on(0x2040001, player->m.pos);
+            }
+            joint_move(player, emr, edd, 512);
+            if (player->id == PLD_SHERRY)
+            {
+                player->spd.x = 5;
+            }
+            if (*player->pNow_seq & 0x2000)
+            {
+                foot_set_pl(player, 1, player->id == PLD_SHERRY);
+            }
+            player->spd.z = 0;
+            add_speed_xz(player, 0);
+            break;
+        }
+        case PUSH_OBJ_STATE_STOP_PUSHING:
+        {
+            player->routine_2 += joint_move(player, emr, edd, 0x10200);
+            break;
+        }
+        case PUSH_OBJ_STATE_END:
+        {
+            set_routine(Routine::IDLE);
+            break;
+        }
+        }
+    }
+
     // 0x004DA2E0
     void pl_br_run_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
@@ -924,9 +1052,11 @@ namespace openre::player
         br_tbl[2] = pl_br_run_forward;
         br_tbl[3] = pl_br_backward;
         br_tbl[4] = pl_br_rotate;
+        br_tbl[10] = pl_br_push_object;
         br_tbl[12] = pl_br_quickturn;
         // set mv hooks
         mv_tbl[6] = pl_mv_pick_up_item;
+        mv_tbl[10] = pl_mv_push_object;
         mv_tbl[12] = pl_mv_quickturn;
         // replace old table pointers
         interop::writeMemory(0x53A7FC, br_tbl, 12 * 4);
