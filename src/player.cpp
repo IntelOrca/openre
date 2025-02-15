@@ -32,18 +32,18 @@ namespace openre::player
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
 
-    using MoveTypeFunc = int (*)(PlayerEntity*, int, int);
+    using MoveTypeFunc = void (*)(PlayerEntity*, int, int);
     static MoveTypeFunc* gMoveTypeTable = (MoveTypeFunc*)0x53A7DC;
 
-    using MoveKeyFunc = int (*)(PlayerEntity*, uint32_t, uint32_t);
-    using MoveFunc = int (*)(PlayerEntity*, Emr*, Edd*);
+    using MoveKeyFunc = void (*)(PlayerEntity*, uint32_t, uint32_t);
+    using MoveFunc = void (*)(PlayerEntity*, Emr*, Edd*);
     static MoveKeyFunc* gMoveBrTable = (MoveKeyFunc*)0x53A7FC;
     static MoveFunc* gMoveMvTable = (MoveFunc*)0x53A82C;
     static MoveFunc* gMoveDamageTable = (MoveFunc*)0x53A85C;
 
-    int (*br_tbl[13])(PlayerEntity* player, uint32_t key, uint32_t key_trg);
-    int (*mv_tbl[13])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
-    int (*dmg_tbl[6])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
+    void (*br_tbl[13])(PlayerEntity* player, uint32_t key, uint32_t key_trg);
+    void (*mv_tbl[13])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
+    void (*dmg_tbl[6])(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr);
 
     const int now_seq_0x4000 = 0x4000;
 
@@ -382,50 +382,50 @@ namespace openre::player
     }
 
     // 0x004DC130
-    static int pl_mv_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
         set_flag(FlagGroup::Status, FG_STATUS_25, true);
-        return gMoveDamageTable[player->routine_1](player, pKan, pSeq);
+        gMoveDamageTable[player->routine_1](player, pKan, pSeq);
     }
 
     // 0x004DC850
-    static int pl_mv_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC850, player, pKan, pSeq);
+        interop::call<void, PlayerEntity*, Emr*, Edd*>(0x004DC850, player, pKan, pSeq);
     }
 
     // 0x004F6080
-    static int pl_mv_cutscene(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_cutscene(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004F6080, player, pKan, pSeq);
+        interop::call<void, PlayerEntity*, Emr*, Edd*>(0x004F6080, player, pKan, pSeq);
     }
 
-    static int pl_mv_em_damage_internal(PlayerEntity* player, MoveFunc* table)
+    static void pl_mv_em_damage_internal(PlayerEntity* player, MoveFunc* table)
     {
         set_flag(FlagGroup::Status, FG_STATUS_25, true);
         player->be_flg &= ~0x04;
 
         auto enemy = reinterpret_cast<EnemyEntity*>(player->pEnemy_ptr);
         auto cb = table[enemy->id];
-        return cb(player, player->pSub1_kan_t_ptr, player->pSub1_seq_t_ptr);
+        cb(player, player->pSub1_kan_t_ptr, player->pSub1_seq_t_ptr);
     }
 
     // 0x004DC930
-    static int pl_mv_em_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_em_damage(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_damage_table_16 - 16));
+        pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_damage_table_16 - 16));
     }
 
     // 0x004DC980
-    static int pl_mv_em_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_em_die(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_die_table));
+        pl_mv_em_damage_internal(player, reinterpret_cast<MoveFunc*>(gGameTable.em_die_table));
     }
 
     // 0x004DC9D0
-    static int pl_mv_dead(PlayerEntity* player, Emr* pKan, Edd* pSeq)
+    static void pl_mv_dead(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {
-        return interop::call<int, PlayerEntity*, Emr*, Edd*>(0x004DC9D0, player, pKan, pSeq);
+        interop::call<void, PlayerEntity*, Emr*, Edd*>(0x004DC9D0, player, pKan, pSeq);
     }
 
     // 0x004D97B0
@@ -582,7 +582,7 @@ namespace openre::player
     }
 
     // 0x004DAFF0
-    int pl_mv_pick_up_item(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
+    void pl_mv_pick_up_item(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
     {
         int lateFlag = 0;
         switch (player->routine_2)
@@ -627,11 +627,10 @@ namespace openre::player
             set_flag(FlagGroup::Status, FG_STATUS_25, true);
             break;
         }
-        return 0;
     }
 
     // 0x004DA6C0
-    static int pl_br_backward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    static void pl_br_backward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x28, 0x10, 0x10 };
         if (key & input::KEY_TYPE_BACKWARD)
@@ -647,7 +646,7 @@ namespace openre::player
             if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
             {
                 set_routine(Routine::QUICKTURN);
-                return 0;
+                return;
             }
             if ((key_trg & input::KEY_TYPE_128) != 0)
             {
@@ -671,16 +670,12 @@ namespace openre::player
                 set_routine(Routine::FORWARD);
             }
         }
-        return 0;
     }
 
     // no input code is required for quickturn
-    int pl_br_quickturn(PlayerEntity* player, uint32_t key, uint32_t key_trg)
-    {
-        return 0;
-    }
+    void pl_br_quickturn(PlayerEntity* player, uint32_t key, uint32_t key_trg) {}
 
-    int pl_mv_quickturn(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
+    void pl_mv_quickturn(PlayerEntity* player, Emr* pKanPtr, Edd* pSeqPtr)
     {
         switch (player->routine_2)
         {
@@ -713,11 +708,10 @@ namespace openre::player
             gGameTable.word_989EEE |= 2;
         }
         joint_move(player, player->pKan_t_ptr, player->pSeq_t_ptr, 512);
-        return 0;
     }
 
     // 0x004D9FA0
-    int pl_br_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    void pl_br_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x28, 0x20, 0x16 };
         if ((key & input::KEY_TYPE_FORWARD) == 0)
@@ -734,7 +728,7 @@ namespace openre::player
                 set_routine(Routine::BACKWARD);
             }
 
-            return 0;
+            return;
         }
         if (key & input::KEY_TYPE_LEFT)
         {
@@ -759,7 +753,7 @@ namespace openre::player
         if (player->Sca_info & 0x100000)
         {
             sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
-            return 0;
+            return;
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
@@ -773,11 +767,10 @@ namespace openre::player
                 set_routine(Routine::AIM);
             }
         }
-        return 0;
     }
 
     // 0x004D9D60
-    int pl_br_idle(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    void pl_br_idle(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         if (key & input::KEY_TYPE_ROTATE)
         {
@@ -812,11 +805,10 @@ namespace openre::player
                 set_routine(Routine::AIM);
             }
         }
-        return 0;
     }
 
-    // 0x4DAD30
-    int pl_br_rotate(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    // 0x004DAD30
+    void pl_br_rotate(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x50, 0x30, 0x20 };
         int result = 0;
@@ -840,19 +832,17 @@ namespace openre::player
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
         }
-        result = (result & 0xFFFFFF00) | key_trg;
         if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
         {
             if (player->Sca_info & 0x100000)
             {
-                return (result & 0xFFFFFF00) | sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+                sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+                return;
             }
-            auto result = oma_pl_updown_ck(player->id + 4);
-            if (result)
+            if (oma_pl_updown_ck(player->id + 4))
             {
-                return result;
+                return;
             }
-            result = (result & 0xFFFFFF00) | key_trg;
             if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_10, true);
@@ -862,11 +852,10 @@ namespace openre::player
         {
             set_routine(Routine::AIM);
         }
-        return result;
     }
 
     // 0x004DA2E0
-    int pl_br_run_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    void pl_br_run_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x38, 0x30, 0x18 };
         int result = player->routine_2;
@@ -883,19 +872,17 @@ namespace openre::player
                     player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
                 }
             }
-            result = (result & 0xFFFFFF00) | key_trg;
             if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
             {
                 if (player->Sca_info & 0x100000)
                 {
-                    return (result & 0xFFFFFF00) | sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+                    sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+                    return;
                 }
-                auto result = oma_pl_updown_ck(player->id + 4);
-                if (result)
+                if (oma_pl_updown_ck(player->id + 4))
                 {
-                    return result;
+                    return;
                 }
-                result = (result & 0xFFFFFF00) | key_trg;
                 if (key_trg & input::KEY_TYPE_128)
                 {
                     set_flag(FlagGroup::Status, FG_STATUS_10, true);
@@ -923,7 +910,6 @@ namespace openre::player
                 set_routine(Routine::FORWARD);
             }
         }
-        return result;
     }
 
     void init_move_tables()
