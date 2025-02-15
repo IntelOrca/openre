@@ -898,7 +898,7 @@ namespace openre::player
         {
             set_routine(Routine::ROTATE);
         }
-        if (key_trg & 0x80)
+        if (key_trg & input::KEY_TYPE_128)
         {
             set_flag(FlagGroup::Status, FG_STATUS_10, true);
             if (player->Sca_info & 0x100000)
