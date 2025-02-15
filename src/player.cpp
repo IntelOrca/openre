@@ -152,7 +152,6 @@ namespace openre::player
         case Routine::QUICKTURN:
             gPlayerEntity.routine_0 = 1;
             gPlayerEntity.routine_1 = 0xC;
-
             break;
         case Routine::PUSH_OBJECT:
             gPlayerEntity.routine_0 = 1;
@@ -874,6 +873,48 @@ namespace openre::player
         }
     }
 
+    // 0x004DB930
+    void pl_br_step_down(PlayerEntity* player, uint32_t key, uint32_t key_trg)
+    {
+        if (player->routine_3 <= 4)
+        {
+            // Play step down animation
+            return;
+        }
+        // End step down animation
+        if (key & input::KEY_TYPE_FORWARD)
+        {
+            set_routine(Routine::FORWARD);
+            if (key & input::KEY_TYPE_RUN_AND_CANCEL)
+            {
+                set_routine(Routine::RUN_FORWARD);
+            }
+        }
+        if (key & input::KEY_TYPE_BACKWARD)
+        {
+            set_routine(Routine::BACKWARD);
+        }
+        if (key & input::KEY_TYPE_ROTATE)
+        {
+            set_routine(Routine::ROTATE);
+        }
+        if (key_trg & 0x80)
+        {
+            set_flag(FlagGroup::Status, FG_STATUS_10, true);
+            if (player->Sca_info & 0x100000)
+            {
+                sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
+            }
+        }
+        if ((key & input::KEY_TYPE_AIM) && (player->type & 0xFFF))
+        {
+            set_routine(Routine::AIM);
+        }
+    }
+
+    // 0x004DB9D0
+    void pl_mv_step_down(PlayerEntity* player, uint32_t key, uint32_t key_trg) {}
+
     // 0x004DBD90
     void pl_br_push_object(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
@@ -1052,6 +1093,7 @@ namespace openre::player
         br_tbl[2] = pl_br_run_forward;
         br_tbl[3] = pl_br_backward;
         br_tbl[4] = pl_br_rotate;
+        br_tbl[9] = pl_br_step_down;
         br_tbl[10] = pl_br_push_object;
         br_tbl[12] = pl_br_quickturn;
         // set mv hooks
