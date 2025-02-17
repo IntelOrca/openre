@@ -112,7 +112,7 @@ namespace openre::player
     enum
     {
         PUSH_OBJ_STATE_0,
-        PUSH_OBJ_STATE__PLACE_IN_FRONT,
+        PUSH_OBJ_STATE_PLACE_IN_FRONT,
         PUSH_OBJ_STATE_2,
         PUSH_OBJ_STATE_3,
         PUSH_OBJ_STATE_START_PUSHING,
@@ -903,7 +903,7 @@ namespace openre::player
             player->mplay_flg = 0;
             [[fallthrough]];
         }
-        case PUSH_OBJ_STATE__PLACE_IN_FRONT:
+        case PUSH_OBJ_STATE_PLACE_IN_FRONT:
         {
             auto nowSeq = *player->pNow_seq;
             if (nowSeq & 0x4000)
@@ -919,7 +919,7 @@ namespace openre::player
             }
             else
             {
-                player->cdir.y = joinMoveRes - +((joinMoveRes >> 2) & 0xFF);
+                player->cdir.y = joinMoveRes - ((joinMoveRes >> 2) & 0xFF);
             }
             if (!(player->cdir.y & 0x3E0))
             {
