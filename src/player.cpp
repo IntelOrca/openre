@@ -112,7 +112,7 @@ namespace openre::player
     enum
     {
         PUSH_OBJ_STATE_0,
-        PUSH_OBJ_STATE_1,
+        PUSH_OBJ_STATE__PLACE_IN_FRONT,
         PUSH_OBJ_STATE_2,
         PUSH_OBJ_STATE_3,
         PUSH_OBJ_STATE_START_PUSHING,
@@ -903,7 +903,7 @@ namespace openre::player
             player->mplay_flg = 0;
             [[fallthrough]];
         }
-        case PUSH_OBJ_STATE_1:
+        case PUSH_OBJ_STATE__PLACE_IN_FRONT:
         {
             auto nowSeq = *player->pNow_seq;
             if (nowSeq & 0x4000)
@@ -911,15 +911,15 @@ namespace openre::player
                 snd_se_walk(1, 3 * ((nowSeq >> 13) & 1) + 4, player);
                 gGameTable.word_989EEE |= 4;
             }
-            auto joinMoveRes = joint_move(player, player->pSub0_kan_t_ptr, player->pSub0_seq_t_ptr, 512);
+            auto joinMoveRes = static_cast<int32_t>(joint_move(player, player->pSub0_kan_t_ptr, player->pSub0_seq_t_ptr, 512));
             joinMoveRes = (joinMoveRes << 16) | player->cdir.y;
             if (joinMoveRes & 0x200)
             {
-                player->cdir.y = joinMoveRes + ((joinMoveRes & 0xff) >> 2);
+                player->cdir.y = joinMoveRes + ((joinMoveRes >> 2) & 0xFF);
             }
             else
             {
-                player->cdir.y = joinMoveRes - ((joinMoveRes & 0xff) >> 2);
+                player->cdir.y = joinMoveRes - +((joinMoveRes >> 2) & 0xFF);
             }
             if (!(player->cdir.y & 0x3E0))
             {
