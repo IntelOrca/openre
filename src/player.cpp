@@ -685,9 +685,9 @@ namespace openre::player
                 set_routine(Routine::QUICKTURN);
                 return;
             }
-            if ((key_trg & input::KEY_TYPE_128) != 0)
+            if ((key_trg & input::KEY_TYPE_ACTION) != 0)
             {
-                set_flag(FlagGroup::Status, FG_STATUS_10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
             if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
             {
@@ -783,7 +783,7 @@ namespace openre::player
         {
             set_routine(Routine::PUSH_OBJECT);
         }
-        if ((key & input::KEY_TYPE_128) == 0 && (key_trg & input::KEY_TYPE_128) == 0)
+        if ((key & input::KEY_TYPE_ACTION) == 0 && (key_trg & input::KEY_TYPE_ACTION) == 0)
         {
             goto LABEL_31;
         }
@@ -794,9 +794,9 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_128)
+            if (key_trg & input::KEY_TYPE_ACTION)
             {
-                set_flag(FlagGroup::Status, FG_STATUS_10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
         LABEL_31:
             if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
@@ -821,7 +821,7 @@ namespace openre::player
         {
             set_routine(Routine::FORWARD);
         }
-        if (((key & input::KEY_TYPE_128) == 0) && ((key_trg & input::KEY_TYPE_128) == 0))
+        if (((key & input::KEY_TYPE_ACTION) == 0) && ((key_trg & input::KEY_TYPE_ACTION) == 0))
         {
             goto LABEL_25;
         }
@@ -831,9 +831,9 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_128)
+            if (key_trg & input::KEY_TYPE_ACTION)
             {
-                set_flag(FlagGroup::Status, FG_STATUS_10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
 
         LABEL_25:
@@ -869,7 +869,7 @@ namespace openre::player
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
         }
-        if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
+        if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
         {
             if (player->Sca_info & 0x100000)
             {
@@ -880,9 +880,9 @@ namespace openre::player
             {
                 return;
             }
-            if (key_trg & input::KEY_TYPE_128)
+            if (key_trg & input::KEY_TYPE_ACTION)
             {
-                set_flag(FlagGroup::Status, FG_STATUS_10, true);
+                set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
         }
         if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
@@ -916,9 +916,9 @@ namespace openre::player
         {
             set_routine(Routine::ROTATE);
         }
-        if (key_trg & input::KEY_TYPE_128)
+        if (key_trg & input::KEY_TYPE_ACTION)
         {
-            set_flag(FlagGroup::Status, FG_STATUS_10, true);
+            set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             if (player->Sca_info & 0x100000)
             {
                 sca_hit_stairs(player, 450, gGameTable.dword_695E7C);
@@ -1204,7 +1204,7 @@ namespace openre::player
                     player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
                 }
             }
-            if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
+            if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
             {
                 if (player->Sca_info & 0x100000)
                 {
@@ -1215,9 +1215,9 @@ namespace openre::player
                 {
                     return;
                 }
-                if (key_trg & input::KEY_TYPE_128)
+                if (key_trg & input::KEY_TYPE_ACTION)
                 {
-                    set_flag(FlagGroup::Status, FG_STATUS_10, true);
+                    set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
                 }
             }
             if (key & input::KEY_TYPE_AIM && player->type & 0xFFF)
