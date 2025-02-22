@@ -5,6 +5,8 @@
 
 namespace openre::enemy
 {
+    void em_spider_01(EnemyEntity* enemy, Emr* emr, Edd* edd);
+
     // 0x004EA1C0
     static int water_ck(int a0, int a1)
     {
@@ -41,7 +43,108 @@ namespace openre::enemy
         interop::call<void, EnemyEntity*>(0x004735A0, enemy);
     }
 
-    static EnemyRoutineFunc* _hurtRoutines = (EnemyRoutineFunc*)0x00528694;
+    // 0x00472DF0
+    static void sub_472DF0(EnemyEntity* enemy, int a1, int a2)
+    {
+        interop::call<void, EnemyEntity*, int, int>(0x00472DF0, enemy, a1, a2);
+    }
+
+    // 0x00471170
+    // Hurt routine
+    static void sub_471170(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471170, enemy, emr, edd);
+    }
+
+    // 0x00471840
+    // Hurt routine
+    static void sub_471840(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471840, enemy, emr, edd);
+    }
+
+    // 0x00471340
+    // Hurt routine
+    static void sub_471340(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471340, enemy, emr, edd);
+    }
+
+    // 0x004718E0
+    // Hurt routine
+    static void sub_4718E0(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x004718E0, enemy, emr, edd);
+    }
+
+    // 0x00471980
+    // Hurt routine
+    static void sub_471980(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471980, enemy, emr, edd);
+    }
+
+    // 0x004719F0
+    // Hurt routine
+    static void sub_4719F0(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x004719F0, enemy, emr, edd);
+    }
+
+    // 0x00471AE0
+    // Hurt routine
+    static void sub_471AE0(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471AE0, enemy, emr, edd);
+    }
+
+    // 0x00471B10
+    static void em_spider_hurt_sub_machine_gun(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        if (!enemy->var_23D)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                auto partsIndex = (rnd() & 0xF) + 3;
+                auto be_flg = enemy->pSin_parts_ptr[partsIndex].Be_flg;
+                if (be_flg & 1 && !(be_flg & 0x4A))
+                {
+                    sub_472DF0(enemy, partsIndex, 5);
+                }
+            }
+            enemy->var_23D = 30;
+        }
+
+        enemy->routine_0 = 1;
+        enemy->routine_1 = enemy->var_233;
+        enemy->routine_2 = enemy->var_234;
+        enemy->routine_3 = enemy->var_235;
+        em_spider_01(enemy, emr, edd);
+    }
+
+    // static EnemyRoutineFunc* _hurtRoutines = (EnemyRoutineFunc*)0x00528694;
+    static EnemyRoutineFunc _hurtRoutines[] = {
+        sub_471170,                     // 0
+        sub_471170,                     // 1
+        sub_471170,                     // 2
+        sub_471840,                     // 3
+        sub_471340,                     // 4
+        sub_471340,                     // 5
+        sub_471340,                     // 6
+        sub_471340,                     // 7
+        sub_4718E0,                     // 8
+        sub_471980,                     // 9
+        sub_4719F0,                     // 10
+        sub_471170,                     // 11
+        sub_471170,                     // 12
+        sub_471AE0,                     // 13
+        sub_471840,                     // 14
+        em_spider_hurt_sub_machine_gun, // 15
+        sub_471340,                     // 16
+        sub_471840,                     // 17
+        sub_471170,                     // 18
+    };
+
     static EnemyRoutineFunc* _01Routines = (EnemyRoutineFunc*)0x005285B8;
 
     // 0x00471110
