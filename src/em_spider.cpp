@@ -49,11 +49,13 @@ namespace openre::enemy
         interop::call<void, EnemyEntity*, int, int>(0x00472DF0, enemy, a1, a2);
     }
 
+    static EnemyRoutineFunc* _hurtFuncs_471180 = (EnemyRoutineFunc*)0x005286E4;
+
     // 0x00471170
     // Hurt routine
     static void sub_471170(EnemyEntity* enemy, Emr* emr, Edd* edd)
     {
-        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471170, enemy, emr, edd);
+        _hurtFuncs_471180[enemy->var_222](enemy, emr, edd);
     }
 
     // 0x00471840
@@ -78,10 +80,20 @@ namespace openre::enemy
     }
 
     // 0x00471980
-    // Hurt routine
-    static void sub_471980(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    static void em_spider_hurt_explosive_round(EnemyEntity* enemy, Emr* emr, Edd* edd)
     {
-        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471980, enemy, emr, edd);
+        for (int i = 0; i < 5; i++)
+        {
+            auto partsIndex = (rnd() & 0xF) + 3;
+            auto be_flg = enemy->pSin_parts_ptr[partsIndex].Be_flg;
+            if (be_flg & 1 && !(be_flg & 0x4A))
+            {
+                sub_472DF0(enemy, partsIndex, 5);
+            }
+        }
+
+        enemy->routine_1 = 2;
+        sub_471170(enemy, emr, edd);
     }
 
     // 0x004719F0
@@ -133,7 +145,7 @@ namespace openre::enemy
         sub_471340,                     // 6
         sub_471340,                     // 7
         sub_4718E0,                     // 8
-        sub_471980,                     // 9
+        em_spider_hurt_explosive_round, // 9
         sub_4719F0,                     // 10
         sub_471170,                     // 11
         sub_471170,                     // 12
