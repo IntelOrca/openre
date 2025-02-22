@@ -271,10 +271,12 @@ declare     var_22C                 u8          0x22C
 declare     var_22D                 u8          0x22D
 declare     var_22E                 u8          0x22E
 declare     var_230                 u8          0x230
+declare     var_231                 u8          0x231
 declare     var_232                 u8          0x232
 declare     var_233                 u8          0x233
 declare     var_234                 u8          0x234
 declare     var_235                 u8          0x235
+declare     var_236                 u8          0x236
 declare     var_23A                 s8          0x23A
 declare     var_23C                 u8          0x23C
 declare     var_23D                 u8          0x23D
@@ -438,6 +440,8 @@ struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
 declare     math_const_table        s16[1224]               0x00526270
+declare     byte_5286F4             u8[8]                   0x005286F4
+declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
 declare     flag_groups             u32*[35]                0x0053B218

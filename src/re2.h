@@ -325,12 +325,13 @@ struct EnemyEntity : ActorEntity
     uint8_t var_22E;                    // 0x022E
     uint8_t pad_022F[1];                // 0x022F
     uint8_t var_230;                    // 0x0230
-    uint8_t pad_0231[1];                // 0x0231
+    uint8_t var_231;                    // 0x0231
     uint8_t var_232;                    // 0x0232
     uint8_t var_233;                    // 0x0233
     uint8_t var_234;                    // 0x0234
     uint8_t var_235;                    // 0x0235
-    uint8_t pad_0236[4];                // 0x0236
+    uint8_t var_236;                    // 0x0236
+    uint8_t pad_0237[3];                // 0x0237
     int8_t var_23A;                     // 0x023A
     uint8_t pad_023B[1];                // 0x023B
     uint8_t var_23C;                    // 0x023C
@@ -554,7 +555,11 @@ struct GameTable
     int32_t global_prj;                 // 0x526268
     uint8_t pad_52626C[4];              // 0x52626C
     int16_t math_const_table[1224];     // 0x526270
-    uint8_t pad_526C00[22704];          // 0x526C00
+    uint8_t pad_526C00[6900];           // 0x526C00
+    uint8_t byte_5286F4[8];             // 0x5286F4
+    uint8_t pad_5286FC[40];             // 0x5286FC
+    uint8_t byte_528724[4];             // 0x528724
+    uint8_t pad_528728[15752];          // 0x528728
     void* pGG;                          // 0x52C4B0
     uint8_t pad_52C4B4[5068];           // 0x52C4B4
     Mat16 g_identity_mat;               // 0x52D880
