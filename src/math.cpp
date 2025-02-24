@@ -311,6 +311,30 @@ namespace openre::math
         memcpy(&res, &resVal, sizeof(Mat16));
     }
 
+    // 0x004513C0
+    static void set_rot_matrix(const Mat16& m)
+    {
+        auto& rc = gGameTable.rc_matrix;
+        rc.m[0] = m.m[0];
+        rc.m[1] = m.m[1];
+        rc.m[2] = m.m[2];
+        rc.m[3] = m.m[3];
+        rc.m[4] = m.m[4];
+        rc.m[5] = m.m[5];
+        rc.m[6] = m.m[6];
+        rc.m[7] = m.m[7];
+        rc.m[8] = m.m[8];
+    }
+
+    // 0x00451470
+    static void set_trans_matrix(const uint32_t* a1)
+    {
+        auto& rc = gGameTable.rc_matrix;
+        rc.pos.x = a1[5];
+        rc.pos.y = a1[6];
+        rc.pos.z = a1[7];
+    }
+
     void math_init_hooks()
     {
         interop::writeJmp(0x00450F60, &rotate_matrix);
@@ -325,5 +349,7 @@ namespace openre::math
         interop::writeJmp(0x004509D0, &apply_matrixsv);
         interop::writeJmp(0x00450E10, &compare_matrix);
         interop::writeJmp(0x004E7210, &get_matrix);
+        interop::writeJmp(0x004513C0, &set_rot_matrix);
+        interop::writeJmp(0x00451470, &set_trans_matrix);
     }
 }

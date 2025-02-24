@@ -819,7 +819,8 @@ struct GameTable
     uint8_t byte_991F80;                // 0x991F80
     uint8_t pad_991F81[67];             // 0x991F81
     uint32_t dword_991FC4;              // 0x991FC4
-    uint8_t pad_991FC8[44760];          // 0x991FC8
+    uint8_t pad_991FC8[44728];          // 0x991FC8
+    Mat16 rc_matrix;                    // 0x99CE80
     DoorEntity* doors[9];               // 0x99CEA0
     uint32_t dword_99CEC4;              // 0x99CEC4
     uint8_t pad_99CEC8[156];            // 0x99CEC8

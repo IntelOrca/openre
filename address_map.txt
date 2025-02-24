@@ -615,6 +615,7 @@ declare     fade_table              Fade[4]                 0x0098F07C
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
+declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
