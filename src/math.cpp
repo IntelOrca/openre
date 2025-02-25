@@ -211,7 +211,7 @@ namespace openre::math
     }
 
     // 0x00450F60
-    static void rotate_matrix(Vec16p& vAngles, Mat16& m)
+    void rotate_matrix(Vec16p& vAngles, Mat16& m)
     {
         memcpy(m.m, gGameTable.g_identity_mat.m, 9 * sizeof(int16_t));
         rotate_matrix_z(vAngles.z, m);
@@ -296,7 +296,7 @@ namespace openre::math
     }
 
     // 0x00450E10
-    static void compare_matrix(const Mat16& m1, Mat16& m2, Mat16& res)
+    void compare_matrix(const Mat16& m1, Mat16& m2, Mat16& res)
     {
         Mat16 resVal;
         Vec32 resValT;
@@ -312,7 +312,7 @@ namespace openre::math
     }
 
     // 0x004513C0
-    static void set_rot_matrix(const Mat16& m)
+    void set_rot_matrix(const Mat16& m)
     {
         auto& rc = gGameTable.rc_matrix;
         rc.m[0] = m.m[0];
@@ -327,12 +327,30 @@ namespace openre::math
     }
 
     // 0x00451470
-    static void set_trans_matrix(const uint32_t* a1)
+    void set_trans_matrix(const uint32_t* a1)
     {
         auto& rc = gGameTable.rc_matrix;
         rc.pos.x = a1[5];
         rc.pos.y = a1[6];
         rc.pos.z = a1[7];
+    }
+
+    // 0x00451450
+    void set_color_matrix(const Mat16& m)
+    {
+        memcpy(&gGameTable.lc_matrix, &m, sizeof(Mat16));
+    }
+
+    // 0x00451430
+    void set_light_matrix(const Mat16& m)
+    {
+        memcpy(&gGameTable.ll_matrix, &m, sizeof(Mat16));
+    }
+
+    // 0x00450C20
+    void mul_matrix0(const Mat16& left, const Mat16& right, Mat16& res)
+    {
+        interop::call<void, const Mat16&, const Mat16&, Mat16&>(0x00450C20, left, right, res);
     }
 
     void math_init_hooks()
@@ -351,5 +369,7 @@ namespace openre::math
         interop::writeJmp(0x004E7210, &get_matrix);
         interop::writeJmp(0x004513C0, &set_rot_matrix);
         interop::writeJmp(0x00451470, &set_trans_matrix);
+        interop::writeJmp(0x00451450, &set_color_matrix);
+        interop::writeJmp(0x00451430, &set_light_matrix);
     }
 }
