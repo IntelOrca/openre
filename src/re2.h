@@ -80,11 +80,11 @@ static_assert(sizeof(Mat16) == 0x20);
 
 struct VCut
 {
-    int8_t be_flg;                      // 0x0000
+    uint8_t be_flg;                     // 0x0000
     uint8_t nFloor;                     // 0x0001
     uint8_t fCut;                       // 0x0002
     uint8_t tCut;                       // 0x0003
-    uint16_t xz[8];                     // 0x0004
+    int16_t xz[8];                      // 0x0004
 };
 static_assert(sizeof(VCut) == 0x14);
 

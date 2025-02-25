@@ -668,30 +668,30 @@ namespace openre::scd
 
         if (vCuts->be_flg != -1)
         {
-            auto nextBeFlg = 0;
+            uint8_t nextBeFlg = 0;
             do
             {
-                if (uint8_t(vCuts->be_flg) == opcode->Id)
+                if (vCuts->be_flg == opcode->Id)
                 {
                     vCuts->be_flg = opcode->value;
                 }
-                else if (uint8_t(vCuts->be_flg) == opcode->value)
+                else if (vCuts->be_flg == opcode->value)
                 {
                     vCuts->be_flg = opcode->Id;
                 }
 
-                if (uint8_t(vCuts->nFloor) == opcode->Id)
+                if (vCuts->nFloor == opcode->Id)
                 {
                     vCuts->nFloor = opcode->value;
                 }
-                else if (uint8_t(vCuts->nFloor) == opcode->value)
+                else if (vCuts->nFloor == opcode->value)
                 {
                     vCuts->nFloor = opcode->Id;
                 }
                 nextBeFlg = vCuts[1].be_flg;
                 ++vCuts;
 
-            } while (nextBeFlg != -1);
+            } while (nextBeFlg != 0xFF);
         }
 
         if (gGameTable.vcut_data[1]->fCut == opcode->Id)
