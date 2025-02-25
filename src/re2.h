@@ -80,11 +80,11 @@ static_assert(sizeof(Mat16) == 0x20);
 
 struct VCut
 {
-    int8_t be_flg;                      // 0x0000
+    uint8_t be_flg;                     // 0x0000
     uint8_t nFloor;                     // 0x0001
     uint8_t fCut;                       // 0x0002
     uint8_t tCut;                       // 0x0003
-    uint16_t xz[8];                     // 0x0004
+    int16_t xz[8];                      // 0x0004
 };
 static_assert(sizeof(VCut) == 0x14);
 
@@ -891,7 +891,8 @@ struct GameTable
     uint32_t dword_991FC4;              // 0x991FC4
     DemoPlayer pdemo;                   // 0x991FC8
     uint8_t byte_99270E;                // 0x99270E
-    uint8_t pad_99270F[42897];          // 0x99270F
+    uint8_t pad_99270F[42865];          // 0x99270F
+    Mat16 rc_matrix;                    // 0x99CE80
     DoorEntity* doors[9];               // 0x99CEA0
     uint32_t dword_99CEC4;              // 0x99CEC4
     uint8_t pad_99CEC8[156];            // 0x99CEC8

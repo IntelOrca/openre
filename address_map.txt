@@ -51,11 +51,11 @@ declare     field_12                s16
 declare     pos                     Vec32
 
 struct      VCut
-declare     be_flg                  s8
+declare     be_flg                  u8
 declare     nFloor                  u8
 declare     fCut                    u8
 declare     tCut                    u8
-declare     xz                      u16[8]
+declare     xz                      s16[8]
 
 struct      TmdEntry
 struct      Edd
@@ -664,6 +664,7 @@ declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
 declare     pdemo                   DemoPlayer              0x00991FC8
 declare     byte_99270E             u8                      0x0099270E 
+declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64

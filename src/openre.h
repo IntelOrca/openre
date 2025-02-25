@@ -86,7 +86,7 @@ namespace openre
         FG_SYSTEM_4 = 4,
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_EX_BATTLE = 7,
-        FG_SYSTEM_8 = 8,    
+        FG_SYSTEM_8 = 8,
         FG_SYSTEM_12 = 12,
         FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
@@ -172,6 +172,7 @@ namespace openre
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
     int set_game_seconds(int a0);
+    void show_message(int a0, int a1, int a2, int a3);
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()
