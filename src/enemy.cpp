@@ -146,7 +146,7 @@ namespace openre::enemy
         gGameTable.enemy_init_table[EM_LICKER_RED] = em_22;
         gGameTable.enemy_init_table[EM_ALLIGATOR] = em_23;
         gGameTable.enemy_init_table[EM_LICKER_GREY] = em_24;
-        gGameTable.enemy_init_table[EM_SPIDER] = em_25;
+        gGameTable.enemy_init_table[EM_SPIDER] = em_spider;
         gGameTable.enemy_init_table[EM_SPIDER_BABY] = em_26;
         gGameTable.enemy_init_table[EM_G_EMBRYO] = em_27;
         gGameTable.enemy_init_table[EM_G_ADULT] = em_28;

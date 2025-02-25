@@ -334,9 +334,7 @@ namespace openre
     // 0x004C89B2
     void show_message(int a0, int a1, int a2, int a3)
     {
-        using sig = void (*)(int, int, int, int);
-        auto p = (sig)0x004C89B2;
-        p(a0, a1, a2, a3);
+        interop::call<void, int, int, int, int>(0x004C89B2, a0, a1, a2, a3);
     }
 
     void* work_alloc(size_t len)

@@ -302,7 +302,7 @@ namespace openre::sce
             gGameTable.aot_count--;
         }
         entry = aot;
-    }    
+    }
 
     static int sub_4E95F0()
     {
