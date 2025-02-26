@@ -239,7 +239,52 @@ namespace openre::door
     // 0x004507E0
     static void door_snd_trans()
     {
-        interop::call(0x004507E0);
+        if (check_flag(FlagGroup::Common, 0xFC))
+        {
+            return;
+        }
+        int enabledFlagCnt = 0;
+        for (int i = 248; i <= 255; i++)
+        {
+            if (check_flag(FlagGroup::Item, i))
+            {
+                enabledFlagCnt++;
+            }
+        }
+        if (enabledFlagCnt < 7)
+        {
+            return;
+        }
+        set_flag(FlagGroup::Common, 0xFC, true);
+        bgm_set_entry(0x105FF34);
+        for (int i = 7; i < 24; i++)
+        {
+            if (i == 15)
+            {
+                i = 16;
+            }
+            bgm_set_entry((i << 16) | 0x100FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 8)
+            {
+                i = 9;
+            }
+            else if (i == 23)
+            {
+                i = 25;
+            }
+            bgm_set_entry((i << 16) | 0x200FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 5)
+            {
+                i = 7;
+            }
+            bgm_set_entry((i << 16) | 0x300FF34);
+        }
     }
 
     // 0x00441870
