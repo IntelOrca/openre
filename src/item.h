@@ -41,5 +41,9 @@ namespace openre
         ITEM_TYPE_VALVE_HANDLE = 50,
         ITEM_TYPE_RED_JEWEL = 51,
         ITEM_TYPE_PHOTO_ADA = 87,
+        ITEM_TYPE_SPADE_KEY = 89,
+        ITEM_TYPE_DIAMOND_KEY = 90,
+        ITEM_TYPE_HEART_KEY = 91,
+        ITEM_TYPE_CLUB_KEY = 92,
     };
 }
