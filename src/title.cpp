@@ -99,7 +99,6 @@ namespace openre::title
 
     static Action title_mv[] = {
         (Action)0x00503680, // capcom_logo
-        // (Action)0x005038B0,
         title_init,
         (Action)0x00503A20, // title_main
         (Action)0x00505460, // title_survivor_load
