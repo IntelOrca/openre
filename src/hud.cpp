@@ -265,8 +265,8 @@ namespace openre::hud
     /**
      * 0x00502620
      *
-     * For type == ITEM_TYPE_NONE, returns first empty inventory slot index or INVENTORY_IS_FULL if the inventory is full.
-     * For type != ITEM_TYPE_NONE, returns the count of empty inventory slots.
+     * If type == ITEM_TYPE_NONE, returns the index of the first empty inventory slot or INVENTORY_IS_FULL if the inventory is
+     * full. If type != ITEM_TYPE_NONE, returns the number of empty inventory slots.
      */
     static int8_t search_item(ItemType type)
     {
