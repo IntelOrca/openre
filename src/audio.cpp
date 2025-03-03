@@ -164,7 +164,7 @@ namespace openre::audio
                 auto temp = 0;
                 if (get_bgm_slot(bgmIndex, i) == 0)
                 {
-                    if (check_flag(FlagGroup::System, FG_SYSTEM_28))
+                    if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
                     {
                         temp = gGameTable.dword_693804 & 0xFFFF;
                     }
@@ -219,16 +219,22 @@ namespace openre::audio
         snd_se_on(a0, nullptr);
     }
 
+    // 0x004EC450
+    void snd_load_core(uint8_t a0, uint8_t a1)
+    {
+        interop::call<void, uint8_t, uint8_t>(0x004EC450, a0, a1);
+    }
+
+    // 0x004EC410
+    void snd_sys_init_sub2()
+    {
+        interop::call(0x004EC410);
+    }
+
     // 0x004ECBE0
     void snd_bgm_ck()
     {
         interop::call(0x004ECBE0);
-    }
-
-    // 0x004EC450
-    void snd_load_core(uint8_t id, uint8_t arg1)
-    {
-        interop::call<void, uint8_t, uint8_t>(0x004EC450, id, arg1);
     }
 
     // 0x004EC7D0
