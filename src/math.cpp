@@ -160,9 +160,52 @@ namespace openre::math
     }
 
     // 0x00450C20
-    static void mul_matrix0(const Mat16& m1, Mat16& m2, Mat16& res)
+    static void mul_matrix0(Mat16& left, Mat16& right, Mat16& res)
     {
-        interop::call<void, const Mat16&, Mat16&, Mat16&>(0x00450C20, m1, m2, res);
+        auto left_00 = (int32_t)left.m[0];
+        auto left_01 = (int32_t)left.m[1];
+        auto left_02 = (int32_t)left.m[2];
+        auto left_10 = (int32_t)left.m[3];
+        auto left_11 = (int32_t)left.m[4];
+        auto left_12 = (int32_t)left.m[5];
+        auto left_20 = (int32_t)left.m[6];
+        auto left_21 = (int32_t)left.m[7];
+        auto left_22 = (int32_t)left.m[8];
+
+        auto right_00 = (int32_t)right.m[0];
+        auto right_01 = (int32_t)right.m[1];
+        auto right_02 = (int32_t)right.m[2];
+        auto right_10 = (int32_t)right.m[3];
+        auto right_11 = (int32_t)right.m[4];
+        auto right_12 = (int32_t)right.m[5];
+        auto right_20 = (int32_t)right.m[6];
+        auto right_21 = (int32_t)right.m[7];
+        auto right_22 = (int32_t)right.m[8];
+
+        // Row 1
+        res.m[0] = (left_00 * right_00 + left_01 * right_10 + left_02 * right_20) >> 12;
+        res.m[1] = (left_00 * right_01 + left_01 * right_11 + left_02 * right_21) >> 12;
+        res.m[2] = (left_00 * right_02 + left_01 * right_12 + left_02 * right_22) >> 12;
+        // Row 2
+        res.m[3] = (left_10 * right_00 + left_11 * right_10 + left_12 * right_20) >> 12;
+        res.m[4] = (left_10 * right_01 + left_11 * right_11 + left_12 * right_21) >> 12;
+        res.m[5] = (left_10 * right_02 + left_11 * right_12 + left_12 * right_22) >> 12;
+        // Row 3
+        res.m[6] = (left_20 * right_00 + left_21 * right_10 + left_22 * right_20) >> 12;
+        res.m[7] = (left_20 * right_01 + left_21 * right_11 + left_22 * right_21) >> 12;
+        res.m[8] = (left_20 * right_02 + left_21 * right_12 + left_22 * right_22) >> 12;
+    }
+
+    // 0x00450DD0
+    static void mul_matrix(Mat16& left, Mat16& right)
+    {
+        mul_matrix0(left, right, left);
+    }
+
+    // 0x00450DF0
+    static void mul_matrix2(Mat16& left, Mat16& right)
+    {
+        mul_matrix0(left, right, right);
     }
 
     // 0x00451120
@@ -296,7 +339,7 @@ namespace openre::math
     }
 
     // 0x00450E10
-    static void compare_matrix(const Mat16& m1, Mat16& m2, Mat16& res)
+    static void compare_matrix(Mat16& m1, Mat16& m2, Mat16& res)
     {
         Mat16 resVal;
         Vec32 resValT;
@@ -351,5 +394,8 @@ namespace openre::math
         interop::writeJmp(0x004E7210, &get_matrix);
         interop::writeJmp(0x004513C0, &set_rot_matrix);
         interop::writeJmp(0x00451470, &set_trans_matrix);
+        interop::writeJmp(0x00450C20, &mul_matrix0);
+        interop::writeJmp(0x00450DD0, &mul_matrix);
+        interop::writeJmp(0x00450DF0, &mul_matrix2);
     }
 }
