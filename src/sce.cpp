@@ -460,7 +460,7 @@ namespace openre::sce
         }
 
         int eax;
-        if (data->LockId < 128 || (eax = bitarray_get(gGameTable.door_locks, data->LockId & 0x3F)))
+        if (data->LockId < 128 || (eax = bitarray_get(&gGameTable.door_locks, data->LockId & 0x3F)))
         {
             gGameTable.byte_991F80 = 1;
             gGameTable.door_aot_data = data;
@@ -497,7 +497,7 @@ namespace openre::sce
             gGameTable.byte_98E541 = inventoryIndex + 1;
         }
 
-        bitarray_set(gGameTable.door_locks, data->LockId & 0x3F);
+        bitarray_set(&gGameTable.door_locks, data->LockId & 0x3F);
         return 0;
     }
 
