@@ -10,6 +10,18 @@ namespace openre
             0x004B2CE0, pK, offset, half, color, pPos);
     }
 
+    // 0x004B2C00
+    void kage_work_init()
+    {
+        interop::call(0x004B2C00);
+    }
+
+    // 0x004B2CC0
+    void kage_work9_init()
+    {
+        interop::call(0x004B2CC0);
+    }
+
     // 0x004C1C30
     int joint_move(Entity* entity, Emr* pKanPtr, Edd* pSeqPtr, int lateFlag)
     {

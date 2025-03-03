@@ -160,9 +160,52 @@ namespace openre::math
     }
 
     // 0x00450C20
-    static void mul_matrix0(const Mat16& m1, Mat16& m2, Mat16& res)
+    static void mul_matrix0(Mat16& left, Mat16& right, Mat16& res)
     {
-        interop::call<void, const Mat16&, Mat16&, Mat16&>(0x00450C20, m1, m2, res);
+        auto left_00 = (int32_t)left.m[0];
+        auto left_01 = (int32_t)left.m[1];
+        auto left_02 = (int32_t)left.m[2];
+        auto left_10 = (int32_t)left.m[3];
+        auto left_11 = (int32_t)left.m[4];
+        auto left_12 = (int32_t)left.m[5];
+        auto left_20 = (int32_t)left.m[6];
+        auto left_21 = (int32_t)left.m[7];
+        auto left_22 = (int32_t)left.m[8];
+
+        auto right_00 = (int32_t)right.m[0];
+        auto right_01 = (int32_t)right.m[1];
+        auto right_02 = (int32_t)right.m[2];
+        auto right_10 = (int32_t)right.m[3];
+        auto right_11 = (int32_t)right.m[4];
+        auto right_12 = (int32_t)right.m[5];
+        auto right_20 = (int32_t)right.m[6];
+        auto right_21 = (int32_t)right.m[7];
+        auto right_22 = (int32_t)right.m[8];
+
+        // Row 1
+        res.m[0] = (left_00 * right_00 + left_01 * right_10 + left_02 * right_20) >> 12;
+        res.m[1] = (left_00 * right_01 + left_01 * right_11 + left_02 * right_21) >> 12;
+        res.m[2] = (left_00 * right_02 + left_01 * right_12 + left_02 * right_22) >> 12;
+        // Row 2
+        res.m[3] = (left_10 * right_00 + left_11 * right_10 + left_12 * right_20) >> 12;
+        res.m[4] = (left_10 * right_01 + left_11 * right_11 + left_12 * right_21) >> 12;
+        res.m[5] = (left_10 * right_02 + left_11 * right_12 + left_12 * right_22) >> 12;
+        // Row 3
+        res.m[6] = (left_20 * right_00 + left_21 * right_10 + left_22 * right_20) >> 12;
+        res.m[7] = (left_20 * right_01 + left_21 * right_11 + left_22 * right_21) >> 12;
+        res.m[8] = (left_20 * right_02 + left_21 * right_12 + left_22 * right_22) >> 12;
+    }
+
+    // 0x00450DD0
+    static void mul_matrix(Mat16& left, Mat16& right)
+    {
+        mul_matrix0(left, right, left);
+    }
+
+    // 0x00450DF0
+    static void mul_matrix2(Mat16& left, Mat16& right)
+    {
+        mul_matrix0(left, right, right);
     }
 
     // 0x00451120
@@ -223,23 +266,50 @@ namespace openre::math
     static void scale_matrix(Mat16& a1, const Vec32& a2)
     {
         // Row 1
-        a1.m[0] *= a2.x / 4096;
-        a1.m[1] *= a2.y / 4096;
-        a1.m[2] *= a2.z / 4096;
+        a1.m[0] = a1.m[0] * a2.x / 4096;
+        a1.m[1] = a1.m[1] * a2.y / 4096;
+        a1.m[2] = a1.m[2] * a2.z / 4096;
         // Row 2
-        a1.m[3] *= a2.x / 4096;
-        a1.m[4] *= a2.y / 4096;
-        a1.m[5] *= a2.z / 4096;
+        a1.m[3] = a1.m[3] * a2.x / 4096;
+        a1.m[4] = a1.m[4] * a2.y / 4096;
+        a1.m[5] = a1.m[5] * a2.z / 4096;
         // Row 3
-        a1.m[6] *= a2.x / 4096;
-        a1.m[7] *= a2.y / 4096;
-        a1.m[8] *= a2.z / 4096;
+        a1.m[6] = a1.m[6] * a2.x / 4096;
+        a1.m[7] = a1.m[7] * a2.y / 4096;
+        a1.m[8] = a1.m[8] * a2.z / 4096;
     }
 
     // 0x004E7210
-    Mat16& get_matrix(uint8_t type, uint8_t a2)
+    Mat16& get_matrix(uint8_t type, uint8_t id)
     {
-        return interop::call<Mat16&, uint8_t, uint8_t>(0x004E7210, type, a2);
+        auto signedType = static_cast<int8_t>(type);
+        if (signedType < 0)
+        {
+            auto v3 = (signedType >> 5) & 3;
+            if (v3)
+            {
+                auto v4 = v3 - 1;
+                if (v4 == 1)
+                {
+                    return gGameTable.enemies[id]->pSin_parts_ptr->workm;
+                }
+
+                return gGameTable.splayer_work->pSin_parts_ptr->workm;
+            }
+
+            return gGameTable.player_work->pSin_parts_ptr->workm;
+        }
+
+        switch (type)
+        {
+        case 0: return gGameTable.g_identity_mat;
+        case 1: return gGameTable.player_work->m;
+        case 2: return gGameTable.splayer_work->m;
+        case 3: return gGameTable.enemies[id]->m;
+        case 4: return gGameTable.pOm[id].workm;
+        }
+
+        return gGameTable.g_identity_mat;
     }
 
     // 0x00450950
@@ -269,19 +339,43 @@ namespace openre::math
     }
 
     // 0x00450E10
-    static void compare_matrix(const Mat16& m1, Mat16& m2, Mat16& res)
+    static void compare_matrix(Mat16& m1, Mat16& m2, Mat16& res)
     {
         Mat16 resVal;
         Vec32 resValT;
-        const Vec32 m2_t{ m2.t[0], m2.t[1], m2.t[2] };
+        const Vec32 m2_t{ m2.pos.x, m2.pos.y, m2.pos.z };
 
         mul_matrix0(m1, m2, resVal);
         apply_matrixlv(m1, m2_t, resValT);
-        resVal.t[0] = resValT.x + m1.t[0];
-        resVal.t[1] = resValT.y + m1.t[1];
-        resVal.t[2] = resValT.z + m1.t[2];
+        resVal.pos.x = resValT.x + m1.pos.x;
+        resVal.pos.y = resValT.y + m1.pos.y;
+        resVal.pos.z = resValT.z + m1.pos.z;
 
         memcpy(&res, &resVal, sizeof(Mat16));
+    }
+
+    // 0x004513C0
+    static void set_rot_matrix(const Mat16& m)
+    {
+        auto& rc = gGameTable.rc_matrix;
+        rc.m[0] = m.m[0];
+        rc.m[1] = m.m[1];
+        rc.m[2] = m.m[2];
+        rc.m[3] = m.m[3];
+        rc.m[4] = m.m[4];
+        rc.m[5] = m.m[5];
+        rc.m[6] = m.m[6];
+        rc.m[7] = m.m[7];
+        rc.m[8] = m.m[8];
+    }
+
+    // 0x00451470
+    static void set_trans_matrix(const uint32_t* a1)
+    {
+        auto& rc = gGameTable.rc_matrix;
+        rc.pos.x = a1[5];
+        rc.pos.y = a1[6];
+        rc.pos.z = a1[7];
     }
 
     void math_init_hooks()
@@ -297,5 +391,11 @@ namespace openre::math
         interop::writeJmp(0x00450A10, &apply_matrixlv);
         interop::writeJmp(0x004509D0, &apply_matrixsv);
         interop::writeJmp(0x00450E10, &compare_matrix);
+        interop::writeJmp(0x004E7210, &get_matrix);
+        interop::writeJmp(0x004513C0, &set_rot_matrix);
+        interop::writeJmp(0x00451470, &set_trans_matrix);
+        interop::writeJmp(0x00450C20, &mul_matrix0);
+        interop::writeJmp(0x00450DD0, &mul_matrix);
+        interop::writeJmp(0x00450DF0, &mul_matrix2);
     }
 }

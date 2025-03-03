@@ -74,6 +74,7 @@
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="door.cpp" />
     <ClCompile Include="em_dog.cpp" />
+    <ClCompile Include="em_spider.cpp" />
     <ClCompile Include="enemy.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
@@ -90,6 +91,7 @@
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
+    <ClCompile Include="title.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
@@ -112,6 +114,7 @@
     <ClInclude Include="re2.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
+    <ClInclude Include="title.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

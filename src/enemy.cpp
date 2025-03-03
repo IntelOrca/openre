@@ -146,7 +146,7 @@ namespace openre::enemy
         gGameTable.enemy_init_table[EM_LICKER_RED] = em_22;
         gGameTable.enemy_init_table[EM_ALLIGATOR] = em_23;
         gGameTable.enemy_init_table[EM_LICKER_GREY] = em_24;
-        gGameTable.enemy_init_table[EM_SPIDER] = em_25;
+        gGameTable.enemy_init_table[EM_SPIDER] = em_spider;
         gGameTable.enemy_init_table[EM_SPIDER_BABY] = em_26;
         gGameTable.enemy_init_table[EM_G_EMBRYO] = em_27;
         gGameTable.enemy_init_table[EM_G_ADULT] = em_28;
@@ -484,9 +484,9 @@ namespace openre::enemy
                 gGameTable.byte_695E71 = info.SoundBank;
         }
 
-        em->pos.x = info.Position.x;
-        em->pos.y = info.Position.y;
-        em->pos.z = info.Position.z;
+        em->m.pos.x = info.Position.x;
+        em->m.pos.y = info.Position.y;
+        em->m.pos.z = info.Position.z;
         em->old_pos.x = info.Position.x;
         em->old_pos.y = info.Position.y;
         em->old_pos.z = info.Position.z;

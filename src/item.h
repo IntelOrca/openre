@@ -24,6 +24,10 @@ namespace openre
         ITEM_TYPE_AMMO_SPARKSHOT = 28,
         ITEM_TYPE_AMMO_BOWGUN = 29,
         ITEM_TYPE_INK_RIBBON = 30,
+        ITEM_TYPE_SMALL_KEY = 31,
+        ITEM_TYPE_HANDGUN_PARTS = 32,
+        ITEM_TYPE_MAGNUM_PARTS = 33,
+        ITEM_TYPE_SHOTGUN_PARTS = 34,
         ITEM_TYPE_FIRST_AID_SPRAY = 35,
         ITEM_TYPE_ANTI_VIRUS_BOMB = 36,
         ITEM_TYPE_HERB_G = 38,
@@ -41,5 +45,9 @@ namespace openre
         ITEM_TYPE_VALVE_HANDLE = 50,
         ITEM_TYPE_RED_JEWEL = 51,
         ITEM_TYPE_PHOTO_ADA = 87,
+        ITEM_TYPE_SPADE_KEY = 89,
+        ITEM_TYPE_DIAMOND_KEY = 90,
+        ITEM_TYPE_HEART_KEY = 91,
+        ITEM_TYPE_CLUB_KEY = 92,
     };
 }

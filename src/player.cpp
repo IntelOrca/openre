@@ -30,7 +30,6 @@ namespace openre::player
     InventorySlot* gSavedInventory = (InventorySlot*)0x9888DC;
 
     static uint32_t* dword_98EB4C = (uint32_t*)0x98EB4C;
-    static uint8_t*& byte_98ED39 = *((uint8_t**)0x98ED39);
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
 
     using MoveTypeFunc = int (*)(PlayerEntity*, int, int);
@@ -270,7 +269,7 @@ namespace openre::player
         auto part = gGameTable.inventory[slotId].Part;
         if (part == 1)
         {
-            byte_98ED39[4 * slotId] = quantity;
+            gGameTable.inventory[slotId + 1].Quantity = quantity;
         }
         if (part == 2)
         {
@@ -443,18 +442,18 @@ namespace openre::player
             player->damage_cnt--;
         }
 
-        if (player->id == 13)
+        if (player->id == PLD_TOFU)
         {
-            auto v3 = static_cast<uint8_t>((player->life << 15) / (player->max_life) >> 8);
-            auto sinParts = reinterpret_cast<uint8_t*>(&(player->pSin_parts_ptr));
-            sinParts[28] = ((v3 | (v3 << 8)) << 8) + 128;
+            auto v3 = static_cast<uint32_t>((player->life << 15) / (player->max_life) >> 8);
+            auto partsW = player->pSin_parts_ptr;
+            partsW->poly_rgb = ((v3 | (v3 << 8)) << 8) + 128;
             if (player->life < 0)
             {
-                sinParts[28] = 128;
+                partsW->poly_rgb = 128;
             }
             if (gPoisonStatus)
             {
-                if (!(player->move_cnt & 1))
+                if ((player->move_cnt & 1) == 0)
                 {
                     gGameTable.dword_689BDC++;
                 }
@@ -462,12 +461,12 @@ namespace openre::player
             }
             else
             {
-                if (!(gGameTable.dword_689BDC << 24) && !(player->move_cnt & 1))
+                if ((gGameTable.dword_689BDC & 0xFF) && (player->move_cnt & 1) == 0)
                 {
                     gGameTable.dword_689BDC--;
                 }
             }
-            sinParts[28] += gGameTable.dword_689BDC << 16;
+            partsW->poly_rgb += gGameTable.dword_689BDC << 16;
         }
 
         if (gPoisonStatus)

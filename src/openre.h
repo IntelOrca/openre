@@ -81,10 +81,13 @@ namespace openre
 
     enum
     {
+        FG_SYSTEM_2 = 2,
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_7 = 7,
+        FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
         FG_SYSTEM_BGM_DISABLED = 18,
+        FG_SYSTEM_19 = 19,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
         FG_SYSTEM_28 = 28,
@@ -152,6 +155,7 @@ namespace openre
 
     void task_sleep(int frames);
     void task_exit();
+    void task_execute(int index, void* fn);
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
     uint8_t rnd_area();
@@ -160,6 +164,8 @@ namespace openre
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
+    void set_stage();
+    void show_message(int a0, int a1, int a2, int a3);
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()

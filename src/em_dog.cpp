@@ -92,7 +92,7 @@ namespace openre::enemy
             enemy->damage_cnt &= ~0x80;
             if (enemy->var_22D == 0)
             {
-                auto r = goto00_ck(enemy, pl->pos.x, pl->pos.z, 512);
+                auto r = goto00_ck(enemy, pl->m.pos.x, pl->m.pos.z, 512);
                 enemy->routine_0 = ROUTINE_NORMAL;
                 enemy->routine_1 = r == 0 ? 5 : 6;
                 enemy->routine_2 = 0;
@@ -145,6 +145,9 @@ namespace openre::enemy
     static void em_dog_init(EnemyEntity* enemy, Emr* emr, Edd* seq)
     {
         enemy->routine_0 = ROUTINE_NORMAL;
+        enemy->routine_1 = 0;
+        enemy->routine_2 = 0;
+        enemy->routine_3 = 0;
         enemy->damage_flg = 0;
         enemy->sce_flg = 0;
         enemy->down_cnt = 0;
@@ -156,11 +159,11 @@ namespace openre::enemy
         enemy->d_life_d = 13;
         enemy->d_life_c = 13;
         enemy->d_life_u = 13;
-        kage_work_set(&enemy->pKage_work, 0, 0x025804B0, 0x00000000, &enemy->pos);
+        kage_work_set(&enemy->pKage_work, 0, 0x025804B0, 0x00000000, &enemy->m.pos);
         enemy->nOba = 1;
         enemy->atd[0].ofs.x = 500;
-        enemy->atd[0].ofs.y = -1000;
-        enemy->atd[0].ofs.z = 0;
+        enemy->atd[0].ofs.y = 0;
+        enemy->atd[0].ofs.z = -1000;
         enemy->atd[1].at_w = 600;
         enemy->atd[0].at_d = 600;
         enemy->atd[0].at_h = 1000;
@@ -213,6 +216,7 @@ namespace openre::enemy
                 enemy->move_cnt = rnd() & 0x3F;
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
+                enemy->be_flg |= 0xC000000;
                 break;
             case 2:
             case 6:
@@ -220,23 +224,19 @@ namespace openre::enemy
                 enemy->move_cnt = rnd() & 0xF;
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
+                enemy->be_flg |= 0xC000000;
                 break;
             case 7:
-                enemy->move_no = 11;
-                enemy->move_cnt = rnd() & 0x1F;
-                enemy->hokan_flg = 15;
-                enemy->mplay_flg = 0;
                 enemy->timer2 = (rnd() & 3) + 1;
-                enemy->neck_flg &= ~0x02;
-                enemy->var_22E = 1;
+                enemy->neck_flg &= ~2;
                 enemy->routine_3 = 1;
-                break;
+                [[fallthrough]];
             case 8:
                 enemy->move_no = 0;
                 enemy->move_cnt = 0;
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
-                enemy->var_22E = 1;
+                enemy->var_22D = 1;
                 enemy->be_flg |= 0x8000000;
                 break;
             case 9:
@@ -465,7 +465,7 @@ namespace openre::enemy
         oba_ck_em(enemy);
         sca_ck_em(enemy, 1024);
 
-        if ((enemy->pos.x == enemy->old_pos.x && enemy->pos.z == enemy->old_pos.z) || enemy->at_em_no != 0xFF)
+        if ((enemy->m.pos.x == enemy->old_pos.x && enemy->m.pos.z == enemy->old_pos.z) || enemy->at_em_no != 0xFF)
             enemy->var_230++;
         else
             enemy->var_230 = 0;

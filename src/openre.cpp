@@ -15,6 +15,8 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "title.h"
+#include <cassert>
 #include <cstring>
 #include <windows.h>
 
@@ -31,6 +33,7 @@ using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
 using namespace openre::camera;
+using namespace openre::title;
 
 namespace openre
 {
@@ -131,6 +134,12 @@ namespace openre
     void task_exit()
     {
         interop::call(0x00508D10);
+    }
+
+    // 0x00508CC0
+    void task_execute(int index, void* fn)
+    {
+        interop::call<void, int, void*>(0x00508CC0, index, fn);
     }
 
     // 0x004CA2F9
@@ -315,6 +324,19 @@ namespace openre
         bitarray_set(addr, index, value);
     }
 
+
+    // 0x004DEF00
+    void set_stage()
+    {
+        interop::call(0x004DEF00);
+    }
+
+    // 0x004C89B2
+    void show_message(int a0, int a1, int a2, int a3)
+    {
+        interop::call<void, int, int, int, int>(0x004C89B2, a0, a1, a2, a3);
+    }
+
     void* work_alloc(size_t len)
     {
         auto mem = gGameTable.mem_top;
@@ -372,6 +394,7 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
 
+    title_init_hooks();
     door_init_hooks();
     scd_init_hooks();
     sce_init_hooks();

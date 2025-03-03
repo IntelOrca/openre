@@ -113,6 +113,7 @@ namespace openre::enemy
     bool spawn_enemy(const EnemySpawnInfo& info);
 
     void em_dog(EnemyEntity* enemy);
+    void em_spider(EnemyEntity* enemy);
 
     void enemy_init_hooks();
 }

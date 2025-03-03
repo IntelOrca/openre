@@ -1,4 +1,6 @@
 #include "audio.h"
+#include "camera.h"
+#include "entity.h"
 #include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
@@ -11,6 +13,7 @@
 #include <cstring>
 
 using namespace openre::audio;
+using namespace openre::camera;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::hud;
@@ -18,6 +21,7 @@ using namespace openre::hud;
 namespace openre::door
 {
     using DoorAction = void (*)();
+    using DoorTransitionMv = void (*)();
 
     enum
     {
@@ -29,6 +33,25 @@ namespace openre::door
     static void door_init();
     static void door_move();
     static void door_exit();
+
+    enum
+    {
+        DOOR_TRANS_MV_00,
+        DOOR_TRANS_MV_01,
+        DOOR_TRANS_MV_02,
+        DOOR_TRANS_MV_03,
+        DOOR_TRANS_MV_04,
+    };
+
+    // 0x005331C4
+    static DoorTransitionMv _doorTransitionMvs[] = {
+        (DoorTransitionMv)0x004CB2C0, // Ex_trans_mv00
+        (DoorTransitionMv)0x004CB4D0, // Ex_trans_mv01
+        (DoorTransitionMv)0x004CB620, // Ex_trans_mv02
+        (DoorTransitionMv)0x004CB770, // Ex_trans_mv03
+        (DoorTransitionMv)0x004CB7B0, // Ex_trans_mv04
+        nullptr                       // padding
+    };
 
     // 0x00526254
     static DoorAction _doorActions[] = {
@@ -201,7 +224,7 @@ namespace openre::door
             hud_fade_set(512, 0, 7, 1);
             hud_fade_adjust(0, 0x7FFF, 0xFFFFFF, 0);
             if (gGameTable.door->sound_flg != 0)
-                snd_se_on(0x10000, gGameTable.player_work->pos);
+                snd_se_on(0x10000, gGameTable.player_work->m.pos);
             marni::unload_door_texture();
             gGameTable.byte_98F07A = 2;
             set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, false);
@@ -213,8 +236,243 @@ namespace openre::door
         }
     }
 
+    // 0x004507E0
+    static void door_snd_trans()
+    {
+        if (check_flag(FlagGroup::Common, 0xFC))
+        {
+            return;
+        }
+        int enabledFlagCnt = 0;
+        for (int i = 248; i <= 255; i++)
+        {
+            if (check_flag(FlagGroup::Item, i))
+            {
+                enabledFlagCnt++;
+            }
+        }
+        if (enabledFlagCnt < 7)
+        {
+            return;
+        }
+        set_flag(FlagGroup::Common, 0xFC, true);
+        bgm_set_entry(0x105FF34);
+        for (int i = 7; i < 24; i++)
+        {
+            if (i == 15)
+            {
+                i = 16;
+            }
+            bgm_set_entry((i << 16) | 0x100FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 8)
+            {
+                i = 9;
+            }
+            else if (i == 23)
+            {
+                i = 25;
+            }
+            bgm_set_entry((i << 16) | 0x200FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 5)
+            {
+                i = 7;
+            }
+            bgm_set_entry((i << 16) | 0x300FF34);
+        }
+    }
+
+    // 0x00441870
+    static void movie_set(int id)
+    {
+        interop::call(0x00441870);
+    }
+
+    // 0x004CB260
+    static void exec_door_trans_mv()
+    {
+        _doorTransitionMvs[gGameTable.door_trans_mv]();
+        if (gGameTable.ctcb->var_13 == 0)
+        {
+            gGameTable.door_trans_mv++;
+            if (_doorTransitionMvs[gGameTable.door_trans_mv] == nullptr)
+            {
+                gGameTable.byte_680598 = 0;
+                marni::unload_texture_page(18);
+                movie_set(1);
+                task_exit();
+            }
+        }
+    }
+
+    // 0x004DE7B0
+    static void set_room()
+    {
+        interop::call(0x004DE7B0);
+    }
+
+    // 0x004505C0
+    static void door_load()
+    {
+        interop::call(0x004505C0);
+    }
+
+    // 0x004C0840
+    static void door_set()
+    {
+        auto& ctcb = *gGameTable.ctcb;
+        auto& player = gGameTable.pl;
+        auto doorAotData = reinterpret_cast<SceAotDoorData*>(gGameTable.door_aot_data);
+        auto zappingFlagAddr = gGameTable.flag_groups[static_cast<uint32_t>(FlagGroup::Zapping)];
+
+        switch (ctcb.var_09)
+        {
+        case 2: goto LABEL_14;
+        case 3:
+        {
+            door_load();
+            if (!ctcb.var_13)
+            {
+                ctcb.var_09 = 4;
+                task_sleep(1);
+            }
+            break;
+        }
+        case 4:
+        {
+            if (check_flag(FlagGroup::Status, FG_SYSTEM_14))
+            {
+                task_sleep(1);
+                return;
+            }
+            task_execute(1, &door_main);
+            goto LABEL_5;
+        }
+        case 5: goto LABEL_18;
+        case 6: goto LABEL_23;
+        case 7: goto LABEL_25;
+        case 8: goto LABEL_27;
+        case 10: goto LABEL_29;
+        case 11:
+        {
+            if (check_flag(FlagGroup::Status, FG_STATUS_9))
+            {
+                bg_set_mode(2, 0);
+                set_flag(FlagGroup::Status, FG_STATUS_9, false);
+            }
+            ctcb.var_09 = 0;
+            return;
+        }
+        default:
+        {
+            if (check_flag(FlagGroup::System, FG_SYSTEM_7))
+            {
+                door_snd_trans();
+            }
+            ctcb.var_09 = 2;
+        LABEL_14:
+            if (check_flag(FlagGroup::System, FG_SYSTEM_15))
+            {
+                task_sleep(1);
+                return;
+            }
+            if (check_flag(FlagGroup::System, FG_SYSTEM_7) && bitarray_get(zappingFlagAddr, 0x3f))
+            {
+                gGameTable.byte_989EEA = static_cast<uint8_t>(gGameTable.current_cut);
+                set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, true);
+                gGameTable.door_trans_mv = DOOR_TRANS_MV_00;
+                task_execute(1, &exec_door_trans_mv);
+                ctcb.var_09 = 5;
+            LABEL_18:
+                if (check_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION) && gGameTable.door_trans_mv != DOOR_TRANS_MV_04)
+                {
+                    task_sleep(1);
+                    return;
+                }
+            LABEL_5:
+                player.old_pos.x = doorAotData->TargetX;
+                player.sca_old_x = player.old_pos.x;
+                player.m.pos.x = player.old_pos.x;
+                player.old_pos.y = doorAotData->TargetY;
+                player.m.pos.y = player.old_pos.y;
+                player.old_pos.z = doorAotData->TargetZ;
+                player.sca_old_z = player.old_pos.z;
+                player.m.pos.z = player.old_pos.z;
+                player.cdir.y = doorAotData->TargetD;
+                player.nFloor = doorAotData->TargetFloor;
+                player.ground = player.nFloor * -1800;
+                gGameTable.byte_989EEA = doorAotData->TargetCut;
+                gGameTable.current_cut = gGameTable.byte_989EEA;
+                gGameTable.last_cut = gGameTable.current_room + ((gGameTable.current_stage + 1) << 8);
+                gGameTable.current_room = doorAotData->TargetRoom;
+
+                if (gGameTable.current_stage != doorAotData->TargetStage % 9)
+                {
+                    gGameTable.current_stage = doorAotData->TargetStage % 9;
+                    set_stage();
+                    if (ctcb.var_13)
+                    {
+                        ctcb.var_09 = 6;
+                        return;
+                    }
+                }
+                ctcb.var_09 = 6;
+            LABEL_23:
+                if (check_flag(FlagGroup::Status, FG_STATUS_14))
+                {
+                    task_sleep(1);
+                    return;
+                }
+                ctcb.var_09 = 7;
+            LABEL_25:
+                snd_bgm_ck();
+                if (!ctcb.var_13)
+                {
+                    kage_work_init();
+                    kage_work9_init();
+                    ctcb.var_09 = 8;
+                LABEL_27:
+                    set_room();
+                    if (!ctcb.var_13)
+                    {
+                        ctcb.var_09 = 10;
+                    LABEL_29:
+                        if (check_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION))
+                        {
+                            task_sleep(1);
+                            return;
+                        }
+                        bg_set_mode(0, 0);
+                        cut_check(1);
+                        gGameTable.byte_98F07B = 1;
+                        ctcb.var_09 = 11;
+                        task_sleep(1);
+                    }
+                }
+            }
+            else
+            {
+                bg_set_mode(2, 0);
+                ctcb.var_09 = 3;
+                door_load();
+                if (!ctcb.var_13)
+                {
+                    ctcb.var_09 = 4;
+                    task_sleep(1);
+                }
+            }
+        }
+        }
+    }
+
     void door_init_hooks()
     {
         interop::writeJmp(0x0044FEA0, &door_main);
+        interop::writeJmp(0x004C0840, &door_set);
     }
 }
