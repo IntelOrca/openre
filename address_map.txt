@@ -460,14 +460,29 @@ declare     reset_r0                u8                      0x0068058F
 declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
 declare     hard_mode               u8                      0x006805B1
+declare     censorship_off          u8                      0x006805B3
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
 declare     idd                     u32                     0x00689790
+declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
+declare     title_disp_add          u8                      0x00691B81
+declare     byte_691B82             u8                      0x00691B82
+declare     byte_691B83             u8                      0x00691B83
+declare     byte_691B85             u8                      0x00691B85
+declare     title_mode              u8                      0x00691B86
+declare     title_cursor            u8                      0x00691B87
+declare     byte_691B88             u8                      0x00691B88
+declare     byte_691B89             u8                      0x00691B89
+declare     byte_691B8D             u8                      0x00691B8D
+declare     byte_691B8E             u8                      0x00691B8E
+declare     demo_countdown          u16                     0x00691B90
+declare     ti_kido                 s16                     0x00691B92
+declare     ti_add                  s16                     0x00691B94
 declare     word_691B96             s16                     0x00691B96
 declare     word_691B98             s16                     0x00691B98
 declare     dword_691B9C            s32                     0x00691B9C
@@ -546,6 +561,7 @@ declare     aot_table               void*[32]               0x00988850
 declare     dword_9888D8            u16                     0x009888D8
 declare     fg_system               u32                     0x00989E6C
 declare     byte_989E90             u8                      0x00989E90
+declare     byte_989E91             u8                      0x00989E91
 declare     fg_status               u32                     0x00989ED0
 declare     fg_stop                 u32                     0x00989ED4
 declare     fg_use                  u32                     0x00989ED8
@@ -607,11 +623,13 @@ declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98EE7B             u8                      0x0098EE7B
 declare     saved_splayer_health    s16                     0x0098EE7C
+declare     word_98EE7E             u16                     0x0098EE7E
 declare     dword_98F074            u32                     0x0098F074
 declare     word_98F078             u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
+declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
@@ -619,6 +637,7 @@ declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
+declare     dword_99CF6C            u32                     0x0099CF6C
 declare     dword_99CF70            u32                     0x0099CF70
 
 struct      Unknown6949F8
