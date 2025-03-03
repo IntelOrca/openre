@@ -467,6 +467,7 @@ declare     door                    DoorInfo*               0x00689400
 declare     idd                     u32                     0x00689790
 declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
+declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
@@ -584,6 +585,8 @@ declare     enemy_init_table        void*[192]              0x0098A2D4
 declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
 declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     aot_count               u8                      0x0098E528
+declare     byte_98E541             u8                      0x0098E541
+declare     dword_98E790            u32                     0x0098E790
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
 declare     num_saves               u16                     0x0098E9BC

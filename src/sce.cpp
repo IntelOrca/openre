@@ -52,7 +52,6 @@ namespace openre::sce
     static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
     static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
     static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
-    static uint8_t& byte_98E541 = *((uint8_t*)0x98E541);
     static void*& dword_98E790 = *((void**)0x98E790);
     static Action& dword_98E794 = *((Action*)0x98E794);
     static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
@@ -72,6 +71,7 @@ namespace openre::sce
     constexpr uint32_t MESSAGE_KIND_YOU_UNLOCKED_IT = 10;
     constexpr uint32_t MESSAGE_KIND_LOCKED_FROM_OTHER_SIDE = 11;
     constexpr uint32_t MESSAGE_KIND_LEAVE_SHERRY_BEHIND = 8;
+    constexpr uint32_t MESSAGE_KIND_DISCARD_USELESS_KEY = 9;
 
     PlayerEntity* GetPlayerEntity()
     {
@@ -304,11 +304,52 @@ namespace openre::sce
         entry = aot;
     }
 
-    static int sub_4E95F0()
+    // 0x00502690
+    static void sort_item()
     {
-        using sig = int (*)();
-        auto p = (sig)0x004E95F0;
-        return p();
+        interop::call<void>(0x00502690);
+    }
+
+    // 0x004E95F0
+    static void use_key()
+    {
+        auto& inventory = gGameTable.inventory;
+
+        if (gGameTable.byte_98E541)
+        {
+            gGameTable.dword_689CA0 = gGameTable.byte_98E541 - 1;
+            if (gGameTable.fg_message >= 0)
+            {
+                // Key still working in other doors
+                if (--inventory[gGameTable.dword_689CA0].Quantity)
+                {
+                    gGameTable.dword_98E790 = 0;
+                    gGameTable.byte_98E541 = 0;
+                }
+                else // Useless key, discard it
+                {
+                    show_message(0, 0x100, MESSAGE_KIND_DISCARD_USELESS_KEY, 0xFF000000);
+                    gGameTable.byte_98E541 = 0;
+                    gGameTable.fg_stop |= 0xFF000000;
+                }
+            }
+        }
+        else if (gGameTable.fg_message >= 0)
+        {
+            if (gGameTable.fg_message & 1)
+            {
+                // Keep useless key in the inventory
+                inventory[gGameTable.dword_689CA0].Quantity = 1;
+            }
+            else
+            {
+                // Discard key
+                inventory[gGameTable.dword_689CA0].Type = ITEM_TYPE_NONE;
+                inventory[gGameTable.dword_689CA0].Part = 0;
+                sort_item();
+            }
+            gGameTable.dword_98E790 = 0;
+        }
     }
 
     // 0x004E9930
@@ -452,8 +493,8 @@ namespace openre::sce
             gPickupItemName = key;
             show_message(0, 0x100, MESSAGE_KIND_YOU_USED_KEY_X, 0xFF000000);
             snd_se_on(0x2250000);
-            dword_98E790 = &sub_4E95F0;
-            byte_98E541 = inventoryIndex + 1;
+            dword_98E790 = &use_key;
+            gGameTable.byte_98E541 = inventoryIndex + 1;
         }
 
         bitarray_set(gGameTable.door_locks, data->LockId & 0x3F);

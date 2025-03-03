@@ -608,7 +608,9 @@ struct GameTable
     uint8_t byte_68984A;                // 0x68984A
     uint8_t pad_68984B[913];            // 0x68984B
     uint32_t dword_689BDC;              // 0x689BDC
-    uint8_t pad_689BE0[536];            // 0x689BE0
+    uint8_t pad_689BE0[192];            // 0x689BE0
+    uint32_t dword_689CA0;              // 0x689CA0
+    uint8_t pad_689CA4[340];            // 0x689CA4
     uint32_t dword_689DF8;              // 0x689DF8
     uint8_t pad_689DFC[1032];           // 0x689DFC
     Unknown68A204* ctcb;                // 0x68A204
@@ -778,7 +780,11 @@ struct GameTable
     ObjectEntity pOm[32];               // 0x98A61C
     uint8_t pad_98E51C[12];             // 0x98E51C
     uint8_t aot_count;                  // 0x98E528
-    uint8_t pad_98E529[627];            // 0x98E529
+    uint8_t pad_98E529[24];             // 0x98E529
+    uint8_t byte_98E541;                // 0x98E541
+    uint8_t pad_98E542[590];            // 0x98E542
+    uint32_t dword_98E790;              // 0x98E790
+    uint8_t pad_98E794[8];              // 0x98E794
     uint8_t table_start;                // 0x98E79C
     uint8_t pad_98E79D[519];            // 0x98E79D
     uint8_t inventory_size;             // 0x98E9A4
