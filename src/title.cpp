@@ -1,10 +1,13 @@
 #include "title.h"
 #include "audio.h"
+#include "hud.h"
 #include "interop.hpp"
+#include "marni.h"
 #include "openre.h"
 #include "re2.h"
 
 using namespace openre::audio;
+using namespace openre::hud;
 
 namespace openre::title
 {
@@ -22,9 +25,81 @@ namespace openre::title
         TITLE_STATE_7,
     };
 
+    // 0x0050AA80
+    static void config_write()
+    {
+        interop::call(0x0050AA80);
+    }
+
+    // 0x00503880
+    static void title_bg_reload()
+    {
+        interop::call(0x00503880);
+    }
+
+    // 0x00505B80
+    static void moji_set_work()
+    {
+        interop::call(0x00505B80);
+    }
+
+    // 0x005038B0
+    static void title_init()
+    {
+        config_write();
+        gGameTable.hard_mode = 0;
+        gGameTable.censorship_off = 0;
+        gGameTable.byte_68984A = 0;
+        gGameTable.word_98EE7E = 2;
+        gGameTable.byte_989E91 = 2;
+        gGameTable.fg_system &= 0xFFF7FFBF;
+        marni::out();
+        gGameTable.byte_98F1B7 = 1;
+        gGameTable.byte_98F07A = 0;
+        gGameTable.dword_99CF6C = 0;
+        gGameTable.title_mode = 0;
+        gGameTable.title_cursor = 0;
+        gGameTable.byte_691B88 = 0;
+        gGameTable.byte_691B89 = 1;
+        gGameTable.title_disp_add = 0;
+        gGameTable.byte_691B82 = 0;
+        gGameTable.byte_691B83 = 0;
+        gGameTable.byte_691B85 = 0;
+        gGameTable.demo_countdown = 0;
+        gGameTable.byte_691B8D = 0;
+        gGameTable.byte_691B8E = 0;
+        gGameTable.word_691B98 = -46;
+        gGameTable.word_691B96 = 0;
+        gGameTable.dword_691B9C = -1;
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_2))
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_2, false);
+            bg_set_mode(2, 0);
+            title_bg_reload();
+            hud_fade_set(0x100, 0, 7, 1);
+            hud_fade_adjust(0, 0x7F80, 0, 0);
+            gGameTable.word_691B98 = 240;
+            gGameTable.title_disp_add = 5;
+        }
+        else
+        {
+            bg_set_mode(0, 0);
+            title_bg_reload();
+            hud_fade_set(0x200, 0, 7, 1);
+            hud_fade_adjust(0, 0x7C00, 0, 0);
+            gGameTable.ti_add = -1024;
+            gGameTable.ti_kido = 0x7C00;
+            gGameTable.title_disp_add = 1;
+        }
+
+        moji_set_work();
+        gGameTable.title_mv_state++;
+    }
+
     static Action title_mv[] = {
         (Action)0x00503680, // capcom_logo
-        (Action)0x005038B0, // title_init
+        title_init,
         (Action)0x00503A20, // title_main
         (Action)0x00505460, // title_survivor_load
         (Action)0x00505670, // title_survivor_main
@@ -72,12 +147,6 @@ namespace openre::title
     static void title_bg_load()
     {
         interop::call(0x00503810);
-    }
-
-    // 0x00505B80
-    static void moji_set_work()
-    {
-        interop::call(0x00505B80);
     }
 
     // 0x005035B0

@@ -4,6 +4,19 @@
 
 typedef     ItemType                u8
 
+struct      ItemMixDefinition
+declare     object_item_id          u8
+declare     mix_type                u8
+declare     result_item             u8
+declare     mixed_pix_no            u8
+
+struct      ItemTypeDefinition
+declare     max                     u8
+declare     var_01                  u8
+declare     var_02                  u8
+declare     var_03                  u8
+declare     mix                     ItemMixDefinition*
+
 struct      InventoryDef
 declare     Type                    ItemType
 declare     Quantity                u8
@@ -445,6 +458,7 @@ declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
+declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
 declare     input_mapping           u8[31]                  0x0067CA30
@@ -461,6 +475,7 @@ declare     reset_r0                u8                      0x0068058F
 declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
 declare     hard_mode               u8                      0x006805B1
+declare     censorship_off          u8                      0x006805B3
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
@@ -468,10 +483,25 @@ declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
+declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
+declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
+declare     title_disp_add          u8                      0x00691B81
+declare     byte_691B82             u8                      0x00691B82
+declare     byte_691B83             u8                      0x00691B83
+declare     byte_691B85             u8                      0x00691B85
+declare     title_mode              u8                      0x00691B86
+declare     title_cursor            u8                      0x00691B87
+declare     byte_691B88             u8                      0x00691B88
+declare     byte_691B89             u8                      0x00691B89
+declare     byte_691B8D             u8                      0x00691B8D
+declare     byte_691B8E             u8                      0x00691B8E
+declare     demo_countdown          u16                     0x00691B90
+declare     ti_kido                 s16                     0x00691B92
+declare     ti_add                  s16                     0x00691B94
 declare     word_691B96             s16                     0x00691B96
 declare     word_691B98             s16                     0x00691B98
 declare     dword_691B9C            s32                     0x00691B9C
@@ -482,7 +512,10 @@ declare     word_691DA2             s16                     0x00691DA2
 declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
-declare     byte_691F6C             u8                      0x00691F6C
+declare     byte_691F68             u8                      0x00691F68
+declare     byte_691F69             u8                      0x00691F69
+declare     byte_691F6A             u8                      0x00691F6A
+declare     inventory_cursor        u8                      0x00691F6C
 declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F76             u8                      0x00691F76
 declare     itembox_slot_id         u8                      0x00691F84
@@ -550,6 +583,7 @@ declare     aot_table               void*[32]               0x00988850
 declare     byte_9888D8             u8                      0x009888D8
 declare     fg_system               u32                     0x00989E6C
 declare     byte_989E90             u8                      0x00989E90
+declare     byte_989E91             u8                      0x00989E91
 declare     fg_status               u32                     0x00989ED0
 declare     fg_stop                 u32                     0x00989ED4
 declare     fg_use                  u32                     0x00989ED8
@@ -572,6 +606,8 @@ declare     enemy_init_table        void*[192]              0x0098A2D4
 declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
 declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     aot_count               u8                      0x0098E528
+declare     byte_98E541             u8                      0x0098E541
+declare     dword_98E790            u32                     0x0098E790
 declare     table_start             u8                      0x0098E79C
 declare     inventory_size          u8                      0x0098E9A4
 declare     num_saves               u16                     0x0098E9BC
@@ -606,16 +642,19 @@ declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
 declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
-declare     door_locks              u32[2]                  0x0098ED2C
+declare     door_locks              u32                     0x0098ED2C
+declare     item_twork              InventorySlot           0x0098ED30
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     byte_98EE7B             u8                      0x0098EE7B
 declare     saved_splayer_health    s16                     0x0098EE7C
+declare     word_98EE7E             u16                     0x0098EE7E
 declare     dword_98F074            u32                     0x0098F074
 declare     word_98F078             u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
+declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
@@ -625,6 +664,7 @@ declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
+declare     dword_99CF6C            u32                     0x0099CF6C
 declare     dword_99CF70            u32                     0x0099CF70
 
 struct      Unknown6949F8
