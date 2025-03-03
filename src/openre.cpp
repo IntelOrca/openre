@@ -325,6 +325,7 @@ namespace openre
         bitarray_set(addr, index, value);
     }
 
+
     // 0x004DEF00
     void set_stage()
     {

@@ -82,6 +82,7 @@ namespace openre
     enum
     {
         FG_SYSTEM_0 = 0,
+        FG_SYSTEM_2 = 2,
         FG_SYSTEM_1 = 1,
         FG_SYSTEM_4 = 4,
         FG_SYSTEM_DOOR_TRANSITION = 6,

@@ -4,6 +4,19 @@
 
 typedef     ItemType                u8
 
+struct      ItemMixDefinition
+declare     object_item_id          u8
+declare     mix_type                u8
+declare     result_item             u8
+declare     mixed_pix_no            u8
+
+struct      ItemTypeDefinition
+declare     max                     u8
+declare     var_01                  u8
+declare     var_02                  u8
+declare     var_03                  u8
+declare     mix                     ItemMixDefinition*
+
 struct      InventoryDef
 declare     Type                    ItemType
 declare     Quantity                u8
@@ -459,6 +472,7 @@ declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
+declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
@@ -482,11 +496,26 @@ declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
 declare     idd                     u32                     0x00689790
+declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
+declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF8            u32                     0x00689DF8
 declare     dword_689F20            u32                     0x00689F20
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
+declare     title_disp_add          u8                      0x00691B81
+declare     byte_691B82             u8                      0x00691B82
+declare     byte_691B83             u8                      0x00691B83
+declare     byte_691B85             u8                      0x00691B85
+declare     title_mode              u8                      0x00691B86
+declare     title_cursor            u8                      0x00691B87
+declare     byte_691B88             u8                      0x00691B88
+declare     byte_691B89             u8                      0x00691B89
+declare     byte_691B8D             u8                      0x00691B8D
+declare     byte_691B8E             u8                      0x00691B8E
+declare     demo_countdown          u16                     0x00691B90
+declare     ti_kido                 s16                     0x00691B92
+declare     ti_add                  s16                     0x00691B94
 declare     word_691B96             s16                     0x00691B96
 declare     word_691B98             s16                     0x00691B98
 declare     dword_691B9C            s32                     0x00691B9C
@@ -499,8 +528,9 @@ declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
 declare     byte_691F68             u8                      0x00691F68
+declare     byte_691F69             u8                      0x00691F69
 declare     byte_691F6A             u8                      0x00691F6A
-declare     byte_691F6C             u8                      0x00691F6C
+declare     inventory_cursor        u8                      0x00691F6C
 declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F76             u8                      0x00691F76
 declare     itembox_slot_id         u8                      0x00691F84
@@ -598,6 +628,8 @@ declare     enemy_init_table        void*[192]              0x0098A2D4
 declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
 declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     aot_count               u8                      0x0098E528
+declare     byte_98E541             u8                      0x0098E541
+declare     dword_98E790            u32                     0x0098E790
 declare     byte_98E798             u8                      0x0098E798
 declare     table_start             u8                      0x0098E79C
 declare     dword_98E99C            u32                     0x0098E99C
@@ -641,7 +673,8 @@ declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
 declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
-declare     door_locks              u32[2]                  0x0098ED2C
+declare     door_locks              u32                     0x0098ED2C
+declare     item_twork              InventorySlot           0x0098ED30
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
 declare     word_98EE78             s16                     0x0098EE78
