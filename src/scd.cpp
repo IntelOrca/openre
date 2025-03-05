@@ -248,6 +248,25 @@ namespace openre::scd
         uint16_t dir_y;
     };
 
+    struct SceItemAotSet
+    {
+        uint8_t opcode;
+        uint8_t aot_id;
+        uint8_t sce;
+        uint8_t sat;
+        uint8_t nFloor;
+        uint8_t super;
+        int16_t x;
+        int16_t z;
+        uint16_t w;
+        uint16_t d;
+        uint16_t item_id;
+        uint16_t item_quantity;
+        uint16_t flag;
+        uint8_t md1;
+        uint8_t action;
+    };
+
     constexpr uint8_t SAT_4P = (1 << 7);
 
     using ScdOpcodeImpl = int (*)(SceTask*);
@@ -723,6 +742,42 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E52E0
+    static int scd_item_aot_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<SceItemAotSet*>(sce->data);
+        sce->data += sizeof(SceItemAotSet);
+        if (!gGameTable.aot_table[opcode->aot_id])
+        {
+            gGameTable.aot_count++;
+        }
+        gGameTable.aot_table[opcode->aot_id] = &opcode->sce;
+        // Item already picked up
+        auto flagGroup = gGameTable.current_stage < 4 ? FlagGroup::Item : FlagGroup::Item2;
+        if (check_flag(flagGroup, opcode->flag))
+        {
+            auto aot = (uint32_t*)(gGameTable.aot_table[opcode->aot_id]);
+            *aot &= ~0xFF;
+            if (opcode->md1 < 32)
+            {
+                gGameTable.pOm[opcode->md1].be_flg = 0x80000000;
+                gGameTable.pOm[opcode->md1].free0 = 0;
+            }
+            return SCD_RESULT_NEXT;
+        }
+        if (opcode->md1 >= 32)
+        {
+            return SCD_RESULT_NEXT;
+        }
+
+        gGameTable.pOm[opcode->md1].free0 = opcode->action;
+        if (opcode->action & 2)
+        {
+            gGameTable.pOm[opcode->md1].be_flg = 0x80000000;
+        }
+        return SCD_RESULT_NEXT;
+    }
+
     static bool is_enemy_dead(uint8_t globalId)
     {
         auto fgEnemy = FlagGroup::Enemy2;
@@ -857,6 +912,7 @@ namespace openre::scd
         set_scd_hook(SCE_CUT_AUTO, &scd_cut_auto);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
         set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
+        set_scd_hook(SCD_ITEM_AOT_SET, &scd_item_aot_set);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_EM_SET, &sce_em_set);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
