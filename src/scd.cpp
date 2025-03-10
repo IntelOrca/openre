@@ -752,8 +752,8 @@ namespace openre::scd
             gGameTable.aot_count++;
         }
         gGameTable.aot_table[opcode->aot_id] = &opcode->sce;
-        // Item already picked up
         auto flagGroup = gGameTable.current_stage < 4 ? FlagGroup::Item : FlagGroup::Item2;
+        // Item already picked up
         if (check_flag(flagGroup, opcode->flag))
         {
             auto aot = (uint32_t*)(gGameTable.aot_table[opcode->aot_id]);
