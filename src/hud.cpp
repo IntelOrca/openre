@@ -778,6 +778,42 @@ namespace openre::hud
         hud_render_text_bg();
     }
 
+    // 0x00502590
+    static uint8_t hud_check_item_mix()
+    {
+        auto redCursor = gGameTable.inventory_cursor;
+        auto greenCursor = gGameTable.inventory_cursor_2;
+        auto type = gGameTable.inventory[redCursor].Type;
+
+        if (redCursor == greenCursor)
+        {
+            return 0;
+        }
+        if (gGameTable.inventory[greenCursor].Type == ITEM_TYPE_NONE)
+        {
+            return 0;
+        }
+        auto itemDef = gGameTable.item_def_tbl[type];
+        if (itemDef.var_03 == 0)
+        {
+            return 0;
+        }
+
+        auto counter = 0;
+        while (itemDef.mix->object_item_id != gGameTable.inventory[greenCursor].Type)
+        {
+            if (++counter >= itemDef.var_03)
+            {
+                return 0;
+            }
+            itemDef.mix++;
+        }
+
+        gGameTable.byte_691F86 = itemDef.mix->result_item;
+        gGameTable.byte_691F87 = itemDef.mix->mixed_pix_no;
+        return itemDef.mix->mix_type;
+    }
+
     static void set_hud_hook(uint8_t kind, Action impl)
     {
         gHudImplTable[kind] = impl;
@@ -794,5 +830,6 @@ namespace openre::hud
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
         interop::writeJmp(0x004FC5B0, &exchange_item);
+        interop::writeJmp(0x00502590, &hud_check_item_mix);
     }
 }
