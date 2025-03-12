@@ -612,6 +612,7 @@ namespace openre::hud
                 sort_itembox();
                 snd_se_on(0x4060000);
             }
+
             break;
         }
         case ITEM_BOX_STATE_SELECT_BOX:
@@ -753,8 +754,10 @@ namespace openre::hud
         }
         }
 
-        const auto& item = gGameTable.inventory[gGameTable.inventory_cursor];
+        const auto cursor = gGameTable.inventory_cursor;
+        const auto& item = gGameTable.inventory[cursor];
         hud_render_selection(item.Part);
+        hud_render_inventory_text(16, 175, 6, item.Type);
     }
 
     static const Action _itemBoxRender[] = {
