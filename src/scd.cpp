@@ -260,10 +260,7 @@ namespace openre::scd
     {
         uint8_t opcode;
         uint8_t aot_id;
-        uint8_t sce;
-        uint8_t sat;
-        uint8_t nFloor;
-        uint8_t super;
+        SceAotBase aot;
         int16_t x;
         int16_t z;
         uint16_t w;
@@ -755,21 +752,19 @@ namespace openre::scd
     {
         auto opcode = reinterpret_cast<SceItemAotSet*>(sce->data);
         sce->data += sizeof(SceItemAotSet);
-        if (!gGameTable.aot_table[opcode->aot_id])
-        {
-            gGameTable.aot_count++;
-        }
-        gGameTable.aot_table[opcode->aot_id] = &opcode->sce;
+        set_aot_entry(opcode->aot_id, &opcode->aot);
+        auto obj = GetObjectEntity(opcode->md1);
+
         auto flagGroup = gGameTable.current_stage < 4 ? FlagGroup::Item : FlagGroup::Item2;
         // Item already picked up
         if (check_flag(flagGroup, opcode->flag))
         {
-            auto aot = (uint32_t*)(gGameTable.aot_table[opcode->aot_id]);
-            *aot &= ~0xFF;
+            auto aot = reinterpret_cast<SceAotBase*>(&opcode->aot);
+            aot->Sce = 0;
             if (opcode->md1 < 32)
-            {
-                gGameTable.pOm[opcode->md1].be_flg = 0x80000000;
-                gGameTable.pOm[opcode->md1].free0 = 0;
+            {                
+                obj->be_flg = 0x80000000;
+                obj->free0 = 0;
             }
             return SCD_RESULT_NEXT;
         }
@@ -777,11 +772,11 @@ namespace openre::scd
         {
             return SCD_RESULT_NEXT;
         }
-
-        gGameTable.pOm[opcode->md1].free0 = opcode->action;
+        
+        obj->free0 = opcode->action;
         if (opcode->action & 2)
         {
-            gGameTable.pOm[opcode->md1].be_flg = 0x80000000;
+            obj->be_flg = 0x80000000;
         }
         return SCD_RESULT_NEXT;
     }
