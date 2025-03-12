@@ -759,10 +759,9 @@ namespace openre::scd
         // Item already picked up
         if (check_flag(flagGroup, opcode->flag))
         {
-            auto aot = reinterpret_cast<SceAotBase*>(&opcode->aot);
-            aot->Sce = 0;
+            opcode->aot.Sce = 0;
             if (opcode->md1 < 32)
-            {                
+            {
                 obj->be_flg = 0x80000000;
                 obj->free0 = 0;
             }
@@ -772,7 +771,7 @@ namespace openre::scd
         {
             return SCD_RESULT_NEXT;
         }
-        
+
         obj->free0 = opcode->action;
         if (opcode->action & 2)
         {
