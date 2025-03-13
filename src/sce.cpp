@@ -233,7 +233,7 @@ namespace openre::sce
     // 0x004E3BD0
     void sce_rnd_set()
     {
-        if (check_flag(FlagGroup::System, FG_SYSTEM_7))
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
         {
             gGameTable.rng = rnd();
         }
@@ -250,7 +250,7 @@ namespace openre::sce
     // 0x004E40D0
     static void sce_scheduler_set()
     {
-        if (check_flag(FlagGroup::System, FG_SYSTEM_7))
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
         {
             auto mapFlag = sce_get_map_flg(gGameTable.current_stage, gGameTable.current_room);
             auto state = check_flag(FlagGroup::Map, mapFlag);
