@@ -641,6 +641,7 @@ namespace openre::hud
                 sort_itembox();
                 snd_se_on(0x4060000);
             }
+
             break;
         }
         case ITEM_BOX_STATE_SELECT_BOX:
@@ -782,8 +783,10 @@ namespace openre::hud
         }
         }
 
-        const auto& item = gGameTable.inventory[gGameTable.inventory_cursor];
+        const auto cursor = gGameTable.inventory_cursor;
+        const auto& item = gGameTable.inventory[cursor];
         hud_render_selection(item.Part);
+        hud_render_inventory_text(16, 175, 6, item.Type);
     }
 
     static const Action _itemBoxRender[] = {
@@ -802,6 +805,42 @@ namespace openre::hud
         hud_render_weapon_amount();
         hud_render_weapon();
         hud_render_text_bg();
+    }
+
+    // 0x00502590
+    static uint8_t hud_check_item_mix()
+    {
+        auto redCursor = gGameTable.inventory_cursor;
+        auto greenCursor = gGameTable.inventory_cursor_2;
+        auto type = gGameTable.inventory[redCursor].Type;
+
+        if (redCursor == greenCursor)
+        {
+            return 0;
+        }
+        if (gGameTable.inventory[greenCursor].Type == ITEM_TYPE_NONE)
+        {
+            return 0;
+        }
+        auto itemDef = gGameTable.item_def_tbl[type];
+        if (itemDef.var_03 == 0)
+        {
+            return 0;
+        }
+
+        auto counter = 0;
+        while (itemDef.mix->object_item_id != gGameTable.inventory[greenCursor].Type)
+        {
+            if (++counter >= itemDef.var_03)
+            {
+                return 0;
+            }
+            itemDef.mix++;
+        }
+
+        gGameTable.byte_691F86 = itemDef.mix->result_item;
+        gGameTable.byte_691F87 = itemDef.mix->mixed_pix_no;
+        return itemDef.mix->mix_type;
     }
 
     // 0x004FF1C0
@@ -1139,6 +1178,7 @@ namespace openre::hud
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
         interop::writeJmp(0x004FC5B0, &exchange_item);
+        interop::writeJmp(0x00502590, &hud_check_item_mix);
         interop::writeJmp(0x004F8000, &hud_render_inventory);
     }
 }
