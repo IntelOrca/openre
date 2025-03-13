@@ -256,6 +256,22 @@ namespace openre::scd
         uint16_t size;
     };
 
+    struct SceItemAotSet
+    {
+        uint8_t opcode;
+        uint8_t aot_id;
+        SceAotBase aot;
+        int16_t x;
+        int16_t z;
+        uint16_t w;
+        uint16_t d;
+        uint16_t item_id;
+        uint16_t item_quantity;
+        uint16_t flag;
+        uint8_t md1;
+        uint8_t action;
+    };
+
     constexpr uint8_t SAT_4P = (1 << 7);
 
     using ScdOpcodeImpl = int (*)(SceTask*);
@@ -731,6 +747,39 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E52E0
+    static int scd_item_aot_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<SceItemAotSet*>(sce->data);
+        sce->data += sizeof(SceItemAotSet);
+        set_aot_entry(opcode->aot_id, &opcode->aot);
+        auto obj = GetObjectEntity(opcode->md1);
+
+        auto flagGroup = gGameTable.current_stage < 4 ? FlagGroup::Item : FlagGroup::Item2;
+        // Item already picked up
+        if (check_flag(flagGroup, opcode->flag))
+        {
+            opcode->aot.Sce = 0;
+            if (opcode->md1 < 32)
+            {
+                obj->be_flg = 0x80000000;
+                obj->free0 = 0;
+            }
+            return SCD_RESULT_NEXT;
+        }
+        if (opcode->md1 >= 32)
+        {
+            return SCD_RESULT_NEXT;
+        }
+
+        obj->free0 = opcode->action;
+        if (opcode->action & 2)
+        {
+            obj->be_flg = 0x80000000;
+        }
+        return SCD_RESULT_NEXT;
+    }
+
     static bool is_enemy_dead(uint8_t globalId)
     {
         auto fgEnemy = FlagGroup::Enemy2;
@@ -876,6 +925,7 @@ namespace openre::scd
         set_scd_hook(SCE_CUT_AUTO, &scd_cut_auto);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
         set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
+        set_scd_hook(SCD_ITEM_AOT_SET, &scd_item_aot_set);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_EM_SET, &sce_em_set);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
