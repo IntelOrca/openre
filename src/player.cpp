@@ -252,31 +252,6 @@ namespace openre::player
         loc_4FC3FD();
     }
 
-    // 0x005024D0
-    static int set_inventory_item(int slotId, int type, int quantity, int part)
-    {
-        gGameTable.inventory[slotId].Type = type;
-        gGameTable.inventory[slotId].Quantity = quantity;
-        gGameTable.inventory[slotId].Part = part;
-        return slotId;
-    }
-
-    // 0x00502500
-    static void set_inventory_item_quantity(int slotId, int quantity)
-    {
-        gGameTable.inventory[slotId].Quantity = quantity;
-
-        auto part = gGameTable.inventory[slotId].Part;
-        if (part == 1)
-        {
-            gGameTable.inventory[slotId + 1].Quantity = quantity;
-        }
-        if (part == 2)
-        {
-            gGameTable.inventory[slotId].Quantity = quantity;
-        }
-    }
-
     // 0x004DABC0
     static int pl_neck(int a1, int a2)
     {
@@ -962,8 +937,6 @@ namespace openre::player
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
         interop::writeJmp(0x4FC3CE, itembox_prev_slot);
-        interop::writeJmp(0x5024D0, set_inventory_item);
-        interop::writeJmp(0x502500, set_inventory_item_quantity);
         interop::writeJmp(0x4D97B0, player_move);
         interop::writeJmp(0x4D9D20, pl_move);
         interop::writeJmp(0x4DC130, pl_mv_damage);
