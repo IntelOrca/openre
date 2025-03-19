@@ -1011,5 +1011,29 @@ struct HudInfo
 };
 static_assert(sizeof(HudInfo) == 0x05);
 
+struct MarniRes
+{
+    uint32_t width;                     // 0x0000
+    uint32_t height;                    // 0x0004
+    uint32_t depth;                     // 0x0008
+    uint32_t fullscreen;                // 0x000C
+};
+static_assert(sizeof(MarniRes) == 0x10);
+
+struct Marni
+{
+    uint8_t pad_0000[9203736];          // 0x0000
+    uint32_t modes;                     // 0x8C7018
+    uint8_t pad_8C701C[3264];           // 0x8C701C
+    uint32_t window_rect[4];            // 0x8C7CDC
+    uint8_t pad_8C7CEC[444];            // 0x8C7CEC
+    void* hWnd;                         // 0x8C7EA8
+    uint8_t pad_8C7EAC[76];             // 0x8C7EAC
+    MarniRes resolutions[64];           // 0x8C7EF8
+    uint8_t pad_8C82F8[372];            // 0x8C82F8
+    uint32_t var_8C846C;                // 0x8C846C
+};
+static_assert(sizeof(Marni) == 0x8C8470);
+
 #pragma pack(pop)
 
