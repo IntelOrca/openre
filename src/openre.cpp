@@ -16,7 +16,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "title.h"
-#include <cassert>
+
 #include <cstring>
 #include <windows.h>
 
@@ -151,7 +151,7 @@ namespace openre
     }
 
     // 0x004427E0
-    static void update_timer()
+    void update_timer()
     {
         auto time = timeGetTime();
         _timerCurrent = time;
@@ -323,7 +323,6 @@ namespace openre
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
         bitarray_set(addr, index, value);
     }
-
 
     // 0x004DEF00
     void set_stage()
