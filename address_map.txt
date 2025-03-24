@@ -447,6 +447,15 @@ struct      EnemyInitEntry
 declare     type                    u16
 declare     enabled                 u16
 
+struct      Input
+declare     mapping                 u8[31]
+declare     var_24                  u32                     0x24
+declare     var_1F8                 u32                     0x1F8
+declare     var_1FC                 u32                     0x1FC
+declare     var_3D0                 u32                     0x3D0
+declare     var_3B24                u32                     0x3B24
+declare     keyboard                u32                     0x3B28
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
@@ -460,13 +469,7 @@ declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
-declare     input_mapping           u8[31]                  0x0067CA30
-declare     dword_67CA54            u32                     0x0067CA54
-declare     dword_67CC28            u32                     0x0067CC28
-declare     dword_67CC2C            u32                     0x0067CC2C
-declare     dword_67CE00            u32                     0x0067CE00
-declare     dword_680554            u32                     0x00680554
-declare     input_keyboard          u32                     0x00680558
+declare     input                   Input                   0x0067CA30
 declare     error_no                u32                     0x00680580
 declare     timer_r2                u8                      0x00680586
 declare     can_draw                u16                     0x0068058D
