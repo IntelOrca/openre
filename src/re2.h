@@ -748,7 +748,9 @@ struct GameTable
     uint8_t pad_8C7010[112752];         // 0x8C7010
     DoorInfo door_info;                 // 0x8E2880
     DoorEntity door_data[10];           // 0x8E2ACC
-    uint8_t pad_8E37C4[643900];         // 0x8E37C4
+    uint8_t pad_8E37C4[114908];         // 0x8E37C4
+    uint32_t work_buffer;               // 0x8FF8A0
+    uint8_t pad_8FF8A4[528988];         // 0x8FF8A4
     CCWork cc_work;                     // 0x980B00
     uint8_t pad_9813EC[178];            // 0x9813EC
     uint8_t door_trans_mv;              // 0x98149E
@@ -765,7 +767,7 @@ struct GameTable
     uint32_t dword_988610;              // 0x988610
     uint8_t pad_988614[8];              // 0x988614
     Rdt* rdt;                           // 0x98861C
-    uint8_t pad_988620[4];              // 0x988620
+    uint32_t dword_988620;              // 0x988620
     void* mem_top;                      // 0x988624
     uint8_t pad_988628[4];              // 0x988628
     void* dword_98862C;                 // 0x98862C
