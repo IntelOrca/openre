@@ -92,13 +92,27 @@ namespace openre::input
         return gGameTable.input_keyboard;
     }
 
+    static uint32_t dword_524CE8[32] = {
+        0x1000, 0x4000, 0x8000, 0x2000, 0x20, 0x44, 0x2, 0x10, 0x4, 0x1,    0x8,    0x80,   0x100,  0x800, 0,    0,
+        0,      0,      0,      0,      0,    0,    0,   0,    0,   0x1000, 0x4000, 0x8000, 0x2000, 0x80,  0x80, 0x40,
+    };
+
     // 0x0043BAC0
     int sub_43BAC0(int a0, int a1)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x0043BAC0;
-        return p(a0, a1);
+        auto result = 0;
+        auto v3 = 1;
+        for (int i = 0; i < 32; i++)
+        {
+            if (v3 & a0)
+            {
+                result |= dword_524CE8[a1 + i];
+            }
+            v3 *= 2;
+        }
+        return result;
     }
+
     // 0x004100F0
     int joy_get_pos_ex(uint8_t* a0)
     {
