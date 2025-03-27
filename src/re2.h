@@ -779,7 +779,12 @@ struct GameTable
     uint16_t dword_9888D8;              // 0x9888D8
     uint8_t pad_9888DA[5522];           // 0x9888DA
     uint32_t fg_system;                 // 0x989E6C
-    uint8_t pad_989E70[32];             // 0x989E70
+    uint8_t pad_989E70[5];              // 0x989E70
+    uint8_t byte_989E75;                // 0x989E75
+    uint16_t word_989E76;               // 0x989E76
+    uint16_t word_989E78;               // 0x989E78
+    uint16_t word_989E7A;               // 0x989E7A
+    uint8_t pad_989E7C[20];             // 0x989E7C
     uint8_t byte_989E90;                // 0x989E90
     uint8_t byte_989E91;                // 0x989E91
     uint8_t pad_989E92[62];             // 0x989E92
