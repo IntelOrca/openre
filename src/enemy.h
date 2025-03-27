@@ -104,7 +104,6 @@ namespace openre::enemy
     int* mem_ck_parts_work(int workNo, int id);
     void oba_ck_em(EnemyEntity* enemy);
     void sca_ck_em(EnemyEntity* enemy, int a1);
-    void add_speed_xz(Entity* entity, int16_t d);
     int root_ck(Entity* entity, int a1, int a2, int a3);
     void goto00(Entity* entity, int x, int z, int t);
     void rot_neck_em(Entity* entity, int d);
