@@ -1067,6 +1067,12 @@ namespace openre::player
         gMoveDamageTable = dmg_tbl;
     }
 
+    // 0x00502530
+    int player_check_life()
+    {
+        return interop::call<int>(0x00502530);
+    }
+
     void player_init_hooks()
     {
         interop::writeJmp(0x00502190, &partner_switch);
