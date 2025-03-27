@@ -169,14 +169,13 @@ namespace openre::enemy
         gGameTable.enemy_init_table[EM_IVY_POISON] = em_2E;
         gGameTable.enemy_init_table[EM_MOTH] = em_3A;
         gGameTable.enemy_init_table[EM_MAGGOTS] = em_3B;
+
         gGameTable.enemy_init_table[EM_3E] = em_3E;
         gGameTable.enemy_init_table[EM_3F] = em_3F;
 
-        gGameTable.enemy_init_table[0x35] = em_30;
-
-        for (auto i = 0; i < 96; i++)
+        for (auto i = 112; i < 159; i++)
         {
-            gGameTable.enemy_init_table[96 + i] = gGameTable.enemy_init_table[i];
+            gGameTable.enemy_init_table[i] = gGameTable.enemy_init_table[i - 96];
         }
     }
 
