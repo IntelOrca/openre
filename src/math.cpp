@@ -378,6 +378,20 @@ namespace openre::math
         rc.pos.z = a1[7];
     }
 
+    // 0x00451490
+    static void transpose_matrix(const Mat16& m, Mat16& res)
+    {
+        res.m[0] = m.m[0];
+        res.m[1] = m.m[3];
+        res.m[2] = m.m[6];
+        res.m[3] = m.m[1];
+        res.m[4] = m.m[4];
+        res.m[5] = m.m[7];
+        res.m[6] = m.m[2];
+        res.m[7] = m.m[5];
+        res.m[8] = m.m[8];
+    }
+
     // 0x00451450
     void set_color_matrix(const Mat16& m)
     {
@@ -409,6 +423,7 @@ namespace openre::math
         interop::writeJmp(0x00450C20, &mul_matrix0);
         interop::writeJmp(0x00450DD0, &mul_matrix);
         interop::writeJmp(0x00450DF0, &mul_matrix2);
+        interop::writeJmp(0x00451490, &transpose_matrix);
         interop::writeJmp(0x00451450, &set_color_matrix);
         interop::writeJmp(0x00451430, &set_light_matrix);
     }
