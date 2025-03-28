@@ -284,10 +284,12 @@ declare     var_22C                 u8          0x22C
 declare     var_22D                 u8          0x22D
 declare     var_22E                 u8          0x22E
 declare     var_230                 u8          0x230
+declare     var_231                 u8          0x231
 declare     var_232                 u8          0x232
 declare     var_233                 u8          0x233
 declare     var_234                 u8          0x234
 declare     var_235                 u8          0x235
+declare     var_236                 u8          0x236
 declare     var_23A                 s8          0x23A
 declare     var_23C                 u8          0x23C
 declare     var_23D                 u8          0x23D
@@ -447,10 +449,21 @@ struct      EnemyInitEntry
 declare     type                    u16
 declare     enabled                 u16
 
+struct      Input
+declare     mapping                 u8[31]
+declare     var_24                  u32                     0x24
+declare     var_1F8                 u32                     0x1F8
+declare     var_1FC                 u32                     0x1FC
+declare     var_3D0                 u32                     0x3D0
+declare     var_3B24                u32                     0x3B24
+declare     keyboard                u32                     0x3B28
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     global_prj              s32                     0x00526268
 declare     math_const_table        s16[1224]               0x00526270
+declare     byte_5286F4             u8[8]                   0x005286F4
+declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
 declare     flag_groups             u32*[35]                0x0053B218
@@ -460,13 +473,7 @@ declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
-declare     input_mapping           u8[31]                  0x0067CA30
-declare     dword_67CA54            u32                     0x0067CA54
-declare     dword_67CC28            u32                     0x0067CC28
-declare     dword_67CC2C            u32                     0x0067CC2C
-declare     dword_67CE00            u32                     0x0067CE00
-declare     dword_680554            u32                     0x00680554
-declare     input_keyboard          u32                     0x00680558
+declare     input                   Input                   0x0067CA30
 declare     error_no                u32                     0x00680580
 declare     timer_r2                u8                      0x00680586
 declare     can_draw                u16                     0x0068058D
@@ -482,6 +489,7 @@ declare     idd                     u32                     0x00689790
 declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
 declare     dword_689CA0            u32                     0x00689CA0
+declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
@@ -508,14 +516,22 @@ declare     word_691DA2             s16                     0x00691DA2
 declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
+declare     byte_691F64             u8                      0x00691F64
 declare     byte_691F68             u8                      0x00691F68
 declare     byte_691F69             u8                      0x00691F69
 declare     byte_691F6A             u8                      0x00691F6A
 declare     inventory_cursor        u8                      0x00691F6C
+declare     inventory_cursor_2      u8                      0x00691F6D
+declare     inventory_cursor_3      u8                      0x00691F6E
+declare     byte_691F6F             u8                      0x00691F6F
 declare     byte_691F70             u8                      0x00691F70
+declare     byte_691F74             u8                      0x00691F74
 declare     byte_691F76             u8                      0x00691F76
 declare     itembox_slot_id         u8                      0x00691F84
 declare     byte_691F85             u8                      0x00691F85
+declare     byte_691F86             u8                      0x00691F86
+declare     byte_691F87             u8                      0x00691F87
+declare     word_691FA8             s16                     0x00691FA8
 declare     word_691FB0             u16                     0x00691FB0
 declare     word_691FB2             u16                     0x00691FB2
 declare     byte_692D64             u8                      0x00692D64
@@ -579,6 +595,10 @@ declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     dword_9888D8            u16                     0x009888D8
 declare     fg_system               u32                     0x00989E6C
+declare     byte_989E75             u8                      0x00989E75
+declare     word_989E76             u16                     0x00989E76
+declare     word_989E78             u16                     0x00989E78
+declare     word_989E7A             u16                     0x00989E7A
 declare     byte_989E90             u8                      0x00989E90
 declare     byte_989E91             u8                      0x00989E91
 declare     fg_status               u32                     0x00989ED0
