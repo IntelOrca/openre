@@ -10,4 +10,7 @@ namespace openre
     int joint_move(Entity* player, Emr* pKanPtr, Edd* pSeqPtr, int lateFlag);
     int32_t goto00_ck(Entity* entity, int32_t x, int32_t z, int32_t dist);
     void add_speed_xz(Entity* entity, int16_t d);
+    uint8_t compute_nfloor(int32_t posY);
+    void oma_set_ofs(ObjectEntity* object);
+    int omd_in_check(Vec32* vec, ObjectEntity* object, int a2, int a3);
 }
