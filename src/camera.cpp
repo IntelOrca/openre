@@ -27,10 +27,42 @@ namespace openre::camera
         return gGameTable.vcut_data[1];
     }
 
+    // 0x004C4EC0
+    bool hit_ck_point4(int32_t* pos, VCut* camSwitch)
+    {
+        return interop::call<bool, int32_t*, VCut*>(0x004C4EC0, pos, camSwitch);
+    }
+
     // 0x004C4DE0
     void cut_check(uint8_t cut_id)
     {
-        interop::call<void, uint8_t>(0x004C4DE0, cut_id);
+        auto camSwitch = gGameTable.vcut_data[1];
+        camSwitch++;
+
+        if (camSwitch->fCut == gGameTable.byte_989EEA)
+        {
+            uint8_t fcut;
+            do
+            {
+                if (camSwitch->be_flg)
+                {
+                    if (camSwitch->nFloor == 0xFF || camSwitch->nFloor == gGameTable.pl.nFloor)
+                    {
+                        if (hit_ck_point4(&gGameTable.pl.m.pos.x, camSwitch))
+                        {
+                            cut_change(camSwitch->tCut);
+                            return;
+                        }
+                    }
+                }
+                fcut = camSwitch[1].fCut;
+                ++camSwitch;
+            } while (fcut == gGameTable.byte_989EEA);
+        }
+        if (cut_id)
+        {
+            cut_change(gGameTable.byte_989EEA);
+        }
     }
 
     // 0x004E5020
@@ -47,5 +79,6 @@ namespace openre::camera
         interop::writeJmp(0x004E5020, &sub_4E5020);
         interop::writeJmp(0x004C4E60, &cut_change);
         interop::writeJmp(0x004C4E90, &cut_search);
+        interop::writeJmp(0x004C4DE0, &cut_check);
     }
 };

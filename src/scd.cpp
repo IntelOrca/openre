@@ -33,10 +33,12 @@ namespace openre::scd
         SCD_EVT_EXEC = 0x04,
         SCD_EVT_KILL = 0x05,
         SCD_IFEL_CK = 0x06,
+        SCD_ELSE_CK = 0x07,
         SCD_END_IF = 0x08,
         SCD_SCE_RND = 0x28,
         SCD_CUT_CH = 0x29,
         SCD_CUT_OLD = 0x2A,
+        SCD_MESSAGE_ON = 0x2B,
         SCD_AOT_SET = 0x2C,
         SCD_WORK_SET = 0x2E,
         SCD_SCE_ESPR_ON = 0x3A,
@@ -53,6 +55,7 @@ namespace openre::scd
         SCD_AOT_SET_4P = 0x67,
         SCD_DOOR_AOT_SET_4P = 0x68,
         SCD_ITEM_AOT_SET_4P = 0x69,
+        SCD_MIRROR_SET = 0x73,
         SCD_HEAL = 0x83,
         SCD_POISON_CK = 0x86,
         SCD_POISON_CLR = 0x87,
@@ -190,6 +193,15 @@ namespace openre::scd
         uint8_t Opcode;
     };
 
+    struct ScdMessageOn
+    {
+        uint8_t Opcode;
+        uint8_t var_01;
+        uint8_t var_02;
+        uint8_t var_03;
+        uint16_t var_04;
+    };
+
     struct ScdCutAuto
     {
         uint8_t Opcode;
@@ -236,6 +248,38 @@ namespace openre::scd
         int16_t svec_y;
         int16_t svec_z;
         uint16_t dir_y;
+    };
+
+    struct ScdElseCk
+    {
+        uint8_t opcode;
+        uint8_t var_01;
+        uint16_t size;
+    };
+
+    struct SceItemAotSet
+    {
+        uint8_t opcode;
+        uint8_t aot_id;
+        SceAotBase aot;
+        int16_t x;
+        int16_t z;
+        uint16_t w;
+        uint16_t d;
+        uint16_t item_id;
+        uint16_t item_quantity;
+        uint16_t flag;
+        uint8_t md1;
+        uint8_t action;
+    };
+
+    struct ScdMirrorSet
+    {
+        uint8_t opcode;
+        uint8_t flag;
+        uint16_t position;
+        uint16_t min;
+        uint16_t max;
     };
 
     constexpr uint8_t SAT_4P = (1 << 7);
@@ -650,6 +694,17 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E5170
+    static int scd_message_on(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdMessageOn*>(sce->data);
+        auto a3 = opcode->var_04 << 16;
+        show_message(0, opcode->var_03 + 768, opcode->var_02, a3);
+        gGameTable.fg_stop |= a3;
+        sce->data += 6;
+        return SCD_RESULT_NEXT;
+    }
+
     // 0x004E5050
     static int scd_cut_auto(SceTask* sce)
     {
@@ -668,30 +723,30 @@ namespace openre::scd
 
         if (vCuts->be_flg != -1)
         {
-            auto nextBeFlg = 0;
+            uint8_t nextBeFlg = 0;
             do
             {
-                if (uint8_t(vCuts->be_flg) == opcode->Id)
+                if (vCuts->be_flg == opcode->Id)
                 {
                     vCuts->be_flg = opcode->value;
                 }
-                else if (uint8_t(vCuts->be_flg) == opcode->value)
+                else if (vCuts->be_flg == opcode->value)
                 {
                     vCuts->be_flg = opcode->Id;
                 }
 
-                if (uint8_t(vCuts->nFloor) == opcode->Id)
+                if (vCuts->nFloor == opcode->Id)
                 {
                     vCuts->nFloor = opcode->value;
                 }
-                else if (uint8_t(vCuts->nFloor) == opcode->value)
+                else if (vCuts->nFloor == opcode->value)
                 {
                     vCuts->nFloor = opcode->Id;
                 }
                 nextBeFlg = vCuts[1].be_flg;
                 ++vCuts;
 
-            } while (nextBeFlg != -1);
+            } while (nextBeFlg != 0xFF);
         }
 
         if (gGameTable.vcut_data[1]->fCut == opcode->Id)
@@ -699,6 +754,39 @@ namespace openre::scd
             cut_change(opcode->value);
         }
         sce->data += 3;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E52E0
+    static int scd_item_aot_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<SceItemAotSet*>(sce->data);
+        sce->data += sizeof(SceItemAotSet);
+        set_aot_entry(opcode->aot_id, &opcode->aot);
+        auto obj = GetObjectEntity(opcode->md1);
+
+        auto flagGroup = gGameTable.current_stage < 4 ? FlagGroup::Item : FlagGroup::Item2;
+        // Item already picked up
+        if (check_flag(flagGroup, opcode->flag))
+        {
+            opcode->aot.Sce = 0;
+            if (opcode->md1 < 32)
+            {
+                obj->be_flg = 0x80000000;
+                obj->free0 = 0;
+            }
+            return SCD_RESULT_NEXT;
+        }
+        if (opcode->md1 >= 32)
+        {
+            return SCD_RESULT_NEXT;
+        }
+
+        obj->free0 = opcode->action;
+        if (opcode->action & 2)
+        {
+            obj->be_flg = 0x80000000;
+        }
         return SCD_RESULT_NEXT;
     }
 
@@ -806,6 +894,29 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E4510
+    static int scd_else_ck(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdElseCk*>(sce->data);
+        sce->data += opcode->size;
+        sce->sp -= 4;
+        sce->ifel_ctr[sce->sub_ctr]--;
+        return SCD_RESULT_NEXT;
+    }
+
+    // 0x004E8DB0
+    static int scd_mirror_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdMirrorSet*>(sce->data);
+        set_flag(FlagGroup::Status, FG_STATUS_MIRROR, true);
+        gGameTable.byte_989E75 = opcode->flag;
+        gGameTable.word_989E76 = opcode->position;
+        gGameTable.word_989E78 = opcode->min;
+        gGameTable.word_989E7A = opcode->max;
+        sce->data += sizeof(ScdMirrorSet);
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -824,10 +935,12 @@ namespace openre::scd
         set_scd_hook(SCD_EVT_EXEC, &scd_evt_exec);
         set_scd_hook(SCD_EVT_KILL, &scd_evt_kill);
         set_scd_hook(SCD_IFEL_CK, &scd_ifel_ck);
+        set_scd_hook(SCD_ELSE_CK, &scd_else_ck);
         set_scd_hook(SCD_END_IF, &scd_end_if);
         set_scd_hook(SCD_SCE_RND, &scd_sce_rnd);
         set_scd_hook(SCD_CUT_CH, &scd_cut_ch);
         set_scd_hook(SCD_CUT_OLD, &scd_cut_old);
+        set_scd_hook(SCD_MESSAGE_ON, &scd_message_on);
         set_scd_hook(SCD_AOT_SET, &scd_aot_set);
         set_scd_hook(SCD_WORK_SET, &scd_work_set);
         set_scd_hook(SCD_SCE_ESPR_ON, &scd_sce_espr_on);
@@ -835,12 +948,14 @@ namespace openre::scd
         set_scd_hook(SCE_CUT_AUTO, &scd_cut_auto);
         set_scd_hook(SCD_PLC_MOTION, &scd_plc_motion);
         set_scd_hook(SCD_CUT_REPLACE, &scd_cut_replace);
+        set_scd_hook(SCD_ITEM_AOT_SET, &scd_item_aot_set);
         set_scd_hook(SCD_SCE_KEY_CK, &scd_sce_key_ck);
         set_scd_hook(SCD_SCE_EM_SET, &sce_em_set);
         set_scd_hook(SCD_SCE_BGM_CONTROL, &scd_sce_bgm_control);
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_CUT_BE_SET, &scd_cut_be_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
+        set_scd_hook(SCD_MIRROR_SET, &scd_mirror_set);
         set_scd_hook(SCD_HEAL, &scd_heal);
         set_scd_hook(SCD_POISON_CK, &scd_poison_ck);
         set_scd_hook(SCD_POISON_CLR, &scd_poison_clr);

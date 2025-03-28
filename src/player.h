@@ -43,6 +43,7 @@ namespace openre::player
     extern InventorySlot* gInventory;
 
     int inventory_find_item(ItemType type);
+    int player_check_life();
     void player_set(PlayerEntity* player);
     bool is_aiming();
     void set_routine(Routine routine);

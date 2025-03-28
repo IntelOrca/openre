@@ -4,6 +4,7 @@
 #include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "math.h"
 #include "model.h"
 #include "openre.h"
 #include "re2.h"
@@ -18,6 +19,7 @@ using namespace openre::camera;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::hud;
+using namespace openre::math;
 using namespace openre::room;
 
 namespace openre::door
@@ -96,10 +98,68 @@ namespace openre::door
         interop::call(0x00450230);
     }
 
+    // 0x00451590
+    static void set_back_color(int a0, int a1, int a2)
+    {
+        gGameTable.dword_689440 = 16 * a0;
+        gGameTable.dword_689444 = 16 * a1;
+        gGameTable.dword_689448 = 16 * a2;
+    }
+
     // 0x00450350
     static void door_trans()
     {
-        interop::call(0x00450350);
+        auto prepacket = reinterpret_cast<uintptr_t>(gGameTable.door->prepacket);
+        if (gGameTable.byte_9888D8)
+        {
+            prepacket += 2048;
+        }
+        gGameTable.door->prepacket = reinterpret_cast<void*>(prepacket);
+        gGameTable.door->ctr1 = 0;
+
+        for (int i = 0; i < 10; i++)
+        {
+            auto& door = *gGameTable.doors[i];
+            if (!door.be_flg)
+            {
+                continue;
+            }
+
+            rotate_matrix(door.cdir, door.m);
+            if (door.attribute_2 & 0x1000)
+            {
+                set_back_color(136, 136, 136);
+            }
+            else
+            {
+                set_back_color(68, 68, 68);
+            }
+            set_color_matrix(gGameTable.door_lc);
+            Mat16 light{};
+            mul_matrix0(gGameTable.door_ll, door.workm, light);
+            set_light_matrix(light);
+            if (door.attribute_2 & 0x100)
+            {
+                auto free2 = (door.free2 + 8) & 0x1FF;
+                door.free2 = free2;
+                if (free2 & 0x100)
+                {
+                    door.free2 = 256 - free2;
+                }
+                door.poly_rgb = door.free2 | ((door.free2 | (door.free2 << 8)) << 8);
+            }
+            compare_matrix(*door.pSuper, door.m, door.workm);
+            set_rot_matrix(door.workm);
+            set_trans_matrix((uint32_t*)&door.workm.m);
+            if ((door.attribute_2 & 0xC0) == 64 && gGameTable.scd_var_temp == 45)
+            {
+                marni::door_disp1(i);
+            }
+            else
+            {
+                marni::door_disp0(i, door.attribute_2 & 0x4000, 0, 0);
+            }
+        }
     }
 
     // 0x00432A40
@@ -241,7 +301,52 @@ namespace openre::door
     // 0x004507E0
     static void door_snd_trans()
     {
-        interop::call(0x004507E0);
+        if (check_flag(FlagGroup::Common, 0xFC))
+        {
+            return;
+        }
+        int enabledFlagCnt = 0;
+        for (int i = 248; i <= 255; i++)
+        {
+            if (check_flag(FlagGroup::Item, i))
+            {
+                enabledFlagCnt++;
+            }
+        }
+        if (enabledFlagCnt < 7)
+        {
+            return;
+        }
+        set_flag(FlagGroup::Common, 0xFC, true);
+        bgm_set_entry(0x105FF34);
+        for (int i = 7; i < 24; i++)
+        {
+            if (i == 15)
+            {
+                i = 16;
+            }
+            bgm_set_entry((i << 16) | 0x100FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 8)
+            {
+                i = 9;
+            }
+            else if (i == 23)
+            {
+                i = 25;
+            }
+            bgm_set_entry((i << 16) | 0x200FF34);
+        }
+        for (int i = 0; i < 28; i++)
+        {
+            if (i == 5)
+            {
+                i = 7;
+            }
+            bgm_set_entry((i << 16) | 0x300FF34);
+        }
     }
 
     // 0x00441870

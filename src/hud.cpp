@@ -5,10 +5,12 @@
 #include "item.h"
 #include "itembox.h"
 #include "openre.h"
+#include "player.h"
 
 using namespace openre::audio;
 using namespace openre::file;
 using namespace openre::itembox;
+using namespace openre::player;
 
 namespace openre::hud
 {
@@ -19,7 +21,24 @@ namespace openre::hud
         ITEM_BOX_STATE_SCROLL_UP,
         ITEM_BOX_STATE_SCROLL_DOWN,
         ITEM_BOX_STATE_EXCHANGE,
-        ITEM_BOX_STATE_5,
+        ITEM_BOX_STATE_NOT_ENOUGH_SPACE,
+    };
+
+    enum
+    {
+        EXCHANGE_INVENTORY_TO_BOX_SINGLE,
+        EXCHANGE_BOX_TO_INVENTORY_WIDE,
+        EXCHANGE_INVENTORY_TO_BOX_WIDE_SINGLE,
+        EXCHANGE_INVENTORY_TO_BOX_WIDE,
+    };
+
+    enum
+    {
+        INVENTORY_ITEM_GRID,
+        INVENTORY_ITEM_COMMAND_BOX,
+        INVENTORY_ITEM_COMMAND_BOX_SELECT,
+        INVENTORY_ITEM_SHOW_COMMAND_BOX,
+        INVENTORY_ITEM_HIDE_COMMAND_BOX,
     };
 
     using Action = void (*)();
@@ -28,6 +47,8 @@ namespace openre::hud
     static HudInfo*& gHudInfoPtr = *((HudInfo**)0x53DB70);
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
     static uint8_t* _bgBuffer = (uint8_t*)0x8C1880;
+
+    constexpr int8_t INVENTORY_IS_FULL = -1;
 
     // 0x004C4AD0
     static int hud_screen_fade(int a0)
@@ -193,6 +214,24 @@ namespace openre::hud
         p();
     }
 
+    // 0x004FFAB0
+    static void hud_render_inventory_ecg(int playerLife)
+    {
+        interop::call<void, int>(0x004FFAB0, playerLife);
+    }
+
+    // 0x004FEA30
+    static void hud_render_inventory_player_face()
+    {
+        interop::call(0x004FEA30);
+    }
+
+    // 0x004FEF70
+    static void hud_render_inventory_topbar()
+    {
+        interop::call(0x004FEF70);
+    }
+
     // 0x004FBEB0
     static void hud_itembox_1()
     {
@@ -244,12 +283,308 @@ namespace openre::hud
         }
     }
 
+    // 0x00502720
+    static void sub_502720(int a0)
+    {
+        using sig = void (*)(int);
+        auto p = (sig)0x00502720;
+        p(a0);
+    }
+
+    /**
+     * 0x00502620
+     *
+     * If type == ITEM_TYPE_NONE, returns the index of the first empty inventory slot or INVENTORY_IS_FULL if the inventory is
+     * full. If type != ITEM_TYPE_NONE, returns the number of empty inventory slots.
+     */
+    static int8_t search_item(ItemType type)
+    {
+        if (type == ITEM_TYPE_NONE)
+        {
+            for (int i = 0; i < gGameTable.inventory_size; i++)
+            {
+                if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+                {
+                    return i;
+                }
+            }
+            return INVENTORY_IS_FULL;
+        }
+
+        auto emptySlotCount = 0;
+        for (int i = 0; i < gGameTable.inventory_size; i++)
+        {
+            if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+            {
+                emptySlotCount++;
+            }
+        }
+        return emptySlotCount;
+    }
+
+    // 0x00502690
+    static void sort_inventory()
+    {
+        auto freeSlotId = search_item(ITEM_TYPE_NONE);
+        if (freeSlotId == INVENTORY_IS_FULL || freeSlotId + 1 == 10)
+        {
+            return;
+        }
+
+        if (freeSlotId + 1 == 9)
+        {
+            gGameTable.inventory[10].Type = 0;
+            gGameTable.inventory[10].Quantity = 0;
+            gGameTable.inventory[10].Part = 0;
+            return;
+        }
+
+        auto index = freeSlotId + 1;
+        do
+        {
+            gGameTable.inventory[index - 1].Type = gGameTable.inventory[index].Type;
+            gGameTable.inventory[index - 1].Quantity = gGameTable.inventory[index].Quantity;
+            gGameTable.inventory[index - 1].Part = gGameTable.inventory[index].Part;
+
+            if (gGameTable.byte_691F68 == index)
+            {
+                gGameTable.byte_691F68--;
+            }
+            if (gGameTable.byte_692D64 == index)
+            {
+                gGameTable.byte_692D64--;
+            }
+            index++;
+        } while (index < gGameTable.inventory_size);
+
+        gGameTable.inventory[index - 1].Type = 0;
+        gGameTable.inventory[index - 1].Quantity = 0;
+        gGameTable.inventory[index - 1].Part = 0;
+    }
+
     // 0x004FC5B0
     static void exchange_item()
     {
-        using sig = void (*)();
-        auto p = (sig)0x004FC5B0;
-        p();
+        auto* inventorySlot = &gGameTable.inventory[gGameTable.inventory_cursor];
+        const auto boxSlotId = (gGameTable.itembox_slot_id + 2) & 0x3f;
+        auto& boxSlot = gGameTable.itembox[boxSlotId];
+
+        auto numParts = inventorySlot->Part != 0 ? 2 : 0;
+        if (boxSlot.Part)
+        {
+            numParts++;
+        }
+
+        // Moving stackable item from itembox to inventory
+        if (boxSlot.Type >= ITEM_TYPE_AMMO_HANDGUN && boxSlot.Type < ITEM_TYPE_HANDGUN_PARTS)
+        {
+            if (boxSlot.Type == inventorySlot->Type)
+            {
+                const auto max = gGameTable.item_def_tbl[boxSlot.Type].max;
+
+                if (inventorySlot->Quantity == max)
+                {
+                    const auto aux = inventorySlot->Quantity;
+                    inventorySlot->Quantity = boxSlot.Quantity;
+                    boxSlot.Quantity = aux;
+                    return;
+                }
+
+                const auto v6 = boxSlot.Quantity + inventorySlot->Quantity;
+                if (v6 > max)
+                {
+                    inventorySlot->Quantity = max;
+                    boxSlot.Quantity = v6 - max;
+                    return;
+                }
+
+                inventorySlot->Quantity += boxSlot.Quantity;
+                boxSlot = ItemboxItem{};
+                return;
+            }
+        }
+
+        // Placing itembox item into an empty inventory slot
+        if (inventorySlot->Type == ITEM_TYPE_NONE)
+        {
+            // Check first if item can be stacked, otherwise use first empty slot (switch case)
+            for (int i = 0; i < gGameTable.inventory_size; i++)
+            {
+                auto& slot = gGameTable.inventory[i];
+                const auto max = gGameTable.item_def_tbl[slot.Type].max;
+                if (boxSlot.Type == slot.Type && slot.Quantity <= max - boxSlot.Quantity)
+                {
+                    slot.Quantity += boxSlot.Quantity;
+                    boxSlot = ItemboxItem{};
+                    return;
+                }
+            }
+        }
+
+        switch (numParts)
+        {
+        case EXCHANGE_INVENTORY_TO_BOX_SINGLE:
+        {
+            if (gGameTable.byte_691F68 == gGameTable.inventory_cursor)
+            {
+                gGameTable.byte_691F68 = 0x80;
+                gGameTable.byte_691F6A = 0;
+            }
+            const auto item = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
+            if (item < gGameTable.inventory_cursor)
+            {
+                inventorySlot = &gGameTable.inventory[item];
+            }
+
+            const auto boxSlotType = inventorySlot->Type;
+            const auto boxSlotQuantity = inventorySlot->Quantity;
+            const auto boxSlotPart = inventorySlot->Part;
+            inventorySlot->Type = boxSlot.Type;
+            inventorySlot->Quantity = boxSlot.Quantity;
+            inventorySlot->Part = boxSlot.Part;
+            boxSlot.Type = boxSlotType;
+            boxSlot.Quantity = boxSlotQuantity;
+            boxSlot.Part = boxSlotPart;
+            sort_inventory();
+            return;
+        }
+        case EXCHANGE_BOX_TO_INVENTORY_WIDE:
+        {
+            const auto inventorySlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
+            if (inventorySlotId == INVENTORY_IS_FULL
+                || (inventorySlotId + 1 > gGameTable.inventory_size && inventorySlot->Type != ITEM_TYPE_NONE))
+            {
+                show_message(11468816, 0xe400, 8, 0);
+                gGameTable.itembox_state = ITEM_BOX_STATE_NOT_ENOUGH_SPACE;
+                return;
+            }
+            if (gGameTable.byte_691F68 == gGameTable.inventory_cursor)
+            {
+                gGameTable.byte_691F68 = 0x80;
+                gGameTable.byte_691F6A = 0;
+            }
+            const auto boxSlotType = inventorySlot->Type;
+            const auto boxSlotQuantity = inventorySlot->Quantity;
+            const auto boxSlotPart = inventorySlot->Part;
+            inventorySlot->Type = ITEM_TYPE_NONE;
+            sort_inventory();
+            sub_502720(1);
+            gGameTable.inventory[0].Type = boxSlot.Type;
+            gGameTable.inventory[0].Quantity = boxSlot.Quantity;
+            gGameTable.inventory[0].Part = 1;
+            gGameTable.inventory[1].Type = boxSlot.Type;
+            gGameTable.inventory[1].Quantity = boxSlot.Quantity;
+            gGameTable.inventory[1].Part = 2;
+            boxSlot.Type = boxSlotType;
+            boxSlot.Quantity = boxSlotQuantity;
+            boxSlot.Part = boxSlotPart;
+            return;
+        }
+        case EXCHANGE_INVENTORY_TO_BOX_WIDE_SINGLE:
+        {
+            const auto newBoxSlotType = inventorySlot->Type;
+            const auto newBoxSlotQuantity = inventorySlot->Quantity;
+
+            if (inventorySlot->Part == 2)
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor - 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+                inventorySlot->Type = ITEM_TYPE_NONE;
+                sort_inventory();
+                auto* itemTwork = &gGameTable.item_twork;
+                if (gGameTable.inventory_cursor > 0)
+                {
+                    itemTwork = &gGameTable.inventory[gGameTable.inventory_cursor - 1];
+                }
+                itemTwork->Type = ITEM_TYPE_NONE;
+            }
+            else
+            {
+                if (inventorySlot->Part != 1)
+                {
+                LABEL_41:
+                    const auto inventorySlotId = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
+                    gGameTable.inventory[inventorySlotId].Type = boxSlot.Type;
+                    gGameTable.inventory[inventorySlotId].Quantity = boxSlot.Quantity;
+                    gGameTable.inventory[inventorySlotId].Part = boxSlot.Part;
+                    boxSlot.Part = 3;
+                    boxSlot.Type = newBoxSlotType;
+                    boxSlot.Quantity = newBoxSlotQuantity;
+                    break;
+                }
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor + 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+                inventorySlot->Type = ITEM_TYPE_NONE;
+                sort_inventory();
+                inventorySlot->Type = ITEM_TYPE_NONE;
+            }
+            sort_inventory();
+            goto LABEL_41;
+        }
+        case EXCHANGE_INVENTORY_TO_BOX_WIDE:
+        {
+            ItemType newBoxSlotType = ITEM_TYPE_NONE;
+            uint8_t newBoxSlotQuantity = 0;
+            if (inventorySlot->Part == 1)
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor + 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+
+                newBoxSlotType = inventorySlot->Type;
+                newBoxSlotQuantity = inventorySlot->Quantity;
+                // First part
+                inventorySlot->Type = boxSlot.Type;
+                inventorySlot->Quantity = boxSlot.Quantity;
+                inventorySlot->Part = 1;
+                // Second part
+                inventorySlot++;
+                inventorySlot->Type = boxSlot.Type;
+                inventorySlot->Quantity = boxSlot.Quantity;
+                inventorySlot->Part = 2;
+            }
+            else
+            {
+                if (gGameTable.byte_691F68 == gGameTable.inventory_cursor
+                    || gGameTable.byte_691F68 == gGameTable.inventory_cursor - 1)
+                {
+                    gGameTable.byte_691F68 = 0x80;
+                    gGameTable.byte_691F6A = 0;
+                }
+
+                auto* itemTwork = &gGameTable.item_twork;
+                if (gGameTable.inventory_cursor > 0)
+                {
+                    itemTwork = &gGameTable.inventory[gGameTable.inventory_cursor - 1];
+                }
+
+                newBoxSlotType = inventorySlot->Type;
+                newBoxSlotQuantity = inventorySlot->Quantity;
+                itemTwork->Type = boxSlot.Type;
+                inventorySlot->Type = boxSlot.Type;
+                inventorySlot->Part = 2;
+                itemTwork->Quantity = boxSlot.Quantity;
+                itemTwork->Part = 1;
+            }
+
+            inventorySlot->Quantity = boxSlot.Quantity;
+            boxSlot.Part = 3;
+            boxSlot.Type = newBoxSlotType;
+            boxSlot.Quantity = newBoxSlotQuantity;
+            break;
+        }
+        }
     }
 
     // 0x004FC0C0
@@ -258,7 +593,7 @@ namespace openre::hud
         if ((gGameTable.word_9885FC & 0x4000) != 0)
         {
             gGameTable._st++;
-            gGameTable.byte_691F6C = 1;
+            gGameTable.inventory_cursor = 1;
             snd_se_on(0x4040000);
         }
         else if ((gGameTable.key_trg & 0x3000) != 0)
@@ -277,7 +612,7 @@ namespace openre::hud
         {
             if (gGameTable.fg_system & 0x80000000)
             {
-                auto selection = gGameTable.byte_691F6C;
+                auto selection = gGameTable.inventory_cursor;
                 auto prevSelection = selection;
                 auto inventorySize = gGameTable.inventory_size;
                 if (gGameTable.word_9885FC & 0x2000) // right
@@ -335,7 +670,7 @@ namespace openre::hud
                 }
                 if (prevSelection != selection)
                 {
-                    gGameTable.byte_691F6C = selection;
+                    gGameTable.inventory_cursor = selection;
                     snd_se_on(0x4040000);
                 }
             }
@@ -367,6 +702,7 @@ namespace openre::hud
                 sort_itembox();
                 snd_se_on(0x4060000);
             }
+
             break;
         }
         case ITEM_BOX_STATE_SELECT_BOX:
@@ -496,21 +832,22 @@ namespace openre::hud
             exchange_item();
             break;
         }
-        case ITEM_BOX_STATE_5:
+        case ITEM_BOX_STATE_NOT_ENOUGH_SPACE:
         {
             gGameTable.byte_691F76 = 0;
             if (gGameTable.fg_message >= 0)
             {
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_BOX;
             }
-            hud_render_selection(gGameTable.inventory[gGameTable.byte_691F6C].Part);
+            hud_render_selection(gGameTable.inventory[gGameTable.inventory_cursor].Part);
             return;
         }
         }
 
-        const auto& item = gGameTable.inventory[gGameTable.byte_691F6C];
-        hud_render_inventory_text(16, 175, 6, item.Type);
+        const auto cursor = gGameTable.inventory_cursor;
+        const auto& item = gGameTable.inventory[cursor];
         hud_render_selection(item.Part);
+        hud_render_inventory_text(16, 175, 6, item.Type);
     }
 
     static const Action _itemBoxRender[] = {
@@ -531,6 +868,353 @@ namespace openre::hud
         hud_render_text_bg();
     }
 
+    // 0x00502590
+    static uint8_t hud_check_item_mix()
+    {
+        auto redCursor = gGameTable.inventory_cursor;
+        auto greenCursor = gGameTable.inventory_cursor_2;
+        auto type = gGameTable.inventory[redCursor].Type;
+
+        if (redCursor == greenCursor)
+        {
+            return 0;
+        }
+        if (gGameTable.inventory[greenCursor].Type == ITEM_TYPE_NONE)
+        {
+            return 0;
+        }
+        auto itemDef = gGameTable.item_def_tbl[type];
+        if (itemDef.var_03 == 0)
+        {
+            return 0;
+        }
+
+        auto counter = 0;
+        while (itemDef.mix->object_item_id != gGameTable.inventory[greenCursor].Type)
+        {
+            if (++counter >= itemDef.var_03)
+            {
+                return 0;
+            }
+            itemDef.mix++;
+        }
+
+        gGameTable.byte_691F86 = itemDef.mix->result_item;
+        gGameTable.byte_691F87 = itemDef.mix->mixed_pix_no;
+        return itemDef.mix->mix_type;
+    }
+
+    // 0x004FF1C0
+    static void st_disp_menu1(int a0)
+    {
+        interop::call<void, int>(0x004FF1C0, a0);
+    }
+
+    // 0x004F88B0
+    static void hud_inventory_mix_item()
+    {
+        interop::call(0x004F88B0);
+    }
+
+    // 0x004F9260
+    static void hud_inventory_inspect_item()
+    {
+        interop::call(0x004F9260);
+    }
+
+    // 0x004F8620
+    static void hud_inventory_equip_item()
+    {
+        interop::call(0x004F8620);
+    }
+
+    // 0x004FF060
+    static void st_init_disp_menu1(uint8_t a0, uint8_t a1)
+    {
+        interop::call<void, uint8_t, uint8_t>(0x004FF060, a0, a1);
+    }
+
+    // 0x004F8160
+    static void hud_inventory_item()
+    {
+        auto& cursor = gGameTable.inventory_cursor;
+        auto& inventory = gGameTable.inventory;
+
+        switch (gGameTable.itembox_state)
+        {
+        case INVENTORY_ITEM_GRID:
+        {
+            const auto prevCursor = cursor;
+            int v1;
+            gGameTable.byte_691F76 = 1;
+
+            if (gGameTable.fg_system & 0x80000000)
+            {
+                if (gGameTable.word_9885FC & 0x2000 && cursor < gGameTable.inventory_size - 1)
+                {
+                    if (inventory[cursor].Part == 1 && cursor < gGameTable.inventory_size - 2)
+                    {
+                        cursor += 2;
+                        v1 = cursor;
+                    }
+                    else
+                    {
+                        v1 = ++cursor;
+                    }
+                }
+                else
+                {
+                    v1 = cursor;
+                }
+                if (gGameTable.word_9885FC & 0x8000 && v1 && v1 != 10)
+                {
+                    if (inventory[cursor].Part == 2)
+                    {
+                        v1 = v1 == 1 ? 2 : v1 - 1;
+                    }
+                    cursor = --v1;
+                }
+                if (gGameTable.word_9885FC & 0x4000)
+                {
+                    if (cursor >= gGameTable.inventory_size - 2)
+                    {
+                        if (v1 == 10)
+                        {
+                            v1 = 1;
+                            cursor = v1;
+                        }
+                    }
+                    else
+                    {
+                        v1 += 2;
+                        cursor = v1;
+                    }
+                }
+                if (gGameTable.word_9885FC & 0x1000)
+                {
+                    if (v1 == 10)
+                    {
+                        gGameTable._st = 2;
+                        snd_se_on(0x4050000);
+                    }
+                    else
+                    {
+                        if (v1 <= 1)
+                        {
+                            cursor = 10;
+                        }
+                        else
+                        {
+                            cursor = v1 - 2;
+                        }
+                    }
+                }
+                if (prevCursor != cursor)
+                {
+                    snd_se_on(0x4040000);
+                }
+            }
+            if (gGameTable.key_trg & 0x1000 && inventory[cursor].Type)
+            {
+                gGameTable.dword_689DF4 &= 0xFFFFFF00;
+                auto type = inventory[cursor].Type;
+                if (type >= ITEM_TYPE_AMMO_HANDGUN)
+                {
+                    st_init_disp_menu1(0, 0);
+                }
+                else if (type == ITEM_TYPE_CUSTOM_HANDGUN)
+                {
+                    auto state = check_flag(FlagGroup::Common, 0x7E);
+                    st_init_disp_menu1(state ? 3 : 1, 1);
+                    gGameTable.dword_689DF4 = (gGameTable.dword_689DF4 & 0xFFFFFF00) | 1;
+                }
+                else
+                {
+                    st_init_disp_menu1(1, 0);
+                }
+                snd_se_on(0x4060000);
+                gGameTable.word_691FA8 += 65;
+                gGameTable.itembox_state = INVENTORY_ITEM_SHOW_COMMAND_BOX;
+                gGameTable.byte_691F63 = 0;
+            }
+            else if (gGameTable.key_trg & 0x2000)
+            {
+                snd_se_on(0x4050000);
+                gGameTable._st = 2;
+            }
+            else if (gGameTable.dword_9885FE & 0x80000000 && gGameTable.byte_691F76 == 1)
+            {
+                snd_se_on(0x4050000);
+                gGameTable._st = 0;
+            }
+
+            hud_render_inventory_text(16, 175, 2, inventory[cursor].Type);
+            break;
+        }
+        case INVENTORY_ITEM_COMMAND_BOX:
+        {
+            gGameTable.byte_691F76 = 1;
+            if (gGameTable.fg_system & 0x80000000)
+            {
+                if (gGameTable.dword_689DF4)
+                {
+                    if (gGameTable.word_9885FC & 0x4000)
+                    {
+                        if (gGameTable.byte_691F6F)
+                        {
+                            gGameTable.byte_691F6F--;
+                        }
+                        else
+                        {
+                            gGameTable.byte_691F6F = 3;
+                        }
+                    }
+                    if (!(gGameTable.word_9885FC & 0x1000))
+                    {
+                        goto LABEL_63;
+                    }
+                    if (gGameTable.byte_691F6F == 3)
+                    {
+                        gGameTable.byte_691F6F = 0;
+                        goto LABEL_63;
+                    }
+                }
+                else
+                {
+                    if (gGameTable.word_9885FC & 0x4000)
+                    {
+                        if (gGameTable.byte_691F6F == 1)
+                        {
+                            gGameTable.byte_691F6F = 3;
+                        }
+                        else
+                        {
+                            gGameTable.byte_691F6F--;
+                        }
+                    }
+                    if (!(gGameTable.word_9885FC & 0x1000))
+                    {
+                        goto LABEL_63;
+                    }
+                    if (gGameTable.byte_691F6F == 3)
+                    {
+                        gGameTable.byte_691F6F = 1;
+                        goto LABEL_63;
+                    }
+                }
+                gGameTable.byte_691F6F++;
+            LABEL_63:
+                if (gGameTable.word_9885FC & 0x5000)
+                {
+                    snd_se_on(0x4040000);
+                }
+            }
+            if (gGameTable.key_trg & 0x1000)
+            {
+                gGameTable.itembox_state = INVENTORY_ITEM_COMMAND_BOX_SELECT;
+                gGameTable.byte_691F63 = gGameTable.byte_691F6F;
+                gGameTable.byte_691F64 = 0;
+                gGameTable.inventory_cursor_2 = cursor;
+                snd_se_on(0x4060000);
+            }
+            else if (gGameTable.key_trg & 0x2000)
+            {
+                gGameTable.itembox_state = INVENTORY_ITEM_HIDE_COMMAND_BOX;
+                gGameTable.byte_691F63 = 0;
+                snd_se_on(0x4050000);
+            }
+            st_disp_menu1(gGameTable.dword_689DF4);
+            break;
+        }
+        case INVENTORY_ITEM_COMMAND_BOX_SELECT:
+        {
+            st_disp_menu1(gGameTable.dword_689DF4);
+            switch (gGameTable.byte_691F63)
+            {
+            case 0:
+            {
+                auto state = check_flag(FlagGroup::Common, 0x7E);
+                set_flag(FlagGroup::Common, 0x7E, !state);
+                st_init_disp_menu1(state ? 1 : 3, 1);
+                gGameTable.byte_691F6F = 0;
+                gGameTable.itembox_state = INVENTORY_ITEM_COMMAND_BOX;
+                gGameTable.byte_691F63 = 0;
+                break;
+            }
+            case 1:
+            {
+                hud_inventory_mix_item();
+                break;
+            }
+            case 2:
+            {
+                hud_inventory_inspect_item();
+                break;
+            }
+            case 3:
+            {
+                hud_inventory_equip_item();
+                break;
+            }
+            }
+            break;
+        }
+        case INVENTORY_ITEM_SHOW_COMMAND_BOX:
+        {
+            if (!(gGameTable.byte_691F63++ <= 3))
+            {
+                gGameTable.itembox_state = INVENTORY_ITEM_COMMAND_BOX;
+                gGameTable.byte_691F63 = 0;
+            }
+            gGameTable.word_691FA8 -= 13;
+            st_disp_menu1(gGameTable.dword_689DF4);
+            break;
+        }
+        case INVENTORY_ITEM_HIDE_COMMAND_BOX:
+        {
+            if (!(gGameTable.byte_691F63++ <= 3))
+            {
+                gGameTable.itembox_state = INVENTORY_ITEM_GRID;
+                gGameTable.byte_691F63 = 0;
+            }
+            gGameTable.word_691FA8 += 13;
+            st_disp_menu1(gGameTable.dword_689DF4);
+            break;
+        }
+        }
+
+        if (!gGameTable.ctcb->var_13)
+        {
+            hud_render_selection(inventory[cursor].Part);
+        }
+    }
+
+    static const Action _inventoryRender[6] = {
+        (Action)0x00502130, // st_fade_out_set
+        (Action)0x00502150, // st_fade_out_wait
+        (Action)0x004F8050, // hud_inventory_topbar_hover
+        hud_inventory_item,
+        (Action)0x004FA240, // st_menu0_map
+        (Action)0x004F95B0  // st_menu0_file
+    };
+
+    // 0x004F8000
+    static void hud_render_inventory()
+    {
+        _inventoryRender[gGameTable._st]();
+        if (!gGameTable.ctcb->var_13)
+        {
+            hud_render_items();
+            hud_render_weapon_amount();
+            hud_render_weapon();
+            auto playerLife = player_check_life();
+            hud_render_inventory_ecg(playerLife);
+            hud_render_inventory_player_face();
+            hud_render_text_bg();
+            hud_render_inventory_topbar();
+        }
+    }
+
     static void set_hud_hook(uint8_t kind, Action impl)
     {
         gHudImplTable[kind] = impl;
@@ -546,5 +1230,10 @@ namespace openre::hud
         interop::writeJmp(0x004D0EC0, &hud_fade_adjust2);
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
+        interop::writeJmp(0x004FC5B0, &exchange_item);
+        interop::writeJmp(0x00502590, &hud_check_item_mix);
+        interop::writeJmp(0x004F8000, &hud_render_inventory);
+        interop::writeJmp(0x00502620, &search_item);
+        interop::writeJmp(0x00502690, &sort_inventory);
     }
 }

@@ -38,4 +38,16 @@ namespace openre::marni
     {
         interop::call(0x00441710);
     }
+
+    // 0x00432C60
+    void door_disp0(int doorId, int a1, int a2, int a3)
+    {
+        interop::call<void, int, int, int>(0x00432C60, doorId, a1, a2, a3);
+    }
+
+    // 0x00432CD0
+    void door_disp1(int doorId)
+    {
+        interop::call<void, int>(0x00432CD0, doorId);
+    }
 }
