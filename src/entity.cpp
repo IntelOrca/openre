@@ -39,4 +39,10 @@ namespace openre
     {
         interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
     }
+
+    // 0x004B4480
+    void rbj_set()
+    {
+        interop::call(0x004B4480);
+    }
 }

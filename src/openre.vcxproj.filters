@@ -81,6 +81,9 @@
     <ClCompile Include="em_spider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="room.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -144,6 +147,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="title.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="room.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
