@@ -557,6 +557,7 @@ declare     byte_691F87             u8                      0x00691F87
 declare     word_691FA8             s16                     0x00691FA8
 declare     word_691FB0             u16                     0x00691FB0
 declare     word_691FB2             u16                     0x00691FB2
+declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
 declare     vab_id                  u8[16]                  0x00692FF5

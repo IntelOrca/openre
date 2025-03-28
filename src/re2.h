@@ -737,7 +737,9 @@ struct GameTable
     uint8_t pad_691FAA[6];              // 0x691FAA
     uint16_t word_691FB0;               // 0x691FB0
     uint16_t word_691FB2;               // 0x691FB2
-    uint8_t pad_691FB4[4106];           // 0x691FB4
+    uint8_t pad_691FB4[3504];           // 0x691FB4
+    uint8_t byte_692D64;                // 0x692D64
+    uint8_t pad_692D65[601];            // 0x692D65
     uint16_t word_692FBE;               // 0x692FBE
     uint16_t word_692FC0;               // 0x692FC0
     uint8_t pad_692FC2[51];             // 0x692FC2
