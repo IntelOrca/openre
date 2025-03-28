@@ -156,8 +156,7 @@ declare     old_pos                 Vec16
 declare     old_pos_2               Vec16
 declare     dummy00                 s32
 declare     workm                   Mat16
-declare     cdir                    Vec16
-declare     dummy01                 s16
+declare     cdir                    Vec16p
 declare     poly_rgb                s32
 declare     pSuper                  Mat16*
 declare     atd                     At[4]
@@ -460,6 +459,8 @@ declare     keyboard                u32                     0x3B28
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
+declare     door_ll                 Mat16                   0x00525F5C
+declare     door_lc                 Mat16                   0x00525F7C
 declare     global_prj              s32                     0x00526268
 declare     math_const_table        s16[1224]               0x00526270
 declare     byte_5286F4             u8[8]                   0x005286F4
@@ -485,6 +486,9 @@ declare     censorship_off          u8                      0x006805B3
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
+declare     dword_689440            u32                     0x00689440
+declare     dword_689444            u32                     0x00689444
+declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
 declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
@@ -592,7 +596,7 @@ declare     em_damage_table_16      void*[48]               0x00988638
 declare     em_die_table            void*[84]               0x009886F8
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
-declare     dword_9888D8            u16                     0x009888D8
+declare     byte_9888D8             u8                      0x009888D8
 declare     fg_system               u32                     0x00989E6C
 declare     byte_989E75             u8                      0x00989E75
 declare     word_989E76             u16                     0x00989E76
@@ -674,6 +678,8 @@ declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
+declare     ll_matrix               Mat16                   0x0099CE40
+declare     lc_matrix               Mat16                   0x0099CE60
 declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
