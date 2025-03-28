@@ -46,13 +46,13 @@ namespace openre::enemy
         EM_BIRKIN_3 = 50,
         EM_BIRKIN_4 = 51,
         EM_BIRKIN_5 = 52,
-        EM_36,
+        EM_36 = 54,
         EM_37,
         EM_38,
         EM_IVY_POISON = 57,
         EM_MOTH = 58,
         EM_MAGGOTS = 59,
-        EM_3E,
+        EM_3E = 62,
         EM_3F,
         EM_IRONS_1 = 64,
         EM_ADA_1 = 65,
@@ -104,7 +104,6 @@ namespace openre::enemy
     int* mem_ck_parts_work(int workNo, int id);
     void oba_ck_em(EnemyEntity* enemy);
     void sca_ck_em(EnemyEntity* enemy, int a1);
-    void add_speed_xz(Entity* entity, int16_t d);
     int root_ck(Entity* entity, int a1, int a2, int a3);
     void goto00(Entity* entity, int x, int z, int t);
     void rot_neck_em(Entity* entity, int d);

@@ -33,7 +33,6 @@ namespace openre::sce
     static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
     static uint8_t& _questionState = *((uint8_t*)0x98E542);
-    static ObjectEntity* _objectEntities = (ObjectEntity*)0x98A61C;
 
     static uint8_t& _censorshipOff = *((uint8_t*)0x6805B3);
     static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
@@ -90,7 +89,7 @@ namespace openre::sce
 
     ObjectEntity* GetObjectEntity(int index)
     {
-        return &_objectEntities[index];
+        return &gGameTable.pOm[index];
     }
 
     DoorEntity* GetDoorEntity(int index)
