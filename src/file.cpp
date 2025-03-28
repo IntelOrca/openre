@@ -7,6 +7,12 @@
 
 namespace openre::file
 {
+    enum
+    {
+        READ_SAVE_FILE_SUCCESS,
+        READ_SAVE_FILE_ERROR = 2,
+    };
+
     // 0x00508DC0
     void file_error()
     {
@@ -83,16 +89,16 @@ namespace openre::file
         auto file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
         if (file == INVALID_HANDLE_VALUE)
         {
-            return 2;
+            return READ_SAVE_FILE_ERROR;
         }
 
         DWORD bytesRead;
         if (!ReadFile(file, buffer, size, &bytesRead, 0) || bytesRead != size)
         {
-            return 2;
+            return READ_SAVE_FILE_ERROR;
         }
         CloseHandle(file);
-        return 0;
+        return READ_SAVE_FILE_SUCCESS;
     }
 
     // 0x005097E0
