@@ -160,7 +160,7 @@ namespace openre::math
     }
 
     // 0x00450C20
-    static void mul_matrix0(Mat16& left, Mat16& right, Mat16& res)
+    void mul_matrix0(Mat16& left, Mat16& right, Mat16& res)
     {
         auto left_00 = (int32_t)left.m[0];
         auto left_01 = (int32_t)left.m[1];
@@ -254,7 +254,7 @@ namespace openre::math
     }
 
     // 0x00450F60
-    static void rotate_matrix(Vec16p& vAngles, Mat16& m)
+    void rotate_matrix(Vec16p& vAngles, Mat16& m)
     {
         memcpy(m.m, gGameTable.g_identity_mat.m, 9 * sizeof(int16_t));
         rotate_matrix_z(vAngles.z, m);
@@ -339,7 +339,7 @@ namespace openre::math
     }
 
     // 0x00450E10
-    static void compare_matrix(Mat16& m1, Mat16& m2, Mat16& res)
+    void compare_matrix(Mat16& m1, Mat16& m2, Mat16& res)
     {
         Mat16 resVal;
         Vec32 resValT;
@@ -355,7 +355,7 @@ namespace openre::math
     }
 
     // 0x004513C0
-    static void set_rot_matrix(const Mat16& m)
+    void set_rot_matrix(const Mat16& m)
     {
         auto& rc = gGameTable.rc_matrix;
         rc.m[0] = m.m[0];
@@ -370,7 +370,7 @@ namespace openre::math
     }
 
     // 0x00451470
-    static void set_trans_matrix(const uint32_t* a1)
+    void set_trans_matrix(const uint32_t* a1)
     {
         auto& rc = gGameTable.rc_matrix;
         rc.pos.x = a1[5];
@@ -390,6 +390,18 @@ namespace openre::math
         res.m[6] = m.m[2];
         res.m[7] = m.m[5];
         res.m[8] = m.m[8];
+    }
+
+    // 0x00451450
+    void set_color_matrix(const Mat16& m)
+    {
+        memcpy(&gGameTable.lc_matrix, &m, sizeof(Mat16));
+    }
+
+    // 0x00451430
+    void set_light_matrix(const Mat16& m)
+    {
+        memcpy(&gGameTable.ll_matrix, &m, sizeof(Mat16));
     }
 
     void math_init_hooks()
@@ -412,5 +424,7 @@ namespace openre::math
         interop::writeJmp(0x00450DD0, &mul_matrix);
         interop::writeJmp(0x00450DF0, &mul_matrix2);
         interop::writeJmp(0x00451490, &transpose_matrix);
+        interop::writeJmp(0x00451450, &set_color_matrix);
+        interop::writeJmp(0x00451430, &set_light_matrix);
     }
 }

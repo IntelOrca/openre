@@ -124,7 +124,7 @@ namespace openre::hud
         fade.kido = kido;
 
         uint32_t rgbc = (fade.tiles[0].code << 24) | rgb;
-        auto tileIdx = static_cast<uint8_t>(gGameTable.dword_9888D8);
+        auto tileIdx = gGameTable.byte_9888D8;
         fade.tiles[tileIdx].r = (rgbc >> 24 & 0xff);
         fade.tiles[tileIdx].g = (rgbc >> 16 & 0xff);
         fade.tiles[tileIdx].b = (rgbc >> 8 & 0xff);
