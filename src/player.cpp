@@ -971,7 +971,7 @@ namespace openre::player
             player->mplay_flg = 0;
             player->spd.x = 1000;
             player->m.pos.y += 550;
-            player->timer0 = 5; // Needed ?
+            player->timer0 = 5;
             if (player->id == PLD_SHERRY)
             {
                 player->spd.x = 600;
