@@ -430,7 +430,7 @@ namespace openre::door
         }
         default:
         {
-            if (check_flag(FlagGroup::System, FG_SYSTEM_7))
+            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
             {
                 door_snd_trans();
             }
@@ -441,7 +441,7 @@ namespace openre::door
                 task_sleep(1);
                 return;
             }
-            if (check_flag(FlagGroup::System, FG_SYSTEM_7) && bitarray_get(zappingFlagAddr, 0x3f))
+            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) && bitarray_get(zappingFlagAddr, 0x3f))
             {
                 gGameTable.byte_989EEA = static_cast<uint8_t>(gGameTable.current_cut);
                 set_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION, true);

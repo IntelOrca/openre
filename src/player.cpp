@@ -1073,6 +1073,12 @@ namespace openre::player
         return interop::call<int>(0x00502530);
     }
 
+    // 0x004D93A0
+    void player_set(PlayerEntity* player)
+    {
+        interop::call<void, PlayerEntity*>(0x004D93A0, player);
+    }
+
     void player_init_hooks()
     {
         interop::writeJmp(0x00502190, &partner_switch);

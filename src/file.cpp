@@ -59,6 +59,12 @@ namespace openre::file
         return p(path, buffer, offset, length, mode);
     }
 
+    // 0x00505B20
+    void sub_505B20()
+    {
+        interop::call(0x00505B20);
+    }
+
     // 0x004DD360
     static int osp_read()
     {
