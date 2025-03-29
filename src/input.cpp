@@ -67,9 +67,9 @@ namespace openre::input
     {
         for (int i = 0; i < 0x20; i++)
         {
-            if (keyCode == gGameTable.input_mapping[i])
+            if (keyCode == gGameTable.input.mapping[i])
             {
-                gGameTable.input_keyboard &= ~(1 << i);
+                gGameTable.input.keyboard &= ~(1 << i);
             }
         }
     }
@@ -79,9 +79,9 @@ namespace openre::input
     {
         for (int i = 0; i < 0x20; i++)
         {
-            if (keyCode == gGameTable.input_mapping[i])
+            if (keyCode == gGameTable.input.mapping[i])
             {
-                gGameTable.input_keyboard |= (1 << i);
+                gGameTable.input.keyboard |= (1 << i);
             }
         }
     }
@@ -89,7 +89,7 @@ namespace openre::input
     // 0x00410400
     int input_get_some_byte()
     {
-        return gGameTable.input_keyboard;
+        return gGameTable.input.keyboard;
     }
 
     static uint32_t dword_524CE8[32] = {
@@ -126,18 +126,18 @@ namespace openre::input
     {
         auto v1 = gGameTable.dword_66D394;
 
-        joy_get_pos_ex(gGameTable.input_mapping);
-        if (gGameTable.dword_67CC28 != 0)
+        joy_get_pos_ex(gGameTable.input.mapping);
+        if (gGameTable.input.var_1F8 != 0)
         {
-            v1 = sub_43BAC0(gGameTable.dword_67CA54, 0);
+            v1 = sub_43BAC0(gGameTable.input.var_24, 0);
 
-            gGameTable.dword_99CF64 = gGameTable.dword_67CA54;
+            gGameTable.dword_99CF64 = gGameTable.input.var_24;
             gGameTable.dword_66D394 = v1;
         }
         gGameTable.dword_99CF70 = 0;
-        if (gGameTable.dword_680554 >= 2 && gGameTable.dword_67CE00 != 0)
+        if (gGameTable.input.var_3B24 >= 2 && gGameTable.input.var_3D0 != 0)
         {
-            auto v2 = sub_43BAC0(gGameTable.dword_67CC2C, 1);
+            auto v2 = sub_43BAC0(gGameTable.input.var_1FC, 1);
             v1 |= v2;
             gGameTable.dword_99CF70 = v2;
             gGameTable.dword_66D394 = v1;

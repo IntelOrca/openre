@@ -35,4 +35,5 @@ namespace openre::scd
     void sce_scheduler_main();
     void scd_event_init(SceTask* task, int evt);
     void scd_event_exec(int taskIndex, int evt);
+    void scd_init();
 }
