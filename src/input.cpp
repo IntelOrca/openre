@@ -101,14 +101,12 @@ namespace openre::input
     int sub_43BAC0(int a0, int a1)
     {
         auto result = 0;
-        auto v3 = 1;
         for (int i = 0; i < 32; i++)
         {
-            if (v3 & a0)
+            if (a0 & (1 << i))
             {
                 result |= dword_524CE8[a1 + i];
             }
-            v3 *= 2;
         }
         return result;
     }
