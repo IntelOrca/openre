@@ -73,6 +73,8 @@ namespace openre::hud
     static HudInfo& gHudInfo = *((HudInfo*)0x691F60);
     static uint8_t* _bgBuffer = (uint8_t*)0x8C1880;
 
+    constexpr int8_t INVENTORY_IS_FULL = -1;
+
     // 0x004C4AD0
     static int hud_screen_fade(int a0)
     {
@@ -306,24 +308,83 @@ namespace openre::hud
         }
     }
 
-    // 0x00502690
-    static void sort_item()
-    {
-        interop::call<void>(0x00502690);
-    }
-
-    // 0x00502620
-    static int search_item(int a0)
-    {
-        return interop::call<int, int>(0x00502620, a0);
-    }
-
     // 0x00502720
     static void sub_502720(int a0)
     {
         using sig = void (*)(int);
         auto p = (sig)0x00502720;
         p(a0);
+    }
+
+    /**
+     * 0x00502620
+     *
+     * If type == ITEM_TYPE_NONE, returns the index of the first empty inventory slot or INVENTORY_IS_FULL if the inventory is
+     * full. If type != ITEM_TYPE_NONE, returns the number of empty inventory slots.
+     */
+    static int8_t search_item(ItemType type)
+    {
+        if (type == ITEM_TYPE_NONE)
+        {
+            for (int i = 0; i < gGameTable.inventory_size; i++)
+            {
+                if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+                {
+                    return i;
+                }
+            }
+            return INVENTORY_IS_FULL;
+        }
+
+        auto emptySlotCount = 0;
+        for (int i = 0; i < gGameTable.inventory_size; i++)
+        {
+            if (gGameTable.inventory[i].Type == ITEM_TYPE_NONE)
+            {
+                emptySlotCount++;
+            }
+        }
+        return emptySlotCount;
+    }
+
+    // 0x00502690
+    static void sort_inventory()
+    {
+        auto freeSlotId = search_item(ITEM_TYPE_NONE);
+        if (freeSlotId == INVENTORY_IS_FULL || freeSlotId + 1 == 10)
+        {
+            return;
+        }
+
+        if (freeSlotId + 1 == 9)
+        {
+            gGameTable.inventory[10].Type = 0;
+            gGameTable.inventory[10].Quantity = 0;
+            gGameTable.inventory[10].Part = 0;
+            return;
+        }
+
+        auto index = freeSlotId + 1;
+        do
+        {
+            gGameTable.inventory[index - 1].Type = gGameTable.inventory[index].Type;
+            gGameTable.inventory[index - 1].Quantity = gGameTable.inventory[index].Quantity;
+            gGameTable.inventory[index - 1].Part = gGameTable.inventory[index].Part;
+
+            if (gGameTable.byte_691F68 == index)
+            {
+                gGameTable.byte_691F68--;
+            }
+            if (gGameTable.byte_692D64 == index)
+            {
+                gGameTable.byte_692D64--;
+            }
+            index++;
+        } while (index < gGameTable.inventory_size);
+
+        gGameTable.inventory[index - 1].Type = 0;
+        gGameTable.inventory[index - 1].Quantity = 0;
+        gGameTable.inventory[index - 1].Part = 0;
     }
 
     // 0x004FC5B0
@@ -409,14 +470,14 @@ namespace openre::hud
             boxSlot.Type = boxSlotType;
             boxSlot.Quantity = boxSlotQuantity;
             boxSlot.Part = boxSlotPart;
-            sort_item();
+            sort_inventory();
             return;
         }
         case EXCHANGE_BOX_TO_INVENTORY_WIDE:
         {
             const auto inventorySlotId = static_cast<int8_t>(search_item(ITEM_TYPE_NONE));
-            if (inventorySlotId == -1
-                || (inventorySlotId + 1 > gGameTable.inventory_size && inventorySlot->Type != ITEM_TYPE_NONE))
+            if (inventorySlotId == INVENTORY_IS_FULL
+                || (inventorySlotId + 1 >= gGameTable.inventory_size && inventorySlot->Type == ITEM_TYPE_NONE))
             {
                 show_message(11468816, 0xe400, 8, 0);
                 gGameTable.itembox_state = ITEM_BOX_STATE_NOT_ENOUGH_SPACE;
@@ -431,7 +492,7 @@ namespace openre::hud
             const auto boxSlotQuantity = inventorySlot->Quantity;
             const auto boxSlotPart = inventorySlot->Part;
             inventorySlot->Type = ITEM_TYPE_NONE;
-            sort_item();
+            sort_inventory();
             sub_502720(1);
             gGameTable.inventory[0].Type = boxSlot.Type;
             gGameTable.inventory[0].Quantity = boxSlot.Quantity;
@@ -458,7 +519,7 @@ namespace openre::hud
                     gGameTable.byte_691F6A = 0;
                 }
                 inventorySlot->Type = ITEM_TYPE_NONE;
-                sort_item();
+                sort_inventory();
                 auto* itemTwork = &gGameTable.item_twork;
                 if (gGameTable.inventory_cursor > 0)
                 {
@@ -487,10 +548,10 @@ namespace openre::hud
                     gGameTable.byte_691F6A = 0;
                 }
                 inventorySlot->Type = ITEM_TYPE_NONE;
-                sort_item();
+                sort_inventory();
                 inventorySlot->Type = ITEM_TYPE_NONE;
             }
-            sort_item();
+            sort_inventory();
             goto LABEL_41;
         }
         case EXCHANGE_INVENTORY_TO_BOX_WIDE:
@@ -1640,5 +1701,7 @@ namespace openre::hud
         interop::writeJmp(0x005024D0, &set_inventory_item);
         interop::writeJmp(0x00502500, &set_inventory_item_quantity);
         interop::writeJmp(0x004F8000, &hud_render_inventory);
+        interop::writeJmp(0x00502620, &search_item);
+        interop::writeJmp(0x00502690, &sort_inventory);
     }
 }
