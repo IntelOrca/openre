@@ -300,7 +300,7 @@ struct ActorEntity : Entity
     uint16_t spl_flg;                   // 0x01DC
     uint16_t parts0_pos_y;              // 0x01DE
     uint32_t pT_xz;                     // 0x01E0
-    int32_t pOn_om;                     // 0x01E4
+    uint32_t pOn_om;                    // 0x01E4
     int32_t nOba;                       // 0x01E8
     uint8_t attw_timer;                 // 0x01EC
     uint8_t attw_seq_no;                // 0x01ED
@@ -874,7 +874,8 @@ struct GameTable
     uint8_t pad_98A5D4[64];             // 0x98A5D4
     EnemyInitEntry enemy_init_entries[2];// 0x98A614
     ObjectEntity pOm[32];               // 0x98A61C
-    uint8_t pad_98E51C[12];             // 0x98E51C
+    ObjectEntity* obj_ptr;              // 0x98E51C
+    uint8_t pad_98E520[8];              // 0x98E520
     uint8_t aot_count;                  // 0x98E528
     uint8_t pad_98E529[24];             // 0x98E529
     uint8_t byte_98E541;                // 0x98E541
