@@ -1,6 +1,7 @@
 #include "hud.h"
 #include "audio.h"
 #include "file.h"
+#include "input.h"
 #include "interop.hpp"
 #include "item.h"
 #include "itembox.h"
@@ -11,6 +12,7 @@ using namespace openre::audio;
 using namespace openre::file;
 using namespace openre::itembox;
 using namespace openre::player;
+using namespace openre::input;
 
 namespace openre::hud
 {
@@ -932,7 +934,7 @@ namespace openre::hud
         {
             auto oldGreenCursor = greenCursor;
 
-            if (gGameTable.fg_system & 0x80000000)
+            if (check_flag(FlagGroup::System, FG_SYSTEM_0))
             {
                 // Right
                 if (gGameTable.word_9885FC & 0x2000 && greenCursor < inventorySize - 1)
@@ -993,7 +995,7 @@ namespace openre::hud
                 }
             }
             // Mix items
-            if (gGameTable.key_trg & 0x1000)
+            if (check_input(KEY_TYPE_ACTION))
             {
                 gGameTable.byte_691F64 = hud_check_item_mix();
                 if (gGameTable.byte_691F64)
@@ -1006,10 +1008,10 @@ namespace openre::hud
                 }
             }
             // Cancel mix
-            if (gGameTable.key_trg & 0x2000)
+            if (check_input(KEY_TYPE_RUN_AND_CANCEL))
             {
                 snd_se_on(0x4050000);
-                gGameTable.itembox_state = 1;
+                gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_BOX;
                 gGameTable.byte_691F63 = 0;
                 gGameTable.byte_691F64 = 0;
             }
@@ -1077,7 +1079,7 @@ namespace openre::hud
 
             if (gGameTable.byte_691F66)
             {
-                gGameTable.itembox_state = 4;
+                gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                 gGameTable.byte_691F66 = 0;
                 gGameTable.byte_691F65 = 0;
                 gGameTable.byte_691F64 = 0;
