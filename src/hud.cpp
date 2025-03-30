@@ -1220,7 +1220,7 @@ namespace openre::hud
             auto auxRedQuantity = greenItem.Quantity;
             redItem.Quantity = greenItem.Quantity;
             greenItem.Quantity = auxRedQuantity;
-            if (!redItem.Quantity)
+            if (redItem.Quantity == 0)
             {
                 set_inventory_item(redCursor, 0, 0, 0);
             }
