@@ -1098,7 +1098,7 @@ namespace openre::hud
                     gGameTable.byte_691F65 = 0;
                     gGameTable.byte_691F64 = 0;
                     gGameTable.byte_691F63 = 0;
-                    gGameTable.itembox_state = 0;
+                    gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
                 }
             }
             break;
