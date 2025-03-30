@@ -1054,7 +1054,7 @@ namespace openre::hud
                 auto slotId = static_cast<uint8_t>(search_item(ITEM_TYPE_NONE));
                 if (slotId > 8 || slotId >= inventorySize - search_item(1))
                 {
-                    gGameTable.itembox_state = 4;
+                    gGameTable.itembox_state = ITEM_BOX_STATE_EXCHANGE;
                     gGameTable.byte_691F66 = 0;
                     gGameTable.byte_691F65 = 0;
                     gGameTable.byte_691F64 = 0;
