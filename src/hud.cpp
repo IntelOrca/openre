@@ -1056,7 +1056,7 @@ namespace openre::hud
                 }
             }
             // Mix items
-            if (check_input(KEY_TYPE_ACTION))
+            if (check_input(KEY_TYPE_4096))
             {
                 gGameTable.byte_691F64 = hud_check_item_mix();
                 if (gGameTable.byte_691F64)

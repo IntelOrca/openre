@@ -26,10 +26,10 @@ namespace openre::input
         KEY_TYPE_LEFT = 2,
         KEY_TYPE_RIGHT = 8,
         KEY_TYPE_ROTATE = 10,
-        KEY_TYPE_ACTION = 128,
+        KEY_TYPE_128 = 128,
         KEY_TYPE_AIM = 256,
         KEY_TYPE_RUN_AND_CANCEL = 512,
-        KEY_TYPE_ACTION = 4096,
+        KEY_TYPE_4096 = 4096,
     };
 
     [[nodiscard]] int GetGamepadState();
