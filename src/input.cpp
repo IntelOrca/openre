@@ -104,7 +104,7 @@ namespace openre::input
         auto v3 = 1;
         for (int i = 0; i < 32; i++)
         {
-            if (v3 & a0)
+            if (a0 & (1 << i))
             {
                 result |= dword_524CE8[a1 + i];
             }
