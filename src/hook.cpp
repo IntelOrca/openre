@@ -406,7 +406,7 @@ namespace openre::interop
         WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
 
         auto addr = reinterpret_cast<uintptr_t>(fn);
-        WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5);
+        WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
 
         writeMemory(address, data, sizeof(data));
     }
