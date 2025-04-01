@@ -58,17 +58,22 @@ namespace openre::marni
         rect.right = marni->window_rect[2];
         rect.bottom = marni->window_rect[3];
 
+        POINT point0 = {};
+        ClientToScreen(window, &point0);
         POINT point1 = {};
+        point1.x = marni->resolutions[marni->modes].width;
+        point1.y = marni->resolutions[marni->modes].height;
         ClientToScreen(window, &point1);
-        POINT point2 = {};
-        point2.x = marni->resolutions[marni->modes].width;
-        point2.y = marni->resolutions[marni->modes].height;
-        ClientToScreen(window, &point2);
-        SetRect(&rect, point1.x, point2.y, point2.x, point2.y);
+
+        SetRect(&rect, point0.x, point0.y, point1.x, point1.y);
+        marni->window_rect[0] = rect.left;
+        marni->window_rect[1] = rect.top;
+        marni->window_rect[2] = rect.right;
+        marni->window_rect[3] = rect.bottom;
     }
 
     void marni_init_hooks()
     {
-        interop::writeJmp(0x00406450, marni_move);
+        interop::hookThisCall(0x00406450, marni_move);
     }
 }
