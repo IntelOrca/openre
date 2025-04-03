@@ -2,7 +2,7 @@
 #include "interop.hpp"
 #include "re2.h"
 
-#define _WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #include <ddraw.h>
 #include <windows.h>
 
