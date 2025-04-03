@@ -2,6 +2,7 @@
 #include "interop.hpp"
 #include "re2.h"
 
+#define _WIN32_LEAN_AND_MEAN
 #include <ddraw.h>
 #include <windows.h>
 
@@ -49,7 +50,7 @@ namespace openre::marni
     }
 
     // 0x00406450
-    static void marni_move(Marni* marni)
+    static void move(Marni* marni)
     {
         HWND window = (HWND)marni->hWnd;
         RECT rect = {};
@@ -72,8 +73,8 @@ namespace openre::marni
         marni->window_rect[3] = rect.bottom;
     }
 
-    void marni_init_hooks()
+    void init_hooks()
     {
-        interop::hookThisCall(0x00406450, marni_move);
+        interop::hookThisCall(0x00406450, &move);
     }
 }

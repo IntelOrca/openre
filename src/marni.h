@@ -12,5 +12,5 @@ namespace openre::marni
     void door_disp0(int doorId, int a1, int a2, int a3);
     void door_disp1(int doorId);
 
-    void marni_init_hooks();
+    void init_hooks();
 }
