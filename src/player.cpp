@@ -265,31 +265,6 @@ namespace openre::player
         loc_4FC3FD();
     }
 
-    // 0x005024D0
-    static int set_inventory_item(int slotId, int type, int quantity, int part)
-    {
-        gGameTable.inventory[slotId].Type = type;
-        gGameTable.inventory[slotId].Quantity = quantity;
-        gGameTable.inventory[slotId].Part = part;
-        return slotId;
-    }
-
-    // 0x00502500
-    static void set_inventory_item_quantity(int slotId, int quantity)
-    {
-        gGameTable.inventory[slotId].Quantity = quantity;
-
-        auto part = gGameTable.inventory[slotId].Part;
-        if (part == 1)
-        {
-            gGameTable.inventory[slotId + 1].Quantity = quantity;
-        }
-        if (part == 2)
-        {
-            gGameTable.inventory[slotId].Quantity = quantity;
-        }
-    }
-
     // 0x004DABC0
     static int pl_neck(int a1, int a2)
     {
@@ -685,7 +660,7 @@ namespace openre::player
                 set_routine(Routine::QUICKTURN);
                 return;
             }
-            if ((key_trg & input::KEY_TYPE_ACTION) != 0)
+            if ((key_trg & input::KEY_TYPE_128) != 0)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -783,7 +758,7 @@ namespace openre::player
         {
             set_routine(Routine::PUSH_OBJECT);
         }
-        if ((key & input::KEY_TYPE_ACTION) == 0 && (key_trg & input::KEY_TYPE_ACTION) == 0)
+        if ((key & input::KEY_TYPE_128) == 0 && (key_trg & input::KEY_TYPE_128) == 0)
         {
             goto LABEL_31;
         }
@@ -794,7 +769,7 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -821,7 +796,7 @@ namespace openre::player
         {
             set_routine(Routine::FORWARD);
         }
-        if (((key & input::KEY_TYPE_ACTION) == 0) && ((key_trg & input::KEY_TYPE_ACTION) == 0))
+        if (((key & input::KEY_TYPE_128) == 0) && ((key_trg & input::KEY_TYPE_128) == 0))
         {
             goto LABEL_25;
         }
@@ -831,7 +806,7 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -869,7 +844,7 @@ namespace openre::player
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
         }
-        if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
+        if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
         {
             if (player->Sca_info & 0x100000)
             {
@@ -880,7 +855,7 @@ namespace openre::player
             {
                 return;
             }
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -916,7 +891,7 @@ namespace openre::player
         {
             set_routine(Routine::ROTATE);
         }
-        if (key_trg & input::KEY_TYPE_ACTION)
+        if (key_trg & input::KEY_TYPE_128)
         {
             set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             if (player->Sca_info & 0x100000)
@@ -1204,7 +1179,7 @@ namespace openre::player
                     player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
                 }
             }
-            if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
+            if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
             {
                 if (player->Sca_info & 0x100000)
                 {
@@ -1215,7 +1190,7 @@ namespace openre::player
                 {
                     return;
                 }
-                if (key_trg & input::KEY_TYPE_ACTION)
+                if (key_trg & input::KEY_TYPE_128)
                 {
                     set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
                 }
@@ -1290,8 +1265,6 @@ namespace openre::player
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
         interop::writeJmp(0x4FC3CE, itembox_prev_slot);
-        interop::writeJmp(0x5024D0, set_inventory_item);
-        interop::writeJmp(0x502500, set_inventory_item_quantity);
         interop::writeJmp(0x4D97B0, player_move);
         interop::writeJmp(0x4D9D20, pl_move);
         interop::writeJmp(0x4DC130, pl_mv_damage);
