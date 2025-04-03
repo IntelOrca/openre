@@ -569,10 +569,10 @@ struct Input
 {
     uint8_t mapping[31];                // 0x0000
     uint8_t pad_001F[5];                // 0x001F
-    uint32_t var_24;                    // 0x0024
+    uint32_t keyboard_raw_state;        // 0x0024
     uint8_t pad_0028[464];              // 0x0028
     uint32_t var_1F8;                   // 0x01F8
-    uint32_t var_1FC;                   // 0x01FC
+    uint32_t gamepad_raw_state;         // 0x01FC
     uint8_t pad_0200[464];              // 0x0200
     uint32_t var_3D0;                   // 0x03D0
     uint8_t pad_03D4[14160];            // 0x03D4
