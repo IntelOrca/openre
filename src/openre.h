@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "re2.h"
@@ -94,6 +95,7 @@ namespace openre
         FG_SYSTEM_DEMO = 18,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_19 = 19,
+        FG_SYSTEM_20 = 20,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
         FG_SYSTEM_4TH_SURVIVOR = 28,
