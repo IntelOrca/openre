@@ -33,4 +33,32 @@ namespace openre
     {
         return interop::call<int32_t, Entity*, int32_t, int32_t, int32_t>(0x004B2440, entity, x, z, dist);
     }
+
+    // 0x004B21D0
+    void add_speed_xz(Entity* entity, int16_t d)
+    {
+        interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
+    }
+
+    uint8_t compute_nfloor(int32_t posY)
+    {
+        auto mul = static_cast<int64_t>(0x6E5D4C3B) * posY;
+        auto hi32 = static_cast<int32_t>(mul >> 32);
+        auto diff = hi32 - posY;
+        auto floorDiv = diff >> 10;
+        auto correction = (diff >> 31) & 1;
+        return floorDiv + correction;
+    }
+
+    // 0x004CD610
+    void oma_set_ofs(ObjectEntity* object)
+    {
+        interop::call<void, ObjectEntity*>(0x004CD610, object);
+    }
+
+    // 0x004CEEF0
+    int omd_in_check(Vec32* vec, ObjectEntity* object, int a2, int a3)
+    {
+        return interop::call<int, Vec32*, ObjectEntity*, int, int>(0x004CEEF0, vec, object, a2, a3);
+    }
 }

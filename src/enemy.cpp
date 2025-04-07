@@ -120,7 +120,7 @@ namespace openre::enemy
                                      2160, 2244, 2322, 2394, 2460, 2520, 2574, 2622, 2664, 2700, 2730, 2754, 2772, 2784, 2790 };
 
     // 0x004B1DD0
-    static void em_move_tbl_set()
+    void em_move_tbl_set()
     {
         gGameTable.enemy_init_entries[0].type = EM_NONE;
         gGameTable.enemy_init_entries[1].type = EM_NONE;
@@ -169,14 +169,13 @@ namespace openre::enemy
         gGameTable.enemy_init_table[EM_IVY_POISON] = em_2E;
         gGameTable.enemy_init_table[EM_MOTH] = em_3A;
         gGameTable.enemy_init_table[EM_MAGGOTS] = em_3B;
+
         gGameTable.enemy_init_table[EM_3E] = em_3E;
         gGameTable.enemy_init_table[EM_3F] = em_3F;
 
-        gGameTable.enemy_init_table[0x35] = em_30;
-
-        for (auto i = 0; i < 96; i++)
+        for (auto i = 112; i < 159; i++)
         {
-            gGameTable.enemy_init_table[96 + i] = gGameTable.enemy_init_table[i];
+            gGameTable.enemy_init_table[i] = gGameTable.enemy_init_table[i - 96];
         }
     }
 
@@ -415,12 +414,6 @@ namespace openre::enemy
         auto b = (a2->var_A0 >> 15) * 30;
         auto c = word_52DA48[a + b];
         sub_445840(a1, c);
-    }
-
-    // 0x004B21D0
-    void add_speed_xz(Entity* entity, int16_t d)
-    {
-        interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
     }
 
     // 0x004DF320

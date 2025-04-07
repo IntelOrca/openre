@@ -7,6 +7,12 @@
 
 namespace openre::file
 {
+    enum
+    {
+        READ_SAVE_FILE_SUCCESS,
+        READ_SAVE_FILE_ERROR = 2,
+    };
+
     // 0x00508DC0
     void file_error()
     {
@@ -59,6 +65,12 @@ namespace openre::file
         return p(path, buffer, offset, length, mode);
     }
 
+    // 0x00505B20
+    void sub_505B20()
+    {
+        interop::call(0x00505B20);
+    }
+
     // 0x004DD360
     static int osp_read()
     {
@@ -77,9 +89,47 @@ namespace openre::file
         return bytesRead;
     }
 
+    // 0x00509780
+    static int file_read_save(void* buffer, const char* filename, size_t size)
+    {
+        auto file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            return READ_SAVE_FILE_ERROR;
+        }
+
+        DWORD bytesRead;
+        if (!ReadFile(file, buffer, size, &bytesRead, 0) || bytesRead != size)
+        {
+            return READ_SAVE_FILE_ERROR;
+        }
+        CloseHandle(file);
+        return READ_SAVE_FILE_SUCCESS;
+    }
+
+    // 0x005097E0
+    static size_t file_write_save(const char* filename, void* buffer, size_t size)
+    {
+        auto file = CreateFileA(filename, GENERIC_WRITE, FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            return 0;
+        }
+
+        DWORD bytesWritten;
+        if (!WriteFile(file, buffer, size, &bytesWritten, 0))
+        {
+            return 0;
+        }
+        update_timer();
+        CloseHandle(file);
+        return bytesWritten;
+    }
+
     void file_init_hooks()
     {
-
         interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x00509780, &file_read_save);
+        interop::writeJmp(0x005097E0, &file_write_save);
     }
 }

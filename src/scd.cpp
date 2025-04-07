@@ -55,6 +55,7 @@ namespace openre::scd
         SCD_AOT_SET_4P = 0x67,
         SCD_DOOR_AOT_SET_4P = 0x68,
         SCD_ITEM_AOT_SET_4P = 0x69,
+        SCD_MIRROR_SET = 0x73,
         SCD_HEAL = 0x83,
         SCD_POISON_CK = 0x86,
         SCD_POISON_CLR = 0x87,
@@ -272,6 +273,15 @@ namespace openre::scd
         uint8_t action;
     };
 
+    struct ScdMirrorSet
+    {
+        uint8_t opcode;
+        uint8_t flag;
+        uint16_t position;
+        uint16_t min;
+        uint16_t max;
+    };
+
     constexpr uint8_t SAT_4P = (1 << 7);
 
     using ScdOpcodeImpl = int (*)(SceTask*);
@@ -297,7 +307,7 @@ namespace openre::scd
     }
 
     // 0x004E39E0
-    static void scd_init()
+    void scd_init()
     {
         auto maxTasks = get_max_tasks();
         for (auto i = 0; i < maxTasks; i++)
@@ -894,6 +904,19 @@ namespace openre::scd
         return SCD_RESULT_NEXT;
     }
 
+    // 0x004E8DB0
+    static int scd_mirror_set(SceTask* sce)
+    {
+        auto opcode = reinterpret_cast<ScdMirrorSet*>(sce->data);
+        set_flag(FlagGroup::Status, FG_STATUS_MIRROR, true);
+        gGameTable.byte_989E75 = opcode->flag;
+        gGameTable.word_989E76 = opcode->position;
+        gGameTable.word_989E78 = opcode->min;
+        gGameTable.word_989E7A = opcode->max;
+        sce->data += sizeof(ScdMirrorSet);
+        return SCD_RESULT_NEXT;
+    }
+
     static void set_scd_hook(ScdOpcode opcode, ScdOpcodeImpl impl)
     {
         gScdImplTable[opcode] = impl;
@@ -932,6 +955,7 @@ namespace openre::scd
         set_scd_hook(SCD_SCE_BGMTBL_SET, &scd_sce_bgmtbl_set);
         set_scd_hook(SCD_CUT_BE_SET, &scd_cut_be_set);
         set_scd_hook(SCD_AOT_SET_4P, &scd_aot_set_4p);
+        set_scd_hook(SCD_MIRROR_SET, &scd_mirror_set);
         set_scd_hook(SCD_HEAL, &scd_heal);
         set_scd_hook(SCD_POISON_CK, &scd_poison_ck);
         set_scd_hook(SCD_POISON_CLR, &scd_poison_clr);

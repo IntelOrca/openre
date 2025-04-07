@@ -1,5 +1,7 @@
 #pragma once
 
+#include "openre.h"
+
 namespace openre::input
 {
     enum InputKey
@@ -27,8 +29,15 @@ namespace openre::input
         KEY_TYPE_128 = 128,
         KEY_TYPE_AIM = 256,
         KEY_TYPE_RUN_AND_CANCEL = 512,
+        KEY_TYPE_4096 = 4096,
     };
 
     [[nodiscard]] int GetGamepadState();
+
+    [[nodiscard]] inline bool check_input(int key)
+    {
+        return gGameTable.key_trg & key;
+    }
+
     void input_init_hooks();
 };

@@ -81,16 +81,23 @@ namespace openre
 
     enum
     {
+        FG_SYSTEM_0 = 0,
         FG_SYSTEM_2 = 2,
+        FG_SYSTEM_1 = 1,
+        FG_SYSTEM_4 = 4,
         FG_SYSTEM_DOOR_TRANSITION = 6,
-        FG_SYSTEM_7 = 7,
+        FG_SYSTEM_EX_BATTLE = 7,
+        FG_SYSTEM_8 = 8,
+        FG_SYSTEM_12 = 12,
         FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
+        FG_SYSTEM_DEMO = 18,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_19 = 19,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
-        FG_SYSTEM_28 = 28,
+        FG_SYSTEM_4TH_SURVIVOR = 28,
+        FG_SYSTEM_31 = 31,
     };
 
     enum
@@ -102,15 +109,14 @@ namespace openre
         FG_STATUS_BONUS = 6,
         FG_STATUS_GAMEPLAY = 8,
         FG_STATUS_9 = 9,
-        FG_STATUS_10 = 10,
+        FG_STATUS_INTERACT = 10,
         FG_STATUS_11 = 11,
         FG_STATUS_12 = 12,
         FG_STATUS_13 = 13,
         FG_STATUS_14 = 14,
         FG_STATUS_MIRROR = 15,
         FG_STATUS_SCREEN = 16,
-        // Pushing object ???
-        FG_STATUS_18 = 18,
+        FG_STATUS_PUSH_OBJECT = 18,
         FG_STATUS_20 = 20,
         FG_STATUS_21 = 21,
         FG_STATUS_CAMERA_LOCKED = 23,
@@ -165,7 +171,9 @@ namespace openre
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
+    int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
+    void update_timer();
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()
