@@ -839,7 +839,9 @@ struct GameTable
     void* dword_98862C;                 // 0x98862C
     VCut* vcut_data[2];                 // 0x988630
     void* em_damage_table_16[48];       // 0x988638
-    void* em_die_table[84];             // 0x9886F8
+    void* em_die_table[81];             // 0x9886F8
+    uint16_t* dword_98883C;             // 0x98883C
+    uint8_t pad_988840[8];              // 0x988840
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850

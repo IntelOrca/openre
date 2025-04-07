@@ -342,12 +342,8 @@ namespace openre
     // 0x00500E00
     static void stage_0()
     {
-        // interop::call(0x00500E00);
-        // return;
-
         auto isClaire = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
-        // ???
-        gGameTable.em_die_table[51] = isClaire ? (void*)&st1_xa_claire : (void*)&st0_xa_leon;
+        gGameTable.dword_98883C = isClaire ? &st1_xa_claire[0] : &st0_xa_leon[0];
         task_exit();
     }
 
@@ -390,6 +386,8 @@ namespace openre
     // 0x004DEF00
     void set_stage()
     {
+        gGameTable.dword_988620 = (uint32_t)&gGameTable.work_buffer;
+
         switch (gGameTable.current_stage)
         {
         case 0: task_execute(2, stage_0); break;
@@ -400,8 +398,8 @@ namespace openre
         case 5: task_execute(2, stage_5); break;
         case 6: task_execute(2, stage_6); break;
         }
+
         task_sleep(1);
-        return;
     }
 
     // 0x004C89B2

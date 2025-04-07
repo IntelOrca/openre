@@ -628,7 +628,8 @@ declare     mem_top                 void*                   0x00988624
 declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[2]                0x00988630
 declare     em_damage_table_16      void*[48]               0x00988638
-declare     em_die_table            void*[84]               0x009886F8
+declare     em_die_table            void*[81]               0x009886F8
+declare     dword_98883C            u16*                    0x0098883C
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     byte_9888D8             u8                      0x009888D8
