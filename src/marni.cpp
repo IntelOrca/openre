@@ -44,5 +44,4 @@ namespace openre::marni
     {
         interop::call<void, int>(0x00432CD0, doorId);
     }
-
 }
