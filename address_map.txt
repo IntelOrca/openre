@@ -482,7 +482,7 @@ declare     byte_5286F4             u8[8]                   0x005286F4
 declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
-declare     byte_53A305             u8[200]                 0x0053A305
+declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
