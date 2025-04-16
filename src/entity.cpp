@@ -1,5 +1,8 @@
 #include "entity.h"
 #include "interop.hpp"
+#include "math.h"
+
+using namespace openre::math;
 
 namespace openre
 {
@@ -35,9 +38,14 @@ namespace openre
     }
 
     // 0x004B21D0
-    void add_speed_xz(Entity* entity, int16_t d)
+    void add_speed_xz(ActorEntity* entity, int16_t d)
     {
-        interop::call<void, Entity*, int16_t>(0x004B21D0, entity, d);
+        Mat16 rotMatrix;
+        Vec16p vec{ 0, entity->cdir.y + d, 0 };
+        rotate_matrix(vec, rotMatrix);
+        apply_matrixsv(rotMatrix, entity->spd, vec);
+        entity->m.pos.x += vec.x;
+        entity->m.pos.z += vec.z;
     }
 
     uint8_t compute_nfloor(int32_t posY)
