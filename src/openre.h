@@ -94,9 +94,11 @@ namespace openre
         FG_SYSTEM_DEMO = 18,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_19 = 19,
+        FG_SYSTEM_22 = 22,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
         FG_SYSTEM_4TH_SURVIVOR = 28,
+        FG_SYSTEM_30 = 30,
         FG_SYSTEM_31 = 31,
     };
 
