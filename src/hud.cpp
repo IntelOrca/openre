@@ -59,8 +59,6 @@ namespace openre::hud
         INVENTORY_MIX_ITEM_CONFIRM_MESSAGE,
     };
 
-    constexpr uint8_t INVENTORY_INFINITE_QUANTITY = 0xFF;
-
     constexpr uint8_t INVENTORY_SPECIAL_ITEM_SLOT = 10;
 
     constexpr uint32_t MESSAGE_KIND_ALREADY_FULLY_LOADED = 2;
@@ -948,7 +946,7 @@ namespace openre::hud
     }
 
     // 0x005024D0
-    static int set_inventory_item(int slotId, int type, int quantity, int part)
+    int set_inventory_item(int slotId, int type, int quantity, int part)
     {
         gGameTable.inventory[slotId].Type = type;
         gGameTable.inventory[slotId].Quantity = quantity;

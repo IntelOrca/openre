@@ -88,6 +88,7 @@ namespace openre
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_EX_BATTLE = 7,
         FG_SYSTEM_8 = 8,
+        FG_SYSTEM_10 = 10,
         FG_SYSTEM_12 = 12,
         FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
@@ -153,6 +154,13 @@ namespace openre
         FG_ZAPPING_15 = 15,
     };
 
+    enum
+    {
+        EX_BATTLE_MODE_LEVEL_1 = 1,
+        EX_BATTLE_MODE_LEVEL_2 = 3,
+        EX_BATTLE_MODE_LEVEL_3 = 3,
+    };
+
     extern GameTable& gGameTable;
     extern uint32_t& gGameFlags;
     extern uint32_t& gErrorCode;
@@ -176,6 +184,7 @@ namespace openre
     bool check_flag(FlagGroup group, uint32_t index);
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
+    void stage_init_item();
     int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
     void update_timer();

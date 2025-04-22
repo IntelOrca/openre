@@ -22,7 +22,6 @@ namespace openre::player
     using PldType = uint8_t;
 
     constexpr uint8_t INVENTORY_INDEX_SPECIAL = 10;
-    constexpr uint8_t FULL_INVENTORY_SIZE = 11;
 
     extern uint8_t WEAPON_INDEX_NONE = 128;
 
@@ -1468,7 +1467,7 @@ namespace openre::player
 
         auto weapon = player->type & 0xFFF;
         auto moveIndex = weapon * 3;
-        if (weapon != ITEM_TYPE_FLAMETHROWER && weapon != ITEM_TYPE_ROCKET_LAUNCHER)
+        if (weapon != ITEM_TYPE_SPARKSHOT && weapon != ITEM_TYPE_ROCKET_LAUNCHER)
         {
             if (player->move_cnt > (gGameTable.byte_53A305[moveIndex + 1] & 0xF7) && key & 0x20)
             {

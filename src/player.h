@@ -42,6 +42,8 @@ namespace openre::player
     extern uint8_t& gInventorySize;
     extern InventorySlot* gInventory;
 
+    constexpr uint8_t FULL_INVENTORY_SIZE = 11;
+
     int inventory_find_item(ItemType type);
     int player_check_life();
     void player_set(PlayerEntity* player);
