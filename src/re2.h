@@ -675,7 +675,8 @@ struct GameTable
     uint32_t dword_689DF8;              // 0x689DF8
     uint8_t pad_689DFC[292];            // 0x689DFC
     uint32_t dword_689F20;              // 0x689F20
-    uint8_t pad_689F24[736];            // 0x689F24
+    uint8_t byte_689F24;                // 0x689F24
+    uint8_t pad_689F25[735];            // 0x689F25
     Unknown68A204* ctcb;                // 0x68A204
     uint8_t pad_68A208[31096];          // 0x68A208
     uint8_t title_mv_state;             // 0x691B80
@@ -971,7 +972,9 @@ struct GameTable
     uint8_t pad_98F1AC[10];             // 0x98F1AC
     uint8_t byte_98F1B6;                // 0x98F1B6
     uint8_t byte_98F1B7;                // 0x98F1B7
-    uint8_t pad_98F1B8[3];              // 0x98F1B8
+    uint8_t pad_98F1B8[1];              // 0x98F1B8
+    uint8_t byte_98F1B9;                // 0x98F1B9
+    uint8_t pad_98F1BA[1];              // 0x98F1BA
     uint8_t byte_98F1BB;                // 0x98F1BB
     uint8_t pad_98F1BC[2003];           // 0x98F1BC
     uint8_t byte_98F98F[4];             // 0x98F98F

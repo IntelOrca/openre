@@ -11,4 +11,5 @@ namespace openre::marni
     void unload_texture_page(int page);
     void door_disp0(int doorId, int a1, int a2, int a3);
     void door_disp1(int doorId);
+    void result_unload_textures();
 }

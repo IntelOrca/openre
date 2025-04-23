@@ -513,6 +513,7 @@ declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
 declare     dword_689F20            u32                     0x00689F20
+declare     byte_689F24             u8                      0x00689F24
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
 declare     title_disp_add          u8                      0x00691B81
@@ -728,6 +729,7 @@ declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
 declare     byte_98F1B6             u8                      0x0098F1B6
 declare     byte_98F1B7             u8                      0x0098F1B7
+declare     byte_98F1B9             u8                      0x0098F1B9
 declare     byte_98F1BB             u8                      0x0098F1BB
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
