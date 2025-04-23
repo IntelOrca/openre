@@ -611,6 +611,7 @@ declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
+declare     work_buffer             u32                     0x008FF8A0
 declare     cc_work                 CCWork                  0x00980B00
 declare     door_trans_mv           u8                      0x0098149E
 declare     byte_981FB7             u8                      0x00981FB7
@@ -628,7 +629,8 @@ declare     mem_top                 void*                   0x00988624
 declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[2]                0x00988630
 declare     em_damage_table_16      void*[48]               0x00988638
-declare     em_die_table            void*[84]               0x009886F8
+declare     em_die_table            void*[81]               0x009886F8
+declare     dword_98883C            u16*                    0x0098883C
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     byte_9888D8             u8                      0x009888D8
