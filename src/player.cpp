@@ -126,6 +126,15 @@ namespace openre::player
         PUSH_OBJ_STATE_END,
     };
 
+    enum
+    {
+        CLIMB_ON_STATE_0,
+        CLIMB_ON_STATE_PLACE_IN_FRONT,
+        CLIMB_ON_STATE_2,
+        CLIMB_ON_STATE_CLIMBING,
+        CLIMB_ON_STATE_END,
+    };
+
     void set_routine(Routine routine)
     {
         switch (routine)
@@ -1224,6 +1233,133 @@ namespace openre::player
         }
     }
 
+    // 0x004DB670
+    static void pl_mv_climb_on(PlayerEntity* player, Emr* emr, Edd* edd)
+    {
+        switch (player->routine_3)
+        {
+        case CLIMB_ON_STATE_0:
+        {
+            player->routine_3 = 1;
+            player->move_no = 0;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
+            player->spd.x = 50;
+            set_flag(FlagGroup::Status, FG_STATUS_25, true);
+            player->be_flg |= 4;
+            [[fallthrough]];
+        }
+        case CLIMB_ON_STATE_PLACE_IN_FRONT:
+        {
+            auto joinMoveRes = static_cast<int32_t>(joint_move(player, player->pSub0_kan_t_ptr, player->pSub0_seq_t_ptr, 512));
+            joinMoveRes = (joinMoveRes << 16) | player->cdir.y;
+            if (joinMoveRes & 0x200)
+            {
+                player->cdir.y = joinMoveRes + ((joinMoveRes >> 2) & 0xFF);
+            }
+            else
+            {
+                player->cdir.y = joinMoveRes - ((joinMoveRes >> 2) & 0xFF);
+            }
+            if ((player->cdir.y & 0x3E0) == 0)
+            {
+                player->routine_3 = 2;
+                player->cdir.y &= ~0xff;
+                if (player->routine_2 & 2)
+                {
+                    player->routine_1 = 9;
+                    player->routine_3 = 0;
+                }
+            }
+            break;
+        }
+        case CLIMB_ON_STATE_2:
+        {
+            player->routine_3 = 3;
+            player->move_no = 6;
+            player->hokan_flg = 3;
+            [[fallthrough]];
+        }
+        case CLIMB_ON_STATE_CLIMBING:
+        {
+            if (player->pOn_om)
+            {
+                oma_ob_pull2(player, player->pOn_om, static_cast<uint16_t>(player->sc_id << 8), 4);
+            }
+            if (player->move_cnt == 17)
+            {
+                player->damage_cnt |= 0x80;
+                player->nFloor++;
+                player->be_flg |= 8;
+            }
+            bool v13;
+            if (player->id == PLD_SHERRY)
+            {
+                if (player->move_cnt == 57 && (rnd() & 3))
+                {
+                    player->move_no = 6;
+                    player->move_cnt = 0x56;
+                    player->hokan_flg = 5;
+                    player->mplay_flg = 0;
+                }
+                if (player->move_cnt == 99)
+                {
+                    player->spd.x = 548;
+                    add_speed_xz(player, 0);
+                    player->ground -= 1800;
+                    player->m.pos.y -= 1800;
+                }
+                v13 = player->move_cnt == 119;
+            }
+            else
+            {
+                if (player->move_cnt == 29)
+                {
+                    player->spd.x = 1000;
+                    add_speed_xz(player, 0);
+                    player->ground -= 1800;
+                    player->m.pos.y -= 1800;
+                }
+                v13 = player->move_cnt == 49;
+            }
+            if (v13)
+            {
+                player->damage_cnt &= ~0x80u;
+                player->be_flg &= 0xF3;
+            }
+            player->routine_3 += joint_move(player, (Emr*)player->field_190, (Edd*)player->field_194, 1024);
+            if (player->water < player->ground)
+            {
+                auto moveCnt = player->move_cnt;
+                if (moveCnt < 0xF && (moveCnt & 1))
+                {
+                    pl_water(player);
+                }
+            }
+            auto nowSeq = *player->pNow_seq;
+            if (nowSeq & 0x4000)
+            {
+                snd_se_walk(1, 3 * ((nowSeq >> 13) & 1) + 4, player);
+                gGameTable.word_989EEE |= 4;
+            }
+            break;
+        }
+        case CLIMB_ON_STATE_END:
+        {
+            if (player->pOn_om)
+            {
+                oma_ob_pull2(player, player->pOn_om, static_cast<uint16_t>(player->sc_id << 8), 0x3E8);
+            }
+            player->routine_1 = 0;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+            gGameTable.fg_status &= 0xBF;
+            break;
+        }
+        }
+    }
+
     // 0x004D4310
     static void enemy_ck(PlayerEntity* player, int a1)
     {
@@ -1421,6 +1557,7 @@ namespace openre::player
         // set mv hooks
         mv_tbl[5] = pl_mv_aim;
         mv_tbl[6] = pl_mv_pick_up_item;
+        mv_tbl[8] = pl_mv_climb_on;
         mv_tbl[9] = pl_mv_step_down;
         mv_tbl[10] = pl_mv_push_object;
         mv_tbl[12] = pl_mv_quickturn;
