@@ -10,6 +10,7 @@
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
+#include "marni.h"
 #include "math.h"
 #include "player.h"
 #include "rdt.h"
@@ -483,6 +484,7 @@ void onAttach()
     enemy_init_hooks();
     file_init_hooks();
     math_init_hooks();
+    marni::init_hooks();
 }
 
 extern "C" {

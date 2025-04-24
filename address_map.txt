@@ -762,3 +762,16 @@ declare     var_01                  u8
 declare     var_0C                  u8
 declare     var_24                  u8
 declare     var_25                  u8
+
+struct      MarniRes
+declare     width                   u32
+declare     height                  u32
+declare     depth                   u32
+declare     fullscreen              u32
+
+struct      Marni
+declare     modes                   u32                    0x008C7018
+declare     window_rect             u32[4]                 0x008C7CDC
+declare     hWnd                    void*                  0x008C7EA8
+declare     resolutions             MarniRes[64]           0x008C7EF8
+declare     var_8C846C              u32                    0x008C846C

@@ -388,4 +388,26 @@ namespace openre::interop
         std::vector<uint8_t> buffer(count, 0x90);
         writeMemory(address, buffer.data(), buffer.size());
     }
+
+    static uint32_t _thisCallReturnAddress;
+    void hookThisCall(uint32_t address, void* fn)
+    {
+        uint8_t data[] = {
+            0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, // pop [addr]
+            0x51,                               // push ecx
+            0xE8, 0x00, 0x00, 0x00, 0x00,       // call addr
+            0x59,                               // pop ecx
+            0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, // push [addr]
+            0xC3,                               // ret
+        };
+
+        auto varAddress = reinterpret_cast<uintptr_t>(&_thisCallReturnAddress);
+        WRITE_ADDRESS_STRICTALIAS(&data[2], varAddress);
+        WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
+
+        auto addr = reinterpret_cast<uintptr_t>(fn);
+        WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
+
+        writeMemory(address, data, sizeof(data));
+    }
 }

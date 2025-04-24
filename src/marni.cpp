@@ -2,6 +2,10 @@
 #include "interop.hpp"
 #include "re2.h"
 
+#define WIN32_LEAN_AND_MEAN
+#include <ddraw.h>
+#include <windows.h>
+
 namespace openre::marni
 {
     // 0x00443620
@@ -54,5 +58,34 @@ namespace openre::marni
         {
             unload_texture_page(pages[page]);
         }
+    }
+
+    // 0x00406450
+    static void move(Marni* marni)
+    {
+        HWND window = (HWND)marni->hWnd;
+        RECT rect = {};
+        rect.left = marni->window_rect[0];
+        rect.top = marni->window_rect[1];
+        rect.right = marni->window_rect[2];
+        rect.bottom = marni->window_rect[3];
+
+        POINT point0 = {};
+        ClientToScreen(window, &point0);
+        POINT point1 = {};
+        point1.x = marni->resolutions[marni->modes].width;
+        point1.y = marni->resolutions[marni->modes].height;
+        ClientToScreen(window, &point1);
+
+        SetRect(&rect, point0.x, point0.y, point1.x, point1.y);
+        marni->window_rect[0] = rect.left;
+        marni->window_rect[1] = rect.top;
+        marni->window_rect[2] = rect.right;
+        marni->window_rect[3] = rect.bottom;
+    }
+
+    void init_hooks()
+    {
+        interop::hookThisCall(0x00406450, &move);
     }
 }
