@@ -326,10 +326,81 @@ namespace openre
         bitarray_set(addr, index, value);
     }
 
+    static uint16_t st0_xa_leon[96]
+        = { 8, 73, 6,  8, 50, 23, 2, 59, 20, 5, 40, 30, 6, 59, 18, 10, 30, 8,  0,  0,  80, 3,  0, 47,
+            1, 71, 9,  3, 47, 32, 9, 22, 17, 4, 46, 32, 9, 39, 16, 10, 16, 14, 9,  55, 16, 5,  0, 40,
+            7, 54, 26, 5, 70, 9,  2, 0,  59, 8, 0,  25, 9, 0,  22, 6,  0,  30, 10, 0,  16, 7,  0, 27,
+            4, 0,  46, 1, 0,  71, 9, 71, 9,  6, 30, 29, 8, 25, 25, 7,  27, 27, 0,  0,  15, 85, 6, 13 };
+
+    static uint16_t st1_xa_claire[160]
+        = { 27, 27, 0,  0,  15, 85, 6,  13, 0,  23, 13, 65, 17, 5,  62, 29, 3,  69, 21, 15, 70, 8,  2,  0,  69, 5,  0,
+            62, 13, 82, 9,  6,  59, 32, 14, 0,  16, 10, 0,  32, 15, 34, 9,  15, 78, 7,  14, 75, 12, 10, 62, 29, 7,  52,
+            37, 7,  0,  52, 12, 76, 14, 13, 23, 21, 9,  80, 10, 1,  71, 18, 9,  0,  40, 8,  46, 41, 4,  0,  63, 3,  0,
+            69, 0,  0,  91, 15, 24, 10, 10, 32, 30, 14, 62, 13, 14, 48, 14, 15, 0,  12, 13, 44, 21, 14, 16, 16, 9,  40,
+            40, 12, 0,  26, 15, 43, 9,  6,  0,  59, 12, 26, 25, 2,  69, 22, 11, 0,  30, 15, 52, 9,  15, 12, 12, 14, 32,
+            16, 4,  63, 27, 8,  0,  46, 1,  0,  71, 15, 61, 9,  11, 30, 29, 12, 51, 25, 11, 59, 27, 0,  0,  0 };
+
+    // 0x00500E00
+    static void stage_0()
+    {
+        auto isClaire = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
+        gGameTable.dword_98883C = isClaire ? &st1_xa_claire[0] : &st0_xa_leon[0];
+        task_exit();
+    }
+
+    // 0x00500E20
+    static void stage_1()
+    {
+        interop::call(0x00500E20);
+    }
+
+    // 0x00500E40
+    static void stage_2()
+    {
+        interop::call(0x00500E40);
+    }
+
+    // 0x00500E60
+    static void stage_3()
+    {
+        interop::call(0x00500E60);
+    }
+
+    // 0x00500E80
+    static void stage_4()
+    {
+        interop::call(0x00500E80);
+    }
+
+    // 0x00500EA0
+    static void stage_5()
+    {
+        interop::call(0x00500EA0);
+    }
+
+    // 0x00500EC0
+    static void stage_6()
+    {
+        interop::call(0x00500EC0);
+    }
+
     // 0x004DEF00
     void set_stage()
     {
-        interop::call(0x004DEF00);
+        gGameTable.dword_988620 = (uint32_t)&gGameTable.work_buffer;
+
+        switch (gGameTable.current_stage)
+        {
+        case 0: task_execute(2, stage_0); break;
+        case 1: task_execute(2, stage_1); break;
+        case 2: task_execute(2, stage_2); break;
+        case 3: task_execute(2, stage_3); break;
+        case 4: task_execute(2, stage_4); break;
+        case 5: task_execute(2, stage_5); break;
+        case 6: task_execute(2, stage_6); break;
+        }
+
+        task_sleep(1);
     }
 
     // 0x004C89B2

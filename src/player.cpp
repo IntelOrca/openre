@@ -121,6 +121,15 @@ namespace openre::player
         PUSH_OBJ_STATE_END,
     };
 
+    enum
+    {
+        CLIMB_ON_STATE_0,
+        CLIMB_ON_STATE_PLACE_IN_FRONT,
+        CLIMB_ON_STATE_2,
+        CLIMB_ON_STATE_CLIMBING,
+        CLIMB_ON_STATE_END,
+    };
+
     void set_routine(Routine routine)
     {
         switch (routine)
@@ -263,31 +272,6 @@ namespace openre::player
         gGameTable.itembox_slot_id--;
         gGameTable.itembox_slot_id &= 0x3F;
         loc_4FC3FD();
-    }
-
-    // 0x005024D0
-    static int set_inventory_item(int slotId, int type, int quantity, int part)
-    {
-        gGameTable.inventory[slotId].Type = type;
-        gGameTable.inventory[slotId].Quantity = quantity;
-        gGameTable.inventory[slotId].Part = part;
-        return slotId;
-    }
-
-    // 0x00502500
-    static void set_inventory_item_quantity(int slotId, int quantity)
-    {
-        gGameTable.inventory[slotId].Quantity = quantity;
-
-        auto part = gGameTable.inventory[slotId].Part;
-        if (part == 1)
-        {
-            gGameTable.inventory[slotId + 1].Quantity = quantity;
-        }
-        if (part == 2)
-        {
-            gGameTable.inventory[slotId].Quantity = quantity;
-        }
     }
 
     // 0x004DABC0
@@ -685,7 +669,7 @@ namespace openre::player
                 set_routine(Routine::QUICKTURN);
                 return;
             }
-            if ((key_trg & input::KEY_TYPE_ACTION) != 0)
+            if ((key_trg & input::KEY_TYPE_128) != 0)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -783,7 +767,7 @@ namespace openre::player
         {
             set_routine(Routine::PUSH_OBJECT);
         }
-        if ((key & input::KEY_TYPE_ACTION) == 0 && (key_trg & input::KEY_TYPE_ACTION) == 0)
+        if ((key & input::KEY_TYPE_128) == 0 && (key_trg & input::KEY_TYPE_128) == 0)
         {
             goto LABEL_31;
         }
@@ -794,7 +778,7 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -821,7 +805,7 @@ namespace openre::player
         {
             set_routine(Routine::FORWARD);
         }
-        if (((key & input::KEY_TYPE_ACTION) == 0) && ((key_trg & input::KEY_TYPE_ACTION) == 0))
+        if (((key & input::KEY_TYPE_128) == 0) && ((key_trg & input::KEY_TYPE_128) == 0))
         {
             goto LABEL_25;
         }
@@ -831,7 +815,7 @@ namespace openre::player
         }
         if (oma_pl_updown_ck(player->id + 4) == 0)
         {
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -869,7 +853,7 @@ namespace openre::player
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
         }
-        if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
+        if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
         {
             if (player->Sca_info & 0x100000)
             {
@@ -880,7 +864,7 @@ namespace openre::player
             {
                 return;
             }
-            if (key_trg & input::KEY_TYPE_ACTION)
+            if (key_trg & input::KEY_TYPE_128)
             {
                 set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             }
@@ -916,7 +900,7 @@ namespace openre::player
         {
             set_routine(Routine::ROTATE);
         }
-        if (key_trg & input::KEY_TYPE_ACTION)
+        if (key_trg & input::KEY_TYPE_128)
         {
             set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
             if (player->Sca_info & 0x100000)
@@ -1204,7 +1188,7 @@ namespace openre::player
                     player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
                 }
             }
-            if (key & input::KEY_TYPE_ACTION || key_trg & input::KEY_TYPE_ACTION)
+            if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
             {
                 if (player->Sca_info & 0x100000)
                 {
@@ -1215,7 +1199,7 @@ namespace openre::player
                 {
                     return;
                 }
-                if (key_trg & input::KEY_TYPE_ACTION)
+                if (key_trg & input::KEY_TYPE_128)
                 {
                     set_flag(FlagGroup::Status, FG_STATUS_INTERACT, true);
                 }
@@ -1244,6 +1228,133 @@ namespace openre::player
         }
     }
 
+    // 0x004DB670
+    static void pl_mv_climb_on(PlayerEntity* player, Emr* emr, Edd* edd)
+    {
+        switch (player->routine_3)
+        {
+        case CLIMB_ON_STATE_0:
+        {
+            player->routine_3 = 1;
+            player->move_no = 0;
+            player->move_cnt = 0;
+            player->hokan_flg = 7;
+            player->mplay_flg = 0;
+            player->spd.x = 50;
+            set_flag(FlagGroup::Status, FG_STATUS_25, true);
+            player->be_flg |= 4;
+            [[fallthrough]];
+        }
+        case CLIMB_ON_STATE_PLACE_IN_FRONT:
+        {
+            auto joinMoveRes = static_cast<int32_t>(joint_move(player, player->pSub0_kan_t_ptr, player->pSub0_seq_t_ptr, 512));
+            joinMoveRes = (joinMoveRes << 16) | player->cdir.y;
+            if (joinMoveRes & 0x200)
+            {
+                player->cdir.y = joinMoveRes + ((joinMoveRes >> 2) & 0xFF);
+            }
+            else
+            {
+                player->cdir.y = joinMoveRes - ((joinMoveRes >> 2) & 0xFF);
+            }
+            if ((player->cdir.y & 0x3E0) == 0)
+            {
+                player->routine_3 = 2;
+                player->cdir.y &= ~0xff;
+                if (player->routine_2 & 2)
+                {
+                    player->routine_1 = 9;
+                    player->routine_3 = 0;
+                }
+            }
+            break;
+        }
+        case CLIMB_ON_STATE_2:
+        {
+            player->routine_3 = 3;
+            player->move_no = 6;
+            player->hokan_flg = 3;
+            [[fallthrough]];
+        }
+        case CLIMB_ON_STATE_CLIMBING:
+        {
+            if (player->pOn_om)
+            {
+                oma_ob_pull2(player, player->pOn_om, static_cast<uint16_t>(player->sc_id << 8), 4);
+            }
+            if (player->move_cnt == 17)
+            {
+                player->damage_cnt |= 0x80;
+                player->nFloor++;
+                player->be_flg |= 8;
+            }
+            bool v13;
+            if (player->id == PLD_SHERRY)
+            {
+                if (player->move_cnt == 57 && (rnd() & 3))
+                {
+                    player->move_no = 6;
+                    player->move_cnt = 0x56;
+                    player->hokan_flg = 5;
+                    player->mplay_flg = 0;
+                }
+                if (player->move_cnt == 99)
+                {
+                    player->spd.x = 548;
+                    add_speed_xz(player, 0);
+                    player->ground -= 1800;
+                    player->m.pos.y -= 1800;
+                }
+                v13 = player->move_cnt == 119;
+            }
+            else
+            {
+                if (player->move_cnt == 29)
+                {
+                    player->spd.x = 1000;
+                    add_speed_xz(player, 0);
+                    player->ground -= 1800;
+                    player->m.pos.y -= 1800;
+                }
+                v13 = player->move_cnt == 49;
+            }
+            if (v13)
+            {
+                player->damage_cnt &= ~0x80u;
+                player->be_flg &= 0xF3;
+            }
+            player->routine_3 += joint_move(player, (Emr*)player->field_190, (Edd*)player->field_194, 1024);
+            if (player->water < player->ground)
+            {
+                auto moveCnt = player->move_cnt;
+                if (moveCnt < 0xF && (moveCnt & 1))
+                {
+                    pl_water(player);
+                }
+            }
+            auto nowSeq = *player->pNow_seq;
+            if (nowSeq & 0x4000)
+            {
+                snd_se_walk(1, 3 * ((nowSeq >> 13) & 1) + 4, player);
+                gGameTable.word_989EEE |= 4;
+            }
+            break;
+        }
+        case CLIMB_ON_STATE_END:
+        {
+            if (player->pOn_om)
+            {
+                oma_ob_pull2(player, player->pOn_om, static_cast<uint16_t>(player->sc_id << 8), 0x3E8);
+            }
+            player->routine_1 = 0;
+            player->routine_2 = 0;
+            player->routine_3 = 0;
+            gGameTable.fg_status &= 0xBF;
+            break;
+        }
+        }
+    }
+
     void init_move_tables()
     {
         // fill expanded tables with old code
@@ -1261,6 +1372,7 @@ namespace openre::player
         br_tbl[12] = pl_br_quickturn;
         // set mv hooks
         mv_tbl[6] = pl_mv_pick_up_item;
+        mv_tbl[8] = pl_mv_climb_on;
         mv_tbl[9] = pl_mv_step_down;
         mv_tbl[10] = pl_mv_push_object;
         mv_tbl[12] = pl_mv_quickturn;
@@ -1290,8 +1402,6 @@ namespace openre::player
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
         interop::writeJmp(0x4FC3CE, itembox_prev_slot);
-        interop::writeJmp(0x5024D0, set_inventory_item);
-        interop::writeJmp(0x502500, set_inventory_item_quantity);
         interop::writeJmp(0x4D97B0, player_move);
         interop::writeJmp(0x4D9D20, pl_move);
         interop::writeJmp(0x4DC130, pl_mv_damage);

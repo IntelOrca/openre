@@ -174,11 +174,78 @@ namespace openre::enemy
         sub_471170(enemy, emr, edd);
     }
 
+    // 0x004732A0
+    static void sub_4732A0(EnemyEntity* enemy, int a1, uint8_t a2)
+    {
+        interop::call<void, EnemyEntity*, int, uint8_t>(0x004732A0, enemy, a1, a2);
+    }
+
+    // 0x00471360
+    static void sub_471360(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        if (!enemy->routine_2)
+        {
+            enemy->routine_2 = 1;
+            enemy->move_no = 1;
+            enemy->move_cnt = 0;
+            enemy->hokan_flg = 3;
+            enemy->mplay_flg = 0;
+            sub_4731A0(enemy);
+            enemy->routine_2 += joint_move(enemy, emr, edd, 1024);
+            return;
+        }
+        if (enemy->routine_2 == 1)
+        {
+            enemy->routine_2 += joint_move(enemy, emr, edd, 1024);
+            return;
+        }
+        if (enemy->routine_2 == 2)
+        {
+            enemy->routine_0 = 1;
+            enemy->routine_1 = 9;
+            enemy->routine_2 = 0;
+            enemy->routine_3 = 0;
+        }
+    }
+
+    static EnemyRoutineFunc* _hurtFuncs47167C = (EnemyRoutineFunc*)0x00528718;
+
+    // 0x00471610
+    static void sub_471610(EnemyEntity* enemy, Emr* emr, Edd* edd)
+    {
+        if (enemy->var_236)
+        {
+            sub_4731A0(enemy);
+            enemy->routine_0 = 1;
+            enemy->routine_1 = enemy->var_233;
+            enemy->routine_2 = enemy->var_234;
+            enemy->routine_3 = enemy->var_235;
+            em_spider_01(enemy, emr, edd);
+            return;
+        }
+        else if (enemy->type & 1)
+        {
+            sub_4731A0(enemy);
+            sub_4732A0(enemy, 8196, (rnd() & 1) + 1);
+            enemy->var_231 = 1;
+            enemy->routine_0 = 1;
+            enemy->routine_1 = 4;
+            enemy->routine_2 = 0;
+            enemy->routine_3 = 0;
+        }
+        else
+        {
+            _hurtFuncs47167C[enemy->routine_2](enemy, emr, edd);
+        }
+    }
+
+    static EnemyRoutineFunc _hurtFuncs_471340[] = { sub_471360, sub_471360, sub_471610, sub_471610 };
+
     // 0x00471340
     // Hurt routine
     static void sub_471340(EnemyEntity* enemy, Emr* emr, Edd* edd)
     {
-        interop::call<void, EnemyEntity*, Emr*, Edd*>(0x00471340, enemy, emr, edd);
+        _hurtFuncs_471340[enemy->var_222](enemy, emr, edd);
     }
 
     // 0x004718E0

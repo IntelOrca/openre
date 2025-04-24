@@ -569,10 +569,10 @@ struct Input
 {
     uint8_t mapping[31];                // 0x0000
     uint8_t pad_001F[5];                // 0x001F
-    uint32_t var_24;                    // 0x0024
+    uint32_t keyboard_raw_state;        // 0x0024
     uint8_t pad_0028[464];              // 0x0028
     uint32_t var_1F8;                   // 0x01F8
-    uint32_t var_1FC;                   // 0x01FC
+    uint32_t gamepad_raw_state;         // 0x01FC
     uint8_t pad_0200[464];              // 0x0200
     uint32_t var_3D0;                   // 0x03D0
     uint8_t pad_03D4[14160];            // 0x03D4
@@ -675,7 +675,8 @@ struct GameTable
     uint32_t dword_689DF8;              // 0x689DF8
     uint8_t pad_689DFC[292];            // 0x689DFC
     uint32_t dword_689F20;              // 0x689F20
-    uint8_t pad_689F24[736];            // 0x689F24
+    uint8_t byte_689F24;                // 0x689F24
+    uint8_t pad_689F25[735];            // 0x689F25
     Unknown68A204* ctcb;                // 0x68A204
     uint8_t pad_68A208[31096];          // 0x68A208
     uint8_t title_mv_state;             // 0x691B80
@@ -713,7 +714,9 @@ struct GameTable
     uint8_t itembox_state;              // 0x691F62
     uint8_t byte_691F63;                // 0x691F63
     uint8_t byte_691F64;                // 0x691F64
-    uint8_t pad_691F65[3];              // 0x691F65
+    uint8_t byte_691F65;                // 0x691F65
+    uint8_t byte_691F66;                // 0x691F66
+    uint8_t byte_691F67;                // 0x691F67
     uint8_t byte_691F68;                // 0x691F68
     uint8_t byte_691F69;                // 0x691F69
     uint8_t byte_691F6A;                // 0x691F6A
@@ -727,7 +730,15 @@ struct GameTable
     uint8_t byte_691F74;                // 0x691F74
     uint8_t pad_691F75[1];              // 0x691F75
     uint8_t byte_691F76;                // 0x691F76
-    uint8_t pad_691F77[13];             // 0x691F77
+    uint8_t pad_691F77[5];              // 0x691F77
+    uint8_t byte_691F7C;                // 0x691F7C
+    uint8_t byte_691F7D;                // 0x691F7D
+    uint8_t byte_691F7E;                // 0x691F7E
+    uint8_t byte_691F7F;                // 0x691F7F
+    uint8_t byte_691F80;                // 0x691F80
+    uint8_t byte_691F81;                // 0x691F81
+    uint8_t byte_691F82;                // 0x691F82
+    uint8_t byte_691F83;                // 0x691F83
     uint8_t itembox_slot_id;            // 0x691F84
     uint8_t byte_691F85;                // 0x691F85
     uint8_t byte_691F86;                // 0x691F86
@@ -800,7 +811,9 @@ struct GameTable
     uint8_t pad_8C7010[112752];         // 0x8C7010
     DoorInfo door_info;                 // 0x8E2880
     DoorEntity door_data[10];           // 0x8E2ACC
-    uint8_t pad_8E37C4[643900];         // 0x8E37C4
+    uint8_t pad_8E37C4[114908];         // 0x8E37C4
+    uint32_t work_buffer;               // 0x8FF8A0
+    uint8_t pad_8FF8A4[528988];         // 0x8FF8A4
     CCWork cc_work;                     // 0x980B00
     uint8_t pad_9813EC[178];            // 0x9813EC
     uint8_t door_trans_mv;              // 0x98149E
@@ -827,7 +840,9 @@ struct GameTable
     void* dword_98862C;                 // 0x98862C
     VCut* vcut_data[2];                 // 0x988630
     void* em_damage_table_16[48];       // 0x988638
-    void* em_die_table[84];             // 0x9886F8
+    void* em_die_table[81];             // 0x9886F8
+    uint16_t* dword_98883C;             // 0x98883C
+    uint8_t pad_988840[8];              // 0x988840
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850
@@ -961,7 +976,9 @@ struct GameTable
     uint8_t pad_98F1AC[10];             // 0x98F1AC
     uint8_t byte_98F1B6;                // 0x98F1B6
     uint8_t byte_98F1B7;                // 0x98F1B7
-    uint8_t pad_98F1B8[3];              // 0x98F1B8
+    uint8_t pad_98F1B8[1];              // 0x98F1B8
+    uint8_t byte_98F1B9;                // 0x98F1B9
+    uint8_t pad_98F1BA[1];              // 0x98F1BA
     uint8_t byte_98F1BB;                // 0x98F1BB
     uint8_t pad_98F1BC[2003];           // 0x98F1BC
     uint8_t byte_98F98F[4];             // 0x98F98F

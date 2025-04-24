@@ -49,6 +49,17 @@ namespace openre::marni
         interop::call<void, int>(0x00432CD0, doorId);
     }
 
+    // 0x00441520
+    void result_unload_textures()
+    {
+        static constexpr uint32_t pages[26]
+            = { 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33 };
+        for (const auto page : pages)
+        {
+            unload_texture_page(pages[page]);            
+        }
+    }
+
     // 0x00406450
     static void move(Marni* marni)
     {
