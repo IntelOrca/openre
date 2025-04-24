@@ -37,6 +37,12 @@ namespace openre::marni
         interop::call<void, int>(0x0043F550, page);
     }
 
+    // 0x00441710
+    void flush_surfaces()
+    {
+        interop::call(0x00441710);
+    }
+
     // 0x00432C60
     void door_disp0(int doorId, int a1, int a2, int a3)
     {

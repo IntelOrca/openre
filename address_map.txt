@@ -368,6 +368,21 @@ struct      Rdt
 declare     header                  RdtHeader
 declare     offsets                 void*[23]
 
+struct      RdtCamera
+declare     flags                   u16         0x00
+declare     perspective             u16         0x02
+declare     pos_x                   s32         0x04
+declare     pos_y                   s32         0x08
+declare     pos_z                   s32         0x0C
+declare     target_x                s32         0x10
+declare     target_y                s32         0x14
+declare     target_z                s32         0x18
+declare     offset                  u32         0x1C
+
+struct      RdtModel
+declare     texture_offset          u32         0x00
+declare     model_offset            u32         0x04
+
 struct      DoorInfo
 declare     prepacket               void*
 declare     tmd_adr                 TmdEntry*
@@ -474,6 +489,7 @@ declare     input                   u16[900]
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
+declare     graphics_ptr_data       u8                      0x00524EB9
 declare     door_ll                 Mat16                   0x00525F5C
 declare     door_lc                 Mat16                   0x00525F7C
 declare     global_prj              s32                     0x00526268
@@ -508,8 +524,17 @@ declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
+declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
 declare     dword_689BDC            u32                     0x00689BDC
+declare     rdt_count               u32                     0x00689C10
+declare     rdt_top_ptr             void*                   0x00689C14
+declare     rdt_size                u32                     0x00689C18
+declare     dword_689C1C            u32                     0x00689C1C
+declare     room_path               char[32]                0x00689C20
+declare     stage_font_name         char[32]                0x00689C40
+declare     p_em                    PlayerEntity*           0x00689C60
+declare     byte_689C64             u8                      0x00689C64
 declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
@@ -555,6 +580,7 @@ declare     byte_691F6F             u8                      0x00691F6F
 declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F74             u8                      0x00691F74
 declare     byte_691F76             u8                      0x00691F76
+declare     byte_691F7B             u8                      0x00691F7B
 declare     byte_691F7C             u8                      0x00691F7C
 declare     byte_691F7D             u8                      0x00691F7D
 declare     byte_691F7E             u8                      0x00691F7E
@@ -627,6 +653,7 @@ declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     dword_988620            u32                     0x00988620
 declare     mem_top                 void*                   0x00988624
+declare     dword_988628            ActorEntity*            0x00988628
 declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[2]                0x00988630
 declare     em_damage_table_16      void*[48]               0x00988638
@@ -636,11 +663,13 @@ declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     byte_9888D8             u8                      0x009888D8
 declare     byte_9888D9             u8                      0x009888D9
+declare     fg_rbj_set              u8                      0x00989E68
 declare     fg_system               u32                     0x00989E6C
 declare     byte_989E75             u8                      0x00989E75
 declare     word_989E76             u16                     0x00989E76
 declare     word_989E78             u16                     0x00989E78
 declare     word_989E7A             u16                     0x00989E7A
+declare     byte_989E7D             u8                      0x00989E7D
 declare     byte_989E7E             u8                      0x00989E7E
 declare     byte_989E90             u8                      0x00989E90
 declare     byte_989E91             u8                      0x00989E91
@@ -670,6 +699,8 @@ declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     obj_ptr                 ObjectEntity*           0x0098E51C
 declare     aot_count               u8                      0x0098E528
 declare     byte_98E541             u8                      0x0098E541
+declare     dword_98E544            u32                     0x0098E544
+declare     word_98E78C             s16                     0x0098E78C
 declare     dword_98E790            u32                     0x0098E790
 declare     byte_98E798             u8                      0x0098E798
 declare     table_start             u8                      0x0098E79C
@@ -678,7 +709,9 @@ declare     inventory_size          u8                      0x0098E9A4
 declare     byte_98E9A5             u8                      0x0098E9A5
 declare     byte_98E9A6             u8                      0x0098E9A6
 declare     byte_98E9AA             u8                      0x0098E9AA
-declare     word_98E9B6             u16                     0x0098E9B6
+declare     byte_98E9AB             u8                      0x0098E9AB
+declare     word_98E9AC             s16                     0x0098E9AC
+declare     word_98E9B6             s16                     0x0098E9B6
 declare     word_98E9BC             s16                     0x0098E9BC
 declare     word_98E9BE             s16                     0x0098E9BE
 declare     word_98E9C0             s16                     0x0098E9C0
@@ -688,7 +721,7 @@ declare     bgm_table               u16[142]                0x0098E9C8
 declare     scd_variables_00        u16                     0x0098EAE4
 declare     word_98EAE6             u16                     0x0098EAE6
 declare     last_used_item          u16                     0x0098EAE8
-declare     word_98EAEA             u16                     0x0098EAEA
+declare     word_98EAEA             s16                     0x0098EAEA
 declare     word_98EAFC             s16                     0x0098EAFC
 declare     word_98EAFE             s16                     0x0098EAFE
 declare     word_98EB00             s16                     0x0098EB00
@@ -701,7 +734,7 @@ declare     word_98EB1C             u16                     0x0098EB1C
 declare     rng                     u16                     0x0098EB1E
 declare     word_98EB20             u16                     0x0098EB20
 declare     word_98EB22             u16                     0x0098EB22
-declare     next_pld                u16                     0x0098EB24
+declare     next_pld                s16                     0x0098EB24
 declare     word_98EB26             u16                     0x0098EB26
 declare     word_98EB28             u16                     0x0098EB28
 declare     word_98EB2A             u16                     0x0098EB2A
@@ -739,7 +772,8 @@ declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
 declare     pdemo                   DemoPlayer              0x00991FC8
-declare     byte_99270E             u8                      0x0099270E 
+declare     byte_99270E             u8                      0x0099270E
+declare     byte_99270F             u8                      0x0099270F
 declare     ll_matrix               Mat16                   0x0099CE40
 declare     lc_matrix               Mat16                   0x0099CE60
 declare     rc_matrix               Mat16                   0x0099CE80

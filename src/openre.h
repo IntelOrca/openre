@@ -162,6 +162,8 @@ namespace openre
     extern uint16_t& gPoisonStatus;
     extern uint8_t& gPoisonTimer;
 
+    static const char* gStageSymbols = "123456789abcdefg";
+
     void task_sleep(int frames);
     void task_exit();
     void task_execute(int index, void* fn);

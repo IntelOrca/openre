@@ -69,4 +69,10 @@ namespace openre
     {
         return interop::call<int, Vec32*, ObjectEntity*, int, int>(0x004CEEF0, vec, object, a2, a3);
     }
+
+    // 0x004B4480
+    void rbj_set()
+    {
+        interop::call(0x004B4480);
+    }
 }

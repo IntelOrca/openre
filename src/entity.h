@@ -13,4 +13,6 @@ namespace openre
     uint8_t compute_nfloor(int32_t posY);
     void oma_set_ofs(ObjectEntity* object);
     int omd_in_check(Vec32* vec, ObjectEntity* object, int a2, int a3);
+    void add_speed_xz(Entity* entity, int16_t d);
+    void rbj_set();
 }

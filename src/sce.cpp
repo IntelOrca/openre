@@ -247,8 +247,14 @@ namespace openre::sce
         }
     }
 
+    // 0x004E3C20
+    void sce_model_init()
+    {
+        interop::call(0x004E3C20);
+    }
+
     // 0x004E40D0
-    static void sce_scheduler_set()
+    void sce_scheduler_set()
     {
         if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
         {

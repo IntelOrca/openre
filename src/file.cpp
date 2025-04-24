@@ -72,7 +72,7 @@ namespace openre::file
     }
 
     // 0x004DD360
-    static int osp_read()
+    int osp_read()
     {
         const char* ospFilepath = "common\\bin\\osp.bin";
 
@@ -124,6 +124,23 @@ namespace openre::file
         update_timer();
         CloseHandle(file);
         return bytesWritten;
+    }
+
+    // 0x00441630
+    void* file_alloc(const size_t size)
+    {
+        return interop::call<void*, size_t>(0x00441630, size);
+    }
+    // 0x0043C590
+    int load_adt(const char* path, uint32_t* bufferSize, int mode)
+    {
+        return interop::call<int, const char*, uint32_t*, int>(0x0043C590, path, bufferSize, mode);
+    }
+
+    // 0x0043FF40
+    int tim_buffer_to_surface(int* timPtr, int page, int mode)
+    {
+        return interop::call<int, int*, int, int>(0x0043FF40, timPtr, page, mode);
     }
 
     void file_init_hooks()

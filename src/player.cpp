@@ -455,7 +455,7 @@ namespace openre::player
     }
 
     // 0x004D97B0
-    static void player_move(PlayerEntity* player)
+    void player_move(PlayerEntity* player)
     {
         if (gGameTable.fg_stop < 0)
         {

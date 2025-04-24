@@ -10,6 +10,7 @@
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
+#include "room.h"
 #include "scd.h"
 
 #include <cstring>
@@ -20,6 +21,7 @@ using namespace openre::enemy;
 using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
+using namespace openre::room;
 using namespace openre::scd;
 
 namespace openre::title
@@ -675,7 +677,7 @@ namespace openre::title
             scd_init();
             ctcb.var_09 = 5;
         LABEL_45:
-            interop::call(0x004DE7B0); // TODO: set_room()
+            room_set();
             if (!ctcb.var_13)
             {
                 set_flag(FlagGroup::System, FG_STATUS_SCENARIO, true);
