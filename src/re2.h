@@ -618,7 +618,9 @@ struct GameTable
     void* pGG;                          // 0x52C4B0
     uint8_t pad_52C4B4[5068];           // 0x52C4B4
     Mat16 g_identity_mat;               // 0x52D880
-    uint8_t pad_52D8A0[55672];          // 0x52D8A0
+    uint8_t pad_52D8A0[51813];          // 0x52D8A0
+    uint8_t byte_53A305[63];            // 0x53A305
+    uint8_t pad_53A344[3796];           // 0x53A344
     uint32_t* flag_groups[35];          // 0x53B218
     uint8_t pad_53B2A4[4916];           // 0x53B2A4
     BgmTableEntry byte_53C5D8[146];     // 0x53C5D8
@@ -915,7 +917,7 @@ struct GameTable
     int16_t word_98E9BE;                // 0x98E9BE
     int16_t word_98E9C0;                // 0x98E9C0
     int16_t word_98E9C2;                // 0x98E9C2
-    uint8_t pad_98E9C4[4];              // 0x98E9C4
+    uint32_t dword_98E9C4;              // 0x98E9C4
     uint16_t bgm_table[142];            // 0x98E9C8
     uint16_t scd_variables_00;          // 0x98EAE4
     uint16_t word_98EAE6;               // 0x98EAE6

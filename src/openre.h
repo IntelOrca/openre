@@ -94,6 +94,7 @@ namespace openre
         FG_SYSTEM_DEMO = 18,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_19 = 19,
+        FG_SYSTEM_20 = 20,
         FG_SYSTEM_22 = 22,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
