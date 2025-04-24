@@ -165,7 +165,7 @@ namespace openre::title
         }
         case 4:
         {
-            snd_load_core(0x10, 0);
+            snd_load_core(0x11, 0);
             if (ctcb.var_13 == 0)
             {
                 ctcb.var_09 = 5;
