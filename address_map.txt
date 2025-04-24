@@ -246,7 +246,7 @@ declare     sce_free3               u16
 declare     spl_flg                 u16
 declare     parts0_pos_y            u16
 declare     pT_xz                   u32
-declare     pOn_om                  s32
+declare     pOn_om                  u32
 declare     nOba                    s32
 declare     attw_timer              u8
 declare     attw_seq_no             u8
@@ -465,9 +465,9 @@ declare     enabled                 u16
 
 struct      Input
 declare     mapping                 u8[31]
-declare     var_24                  u32                     0x24
+declare     keyboard_raw_state      u32                     0x24
 declare     var_1F8                 u32                     0x1F8
-declare     var_1FC                 u32                     0x1FC
+declare     gamepad_raw_state       u32                     0x1FC
 declare     var_3D0                 u32                     0x3D0
 declare     var_3B24                u32                     0x3B24
 declare     keyboard                u32                     0x3B28
@@ -498,6 +498,7 @@ declare     byte_5286F4             u8[8]                   0x005286F4
 declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
+declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
@@ -538,6 +539,7 @@ declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
 declare     dword_689F20            u32                     0x00689F20
+declare     byte_689F24             u8                      0x00689F24
 declare     ctcb                    Unknown68A204*          0x0068A204
 declare     title_mv_state          u8                      0x00691B80
 declare     title_disp_add          u8                      0x00691B81
@@ -565,6 +567,9 @@ declare     _st                     u8                      0x00691F61
 declare     itembox_state           u8                      0x00691F62
 declare     byte_691F63             u8                      0x00691F63
 declare     byte_691F64             u8                      0x00691F64
+declare     byte_691F65             u8                      0x00691F65
+declare     byte_691F66             u8                      0x00691F66
+declare     byte_691F67             u8                      0x00691F67
 declare     byte_691F68             u8                      0x00691F68
 declare     byte_691F69             u8                      0x00691F69
 declare     byte_691F6A             u8                      0x00691F6A
@@ -576,6 +581,14 @@ declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F74             u8                      0x00691F74
 declare     byte_691F76             u8                      0x00691F76
 declare     byte_691F7B             u8                      0x00691F7B
+declare     byte_691F7C             u8                      0x00691F7C
+declare     byte_691F7D             u8                      0x00691F7D
+declare     byte_691F7E             u8                      0x00691F7E
+declare     byte_691F7F             u8                      0x00691F7F
+declare     byte_691F80             u8                      0x00691F80
+declare     byte_691F81             u8                      0x00691F81
+declare     byte_691F82             u8                      0x00691F82
+declare     byte_691F83             u8                      0x00691F83
 declare     itembox_slot_id         u8                      0x00691F84
 declare     byte_691F85             u8                      0x00691F85
 declare     byte_691F86             u8                      0x00691F86
@@ -625,6 +638,7 @@ declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
+declare     work_buffer             u32                     0x008FF8A0
 declare     cc_work                 CCWork                  0x00980B00
 declare     door_trans_mv           u8                      0x0098149E
 declare     byte_981FB7             u8                      0x00981FB7
@@ -643,7 +657,8 @@ declare     dword_988628            ActorEntity*            0x00988628
 declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[2]                0x00988630
 declare     em_damage_table_16      void*[48]               0x00988638
-declare     em_die_table            void*[84]               0x009886F8
+declare     em_die_table            void*[81]               0x009886F8
+declare     dword_98883C            u16*                    0x0098883C
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
 declare     byte_9888D8             u8                      0x009888D8
@@ -681,7 +696,7 @@ declare     enemy_init_map          void*[96]               0x0098A154
 declare     enemy_init_table        void*[192]              0x0098A2D4
 declare     enemy_init_entries      EnemyInitEntry[2]       0x0098A614
 declare     pOm                     ObjectEntity[32]        0x0098A61C
-declare     dword_98E51C            u32                     0x0098E51C
+declare     obj_ptr                 ObjectEntity*           0x0098E51C
 declare     aot_count               u8                      0x0098E528
 declare     byte_98E541             u8                      0x0098E541
 declare     dword_98E544            u32                     0x0098E544
@@ -701,6 +716,7 @@ declare     word_98E9BC             s16                     0x0098E9BC
 declare     word_98E9BE             s16                     0x0098E9BE
 declare     word_98E9C0             s16                     0x0098E9C0
 declare     word_98E9C2             s16                     0x0098E9C2
+declare     dword_98E9C4            u32                     0x0098E9C4
 declare     bgm_table               u16[142]                0x0098E9C8
 declare     scd_variables_00        u16                     0x0098EAE4
 declare     word_98EAE6             u16                     0x0098EAE6
@@ -750,6 +766,7 @@ declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
 declare     byte_98F1B6             u8                      0x0098F1B6
 declare     byte_98F1B7             u8                      0x0098F1B7
+declare     byte_98F1B9             u8                      0x0098F1B9
 declare     byte_98F1BB             u8                      0x0098F1BB
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
@@ -779,3 +796,16 @@ declare     var_01                  u8
 declare     var_0C                  u8
 declare     var_24                  u8
 declare     var_25                  u8
+
+struct      MarniRes
+declare     width                   u32
+declare     height                  u32
+declare     depth                   u32
+declare     fullscreen              u32
+
+struct      Marni
+declare     modes                   u32                    0x008C7018
+declare     window_rect             u32[4]                 0x008C7CDC
+declare     hWnd                    void*                  0x008C7EA8
+declare     resolutions             MarniRes[64]           0x008C7EF8
+declare     var_8C846C              u32                    0x008C846C

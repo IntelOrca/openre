@@ -355,7 +355,7 @@ namespace openre::room
                 gGameTable.enemy_init_entries[1].enabled = 0;
                 sub_43DF40();
 
-                gGameTable.dword_98E51C = (uint32_t)&gGameTable.pOm;
+                gGameTable.obj_ptr = gGameTable.pOm;
                 gGameTable.rdt_count = 32;
                 gGameTable.pOm->be_flg = 0;
                 if (gGameTable.p_em->id == (gGameTable.next_pld & 0xff))

@@ -329,7 +329,7 @@ namespace openre::math
     }
 
     // 0x004509D0
-    static void apply_matrixsv(const Mat16& m, const Vec16& v1, Vec16& res)
+    void apply_matrixsv(const Mat16& m, const Vec16& v1, Vec16& res)
     {
         Vec32 vec32;
         apply_matrix(m, v1, vec32);

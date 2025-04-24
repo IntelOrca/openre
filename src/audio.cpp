@@ -243,6 +243,12 @@ namespace openre::audio
         interop::call(0x004EC7D0);
     }
 
+    // 0x004EC250
+    void snd_sys_init2()
+    {
+        interop::call(0x004EC250);
+    }
+
     // 0x004EC9C0
     void snd_bgm_set()
     {

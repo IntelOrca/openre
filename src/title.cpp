@@ -112,9 +112,155 @@ namespace openre::title
         gGameTable.title_mv_state++;
     }
 
+    // 0x004450C0
+    static void sub_4450C0(int a0)
+    {
+        interop::call<void, int>(0x004450C0, a0);
+    }
+
+    // 0x0043DF40
+    static void sub_43DF40()
+    {
+        interop::call(0x0043DF40);
+    }
+
+    // 0x0050B910
+    static int sub_50B910(int a0)
+    {
+        return interop::call<int, int>(0x0050B910, a0);
+    }
+
+    // 0x00509CB0
+    static void sub_509CB0(int a0)
+    {
+        interop::call<void, int>(0x00509CB0, a0);
+    }
+
+    // 0x004CAEC0
+    static void init_movie_work(int id)
+    {
+        interop::call<void, int>(0x004CAEC0, id);
+    }
+
+    // 0x00503810
+    static void title_bg_load()
+    {
+        interop::call(0x00503810);
+    }
+
+    // 0x00503680
+    static void capcom_logo()
+    {
+        auto& ctcb = *gGameTable.ctcb;
+        switch (ctcb.var_09)
+        {
+        case 0:
+        {
+            marni::result_unload_textures();
+            sub_4450C0(1);
+            sub_43DF40();
+            snd_sys_init2();
+            ctcb.var_09 = 4;
+            [[fallthrough]];
+        }
+        case 4:
+        {
+            snd_load_core(0x10, 0);
+            if (ctcb.var_13 == 0)
+            {
+                ctcb.var_09 = 5;
+                task_sleep(120);
+            }
+            break;
+        }
+        case 5:
+        {
+            gGameTable.byte_98F1B9 = 2;
+            ctcb.var_09 = 6;
+            task_sleep(1);
+            break;
+        }
+        case 6:
+        {
+            if (check_flag(FlagGroup::System, FG_SYSTEM_30))
+            {
+                title_bg_load();
+                if (ctcb.var_13)
+                {
+                    break;
+                }
+                ctcb.var_09 = 7;
+            LABEL_17:
+                if (gGameTable.byte_98F1B9)
+                {
+                    task_sleep(1);
+                    break;
+                }
+                if (gGameTable.byte_689F24 == 0)
+                {
+                    auto res = sub_50B910(2);
+                    sub_509CB0(res);
+                    init_movie_work(0);
+                    ctcb.var_09 = 8;
+                    if (check_flag(FlagGroup::System, FG_SYSTEM_22))
+                    {
+                        task_sleep(1);
+                        break;
+                    }
+                }
+                if (++gGameTable.byte_689F24 >= 6)
+                {
+                    gGameTable.byte_689F24 = 0;
+                }
+                title_bg_reload();
+                if (gGameTable.byte_98F1BB == 2)
+                {
+                    set_flag(FlagGroup::System, FG_SYSTEM_30, false);
+                    set_flag(FlagGroup::System, FG_SYSTEM_31, false);
+                }
+            }
+            else
+            {
+                ctcb.var_09 = 9;
+            LABEL_8:
+                title_bg_load();
+                title_bg_reload();
+            }
+
+            gGameTable.byte_981FB7 = 1;
+            gGameTable.title_mv_state = TITLE_STATE_TITLE_LOAD;
+            if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
+            {
+                gGameTable.title_mv_state = TITLE_STATE_4TH_SURVIVOR_LOAD;
+            }
+            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
+            {
+                gGameTable.title_mv_state = TITLE_STATE_EXTREME_BATTLE_LOAD;
+            }
+            ctcb.var_09 = 0;
+            break;
+        }
+        case 7:
+        {
+            goto LABEL_17;
+        }
+        case 8:
+        {
+            if (check_flag(FlagGroup::System, FG_SYSTEM_22))
+            {
+                task_sleep(1);
+                break;
+            }
+        }
+        case 9:
+        {
+            goto LABEL_8;
+        }
+        }
+    }
+
     static Action title_mv[] = {
-        (Action)0x00503680, // capcom_logo
-        title_init,
+        capcom_logo,        title_init,
         (Action)0x00503A20, // title_main
         (Action)0x00505460, // title_survivor_load
         (Action)0x00505670, // title_survivor_main
@@ -156,12 +302,6 @@ namespace openre::title
         add_sprt_v(150, gameTable.word_691D8E, 128, 48, 0, 80, 0, 19, 6, 0);
         add_sprt_v(150, gameTable.word_691D8E + 48, 128, 32, 0, 0, 0, 20, 6, 0);
         add_sprt_v(278, gameTable.word_691DA2, 128, 80, 0, 32, 0, 20, 6, 0);
-    }
-
-    // 0x00503810
-    static void title_bg_load()
-    {
-        interop::call(0x00503810);
     }
 
     // 0x005035B0
