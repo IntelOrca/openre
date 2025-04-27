@@ -1,6 +1,7 @@
 #include "relua.h"
 #include "mod.h"
 #include "openre.h"
+#include "sce.h"
 #include <cstdio>
 #include <filesystem>
 #include <lua.hpp>
@@ -15,6 +16,8 @@ using namespace openre::modding;
 
 namespace openre::lua
 {
+    constexpr const char* METATABLE_ENTITY = "meta_entity";
+
     class LuaManager
     {
     private:
@@ -81,7 +84,17 @@ namespace openre::lua
             setGlobal("re.subscribe", apiSubscribe);
             setGlobal("re.getFlag", apiGetFlag);
             setGlobal("re.setFlag", apiSetFlag);
+            setGlobal("re.getEntity", apiGetEntity);
+
             setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::Tick));
+
+            setGlobal("EntityKind.player", 1);
+            setGlobal("EntityKind.splayer", 2);
+            setGlobal("EntityKind.enemy", 3);
+            setGlobal("EntityKind.object", 4);
+            setGlobal("EntityKind.door", 5);
+
+            setMetatable(METATABLE_ENTITY, entity_get, entity_set);
         }
 
         void setGlobal(std::string_view fullName, int32_t value)
@@ -102,6 +115,16 @@ namespace openre::lua
             lua_pushlightuserdata(_state, this);
             lua_pushcclosure(_state, f, 1);
             lua_settable(_state, -3);
+            lua_pop(_state, 1);
+        }
+
+        void setMetatable(const char* name, lua_CFunction getter, lua_CFunction setter)
+        {
+            luaL_newmetatable(_state, name);
+            lua_pushcfunction(_state, getter);
+            lua_setfield(_state, -2, "__index");
+            lua_pushcfunction(_state, setter);
+            lua_setfield(_state, -2, "__newindex");
             lua_pop(_state, 1);
         }
 
@@ -208,6 +231,77 @@ namespace openre::lua
             auto index = lua_tointeger(L, 2);
             auto value = lua_toboolean(L, 3);
             set_flag(static_cast<FlagGroup>(group), static_cast<uint32_t>(index), value);
+            return 0;
+        }
+
+        static int apiGetEntity(lua_State* L)
+        {
+            auto custom = (int32_t*)lua_newuserdata(L, 8);
+            custom[0] = static_cast<int32_t>(luaL_checknumber(L, 1));
+            custom[1] = static_cast<int32_t>(luaL_checknumber(L, 2));
+            luaL_getmetatable(L, METATABLE_ENTITY);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int entity_get(lua_State* L)
+        {
+            auto userdata = (int32_t*)luaL_checkudata(L, 1, METATABLE_ENTITY);
+            auto key = luaL_checkstring(L, 2);
+            if (strcmp(key, "kind") == 0)
+            {
+                lua_pushnumber(L, userdata[0]);
+            }
+            else if (strcmp(key, "index") == 0)
+            {
+                lua_pushnumber(L, userdata[1]);
+            }
+            else if (userdata[0] == 3)
+            {
+                auto enemy = (EnemyEntity*)sce::GetEnemyEntity(userdata[1]);
+                if (enemy != nullptr)
+                {
+                    if (strcmp(key, "type") == 0)
+                    {
+                        lua_pushnumber(L, enemy->id);
+                    }
+                    else if (strcmp(key, "life") == 0)
+                    {
+                        lua_pushnumber(L, enemy->life);
+                    }
+                    else
+                    {
+                        lua_pushnil(L);
+                    }
+                }
+                else
+                {
+                    lua_pushnil(L);
+                }
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+
+        static int entity_set(lua_State* L)
+        {
+            auto userdata = (int32_t*)luaL_checkudata(L, 1, METATABLE_ENTITY);
+            auto key = luaL_checkstring(L, 2);
+            auto value = luaL_checkinteger(L, 3);
+            if (userdata[0] == 3)
+            {
+                auto enemy = (EnemyEntity*)sce::GetEnemyEntity(userdata[1]);
+                if (enemy != nullptr)
+                {
+                    if (strcmp(key, "life") == 0)
+                    {
+                        enemy->life = static_cast<int16_t>(value);
+                    }
+                }
+            }
             return 0;
         }
     };
