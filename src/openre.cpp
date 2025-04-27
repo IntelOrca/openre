@@ -675,7 +675,6 @@ namespace openre
             set_inventory_item(3, ITEM_TYPE_NONE, 0, 0);
             set_inventory_item(0, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 3);
 
-            // TODO: Figure out if this for Chris
             if (check_flag(FlagGroup::System, FG_SYSTEM_12))
             {
                 set_itembox_item(4, ITEM_TYPE_ROCKET_LAUNCHER, 2, 3);
