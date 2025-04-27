@@ -20,7 +20,7 @@ namespace openre::lua
     private:
         static inline std::unique_ptr<LuaManager> instance;
         lua_State* _state;
-        std::vector<int> _subscriptionsTick;
+        std::vector<std::vector<int>> _subscriptions;
 
     public:
         static LuaManager& get()
@@ -61,7 +61,13 @@ namespace openre::lua
 
         void callHooks(HookKind kind)
         {
-            for (auto ref : _subscriptionsTick)
+            const auto& list = _subscriptions;
+            auto listIndex = static_cast<size_t>(kind);
+            if (list.size() <= listIndex)
+                return;
+
+            const auto& subList = list[listIndex];
+            for (auto ref : subList)
             {
                 lua_rawgeti(_state, LUA_REGISTRYINDEX, ref);
                 lua_pcall(_state, 0, 0, 0);
@@ -75,7 +81,7 @@ namespace openre::lua
             setGlobal("re.subscribe", apiSubscribe);
             setGlobal("re.getFlag", apiGetFlag);
             setGlobal("re.setFlag", apiSetFlag);
-            setGlobal("HookKind.tick", 1);
+            setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::Tick));
         }
 
         void setGlobal(std::string_view fullName, int32_t value)
@@ -169,11 +175,21 @@ namespace openre::lua
         {
             auto ptr = static_cast<LuaManager*>(lua_touserdata(L, lua_upvalueindex(1)));
 
-            auto kind = lua_tointeger(L, 1);
+            auto kind = static_cast<size_t>(lua_tointeger(L, 1));
+            if (kind <= static_cast<size_t>(HookKind::Undefined))
+                return 0;
+            if (kind > static_cast<size_t>(HookKind::Tick))
+                return 0;
+
             lua_pushvalue(L, 2);
             int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-            ptr->_subscriptionsTick.push_back(ref);
+            auto& list = ptr->_subscriptions;
+            if (list.size() <= kind)
+            {
+                list.resize(kind + 1);
+            }
+            list[kind].push_back(ref);
             return 0;
         }
 
