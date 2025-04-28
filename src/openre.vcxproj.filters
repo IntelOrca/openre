@@ -90,6 +90,9 @@
     <ClCompile Include="relua.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fswatch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -162,6 +165,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="mod.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fswatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

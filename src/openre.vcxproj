@@ -80,6 +80,7 @@
     <ClCompile Include="enemy.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
+    <ClCompile Include="fswatch.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -105,6 +106,7 @@
     <ClInclude Include="enemy.h" />
     <ClInclude Include="entity.h" />
     <ClInclude Include="file.h" />
+    <ClInclude Include="fswatch.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="interop.hpp" />

@@ -15,7 +15,6 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
-#include "relua.h"
 #include "scd.h"
 #include "sce.h"
 #include "title.h"
@@ -344,7 +343,6 @@ void onAttach()
     file_init_hooks();
     math_init_hooks();
     marni::init_hooks();
-    openre::lua::relua_init();
 }
 
 extern "C" {
