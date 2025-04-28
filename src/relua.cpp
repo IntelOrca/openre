@@ -1,4 +1,5 @@
 #include "relua.h"
+#include "interop.hpp"
 #include "mod.h"
 #include "openre.h"
 #include "sce.h"
@@ -136,6 +137,9 @@ namespace openre::lua
             setGlobal("EntityKind.door", 5);
 
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
+
+            setGlobal("unsafe.read", unsafe_read);
+            setGlobal("unsafe.write", unsafe_write);
         }
 
         void loadStandardLibrary(const luaL_Reg& r)
@@ -360,6 +364,48 @@ namespace openre::lua
                     }
                 }
             }
+            return 0;
+        }
+
+        static int unsafe_read(lua_State* L)
+        {
+            auto address = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+            auto len = luaL_checkinteger(L, 2);
+
+            std::vector<uint8_t> buffer;
+            if (len > 0)
+            {
+                buffer.resize(static_cast<size_t>(len));
+                interop::readMemory(address, buffer.data(), buffer.size());
+            }
+
+            lua_newtable(L);
+            for (size_t i = 0; i < buffer.size(); i++)
+            {
+                lua_pushinteger(L, buffer[i]);
+                lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+            }
+
+            return 1;
+        }
+
+        static int unsafe_write(lua_State* L)
+        {
+            auto address = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+            luaL_checktype(L, 2, LUA_TTABLE);
+
+            auto len = static_cast<size_t>(luaL_len(L, 2));
+            std::vector<uint8_t> buffer;
+            buffer.resize(len);
+            size_t i = 0;
+            lua_pushnil(L);
+            while (lua_next(L, 2) != 0)
+            {
+                buffer[i++] = luaL_checkinteger(L, -1) & 0xFF;
+                lua_pop(L, 1);
+            }
+
+            interop::writeMemory(address, buffer.data(), buffer.size());
             return 0;
         }
     };
