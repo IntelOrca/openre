@@ -1,13 +1,24 @@
 #pragma once
 
+#include <filesystem>
+#include <functional>
+
 namespace openre::lua
 {
     enum class HookKind
     {
-        Undefined,
-        Tick,
+        undefined,
+        tick,
     };
 
-    void relua_init();
-    void relua_call_hooks(HookKind kind);
+    class LuaVm
+    {
+    public:
+        virtual ~LuaVm() {}
+        virtual void run(const std::filesystem::path& path) = 0;
+        virtual void callHooks(HookKind kind) = 0;
+        virtual void setLogCallback(std::function<void(const std::string& s)> s) = 0;
+    };
+
+    std::unique_ptr<LuaVm> createLuaVm();
 }

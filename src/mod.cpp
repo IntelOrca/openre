@@ -2,7 +2,10 @@
 
 #include "mod.h"
 #include "openre.h"
+#include "relua.h"
 #include <cstdio>
+
+using namespace openre::lua;
 
 namespace fs = std::filesystem;
 
@@ -13,6 +16,41 @@ namespace openre::modding
         this->rootPath = path;
         this->name = path.filename().string();
         this->scriptPath = path / (this->name + ".lua");
+        this->reload = true;
+    }
+
+    void Mod::markForReload()
+    {
+        this->reload = true;
+    }
+
+    void Mod::tick()
+    {
+        if (this->reload)
+        {
+            this->reload = false;
+            this->run();
+        }
+    }
+
+    void Mod::run()
+    {
+        if (this->luaVm)
+        {
+            log("Shutdown");
+        }
+        log("Startup");
+        this->luaVm = createLuaVm();
+        this->luaVm->setLogCallback([this](const std::string& s) -> void { this->log(s); });
+        this->luaVm->run(this->scriptPath);
+    }
+
+    void Mod::callHooks(HookKind kind)
+    {
+        if (this->luaVm)
+        {
+            this->luaVm->callHooks(kind);
+        }
     }
 
     void Mod::log(const std::string& s)
@@ -49,5 +87,62 @@ namespace openre::modding
 
             mods.emplace_back(e.path());
         }
+
+        watch();
+    }
+
+    void ModManager::tick()
+    {
+        if (!modsLoaded)
+        {
+            modsLoaded = true;
+            loadMods();
+        }
+        for (auto& mod : mods)
+        {
+            mod.tick();
+        }
+        callHooks(HookKind::tick);
+    }
+
+    void ModManager::callHooks(HookKind kind)
+    {
+        auto& modManager = ModManager::get();
+        for (auto& mod : modManager.mods)
+        {
+            mod.callHooks(kind);
+        }
+    }
+
+    void ModManager::watch()
+    {
+        auto modsPath = getModsDirectory();
+        if (modsPath.empty())
+            return;
+
+        fileWatcher = std::make_unique<openre::filesystem::FileWatcher>(modsPath);
+        fileWatcher->onFileChanged = [this](fs::path fileName) -> void {
+            for (auto& mod : mods)
+            {
+                if (fileName == mod.scriptPath)
+                {
+                    mod.markForReload();
+                }
+            }
+        };
+    }
+
+    std::filesystem::path ModManager::getModsDirectory() const
+    {
+        auto appdata = std::getenv("APPDATA");
+        if (appdata == nullptr)
+            return {};
+
+        auto openrePath = fs::u8path(appdata) / "openre";
+        auto modsPath = openrePath / "mods";
+        if (!fs::is_directory(modsPath))
+            return {};
+
+        return modsPath;
     }
 }

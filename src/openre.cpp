@@ -15,7 +15,6 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
-#include "relua.h"
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"

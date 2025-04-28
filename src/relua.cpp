@@ -18,75 +18,116 @@ namespace openre::lua
 {
     constexpr const char* METATABLE_ENTITY = "meta_entity";
 
-    class LuaManager
+    class LuaVmImpl : public LuaVm
     {
     private:
-        static inline std::unique_ptr<LuaManager> instance;
+        struct HookInfo
+        {
+            HookKind kind;
+            int ref;
+        };
+
         lua_State* _state;
-        std::vector<std::vector<int>> _subscriptions;
+        std::vector<HookInfo> _subscriptions;
+        std::function<void(const std::string& s)> _logCallback;
 
     public:
-        static LuaManager& get()
+        LuaVmImpl()
         {
-            if (instance == nullptr)
-            {
-                instance = std::make_unique<LuaManager>();
-            }
-            return *instance;
+            createState();
         }
 
-        LuaManager()
-        {
-            _state = luaL_newstate();
-            luaL_openlibs(_state);
-            setupGlobals();
-        }
+        LuaVmImpl(const LuaVm&) = delete;
 
-        LuaManager(const LuaManager&) = delete;
-
-        ~LuaManager()
+        ~LuaVmImpl() override
         {
             lua_close(_state);
         }
 
-        void runMod(Mod& mod)
+        void run(const std::filesystem::path& path) override
         {
-            mod.log("Starting");
-
-            const auto& scriptPath = mod.scriptPath;
+            const auto& scriptPath = path;
             auto result = luaL_dofile(_state, scriptPath.string().c_str());
             if (result != LUA_OK)
             {
                 auto errString = lua_tostring(_state, -1);
-                mod.log("Error: " + std::string(errString));
+                log("Error: " + std::string(errString));
             }
         }
 
-        void callHooks(HookKind kind)
+        void callHooks(HookKind kind) override
         {
-            const auto& list = _subscriptions;
-            auto listIndex = static_cast<size_t>(kind);
-            if (list.size() <= listIndex)
-                return;
-
-            const auto& subList = list[listIndex];
-            for (auto ref : subList)
+            for (const auto& h : _subscriptions)
             {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, ref);
-                lua_pcall(_state, 0, 0, 0);
+                if (h.kind == kind)
+                {
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, h.ref);
+                    auto result = lua_pcall(_state, 0, 0, 0);
+                    if (result != LUA_OK)
+                    {
+                        auto errString = lua_tostring(_state, -1);
+                        log("Error: " + std::string(errString));
+                    }
+                }
             }
+        }
+
+        void setLogCallback(std::function<void(const std::string& s)> s) override
+        {
+            _logCallback = s;
         }
 
     private:
-        void setupGlobals()
+        static constexpr luaL_Reg standardLibraries[] = { { "_G", luaopen_base },
+                                                          { LUA_COLIBNAME, luaopen_coroutine },
+                                                          { LUA_TABLIBNAME, luaopen_table },
+                                                          { LUA_STRLIBNAME, luaopen_string },
+                                                          { LUA_UTF8LIBNAME, luaopen_utf8 },
+                                                          { LUA_MATHLIBNAME, luaopen_math } };
+
+        static constexpr const char* unsafeFunctions[] = { "collectgarbage", //
+                                                           "dofile",         //
+                                                           "_G",
+                                                           "getfenv",
+                                                           "getmetatable",
+                                                           "load",
+                                                           "loadfile",
+                                                           "loadstring",
+                                                           "rawequal",
+                                                           "rawget",
+                                                           "rawset",
+                                                           "setfenv",
+                                                           "setmetatable" };
+
+        void log(const std::string& s)
         {
-            auto L = _state;
+            _logCallback(s);
+        }
+
+        void createState()
+        {
+            _state = luaL_newstate();
+
+            // Standard LUA APIs
+            for (const auto& r : standardLibraries)
+            {
+                loadStandardLibrary(r);
+            }
+
+            // Remove unsafe APIs
+            for (const auto& fName : unsafeFunctions)
+            {
+                removeGlobal(fName);
+            }
+
+            // RE API
+            setGlobal("print", apiPrint);
             setGlobal("re.subscribe", apiSubscribe);
             setGlobal("re.getFlag", apiGetFlag);
             setGlobal("re.setFlag", apiSetFlag);
             setGlobal("re.getEntity", apiGetEntity);
 
-            setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::Tick));
+            setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::tick));
 
             setGlobal("EntityKind.player", 1);
             setGlobal("EntityKind.splayer", 2);
@@ -95,6 +136,18 @@ namespace openre::lua
             setGlobal("EntityKind.door", 5);
 
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
+        }
+
+        void loadStandardLibrary(const luaL_Reg& r)
+        {
+            luaL_requiref(_state, r.name, r.func, 1);
+            lua_pop(_state, 1);
+        }
+
+        void removeGlobal(std::string_view name)
+        {
+            lua_pushnil(_state);
+            lua_setglobal(_state, std::string(name).c_str());
         }
 
         void setGlobal(std::string_view fullName, int32_t value)
@@ -194,25 +247,30 @@ namespace openre::lua
             return { ns, name };
         }
 
+        static int apiPrint(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto s = luaL_checkstring(L, 1);
+            ptr->log(s);
+            return 0;
+        }
+
         static int apiSubscribe(lua_State* L)
         {
-            auto ptr = static_cast<LuaManager*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
 
             auto kind = static_cast<size_t>(lua_tointeger(L, 1));
-            if (kind <= static_cast<size_t>(HookKind::Undefined))
+            if (kind <= static_cast<size_t>(HookKind::undefined))
                 return 0;
-            if (kind > static_cast<size_t>(HookKind::Tick))
+            if (kind > static_cast<size_t>(HookKind::tick))
                 return 0;
 
             lua_pushvalue(L, 2);
             int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-            auto& list = ptr->_subscriptions;
-            if (list.size() <= kind)
-            {
-                list.resize(kind + 1);
-            }
-            list[kind].push_back(ref);
+            auto& h = ptr->_subscriptions.emplace_back();
+            h.kind = static_cast<HookKind>(kind);
+            h.ref = ref;
             return 0;
         }
 
@@ -306,21 +364,8 @@ namespace openre::lua
         }
     };
 
-    void relua_init()
+    std::unique_ptr<LuaVm> createLuaVm()
     {
-        auto& luaManager = LuaManager::get();
-        auto& modManager = ModManager::get();
-
-        modManager.loadMods();
-        for (auto& mod : modManager.mods)
-        {
-            luaManager.runMod(mod);
-        }
-    }
-
-    void relua_call_hooks(HookKind kind)
-    {
-        auto& luaManager = LuaManager::get();
-        luaManager.callHooks(kind);
+        return std::make_unique<LuaVmImpl>();
     }
 }

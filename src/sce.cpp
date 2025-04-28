@@ -4,11 +4,11 @@
 #include "hud.h"
 #include "interop.hpp"
 #include "item.h"
+#include "mod.h"
 #include "openre.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
-#include "relua.h"
 #include "scd.h"
 
 #include <cstring>
@@ -265,7 +265,8 @@ namespace openre::sce
             gGameTable.scd = rdt_get_offset<uint8_t>(RdtOffsetKind::SCD_MAIN);
             scd_event_exec(TASK_ID_RESERVED_0, EVT_FRAME);
             sce_scheduler_main();
-            relua_call_hooks(HookKind::Tick);
+
+            openre::modding::ModManager::get().tick();
         }
     }
 
