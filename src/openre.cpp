@@ -294,6 +294,47 @@ static void load_init_table_3()
 
 void snd_se_walk(int, int, PlayerEntity* pEm) {}
 
+// 0x00509CF0
+bool ck_installkey()
+{
+    return true;
+}
+
+// 0x00441A00
+LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+    auto marni = gGameTable.pMarni;
+    if (marni != nullptr)
+    {
+        // Marni::Message
+        interop::thiscall<int, Marni*, HWND, UINT, WPARAM, LPARAM>(0x004063D0, marni, hWnd, Msg, wParam, lParam);
+    }
+    gGameTable.vk_press &= 0x1F;
+    switch (Msg)
+    {
+    case WM_CREATE:
+        // Input__Init
+        break;
+    case WM_DESTROY:
+        gGameTable.hwnd = nullptr;
+        // Rsrc_release();
+        // Ssclose();
+        // Font_delete
+        PostQuitMessage(0);
+        break;
+    case WM_ACTIVATE:
+        // Wnd_activate
+        break;
+    case WM_KILLFOCUS:
+        // Input__Pause
+        break;
+    case WM_CLOSE:
+        // Marni_kill
+        break;
+    }
+    return DefWindowProc(hWnd, Msg, wParam, lParam);
+}
+
 void onAttach()
 {
     // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
@@ -304,6 +345,8 @@ void onAttach()
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x00509CF0, ck_installkey);
+    interop::writeJmp(0x00441A00, WndProc);
 
     scheduler_init_hooks();
     title_init_hooks();

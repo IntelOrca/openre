@@ -631,6 +631,30 @@ struct Task
 };
 static_assert(sizeof(Task) == 0x24);
 
+struct MarniRes
+{
+    uint32_t width;                     // 0x0000
+    uint32_t height;                    // 0x0004
+    uint32_t depth;                     // 0x0008
+    uint32_t fullscreen;                // 0x000C
+};
+static_assert(sizeof(MarniRes) == 0x10);
+
+struct Marni
+{
+    uint8_t pad_0000[9203736];          // 0x0000
+    uint32_t modes;                     // 0x8C7018
+    uint8_t pad_8C701C[3264];           // 0x8C701C
+    uint32_t window_rect[4];            // 0x8C7CDC
+    uint8_t pad_8C7CEC[444];            // 0x8C7CEC
+    void* hWnd;                         // 0x8C7EA8
+    uint8_t pad_8C7EAC[76];             // 0x8C7EAC
+    MarniRes resolutions[64];           // 0x8C7EF8
+    uint8_t pad_8C82F8[372];            // 0x8C82F8
+    uint32_t var_8C846C;                // 0x8C846C
+};
+static_assert(sizeof(Marni) == 0x8C8470);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -672,7 +696,9 @@ struct GameTable
     uint8_t vk_press;                   // 0x67C9F8
     uint8_t pad_67C9F9[55];             // 0x67C9F9
     Input input;                        // 0x67CA30
-    uint8_t pad_68055C[36];             // 0x68055C
+    uint8_t pad_68055C[16];             // 0x68055C
+    void* hwnd;                         // 0x68056C
+    uint8_t pad_680570[16];             // 0x680570
     uint32_t error_no;                  // 0x680580
     uint8_t pad_680584[2];              // 0x680584
     uint8_t timer_r2;                   // 0x680586
@@ -689,7 +715,9 @@ struct GameTable
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
-    uint8_t pad_6805B4[36412];          // 0x6805B4
+    uint8_t pad_6805B4[4];              // 0x6805B4
+    Marni* pMarni;                      // 0x6805B8
+    uint8_t pad_6805BC[36404];          // 0x6805BC
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
@@ -1089,30 +1117,6 @@ struct HudInfo
     uint8_t var_25;                     // 0x0004
 };
 static_assert(sizeof(HudInfo) == 0x05);
-
-struct MarniRes
-{
-    uint32_t width;                     // 0x0000
-    uint32_t height;                    // 0x0004
-    uint32_t depth;                     // 0x0008
-    uint32_t fullscreen;                // 0x000C
-};
-static_assert(sizeof(MarniRes) == 0x10);
-
-struct Marni
-{
-    uint8_t pad_0000[9203736];          // 0x0000
-    uint32_t modes;                     // 0x8C7018
-    uint8_t pad_8C701C[3264];           // 0x8C701C
-    uint32_t window_rect[4];            // 0x8C7CDC
-    uint8_t pad_8C7CEC[444];            // 0x8C7CEC
-    void* hWnd;                         // 0x8C7EA8
-    uint8_t pad_8C7EAC[76];             // 0x8C7EAC
-    MarniRes resolutions[64];           // 0x8C7EF8
-    uint8_t pad_8C82F8[372];            // 0x8C82F8
-    uint32_t var_8C846C;                // 0x8C846C
-};
-static_assert(sizeof(Marni) == 0x8C8470);
 
 #pragma pack(pop)
 

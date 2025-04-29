@@ -499,7 +499,20 @@ declare     var_13                  u8
 declare     var_14                  u32
 declare     var_18                  u32
 declare     var_1C                  u32
-declare     var_20                  u32                     0x20
+declare     var_20                  u32
+
+struct      MarniRes
+declare     width                   u32
+declare     height                  u32
+declare     depth                   u32
+declare     fullscreen              u32
+
+struct      Marni
+declare     modes                   u32                     0x008C7018
+declare     window_rect             u32[4]                  0x008C7CDC
+declare     hWnd                    void*                   0x008C7EA8
+declare     resolutions             MarniRes[64]            0x008C7EF8
+declare     var_8C846C              u32                     0x008C846C
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
@@ -522,6 +535,7 @@ declare     byte_540780             u8[16]                  0x00540780
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
 declare     input                   Input                   0x0067CA30
+declare     hwnd                    void*                   0x0068056C
 declare     error_no                u32                     0x00680580
 declare     timer_r2                u8                      0x00680586
 declare     game_seconds            u32                     0x00680588
@@ -531,6 +545,7 @@ declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
+declare     pMarni                  Marni*                  0x006805B8
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
@@ -813,16 +828,3 @@ declare     var_01                  u8
 declare     var_0C                  u8
 declare     var_24                  u8
 declare     var_25                  u8
-
-struct      MarniRes
-declare     width                   u32
-declare     height                  u32
-declare     depth                   u32
-declare     fullscreen              u32
-
-struct      Marni
-declare     modes                   u32                    0x008C7018
-declare     window_rect             u32[4]                 0x008C7CDC
-declare     hWnd                    void*                  0x008C7EA8
-declare     resolutions             MarniRes[64]           0x008C7EF8
-declare     var_8C846C              u32                    0x008C846C
