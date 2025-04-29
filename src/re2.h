@@ -566,19 +566,6 @@ struct CCWork
 };
 static_assert(sizeof(CCWork) == 0x8EC);
 
-struct Unknown68A204
-{
-    uint8_t pad_0000[8];                // 0x0000
-    uint8_t var_08;                     // 0x0008
-    uint8_t var_09;                     // 0x0009
-    uint8_t pad_000A[3];                // 0x000A
-    uint8_t var_0D;                     // 0x000D
-    uint8_t var_0E;                     // 0x000E
-    uint8_t pad_000F[4];                // 0x000F
-    uint8_t var_13;                     // 0x0013
-};
-static_assert(sizeof(Unknown68A204) == 0x14);
-
 struct EnemyInitEntry
 {
     uint16_t type;                      // 0x0000
@@ -619,6 +606,30 @@ struct DemoPlayer
     uint16_t input[900];                // 0x003E
 };
 static_assert(sizeof(DemoPlayer) == 0x746);
+
+struct Task
+{
+    uint16_t status;                    // 0x0000
+    uint16_t sleep;                     // 0x0002
+    void* fn;                           // 0x0004
+    uint8_t var_08;                     // 0x0008
+    uint8_t var_09;                     // 0x0009
+    uint8_t var_0A;                     // 0x000A
+    uint8_t var_0B;                     // 0x000B
+    uint8_t var_0C;                     // 0x000C
+    uint8_t var_0D;                     // 0x000D
+    uint8_t var_0E;                     // 0x000E
+    uint8_t var_0F;                     // 0x000F
+    uint8_t var_10;                     // 0x0010
+    uint8_t var_11;                     // 0x0011
+    uint8_t var_12;                     // 0x0012
+    uint8_t var_13;                     // 0x0013
+    uint32_t var_14;                    // 0x0014
+    uint32_t var_18;                    // 0x0018
+    uint32_t var_1C;                    // 0x001C
+    uint32_t var_20;                    // 0x0020
+};
+static_assert(sizeof(Task) == 0x24);
 
 struct GameTable
 {
@@ -711,9 +722,14 @@ struct GameTable
     uint8_t pad_689DFC[292];            // 0x689DFC
     uint32_t dword_689F20;              // 0x689F20
     uint8_t byte_689F24;                // 0x689F24
-    uint8_t pad_689F25[735];            // 0x689F25
-    Unknown68A204* ctcb;                // 0x68A204
-    uint8_t pad_68A208[31096];          // 0x68A208
+    uint8_t pad_689F25[7];              // 0x689F25
+    uint32_t task_disable;              // 0x689F2C
+    uint32_t task_no;                   // 0x689F30
+    uint8_t pad_689F34[720];            // 0x689F34
+    Task* ctcb;                         // 0x68A204
+    uint8_t pad_68A208[24];             // 0x68A208
+    Task tasks[8];                      // 0x68A220
+    uint8_t pad_68A340[30784];          // 0x68A340
     uint8_t title_mv_state;             // 0x691B80
     uint8_t title_disp_add;             // 0x691B81
     uint8_t byte_691B82;                // 0x691B82

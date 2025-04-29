@@ -17,6 +17,7 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "scheduler.h"
 #include "title.h"
 
 #include <cstring>
@@ -50,15 +51,10 @@ namespace openre
     uint16_t& gPoisonStatus = *((uint16_t*)0x0098A108);
     uint8_t& gPoisonTimer = *((uint8_t*)0x0098A10A);
     uint32_t& _memTop = *((uint32_t*)0x988624);
-    Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
 
     static uint8_t* _ospBuffer = (uint8_t*)0x698840;
     static uint8_t& _ospMaskFlag = *((uint8_t*)0x6998C0);
     static PlayerEntity*& _em = *((PlayerEntity**)0x689C60);
-    static uint32_t& _taskIndex = *((uint32_t*)0x689F30);
-    static uint16_t* _tasks = (uint16_t*)0x68A220;
-    static uint16_t* word_68A222 = (uint16_t*)0x68A222;
-    static uint8_t* byte_68A233 = (uint8_t*)0x68A233;
     static uint32_t& _timerCurrent = *((uint32_t*)0x680570);
     static uint32_t& _timerLast = *((uint32_t*)0x67C9F4);
     static uint32_t& _timer10 = *((uint32_t*)0x68055C);
@@ -76,27 +72,6 @@ namespace openre
         using sig = void (*)();
         auto p = (sig)0x0043DF40;
         p();
-    }
-
-    // 0x00508CE0
-    void task_sleep(int frames)
-    {
-        auto eax = _taskIndex * 36;
-        word_68A222[eax / 2] = frames;
-        _tasks[eax / 2] = 1;
-        byte_68A233[eax] = 1;
-    }
-
-    // 0x00508D10
-    void task_exit()
-    {
-        interop::call(0x00508D10);
-    }
-
-    // 0x00508CC0
-    void task_execute(int index, void* fn)
-    {
-        interop::call<void, int, void*>(0x00508CC0, index, fn);
     }
 
     // 0x004CA2F9
@@ -330,6 +305,7 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
 
+    scheduler_init_hooks();
     title_init_hooks();
     door_init_hooks();
     scd_init_hooks();

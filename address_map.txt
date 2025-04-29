@@ -452,13 +452,6 @@ declare     ccol_old                s16
 declare     ccol_no                 u8
 declare     ctex_old                u8
 
-struct      Unknown68A204
-declare     var_08                  u8                      0x08
-declare     var_09                  u8                      0x09
-declare     var_0D                  u8                      0x0D
-declare     var_0E                  u8                      0x0E
-declare     var_13                  u8                      0x13
-
 struct      EnemyInitEntry
 declare     type                    u16
 declare     enabled                 u16
@@ -486,6 +479,27 @@ declare     frames                  u16
 declare     pos                     Vec16
 declare     cdir_y                  s16
 declare     input                   u16[900]
+
+struct      Task
+declare     status                  u16
+declare     sleep                   u16
+declare     fn                      void*
+declare     var_08                  u8
+declare     var_09                  u8
+declare     var_0A                  u8
+declare     var_0B                  u8
+declare     var_0C                  u8
+declare     var_0D                  u8
+declare     var_0E                  u8
+declare     var_0F                  u8
+declare     var_10                  u8
+declare     var_11                  u8
+declare     var_12                  u8
+declare     var_13                  u8
+declare     var_14                  u32
+declare     var_18                  u32
+declare     var_1C                  u32
+declare     var_20                  u32                     0x20
 
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
@@ -540,7 +554,10 @@ declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
 declare     dword_689F20            u32                     0x00689F20
 declare     byte_689F24             u8                      0x00689F24
-declare     ctcb                    Unknown68A204*          0x0068A204
+declare     task_disable            u32                     0x00689F2C
+declare     task_no                 u32                     0x00689F30
+declare     ctcb                    Task*                   0x0068A204
+declare     tasks                   Task[8]                 0x0068A220
 declare     title_mv_state          u8                      0x00691B80
 declare     title_disp_add          u8                      0x00691B81
 declare     byte_691B82             u8                      0x00691B82

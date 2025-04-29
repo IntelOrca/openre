@@ -157,16 +157,12 @@ namespace openre
     extern uint32_t& gGameFlags;
     extern uint32_t& gErrorCode;
     extern uint32_t& _memTop;
-    extern Unknown68A204*& dword_68A204;
     extern PlayerEntity& gPlayerEntity;
     extern uint16_t& gPoisonStatus;
     extern uint8_t& gPoisonTimer;
 
     static const char* gStageSymbols = "123456789abcdefg";
 
-    void task_sleep(int frames);
-    void task_exit();
-    void task_execute(int index, void* fn);
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
     uint8_t rnd_area();
