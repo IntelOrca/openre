@@ -361,12 +361,6 @@ namespace openre::title
         interop::call(0x004CEFF0);
     }
 
-    // 0x00500EE0
-    static void stage_init_item()
-    {
-        interop::call(0x00500EE0);
-    }
-
     // 0x004E3A20
     static void sub_4E3A20()
     {
@@ -558,7 +552,7 @@ namespace openre::title
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
                 {
                     gGameTable.word_98EB20 = gGameTable.byte_540780[gGameTable.pl.id];
-                    gGameTable.word_98EB22 = gGameTable.byte_691EF3 + 1;
+                    gGameTable.ex_battle_mode = gGameTable.byte_691EF3 + 1;
                     gGameTable.word_98EE7E = gGameTable.byte_989E91;
                     std::memcpy(&gGameTable.dword_98EEF0, &gGameTable.dword_989E94, 0x3C);
                     gGameTable.current_stage = 5;

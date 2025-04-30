@@ -10,6 +10,8 @@
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
+#include "item.h"
+#include "itembox.h"
 #include "marni.h"
 #include "math.h"
 #include "player.h"
@@ -36,6 +38,7 @@ using namespace openre::sce;
 using namespace openre::input;
 using namespace openre::camera;
 using namespace openre::title;
+using namespace openre::itembox;
 
 namespace openre
 {
@@ -261,6 +264,469 @@ namespace openre
         task_sleep(1);
     }
 
+    enum
+    {
+        INITIAL_INVENTORY_LEON_OFFSET = 0,
+        INITIAL_INVENTORY_CLAIRE_OFFSET = 11,
+        INITIAL_INVENTORY_HUNK_OFFSET = 22,
+        INITIAL_INVENTORY_TOFU_OFFSET = 33,
+        INITIAL_INVENTORY_LEON_EX_BATTLE_OFFSET = 44,
+        INITIAL_INVENTORY_CLAIRE_EX_BATTLE_OFFSET = 55,
+        INITIAL_INVENTORY_ADA_EX_BATTLE_OFFSET = 66,
+        INITIAL_INVENTORY_CHRIS_EX_BATTLE_OFFSET = 77,
+    };
+
+    static const InventoryDef _initialInventory[89] = {
+        // Leon
+        { ITEM_TYPE_HANDGUN_LEON, 18, 0 },
+        { ITEM_TYPE_KNIFE, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_LIGHTER, 1, 0 },
+        // Claire
+        { ITEM_TYPE_HANDGUN_CLAIRE, 13, 0 },
+        { ITEM_TYPE_KNIFE, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_LOCKPICK, 1, 0 },
+        // Hunk
+        { ITEM_TYPE_HANDGUN_LEON, 18, 0 },
+        { ITEM_TYPE_SHOTGUN, 5, 0 },
+        { ITEM_TYPE_MAGNUM, 8, 0 },
+        { ITEM_TYPE_AMMO_HANDGUN, 150, 0 },
+        { ITEM_TYPE_AMMO_SHOTGUN, 15, 0 },
+        { ITEM_TYPE_AMMO_MAGNUM, 8, 0 },
+        { ITEM_TYPE_HERB_GB, 1, 0 },
+        { ITEM_TYPE_HERB_GB, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_GVIRUS, 1, 0 },
+        // Tofu
+        { ITEM_TYPE_KNIFE, 0, 0 },
+        { ITEM_TYPE_HERB_G, 1, 0 },
+        { ITEM_TYPE_HERB_G, 1, 0 },
+        { ITEM_TYPE_HERB_B, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_GVIRUS, 1, 0 },
+        // Extreme battle Leon
+        { ITEM_TYPE_HANDGUN_LEON, 18, 0 },
+        { ITEM_TYPE_SHOTGUN, 5, 0 },
+        { ITEM_TYPE_MAGNUM, 8, 0 },
+        { ITEM_TYPE_INK_RIBBON, 5, 0 },
+        { ITEM_TYPE_FIRST_AID_SPRAY, 1, 0 },
+        { ITEM_TYPE_HERB_B, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_LIGHTER, 1, 0 },
+        // Extreme battle Claire
+        { ITEM_TYPE_GRENADE_LAUNCHER_EXPLOSIVE, 6, 0 },
+        { ITEM_TYPE_AMMO_FLAME_ROUNDS, 6, 0 },
+        { ITEM_TYPE_AMMO_ACID_ROUNDS, 6, 0 },
+        { ITEM_TYPE_INK_RIBBON, 5, 0 },
+        { ITEM_TYPE_FIRST_AID_SPRAY, 1, 0 },
+        { ITEM_TYPE_HERB_B, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_LOCKPICK, 1, 0 },
+        // Extreme battle Ada
+        { ITEM_TYPE_SUB_MACHINE_GUN, 100, 1 },
+        { ITEM_TYPE_SUB_MACHINE_GUN, 100, 2 },
+        { ITEM_TYPE_HANDGUN_COLT_SAA, 6, 0 },
+        { ITEM_TYPE_INK_RIBBON, 5, 0 },
+        { ITEM_TYPE_BOWGUN, 18, 0 },
+        { ITEM_TYPE_HERB_GRB, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_PHOTO_ADA, 1, 0 },
+        // Extreme battle Chris
+        { ITEM_TYPE_ROCKET_LAUNCHER, 5, 1 },
+        { ITEM_TYPE_ROCKET_LAUNCHER, 5, 2 },
+        { ITEM_TYPE_CUSTOM_SHOTGUN, 7, 0 },
+        { ITEM_TYPE_INK_RIBBON, 5, 0 },
+        { ITEM_TYPE_BERETTA, 1, 0 },
+        { ITEM_TYPE_FIRST_AID_SPRAY, 1, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_NONE, 0, 0 },
+        { ITEM_TYPE_LIGHTER, 1, 0 },
+    };
+
+    // 0x00500EE0
+    void stage_init_item()
+    {
+        uint32_t initialInventoryOffset = INITIAL_INVENTORY_LEON_OFFSET;
+        bool extremeBattleMode = check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE);
+        bool isLeon = check_flag(FlagGroup::Status, FG_STATUS_PLAYER) == 0;
+        bool isClaire = !isLeon;
+
+        auto& inventory = gGameTable.inventory;
+        auto& itembox = gGameTable.itembox;
+
+        if (extremeBattleMode)
+        {
+            switch (gGameTable.word_98EB20)
+            {
+            case 0: initialInventoryOffset = INITIAL_INVENTORY_LEON_EX_BATTLE_OFFSET; break;
+            case 1: initialInventoryOffset = INITIAL_INVENTORY_CLAIRE_EX_BATTLE_OFFSET; break;
+            case 2: initialInventoryOffset = INITIAL_INVENTORY_ADA_EX_BATTLE_OFFSET; break;
+            case 3: initialInventoryOffset = INITIAL_INVENTORY_CHRIS_EX_BATTLE_OFFSET; break;
+            }
+        }
+        // Normal, arrange and 4th initial inventory offsets
+        else
+        {
+            if (isClaire)
+            {
+                initialInventoryOffset = INITIAL_INVENTORY_CLAIRE_OFFSET;
+            }
+            else if (gGameTable.pl.id == PLD_HUNK)
+            {
+                initialInventoryOffset = INITIAL_INVENTORY_HUNK_OFFSET;
+            }
+            else if (gGameTable.pl.id == PLD_TOFU)
+            {
+                initialInventoryOffset = INITIAL_INVENTORY_TOFU_OFFSET;
+            }
+        }
+
+        auto* itemDef = &_initialInventory[(FULL_INVENTORY_SIZE - 1) + initialInventoryOffset];
+        for (uint32_t i = FULL_INVENTORY_SIZE; i > 0; i--)
+        {
+            set_inventory_item(i - 1, itemDef->Type, itemDef->Quantity, itemDef->Part);
+            itemDef--;
+        }
+
+        gGameTable.byte_691F6A = _initialInventory[initialInventoryOffset].Type;
+        gGameTable.byte_691F68 = 0;
+        if (!extremeBattleMode && gGameTable.cheat0 <= 9 && gGameTable.super_hard_switch)
+        {
+            if (isLeon)
+            {
+                inventory[0].Quantity = INVENTORY_INFINITE_QUANTITY;
+                inventory[0].Part = 0;
+                gGameTable.byte_691F68 = 0;
+
+                switch (gGameTable.cheat0)
+                {
+                case 0:
+                {
+                    inventory[0].Type = ITEM_TYPE_HANDGUN_LEON;
+                    gGameTable.byte_691F6A = ITEM_TYPE_HANDGUN_LEON;
+                    break;
+                }
+                case 1:
+                {
+                    inventory[0].Type = ITEM_TYPE_CUSTOM_HANDGUN;
+                    gGameTable.byte_691F6A = ITEM_TYPE_CUSTOM_HANDGUN;
+                    break;
+                }
+                case 2:
+                {
+                    inventory[0].Type = ITEM_TYPE_MAGNUM;
+                    gGameTable.byte_691F6A = ITEM_TYPE_MAGNUM;
+                    break;
+                }
+                case 3:
+                {
+                    inventory[0].Type = ITEM_TYPE_CUSTOM_MAGNUM;
+                    gGameTable.byte_691F6A = ITEM_TYPE_CUSTOM_MAGNUM;
+                    break;
+                }
+                case 4:
+                {
+                    inventory[0].Type = ITEM_TYPE_SHOTGUN;
+                    gGameTable.byte_691F6A = ITEM_TYPE_SHOTGUN;
+                    break;
+                }
+                case 5:
+                {
+                    inventory[0].Type = ITEM_TYPE_CUSTOM_SHOTGUN;
+                    gGameTable.byte_691F6A = ITEM_TYPE_CUSTOM_SHOTGUN;
+                    break;
+                }
+                case 6:
+                {
+                    set_inventory_item(0, ITEM_TYPE_FLAMETHROWER, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_FLAMETHROWER, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_FLAMETHROWER;
+                    break;
+                }
+                case 7:
+                {
+                    set_inventory_item(0, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_SUB_MACHINE_GUN;
+                    break;
+                }
+                case 8:
+                {
+                    set_inventory_item(0, ITEM_TYPE_ROCKET_LAUNCHER, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_ROCKET_LAUNCHER, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_ROCKET_LAUNCHER;
+                    break;
+                }
+                case 9:
+                {
+                    set_inventory_item(0, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_GATLING_GUN;
+                    break;
+                }
+                }
+            }
+            // Claire
+            else
+            {
+                inventory[0].Quantity = -1;
+                inventory[0].Part = 0;
+                gGameTable.byte_691F68 = 0;
+
+                switch (gGameTable.cheat0)
+                {
+                case 0:
+                {
+                    inventory[0].Type = ITEM_TYPE_HANDGUN_CLAIRE;
+                    gGameTable.byte_691F6A = ITEM_TYPE_HANDGUN_CLAIRE;
+                    break;
+                }
+                case 1:
+                {
+                    inventory[0].Type = ITEM_TYPE_GRENADE_LAUNCHER_EXPLOSIVE;
+                    gGameTable.byte_691F6A = ITEM_TYPE_GRENADE_LAUNCHER_EXPLOSIVE;
+                    break;
+                }
+                case 2:
+                {
+                    inventory[0].Type = ITEM_TYPE_GRENADE_LAUNCHER_FLAME;
+                    gGameTable.byte_691F6A = ITEM_TYPE_GRENADE_LAUNCHER_FLAME;
+                    break;
+                }
+                case 3:
+                {
+                    inventory[0].Type = ITEM_TYPE_GRENADE_LAUNCHER_ACID;
+                    gGameTable.byte_691F6A = ITEM_TYPE_GRENADE_LAUNCHER_ACID;
+                    break;
+                }
+                case 4:
+                {
+                    inventory[0].Type = ITEM_TYPE_BOWGUN;
+                    gGameTable.byte_691F6A = ITEM_TYPE_BOWGUN;
+                    break;
+                }
+                case 5:
+                {
+                    inventory[0].Type = ITEM_TYPE_HANDGUN_COLT_SAA;
+                    gGameTable.byte_691F6A = ITEM_TYPE_HANDGUN_COLT_SAA;
+                    break;
+                }
+                case 6:
+                {
+                    set_inventory_item(0, ITEM_TYPE_SPARKSHOT, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_SPARKSHOT, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_SPARKSHOT;
+                    break;
+                }
+                case 7:
+                {
+                    set_inventory_item(0, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_SUB_MACHINE_GUN;
+                    break;
+                }
+                case 8:
+                {
+                    set_inventory_item(0, ITEM_TYPE_ROCKET_LAUNCHER, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_ROCKET_LAUNCHER, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_ROCKET_LAUNCHER;
+                    break;
+                }
+                case 9:
+                {
+                    set_inventory_item(0, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+                    set_inventory_item(1, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+                    gGameTable.byte_691F6A = ITEM_TYPE_GATLING_GUN;
+                    break;
+                }
+                }
+            }
+        }
+
+        if (extremeBattleMode)
+        {
+            if (gGameTable.word_98EB20 >= 2)
+            {
+                gGameTable.byte_691F68 = 2;
+                gGameTable.byte_691F6A = _initialInventory[initialInventoryOffset + 2].Type;
+            }
+
+            // Level determines the amount of ink ribbons
+            if (gGameTable.ex_battle_mode == EX_BATTLE_MODE_LEVEL_2)
+            {
+                inventory[3].Quantity = 3;
+            }
+            else if (gGameTable.ex_battle_mode == EX_BATTLE_MODE_LEVEL_3)
+            {
+                inventory[3].Quantity = 1;
+            }
+            else
+            {
+                inventory[3].Quantity = 5;
+            }
+        }
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_12))
+        {
+            set_inventory_item(0, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+            set_inventory_item(1, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+            gGameTable.byte_691F6A = ITEM_TYPE_SUB_MACHINE_GUN;
+            gGameTable.byte_691F68 = 0;
+        }
+
+        std::memset(&gGameTable.itembox, 0, sizeof(ItemboxItem) * 64);
+        gGameTable.inventory_size = 8;
+        gGameTable.dword_98E9C4 = 0;
+        bitarray_set(&gGameTable.dword_98E9C4, 0x12);
+        bitarray_clr(gGameTable.fg_common, 0x7E);
+
+        std::memset(&gGameTable.inventory_files, 0xFF, 24);
+
+        if (extremeBattleMode)
+        {
+            set_itembox_item(2, ITEM_TYPE_KNIFE, 1, 0);
+        }
+
+        if (check_flag(FlagGroup::Status, FG_STATUS_EASY))
+        {
+            if (!check_flag(FlagGroup::System, FG_SYSTEM_10) && check_flag(FlagGroup::Status, FG_STATUS_SCENARIO))
+            {
+                if (isClaire)
+                {
+                    gGameTable.word_53E1B0 = 1;
+                    gGameTable.inventory_files[0] = ITEM_TYPE_FILE_ROOKIE_CLAIRE;
+                }
+                else
+                {
+                    gGameTable.word_53E1AC = 1;
+                    gGameTable.inventory_files[0] = ITEM_TYPE_FILE_ROOKIE_LEON;
+                }
+            }
+
+            set_itembox_item(1, ITEM_TYPE_FIRST_AID_SPRAY, 1, 0);
+            set_itembox_item(2, ITEM_TYPE_FIRST_AID_SPRAY, 1, 0);
+            set_itembox_item(3, ITEM_TYPE_FIRST_AID_SPRAY, 1, 0);
+        }
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EASY))
+        {
+            if (check_flag(FlagGroup::System, FG_SYSTEM_12))
+            {
+                set_inventory_item(0, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 1);
+                set_inventory_item(1, ITEM_TYPE_SUB_MACHINE_GUN, INVENTORY_INFINITE_QUANTITY, 2);
+                gGameTable.byte_691F6A = ITEM_TYPE_SUB_MACHINE_GUN;
+                gGameTable.byte_691F68 = 0;
+
+                set_itembox_item(0, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 3);
+                set_itembox_item(4, ITEM_TYPE_ROCKET_LAUNCHER, INVENTORY_INFINITE_QUANTITY, 3);
+                set_itembox_item(5, ITEM_TYPE_KNIFE, 1, 0);
+
+                if ((int32_t)gGameTable.fg_status >= 0)
+                {
+                    set_itembox_item(6, ITEM_TYPE_HANDGUN_LEON, 18, 0);
+                }
+                else
+                {
+                    set_itembox_item(6, ITEM_TYPE_HANDGUN_CLAIRE, 13, 0);
+                }
+
+                set_itembox_item(7, ITEM_TYPE_AMMO_HANDGUN, 120, 0);
+            }
+            else
+            {
+                set_inventory_item(3, ITEM_TYPE_AMMO_HANDGUN, 120, 0);
+            }
+        }
+
+        if (gGameTable.cheat1 != 0xFF)
+        {
+            set_inventory_item(3, ITEM_TYPE_NONE, 0, 0);
+            set_inventory_item(0, ITEM_TYPE_GATLING_GUN, INVENTORY_INFINITE_QUANTITY, 3);
+
+            if (check_flag(FlagGroup::System, FG_SYSTEM_12))
+            {
+                set_itembox_item(4, ITEM_TYPE_ROCKET_LAUNCHER, 2, 3);
+                set_itembox_item(5, ITEM_TYPE_GATLING_GUN, 100, 3);
+                set_itembox_item(13, ITEM_TYPE_KNIFE, 1, 0);
+            }
+
+            itembox[12].Quantity = 100;
+            itembox[12].Part = 3;
+
+            if ((int32_t)gGameTable.fg_status >= 0)
+            {
+                set_itembox_item(6, ITEM_TYPE_HANDGUN_LEON, 18, 0);
+                set_itembox_item(8, ITEM_TYPE_MAGNUM, 8, 0);
+                set_itembox_item(9, ITEM_TYPE_CUSTOM_MAGNUM, 8, 0);
+                set_itembox_item(10, ITEM_TYPE_SHOTGUN, 5, 0);
+                set_itembox_item(11, ITEM_TYPE_CUSTOM_SHOTGUN, 7, 0);
+                itembox[12].Type = ITEM_TYPE_SPARKSHOT;
+            }
+            else
+            {
+                set_itembox_item(6, ITEM_TYPE_HANDGUN_CLAIRE, 13, 0);
+                set_itembox_item(8, ITEM_TYPE_GRENADE_LAUNCHER_FLAME, 6, 0);
+                set_itembox_item(9, ITEM_TYPE_GRENADE_LAUNCHER_ACID, 6, 0);
+                set_itembox_item(10, ITEM_TYPE_BOWGUN, 18, 0);
+                set_itembox_item(11, ITEM_TYPE_HANDGUN_COLT_SAA, 6, 0);
+                itembox[12].Type = ITEM_TYPE_SPARKSHOT;
+            }
+
+            set_itembox_item(7, ITEM_TYPE_AMMO_HANDGUN, 120, 0);
+        }
+
+        if (!extremeBattleMode)
+        {
+            if (gGameTable.cheat0 > 9)
+            {
+                return;
+            }
+
+            if (gGameTable.super_hard_switch)
+            {
+                if (gGameTable.cheat0 > 5)
+                {
+                    set_itembox_item(1, ITEM_TYPE_KNIFE, 1, 0);
+                }
+
+                itembox[0].Type = isClaire ? ITEM_TYPE_HANDGUN_CLAIRE : ITEM_TYPE_HANDGUN_LEON;
+                itembox[0].Quantity = 13;
+            }
+        }
+    }
+
     // 0x004C89B2
     void show_message(int a0, int a1, int a2, int a3)
     {
@@ -321,14 +787,10 @@ void snd_se_walk(int, int, PlayerEntity* pEm) {}
 
 void onAttach()
 {
-    // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
-    // interop::writeJmp(0x004EDF40, &snd_se_walk);
-    // interop::writeJmp(0x00502D40, &read_file_into_buffer);
-    // interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
-    interop::writeJmp(0x004B7860, load_init_table_1);
-    interop::writeJmp(0x004DE650, load_init_table_2);
-    interop::writeJmp(0x00505B20, load_init_table_3);
-    interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x004B7860, &load_init_table_1);
+    interop::writeJmp(0x004DE650, &load_init_table_2);
+    interop::writeJmp(0x00505B20, &load_init_table_3);
+    interop::writeJmp(0x004B2A90, &rnd);
 
     title_init_hooks();
     door_init_hooks();

@@ -488,6 +488,8 @@ declare     cdir_y                  s16
 declare     input                   u16[900]
 
 struct      GameTable
+declare     cheat0                  u8                      0x00524EB4
+declare     cheat1                  u8                      0x00524EB5
 declare     enable_dsound           bool                    0x00524EB6
 declare     graphics_ptr_data       u8                      0x00524EB9
 declare     door_ll                 Mat16                   0x00525F5C
@@ -504,6 +506,8 @@ declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
+declare     word_53E1AC             u16                     0x0053E1AC
+declare     word_53E1B0             u16                     0x0053E1B0
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
@@ -515,6 +519,7 @@ declare     can_draw                u16                     0x0068058D
 declare     reset_r0                u8                      0x0068058F
 declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
+declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
 declare     dword_6893F0            u32                     0x006893F0
@@ -538,6 +543,7 @@ declare     byte_689C64             u8                      0x00689C64
 declare     dword_689CA0            u32                     0x00689CA0
 declare     dword_689DF4            u32                     0x00689DF4
 declare     dword_689DF8            u32                     0x00689DF8
+declare     st_code_pos             u32                     0x00689EAC
 declare     dword_689F20            u32                     0x00689F20
 declare     byte_689F24             u8                      0x00689F24
 declare     ctcb                    Unknown68A204*          0x0068A204
@@ -733,7 +739,7 @@ declare     last_cut                u16                     0x0098EB1A
 declare     word_98EB1C             u16                     0x0098EB1C
 declare     rng                     u16                     0x0098EB1E
 declare     word_98EB20             u16                     0x0098EB20
-declare     word_98EB22             u16                     0x0098EB22
+declare     ex_battle_mode          u16                     0x0098EB22
 declare     next_pld                s16                     0x0098EB24
 declare     word_98EB26             u16                     0x0098EB26
 declare     word_98EB28             u16                     0x0098EB28
@@ -752,6 +758,7 @@ declare     door_locks              u32                     0x0098ED2C
 declare     item_twork              InventorySlot           0x0098ED30
 declare     inventory               InventorySlot[11]       0x0098ED34
 declare     itembox                 ItemboxItem[64]         0x0098ED60
+declare     inventory_files         u8[24]                  0x0098EE60
 declare     word_98EE78             s16                     0x0098EE78
 declare     byte_98EE7B             u8                      0x0098EE7B
 declare     saved_splayer_health    s16                     0x0098EE7C
