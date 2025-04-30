@@ -650,10 +650,44 @@ struct Marni
     void* hWnd;                         // 0x8C7EA8
     uint8_t pad_8C7EAC[76];             // 0x8C7EAC
     MarniRes resolutions[64];           // 0x8C7EF8
-    uint8_t pad_8C82F8[372];            // 0x8C82F8
+    uint8_t pad_8C82F8[52];             // 0x8C82F8
+    uint32_t xsize;                     // 0x8C832C
+    uint8_t pad_8C8330[196];            // 0x8C8330
+    uint32_t var_8C83F4;                // 0x8C83F4
+    uint8_t pad_8C83F8[116];            // 0x8C83F8
     uint32_t var_8C846C;                // 0x8C846C
 };
 static_assert(sizeof(Marni) == 0x8C8470);
+
+struct MarniConfig
+{
+    uint32_t key;                       // 0x0000
+    uint32_t var_04;                    // 0x0004
+    uint32_t var_08;                    // 0x0008
+    uint32_t hKey;                      // 0x000C
+    uint32_t ex_flag;                   // 0x0010
+    uint32_t ex_time[3];                // 0x0014
+    uint32_t var_20;                    // 0x0020
+    uint32_t var_24;                    // 0x0024
+    uint32_t var_28;                    // 0x0028
+    uint32_t var_2C;                    // 0x002C
+    uint32_t var_30;                    // 0x0030
+    uint32_t var_34;                    // 0x0034
+    uint32_t data1;                     // 0x0038
+    uint32_t data2;                     // 0x003C
+    uint32_t data3;                     // 0x0040
+    uint32_t data4;                     // 0x0044
+    uint8_t perswrap;                   // 0x0048
+    uint8_t bilinear;                   // 0x0049
+    uint8_t fadeflag;                   // 0x004A
+    uint8_t var_4B;                     // 0x004B
+    uint32_t var_4C;                    // 0x004C
+    uint32_t var_50;                    // 0x0050
+    uint32_t var_54;                    // 0x0054
+    uint32_t var_58;                    // 0x0058
+    uint8_t var_5C;                     // 0x005C
+};
+static_assert(sizeof(MarniConfig) == 0x5D);
 
 struct GameTable
 {
@@ -690,7 +724,11 @@ struct GameTable
     ItemTypeDefinition item_def_tbl[64];// 0x53DE28
     uint8_t pad_53E028[10072];          // 0x53E028
     uint8_t byte_540780[16];            // 0x540780
-    uint8_t pad_540790[1231876];        // 0x540790
+    uint8_t pad_540790[1217380];        // 0x540790
+    void* hFont;                        // 0x669AF4
+    uint8_t pad_669AF8[4];              // 0x669AF8
+    uint8_t is_480p;                    // 0x669AFC
+    uint8_t pad_669AFD[14487];          // 0x669AFD
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[63072];          // 0x66D398
     uint8_t vk_press;                   // 0x67C9F8
@@ -698,20 +736,26 @@ struct GameTable
     Input input;                        // 0x67CA30
     uint8_t pad_68055C[16];             // 0x68055C
     void* hwnd;                         // 0x68056C
-    uint8_t pad_680570[16];             // 0x680570
+    uint8_t pad_680570[8];              // 0x680570
+    void* hInstance;                    // 0x680578
+    uint8_t pad_68057C[4];              // 0x68057C
     uint32_t error_no;                  // 0x680580
     uint8_t pad_680584[2];              // 0x680584
     uint8_t timer_r2;                   // 0x680586
     uint8_t pad_680587[1];              // 0x680587
     uint32_t game_seconds;              // 0x680588
     uint8_t pad_68058C[1];              // 0x68058C
-    uint16_t can_draw;                  // 0x68058D
+    uint8_t can_draw;                   // 0x68058D
+    uint8_t movie_r0;                   // 0x68058E
     uint8_t reset_r0;                   // 0x68058F
-    uint8_t pad_680590[8];              // 0x680590
+    uint8_t pad_680590[1];              // 0x680590
+    uint8_t byte_680591;                // 0x680591
+    uint8_t pad_680592[6];              // 0x680592
     uint8_t byte_680598;                // 0x680598
     uint8_t pad_680599[1];              // 0x680599
     uint8_t blood_censor;               // 0x68059A
-    uint8_t pad_68059B[22];             // 0x68059B
+    uint8_t byte_68059B;                // 0x68059B
+    uint8_t pad_68059C[21];             // 0x68059C
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
@@ -731,7 +775,9 @@ struct GameTable
     uint8_t pad_689794[181];            // 0x689794
     uint8_t stage_bk;                   // 0x689849
     uint8_t byte_68984A;                // 0x68984A
-    uint8_t pad_68984B[913];            // 0x68984B
+    uint8_t pad_68984B[625];            // 0x68984B
+    uint8_t byte_689ABC;                // 0x689ABC
+    uint8_t pad_689ABD[287];            // 0x689ABD
     uint32_t dword_689BDC;              // 0x689BDC
     uint8_t pad_689BE0[48];             // 0x689BE0
     uint32_t rdt_count;                 // 0x689C10
@@ -753,7 +799,9 @@ struct GameTable
     uint8_t pad_689F25[7];              // 0x689F25
     uint32_t task_disable;              // 0x689F2C
     uint32_t task_no;                   // 0x689F30
-    uint8_t pad_689F34[720];            // 0x689F34
+    uint8_t pad_689F34[28];             // 0x689F34
+    MarniConfig marni_config;           // 0x689F50
+    uint8_t pad_689FAD[599];            // 0x689FAD
     Task* ctcb;                         // 0x68A204
     uint8_t pad_68A208[24];             // 0x68A208
     Task tasks[8];                      // 0x68A220

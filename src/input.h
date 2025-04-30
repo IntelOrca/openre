@@ -39,5 +39,9 @@ namespace openre::input
         return gGameTable.key_trg & key;
     }
 
+    void input_init(Input* self);
+    void input_pause(Input* self);
+    void input_wmkeyup(Input* self, int vk);
+    void input_wmkeydown(Input* self, int vk);
     void input_init_hooks();
 };

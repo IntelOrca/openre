@@ -14,8 +14,14 @@ namespace openre::marni
         interop::call<void, int, Md1*, int>(0x00443620, workNo, pTmd, id);
     }
 
+    void out()
+    {
+    }
+
     // 0x004DBFD0
-    void out() {}
+    void out(const char* message, const char* location)
+    {
+    }
 
     // 0x00432BB0
     void unload_door_texture()
@@ -88,6 +94,60 @@ namespace openre::marni
         marni->window_rect[1] = rect.top;
         marni->window_rect[2] = rect.right;
         marni->window_rect[3] = rect.bottom;
+    }
+
+    // 0x004065C0
+    static void resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
+        interop::thiscall<int, Marni*, HWND, UINT, WPARAM, LPARAM>(0x004065C0, marni, hWnd, msg, wParam, lParam);
+    }
+
+    // 0x004064D0
+    static void destroy(Marni* marni)
+    {
+        interop::thiscall<int, Marni*>(0x004064D0, marni);
+    }
+
+    // 0x00401F10
+    static void syskeydown(Marni* marni)
+    {
+        interop::thiscall<int, Marni*>(0x00401F10, marni);
+    }
+
+    // 0x004063D0
+    long message(Marni* self, void* hWnd, uint32_t msg, void* wParam, void* lParam)
+    {
+        switch (msg)
+        {
+        case WM_MOVE: move(self); break;
+        case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
+        case WM_DESTROY: destroy(self); break;
+        case WM_SYSKEYDOWN:
+            if ((self->var_8C83F4 & 0x0400) != 0)
+            {
+                syskeydown(self);
+            }
+            break;
+        }
+        return 1;
+    }
+
+    // 0x004419A0
+    void kill()
+    {
+        interop::call(0x004419A0);
+    }
+
+    // 0x00402500
+    bool change_resolution(Marni* self)
+    {
+        return interop::thiscall<bool, Marni*>(0x00402500, self);
+    }
+
+    // 0x0050B220
+    void config_flip_filter(MarniConfig* self)
+    {
+        self->bilinear ^= 1;
     }
 
     void init_hooks()
