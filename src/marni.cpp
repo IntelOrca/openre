@@ -10,16 +10,36 @@
 
 namespace openre::marni
 {
+    namespace GpuFlags
+    {
+        constexpr uint32_t GPU_7 = 0x80;
+        constexpr uint32_t GPU_9 = 0x200;
+        constexpr uint32_t GPU_FULLSCREEN = 0x400;
+        constexpr uint32_t GPU_13 = 0x2000;
+    }
+
     // 0x00443620
     void mapping_tmd(int workNo, Md1* pTmd, int id)
     {
         interop::call<void, int, Md1*, int>(0x00443620, workNo, pTmd, id);
     }
 
-    void out() {}
+    static void out_internal(const char* message, const char* location)
+    {
+        // std::printf("[marni] %s: %s\n", location, message);
+    }
 
     // 0x004DBFD0
-    void out(const char* message, const char* location) {}
+    void out(const char* message, const char* location)
+    {
+        out_internal(message, location);
+    }
+
+    // 0x004DBFD0
+    void out()
+    {
+        out_internal("", "");
+    }
 
     // 0x00401000
     int error()
@@ -127,7 +147,7 @@ namespace openre::marni
         case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
         case WM_DESTROY: destroy(self); break;
         case WM_SYSKEYDOWN:
-            if ((self->gpu_flag & 0x0400) != 0)
+            if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
             {
                 syskeydown(self);
             }
@@ -185,14 +205,14 @@ namespace openre::marni
             return;
         if (self->pMovie->flag & 2)
             return;
-        if (!(self->gpu_flag & 0x200))
+        if (!(self->gpu_flag & GpuFlags::GPU_9))
             return;
-        if ((self->gpu_flag & 0x2000) && (self->gpu_flag & 0x400) && self->var_8C8318 < 4)
+        if ((self->gpu_flag & GpuFlags::GPU_13) && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) && self->var_8C8318 < 4)
         {
             surface_fill(&self->surface2, 0, 0, 0);
         }
 
-        if (self->gpu_flag & 0x400)
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
             auto fullscreen = self->resolutions[self->modes].fullscreen;
             if (fullscreen == 1)
@@ -215,7 +235,7 @@ namespace openre::marni
     // 0x00407440
     static int create_d3d(Marni* self)
     {
-        if (self->gpu_flag & 0x2000)
+        if (self->gpu_flag & GpuFlags::GPU_13)
             return 0;
 
         auto dd2 = (LPDIRECTDRAW2)self->pDirectDraw2;
@@ -246,6 +266,23 @@ namespace openre::marni
         return TRUE;
     }
 
+    static int __stdcall com_nop(LPUNKNOWN obj)
+    {
+        return 0;
+    }
+
+    static void clear_com_interface(LPUNKNOWN obj, size_t methodCount)
+    {
+        auto newTable = new void*[methodCount];
+        for (size_t i = 0; i < methodCount; i++)
+        {
+            newTable[i] = com_nop;
+        }
+
+        auto vtable = (void**)obj;
+        vtable[0] = newTable;
+    }
+
     // 0x0040F1A0
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
     {
@@ -274,14 +311,100 @@ namespace openre::marni
             *lpIsDefault = 0;
         }
         *lplpDD = lpDD;
+
         return 0;
+    }
+
+    // 0x00406860
+    static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2)
+    {
+        return pDD->QueryInterface(IID_IDirectDraw2, (LPVOID*)lpDD2);
+    }
+
+    // 0x00406970
+    static int D3DIBPPToDDBD(int bpp)
+    {
+        switch (bpp)
+        {
+        case 1: return DDBD_1;
+        case 2: return DDBD_2;
+        case 4: return DDBD_4;
+        case 8: return DDBD_8;
+        case 16: return DDBD_16;
+        case 24: return DDBD_24;
+        case 32: return DDBD_32;
+        default: out("", "D3DIBPPToDDBD"); return 0;
+        }
+    }
+
+    // 0x00407290
+    static HRESULT CALLBACK enum_driver_callback(
+        GUID* lpGuid, LPSTR lpDeviceDescription, LPSTR lpDeviceName, LPD3DDEVICEDESC descSw, LPD3DDEVICEDESC descHw,
+        LPVOID lpContext)
+    {
+        auto& device = gGameTable.d3d_devices[gGameTable.d3d_device_count];
+        memcpy(device.GUID, lpGuid, sizeof(GUID));
+        strncpy(device.lpDeviceDescription, lpDeviceDescription, sizeof(device.lpDeviceDescription));
+        strncpy(device.lpDeviceName, lpDeviceName, sizeof(device.lpDeviceName));
+        if (descSw->dwFlags == 0)
+        {
+            device.hwAccelerated = 0;
+            memcpy(device.desc, descHw, sizeof(D3DDEVICEDESC));
+        }
+        else
+        {
+            device.hwAccelerated = 1;
+            memcpy(device.desc, descSw, sizeof(D3DDEVICEDESC));
+        }
+        gGameTable.d3d_device_count++;
+        return gGameTable.d3d_device_count < 4 ? D3DENUMRET_OK : D3DENUMRET_CANCEL;
+    }
+
+    // 0x00407340
+    static int enum_drivers(Marni* self)
+    {
+        if (self->gpu_flag & GpuFlags::GPU_13)
+            return 1;
+
+        auto pD3D2 = (LPDIRECT3D2)self->pDirect3D2;
+        gGameTable.d3d_device_count = 0;
+        gGameTable.error = pD3D2->EnumDevices(enum_driver_callback, NULL);
+        if (FAILED(gGameTable.error))
+        {
+            out("failed to detect drivers that can use.", "MarniSystem Direct3D::MD3D");
+            return 0;
+        }
+
+        auto bestScore = -1;
+        for (auto i = 0; i < gGameTable.d3d_device_count; i++)
+        {
+            auto& device = gGameTable.d3d_devices[i];
+            auto desc = (LPD3DDEVICEDESC)device.desc;
+            device.supportsFloat = desc->dwDevCaps & D3DDEVCAPS_FLOATTLVERTEX;
+            device.supportsZbuffer = desc->dwDeviceZBufferBitDepth != 0;
+            device.hwAccelerated2 = device.hwAccelerated;
+            auto supportsDepth
+                = (D3DIBPPToDDBD(self->bpp) & desc->dwDeviceRenderBitDepth) != 0 && ((self->gpu_flag & GpuFlags::GPU_7) != 0);
+            auto score = (device.supportsZbuffer != 0) + (supportsDepth ? 2 : 0) + (device.supportsFloat != 0)
+                + (device.hwAccelerated != 0 ? 4 : 0);
+            if (bestScore < score)
+            {
+                bestScore = score;
+                self->device_cnt = i;
+            }
+        }
+        return 1;
     }
 
     void init_hooks()
     {
+        // 0x004DBFD0
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00407440, &create_d3d);
+        interop::hookThisCall(0x00407340, &enum_drivers);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
+        interop::writeJmp(0x00406860, &query_ddraw2);
+        interop::writeJmp(0x004DBFD0, &out_internal);
     }
 }

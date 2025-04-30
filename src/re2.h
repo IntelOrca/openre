@@ -778,6 +778,19 @@ struct MarniConfig
 };
 static_assert(sizeof(MarniConfig) == 0x5D);
 
+struct D3DDeviceInfo
+{
+    char lpDeviceName[30];              // 0x0000
+    char lpDeviceDescription[50];       // 0x001E
+    uint8_t desc[252];                  // 0x0050
+    uint8_t GUID[16];                   // 0x014C
+    uint32_t hwAccelerated;             // 0x015C
+    uint32_t supportsFloat;             // 0x0160
+    uint32_t supportsZbuffer;           // 0x0164
+    uint32_t hwAccelerated2;            // 0x0168
+};
+static_assert(sizeof(D3DDeviceInfo) == 0x16C);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -815,7 +828,11 @@ struct GameTable
     uint8_t byte_540780[16];            // 0x540780
     uint8_t pad_540790[12936];          // 0x540790
     uint32_t error;                     // 0x543A18
-    uint8_t pad_543A1C[1204440];        // 0x543A1C
+    uint8_t pad_543A1C[4];              // 0x543A1C
+    D3DDeviceInfo d3d_devices[5];       // 0x543A20
+    uint8_t pad_54413C[1050748];        // 0x54413C
+    int32_t d3d_device_count;           // 0x6449B8
+    uint8_t pad_6449BC[151864];         // 0x6449BC
     void* hFont;                        // 0x669AF4
     uint8_t pad_669AF8[4];              // 0x669AF8
     uint8_t is_480p;                    // 0x669AFC

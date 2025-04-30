@@ -620,6 +620,16 @@ declare     var_54                  u32
 declare     var_58                  u32
 declare     var_5C                  u8
 
+struct      D3DDeviceInfo
+declare     lpDeviceName            char[30]
+declare     lpDeviceDescription     char[50]
+declare     desc                    u8[252]
+declare     GUID                    u8[16]
+declare     hwAccelerated           u32
+declare     supportsFloat           u32
+declare     supportsZbuffer         u32
+declare     hwAccelerated2          u32
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     graphics_ptr_data       u8                      0x00524EB9
@@ -639,6 +649,8 @@ declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     byte_540780             u8[16]                  0x00540780
 declare     error                   u32                     0x00543A18
+declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
+declare     d3d_device_count        s32                     0x006449B8
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
