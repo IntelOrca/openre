@@ -192,6 +192,10 @@ namespace interopgen
                 "u16" => "uint16_t",
                 "s32" => "int32_t",
                 "u32" => "uint32_t",
+                "s64" => "int64_t",
+                "u64" => "uint64_t",
+                "f32" => "float",
+                "f64" => "double",
                 _ => name,
             };
         }
@@ -297,7 +301,8 @@ namespace interopgen
                 "char" => 1,
                 "u8" or "s8" => 1,
                 "u16" or "s16" => 2,
-                "u32" or "s32" => 4,
+                "u32" or "s32" or "f32" => 4,
+                "u64" or "s64" or "f64" => 8,
                 _ => ExpectProcessedStruct(type).Size!.Value,
             };
         }

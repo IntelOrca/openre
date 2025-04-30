@@ -1,8 +1,10 @@
 #include "marni.h"
 #include "interop.hpp"
+#include "openre.h"
 #include "re2.h"
 
 #define WIN32_LEAN_AND_MEAN
+#include <d3d.h>
 #include <ddraw.h>
 #include <windows.h>
 
@@ -14,13 +16,15 @@ namespace openre::marni
         interop::call<void, int, Md1*, int>(0x00443620, workNo, pTmd, id);
     }
 
-    void out()
-    {
-    }
+    void out() {}
 
     // 0x004DBFD0
-    void out(const char* message, const char* location)
+    void out(const char* message, const char* location) {}
+
+    // 0x00401000
+    int error()
     {
+        return interop::call(0x00401000);
     }
 
     // 0x00432BB0
@@ -123,7 +127,7 @@ namespace openre::marni
         case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
         case WM_DESTROY: destroy(self); break;
         case WM_SYSKEYDOWN:
-            if ((self->var_8C83F4 & 0x0400) != 0)
+            if ((self->gpu_flag & 0x0400) != 0)
             {
                 syskeydown(self);
             }
@@ -150,8 +154,134 @@ namespace openre::marni
         self->bilinear ^= 1;
     }
 
+    static void surface_fill(MarniSurface* self, uint8_t r, uint8_t g, uint8_t b)
+    {
+        interop::thiscall<int, MarniSurface*, uint8_t, uint8_t, uint8_t>((uintptr_t)self->vtbl[0], self, r, g, b);
+    }
+
+    static void flip_blt(Marni* self, DWORD width, DWORD height)
+    {
+        auto src = ((LPDIRECTDRAWSURFACE2)self->surface0.pDDsurface);
+        auto dst = ((LPDIRECTDRAWSURFACE2)self->surface2.pDDsurface);
+
+        RECT srcRect;
+        SetRect(&srcRect, 0, 0, width, height);
+
+        RECT dstRect;
+        CopyRect(&dstRect, (LPRECT)self->window_rect);
+
+        DDBLTFX ddbltfx;
+        ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
+        ddbltfx.dwSize = sizeof(DDBLTFX);
+        ddbltfx.dwDDFX = DDBLTFX_NOTEARING;
+
+        dst->Blt(&dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
+    }
+
+    // 0x00402A80
+    static void flip(Marni* self)
+    {
+        if (self->var_8C7EE0)
+            return;
+        if (self->pMovie->flag & 2)
+            return;
+        if (!(self->gpu_flag & 0x200))
+            return;
+        if ((self->gpu_flag & 0x2000) && (self->gpu_flag & 0x400) && self->var_8C8318 < 4)
+        {
+            surface_fill(&self->surface2, 0, 0, 0);
+        }
+
+        if (self->gpu_flag & 0x400)
+        {
+            auto fullscreen = self->resolutions[self->modes].fullscreen;
+            if (fullscreen == 1)
+            {
+                auto surface0 = (LPDIRECTDRAWSURFACE7)self->surface0.pDDsurface;
+                auto surface2 = (LPDIRECTDRAWSURFACE7)self->surface2.pDDsurface;
+                surface2->Flip(surface0, DDFLIP_WAIT);
+            }
+            else if (fullscreen == 2 || fullscreen == 3)
+            {
+                flip_blt(self, (int32_t)(self->render_w * self->aspect_x), (int32_t)(self->render_h * self->aspect_y));
+            }
+        }
+        else
+        {
+            flip_blt(self, self->xsize, self->ysize);
+        }
+    }
+
+    // 0x00407440
+    static int create_d3d(Marni* self)
+    {
+        if (self->gpu_flag & 0x2000)
+            return 0;
+
+        auto dd2 = (LPDIRECTDRAW2)self->pDirectDraw2;
+        gGameTable.error = dd2->QueryInterface(IID_IDirect3D2, &self->pDirect3D2);
+        if (gGameTable.error != 0)
+        {
+            error();
+        }
+        return gGameTable.error;
+    }
+
+    static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext)
+    {
+        auto lpDDresult = (LPDIRECTDRAW*)lpContext;
+        LPDIRECTDRAW lpDD;
+        if (lpGUID != NULL && SUCCEEDED(DirectDrawCreate(lpGUID, &lpDD, NULL)))
+        {
+            DDCAPS ddcapsHW;
+            ZeroMemory(&ddcapsHW, sizeof(DDCAPS));
+            ddcapsHW.dwSize = sizeof(DDCAPS);
+            if (SUCCEEDED(lpDD->GetCaps(&ddcapsHW, NULL)) && (ddcapsHW.dwCaps & DDCAPS_3D))
+            {
+                *lpDDresult = lpDD;
+                return FALSE;
+            }
+            lpDD->Release();
+        }
+        return TRUE;
+    }
+
+    // 0x0040F1A0
+    static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
+    {
+        LPDIRECTDRAW lpDD = NULL;
+        if (bEnumDevices)
+        {
+            auto hr = DirectDrawEnumerateA(ddrawEnumCallback, (LPVOID)&lpDD);
+            if (FAILED(hr))
+            {
+                out("Direct3DEnumerate", "MarniSystem Direct3D::MDDCreateDirect3D");
+                return hr;
+            }
+        }
+        if (lpDD == NULL)
+        {
+            auto hr = DirectDrawCreate(NULL, &lpDD, NULL);
+            if (FAILED(hr))
+            {
+                out("Direct3D", "MarniSystem Direct3D::MDDCreateDirect3D");
+                return hr;
+            }
+            *lpIsDefault = 1;
+        }
+        else
+        {
+            *lpIsDefault = 0;
+        }
+        *lplpDD = lpDD;
+        return 0;
+    }
+
     void init_hooks()
     {
         interop::hookThisCall(0x00406450, &move);
+        interop::hookThisCall(0x00402A80, &flip);
+        interop::hookThisCall(0x00407440, &create_d3d);
+        interop::writeJmp(0x0040F1A0, &create_ddraw);
     }
 }

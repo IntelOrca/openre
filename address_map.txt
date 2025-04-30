@@ -507,14 +507,91 @@ declare     height                  u32
 declare     depth                   u32
 declare     fullscreen              u32
 
+struct      MarniSurfaceDesc
+declare     r_shift                 u8
+declare     r_mask                  u8
+declare     r_bitcnt                u8
+declare     g_shift                 u8
+declare     g_mask                  u8
+declare     g_bitcnt                u8
+declare     b_shift                 u8
+declare     b_mask                  u8
+declare     b_bitcnt                u8
+declare     a_shift                 u8
+declare     a_mask                  u8
+declare     a_bitcnt                u8
+
+struct      MarniSurface
+declare     vtbl                    void**
+declare     pBitmap                 void*
+declare     pPalette                void*
+declare     bLocked                 u8
+declare     bPalLocked              u8
+declare     desc                    MarniSurfaceDesc
+declare     width                   s16
+declare     height                  s16
+declare     pitch                   s16
+declare     pal_cnt                 s16
+declare     var_22                  s16
+declare     bpp                     u8
+declare     var_25                  u8
+declare     bOpen                   u8
+declare     var_27                  u8
+declare     var_28                  u8
+declare     var_29                  u8
+declare     var_2A                  u8
+declare     var_2B                  u8
+declare     var_2C                  u8
+declare     var_2D                  u8
+declare     var_2E                  s16
+declare     pDDsurface              void*
+declare     pDDpalette              void**
+declare     var_38                  u32
+
+struct      MarniMovie
+declare     flag                    u32                     0x94
+declare     pos                     f64
+declare     var_A0                  s32
+
 struct      Marni
 declare     modes                   u32                     0x008C7018
 declare     window_rect             u32[4]                  0x008C7CDC
+declare     pMaterial               void*                   0x008C7E94
+declare     MaterialHandle          u32                     0x008C7E98
+declare     pDirect3D2              void*                   0x008C7E9C
+declare     pDirectDevice2          void*                   0x008C7EA0
+declare     pViewport               void*                   0x008C7EA4
 declare     hWnd                    void*                   0x008C7EA8
+declare     render_w                s32                     0x008C7EAC
+declare     render_h                s32                     0x008C7EB0
+declare     xsize_old               s32                     0x008C7EB4
+declare     ysize_old               s32                     0x008C7EB8
+declare     fullscreen_old          s32                     0x008C7EBC
+declare     aspect_x                f32                     0x008C7ED4
+declare     aspect_y                f32                     0x008C7ED8
+declare     var_8C7EE0              s32                     0x008C7EE0
+declare     var_8C7EE4              s32                     0x008C7EE4
+declare     is_gpu_busy             s32                     0x008C7EE8
+declare     desktop_w               s32                     0x008C7EEC
+declare     desktop_h               s32                     0x008C7EF0
+declare     desktop_bpp             s32                     0x008C7EF4
 declare     resolutions             MarniRes[64]            0x008C7EF8
-declare     xsize                   u32                     0x008C832C
-declare     var_8C83F4              u32                     0x008C83F4
-declare     var_8C846C              u32                     0x008C846C
+declare     res_count               s32                     0x008C82F8
+declare     var_8C8318              s32                     0x008C8318
+declare     pDirectDraw             void*                   0x008C8320
+declare     pDirectDraw2            void*                   0x008C8324
+declare     pMovie                  MarniMovie*             0x008C8328
+declare     xsize                   s32                     0x008C832C
+declare     ysize                   s32                     0x008C8330
+declare     bpp                     s32                     0x008C8334
+declare     is_gpu_active           s32                     0x008C8338
+declare     dwVidMemFree            s32                     0x008C833C
+declare     surface0                MarniSurface            0x008C8340
+declare     surfaceZ                MarniSurface            0x008C837C
+declare     surface2                MarniSurface            0x008C83B8
+declare     gpu_flag                u32                     0x008C83F4
+declare     device_cnt              s32                     0x008C842C
+declare     surface3                MarniSurface            0x008C8434
 
 struct      MarniConfig
 declare     key                     u32
@@ -561,6 +638,7 @@ declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     byte_540780             u8[16]                  0x00540780
+declare     error                   u32                     0x00543A18
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
