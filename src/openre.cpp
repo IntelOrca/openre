@@ -17,6 +17,7 @@
 #include "re2.h"
 #include "scd.h"
 #include "sce.h"
+#include "scheduler.h"
 #include "title.h"
 
 #include <cstring>
@@ -50,15 +51,10 @@ namespace openre
     uint16_t& gPoisonStatus = *((uint16_t*)0x0098A108);
     uint8_t& gPoisonTimer = *((uint8_t*)0x0098A10A);
     uint32_t& _memTop = *((uint32_t*)0x988624);
-    Unknown68A204*& dword_68A204 = *((Unknown68A204**)0x68A204);
 
     static uint8_t* _ospBuffer = (uint8_t*)0x698840;
     static uint8_t& _ospMaskFlag = *((uint8_t*)0x6998C0);
     static PlayerEntity*& _em = *((PlayerEntity**)0x689C60);
-    static uint32_t& _taskIndex = *((uint32_t*)0x689F30);
-    static uint16_t* _tasks = (uint16_t*)0x68A220;
-    static uint16_t* word_68A222 = (uint16_t*)0x68A222;
-    static uint8_t* byte_68A233 = (uint8_t*)0x68A233;
     static uint32_t& _timerCurrent = *((uint32_t*)0x680570);
     static uint32_t& _timerLast = *((uint32_t*)0x67C9F4);
     static uint32_t& _timer10 = *((uint32_t*)0x68055C);
@@ -76,27 +72,6 @@ namespace openre
         using sig = void (*)();
         auto p = (sig)0x0043DF40;
         p();
-    }
-
-    // 0x00508CE0
-    void task_sleep(int frames)
-    {
-        auto eax = _taskIndex * 36;
-        word_68A222[eax / 2] = frames;
-        _tasks[eax / 2] = 1;
-        byte_68A233[eax] = 1;
-    }
-
-    // 0x00508D10
-    void task_exit()
-    {
-        interop::call(0x00508D10);
-    }
-
-    // 0x00508CC0
-    void task_execute(int index, void* fn)
-    {
-        interop::call<void, int, void*>(0x00508CC0, index, fn);
     }
 
     // 0x004CA2F9
@@ -319,6 +294,150 @@ static void load_init_table_3()
 
 void snd_se_walk(int, int, PlayerEntity* pEm) {}
 
+// 0x00509CF0
+bool ck_installkey()
+{
+    return true;
+}
+
+// 0x00432080
+static void rsrc_release()
+{
+    interop::call(0x00432080);
+}
+
+// 0x00433830
+static void ssclose()
+{
+    interop::call(0x00433830);
+}
+
+// 0x00431000
+static void font_create()
+{
+    interop::call(0x00431000);
+}
+
+// 0x004310A0
+static void font_delete()
+{
+    DeleteObject(gGameTable.hFont);
+}
+
+// 0x00441DA0
+static void wnd_activate()
+{
+    interop::call(0x00441DA0);
+}
+
+// 0x00441D60
+static void wnd_deactivate()
+{
+    interop::call(0x00441D60);
+}
+
+// 0x00442800
+static INT_PTR CALLBACK about_dialog(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    return interop::stdcall<INT_PTR, HWND, UINT, WPARAM, LPARAM>(0x00442800, hWnd, msg, wParam, lParam);
+}
+
+// 0x00442750
+static void screenshot()
+{
+    interop::call(0x00442750);
+}
+
+// 0x00442C60
+static void cursor_op()
+{
+    interop::call(0x00442C60);
+}
+
+// 0x00441A00
+LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+    auto marni = gGameTable.pMarni;
+    if (marni != nullptr)
+    {
+        auto result = marni::message(marni, hWnd, Msg, (void*)wParam, (void*)lParam);
+        if (result == 0)
+        {
+            return 0;
+        }
+    }
+    gGameTable.vk_press &= 0x1F;
+    switch (Msg)
+    {
+    case WM_CREATE: input_init(&gGameTable.input); break;
+    case WM_DESTROY:
+        gGameTable.hwnd = nullptr;
+        rsrc_release();
+        ssclose();
+        font_delete();
+        PostQuitMessage(0);
+        return 0;
+    case WM_ACTIVATE: wnd_activate(); break;
+    case WM_ACTIVATEAPP:
+        if (wParam)
+            wnd_activate();
+        else
+            wnd_deactivate();
+        break;
+    case WM_KILLFOCUS: input_pause(&gGameTable.input); break;
+    case WM_CLOSE: marni::kill(); return DefWindowProc(hWnd, Msg, wParam, lParam);
+    case WM_KEYUP: input_wmkeyup(&gGameTable.input, wParam); break;
+    case WM_KEYDOWN:
+        if (lParam & 0x40000000) // last key state?
+            break;
+        gGameTable.byte_689ABC = 1;
+        gGameTable.vk_press |= 0x80;
+        switch (wParam)
+        {
+        case VK_SNAPSHOT:
+            screenshot();
+            SetFocus(hWnd);
+            break;
+        case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
+        case VK_F4:
+            gGameTable.vk_press |= 1; // inventory
+            SetFocus(hWnd);
+            break;
+        case VK_F5:
+            gGameTable.vk_press |= 2; // options
+            SetFocus(hWnd);
+            break;
+        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
+        case VK_F8:
+            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
+            {
+                if (marni::change_resolution(gGameTable.pMarni))
+                {
+                    gGameTable.byte_680591 = 120;
+                    cursor_op();
+                    gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+                    font_create();
+                }
+                else
+                {
+                    marni::out("???", "winmain.cpp");
+                }
+            }
+            break;
+        case VK_F9:
+            gGameTable.vk_press |= 0x40; // exit to menu
+            break;
+        default:
+            input_wmkeydown(&gGameTable.input, wParam);
+            SetFocus(hWnd);
+            break;
+        }
+        break;
+    default: return DefWindowProc(hWnd, Msg, wParam, lParam);
+    }
+    return 0;
+}
+
 void onAttach()
 {
     // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
@@ -329,7 +448,10 @@ void onAttach()
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x00509CF0, ck_installkey);
+    interop::writeJmp(0x00441A00, WndProc);
 
+    scheduler_init_hooks();
     title_init_hooks();
     door_init_hooks();
     scd_init_hooks();

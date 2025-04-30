@@ -11,6 +11,7 @@
 #include "room.h"
 #include "scd.h"
 #include "sce.h"
+#include "scheduler.h"
 
 #include <cstring>
 

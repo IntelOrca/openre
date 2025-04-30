@@ -22,8 +22,7 @@ constexpr int32_t kDefaultRegValue = 0xCCCCCCCC;
 
 namespace openre::interop
 {
-    template<typename T = void>
-    class X86Pointer
+    template<typename T = void> class X86Pointer
     {
     private:
         uintptr_t _ptr;
@@ -127,8 +126,7 @@ namespace openre::interop
 #endif
 #endif
 
-    template<uint32_t TAddress, typename T>
-    constexpr T& addr()
+    template<uint32_t TAddress, typename T> constexpr T& addr()
     {
         constexpr auto ptrAddr = kGoodPlaceForDataSegment - 0x008A4000 + TAddress;
         // We use std::launder to prevent the compiler from doing optimizations that lead to undefined behavior.
@@ -150,16 +148,34 @@ namespace openre::interop
     int32_t call(int32_t address);
     int32_t call(int32_t address, registers& registers);
 
-    template<typename TReturn, typename... TArgs>
-    TReturn call(uintptr_t addr, TArgs... args)
+    template<typename TReturn, typename... TArgs> TReturn call(uintptr_t addr, TArgs... args)
     {
         using func_t = TReturn (*)(TArgs...);
         func_t func = (func_t)addr;
         return func(args...);
     }
 
-    template<typename T, uintptr_t TAddress>
-    struct loco_global
+    template<typename TReturn, typename... TArgs> TReturn stdcall(uintptr_t addr, TArgs... args)
+    {
+        using func_t = TReturn (__stdcall *)(TArgs...);
+        func_t func = (func_t)addr;
+        return func(args...);
+    }
+
+    void* createThiscallThunk(uint32_t address, uint32_t* retStore);
+    void deleteThiscallThunk(void* mem);
+
+    template<typename TReturn, typename... TArgs> TReturn thiscall(uintptr_t addr, TArgs... args)
+    {
+        using func_t = TReturn(__stdcall*)(TArgs...);
+        uint32_t retStore;
+        auto thunk = createThiscallThunk(addr, &retStore);
+        auto result = ((func_t)thunk)(args...);
+        deleteThiscallThunk(thunk);
+        return result;
+    }
+
+    template<typename T, uintptr_t TAddress> struct loco_global
     {
     public:
         typedef T type;
@@ -263,8 +279,7 @@ namespace openre::interop
         }
     };
 
-    template<typename T>
-    struct loco_global_iterator
+    template<typename T> struct loco_global_iterator
     {
     private:
         T* _ptr;
@@ -316,8 +331,7 @@ namespace openre::interop
         using iterator_category = std::forward_iterator_tag;
     };
 
-    template<typename T, size_t TCount, uintptr_t TAddress>
-    struct loco_global<T[TCount], TAddress>
+    template<typename T, size_t TCount, uintptr_t TAddress> struct loco_global<T[TCount], TAddress>
     {
     public:
         typedef T type;

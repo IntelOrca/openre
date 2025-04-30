@@ -352,7 +352,7 @@ namespace openre::scd
                 {
                     auto opcode = *task->data;
                     auto result = scd_execute_opcode(task, opcode);
-                    if (dword_68A204->var_13 != 0)
+                    if (gGameTable.ctcb->var_13 != 0)
                         return;
                     if (result == SCD_RESULT_NEXT)
                         continue;

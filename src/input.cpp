@@ -69,11 +69,11 @@ namespace openre::input
     };
 
     // 0x00410450
-    void on_key_up(int keyCode, int a1)
+    void input_wmkeyup(Input* self, int vk)
     {
         for (int i = 0; i < 0x20; i++)
         {
-            if (keyCode == gGameTable.input.mapping[i])
+            if (vk == gGameTable.input.mapping[i])
             {
                 gGameTable.input.keyboard &= ~(1 << i);
             }
@@ -81,11 +81,11 @@ namespace openre::input
     }
 
     // 0x00410410
-    void on_read_key(int keyCode, int a1)
+    void input_wmkeydown(Input* self, int vk)
     {
         for (int i = 0; i < 0x20; i++)
         {
-            if (keyCode == gGameTable.input.mapping[i])
+            if (vk == gGameTable.input.mapping[i])
             {
                 gGameTable.input.keyboard |= (1 << i);
             }
@@ -162,10 +162,22 @@ namespace openre::input
         return v1;
     }
 
+    // 0x004102E0
+    void input_init(Input* self)
+    {
+        interop::thiscall<int, Input*>(0x004102E0, self);
+    }
+
+    // 0x004103F0
+    void input_pause(Input* self)
+    {
+        interop::thiscall<int, Input*>(0x004103F0, self);
+    }
+
     void input_init_hooks()
     {
-        writeJmp(0x00410450, &on_key_up);
-        writeJmp(0x00410410, &on_read_key);
+        writeJmp(0x00410450, &input_wmkeyup);
+        writeJmp(0x00410410, &input_wmkeydown);
         writeJmp(0x00410400, &input_get_some_byte);
         writeJmp(0x0043BB00, &sub_43BB00);
     }

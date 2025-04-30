@@ -12,6 +12,7 @@
 #include "re2.h"
 #include "room.h"
 #include "scd.h"
+#include "scheduler.h"
 
 #include <cstring>
 
