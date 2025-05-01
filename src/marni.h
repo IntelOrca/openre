@@ -27,7 +27,7 @@ namespace openre::marni
     void surface2_vrelease(MarniSurface2* self);
 
     int create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
-    void unload_texture(Marni* self, int handle);
+    void __stdcall unload_texture(Marni* self, int handle);
 
     void init_hooks();
 }

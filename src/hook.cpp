@@ -421,26 +421,35 @@ namespace openre::interop
         writeMemory(address, buffer.data(), buffer.size());
     }
 
-    static uint32_t _thisCallReturnAddress;
     void hookThisCall(uint32_t address, void* fn)
     {
         uint8_t data[] = {
-            0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, // pop [addr]
-            0x51,                               // push ecx
-            0xE8, 0x00, 0x00, 0x00, 0x00,       // call addr
-            0x59,                               // pop ecx
-            0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, // push [addr]
-            0xC3,                               // ret
+            0x87, 0x0C, 0x24,            // xchg [esp],ecx
+            0x51,                        // push ecx
+            0xE9, 0x00, 0x00, 0x00, 0x00 // jmp
         };
 
-        auto varAddress = reinterpret_cast<uintptr_t>(&_thisCallReturnAddress);
-        WRITE_ADDRESS_STRICTALIAS(&data[2], varAddress);
-        WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
-
         auto addr = reinterpret_cast<uintptr_t>(fn);
-        WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
-
+        WRITE_ADDRESS_STRICTALIAS(&data[5], addr - address - 9);
         writeMemory(address, data, sizeof(data));
+
+        // uint8_t data[] = {
+        //     0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, // pop [addr]
+        //     0x51,                               // push ecx
+        //     0xE8, 0x00, 0x00, 0x00, 0x00,       // call addr
+        //     0x59,                               // pop ecx
+        //     0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, // push [addr]
+        //     0xC3,                               // ret
+        // };
+        //
+        // auto varAddress = reinterpret_cast<uintptr_t>(malloc(4));
+        // WRITE_ADDRESS_STRICTALIAS(&data[2], varAddress);
+        // WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
+        //
+        // auto addr = reinterpret_cast<uintptr_t>(fn);
+        // WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
+        //
+        // writeMemory(address, data, sizeof(data));
     }
 
     void* createThiscallThunk(uint32_t address, uint32_t* retStore)

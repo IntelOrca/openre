@@ -18,6 +18,91 @@ namespace openre::marni
         constexpr uint32_t GPU_13 = 0x2000;
     }
 
+    static int sub_414B30(MarniMovie* self);
+    static int movie_seek(MarniMovie* self);
+    static int movie_update(MarniMovie* self);
+    static void movie_release(MarniMovie* self);
+
+    // 0x00401000
+    int error(HRESULT hr)
+    {
+        return interop::call(0x00401000);
+    }
+
+    // 0x00401EF0
+    void __stdcall kill_movie(Marni* self)
+    {
+        movie_seek(self->pMovie);
+    }
+
+    // 0x00401F00
+    void __stdcall sub_401F00(Marni* self)
+    {
+        sub_414B30(self->pMovie);
+    }
+
+    // 0x00401F10
+    void __stdcall syskeydown(Marni* self)
+    {
+        auto movie = self->pMovie;
+        if (movie->flag == 0)
+            return;
+
+        movie_release(movie);
+        if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
+            return;
+
+        auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
+        SetWindowLongA((HWND)self->hWnd, GWL_STYLE, (dwValue & ~WS_SIZEBOX) | WS_MAXIMIZEBOX);
+    }
+
+    // 0x00401F70
+    static void __stdcall update_movie(Marni* self)
+    {
+        auto movie = self->pMovie;
+        if (movie->flag == 0)
+            return;
+
+        if (!movie_update(movie))
+            return;
+
+        if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
+            return;
+
+        auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
+        SetWindowLongA(
+            (HWND)self->hWnd,
+            GWL_STYLE,
+            (dwValue & ~WS_POPUP) | (WS_TABSTOP | WS_GROUP | WS_SIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_BORDER));
+    }
+
+    // 0x00414B30
+    static int sub_414B30(MarniMovie* self)
+    {
+        if (!(self->flag & 0x01))
+            return 0;
+
+        return interop::thiscall<int, MarniMovie*>(0x00414B30, self);
+    }
+
+    // 0x00414C80
+    static int movie_seek(MarniMovie* self)
+    {
+        return interop::thiscall<int, MarniMovie*>(0x00414C80, self);
+    }
+
+    // 0x00414C00
+    static int movie_update(MarniMovie* self)
+    {
+        return interop::thiscall<int, MarniMovie*>(0x00414C00, self);
+    }
+
+    // 0x00414FD0
+    static void movie_release(MarniMovie* self)
+    {
+        interop::thiscall<int, MarniMovie*>(0x00414FD0, self);
+    }
+
     // 0x00443620
     void mapping_tmd(int workNo, Md1* pTmd, int id)
     {
@@ -39,12 +124,6 @@ namespace openre::marni
     void out()
     {
         out_internal("", "");
-    }
-
-    // 0x00401000
-    int error(HRESULT hr)
-    {
-        return interop::call(0x00401000);
     }
 
     // 0x00432BB0
@@ -105,7 +184,7 @@ namespace openre::marni
     }
 
     // 0x00406450
-    static void move(Marni* marni)
+    static void __stdcall move(Marni* marni)
     {
         HWND window = (HWND)marni->hWnd;
         RECT rect = {};
@@ -138,12 +217,6 @@ namespace openre::marni
     static void destroy(Marni* marni)
     {
         interop::thiscall<int, Marni*>(0x004064D0, marni);
-    }
-
-    // 0x00401F10
-    static void syskeydown(Marni* marni)
-    {
-        interop::thiscall<int, Marni*>(0x00401F10, marni);
     }
 
     // 0x004063D0
@@ -212,7 +285,7 @@ namespace openre::marni
     }
 
     // 0x00402A80
-    static void flip(Marni* self)
+    static void __stdcall flip(Marni* self)
     {
         if (self->var_8C7EE0)
             return;
@@ -246,7 +319,7 @@ namespace openre::marni
     }
 
     // 0x00407440
-    static int create_d3d(Marni* self)
+    static int __stdcall create_d3d(Marni* self)
     {
         if (self->gpu_flag & GpuFlags::GPU_13)
             return 0;
@@ -374,7 +447,7 @@ namespace openre::marni
     }
 
     // 0x00407340
-    static int enum_drivers(Marni* self)
+    static int __stdcall enum_drivers(Marni* self)
     {
         if (self->gpu_flag & GpuFlags::GPU_13)
             return 1;
@@ -440,7 +513,7 @@ namespace openre::marni
     }
 
     // 0x0040ECA0
-    static int surfacex_create_texture_object(MarniSurfaceX* self)
+    static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self)
     {
         if (!self->bOpen)
         {
@@ -508,18 +581,31 @@ namespace openre::marni
     }
 
     // 0x00404CE0
-    void unload_texture(Marni* self, int handle)
+    void __stdcall unload_texture(Marni* self, int handle)
     {
-        interop::thiscall<int, Marni*, int>(0x00404CE0, self, handle);
+        if (handle == 0)
+            return;
+
+        auto& surface3 = self->field_1800[handle];
+        if (surface3.vtbl != nullptr)
+        {
+            sub_416BE0(self, handle);
+            request_video_memory(self);
+        }
     }
 
     void init_hooks()
     {
+        interop::hookThisCall(0x00401EF0, &kill_movie);
+        interop::hookThisCall(0x00401F00, &sub_401F00);
+        interop::hookThisCall(0x00401F10, &syskeydown);
+        interop::hookThisCall(0x00401F70, &update_movie);
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x004DBFD0, &out_internal);
