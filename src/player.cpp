@@ -134,6 +134,15 @@ namespace openre::player
         CLIMB_ON_STATE_END,
     };
 
+    enum
+    {
+        PLAYER_LIFE_STATUS_FINE,
+        PLAYER_LIFE_STATUS_CAUTION_1,
+        PLAYER_LIFE_STATUS_CAUTION_2,
+        PLAYER_LIFE_STATUS_DANGER,
+        PLAYER_LIFE_STATUS_POISONED,
+    };
+
     void set_routine(Routine routine)
     {
         switch (routine)
@@ -1572,7 +1581,23 @@ namespace openre::player
     // 0x00502530
     int player_check_life()
     {
-        return interop::call<int>(0x00502530);
+        if (gGameTable.poison_status)
+        {
+            return PLAYER_LIFE_STATUS_POISONED;
+        }
+        if (gGameTable.pl.life > gGameTable.pl.max_life >> 1)
+        {
+            return PLAYER_LIFE_STATUS_FINE;
+        }
+        if (gGameTable.pl.life <= 20)
+        {
+            return PLAYER_LIFE_STATUS_DANGER;
+        }
+        if (gGameTable.pl.life <= 40)
+        {
+            return PLAYER_LIFE_STATUS_CAUTION_2;
+        }
+        return PLAYER_LIFE_STATUS_CAUTION_1;
     }
 
     // 0x004D93A0
