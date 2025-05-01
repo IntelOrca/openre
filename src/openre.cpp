@@ -16,6 +16,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "tim.h"
 #include "title.h"
 
 #include <cstring>
@@ -462,6 +463,7 @@ void onAttach()
     enemy_init_hooks();
     file_init_hooks();
     math_init_hooks();
+    tim::tim_init_hooks();
     marni::init_hooks();
 }
 

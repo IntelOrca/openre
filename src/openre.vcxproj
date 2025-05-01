@@ -94,6 +94,7 @@
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="scheduler.cpp" />
+    <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -119,6 +120,7 @@
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
     <ClInclude Include="scheduler.h" />
+    <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

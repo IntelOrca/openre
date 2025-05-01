@@ -521,7 +521,7 @@ declare     a_shift                 u8
 declare     a_mask                  u8
 declare     a_bitcnt                u8
 
-struct      MarniSurface
+struct      MarniSurface2
 declare     vtbl                    void**
 declare     pBitmap                 void*
 declare     pPalette                void*
@@ -544,9 +544,20 @@ declare     var_2B                  u8
 declare     var_2C                  u8
 declare     var_2D                  u8
 declare     var_2E                  s16
+
+struct      MarniSurface3
+base        MarniSurface2
 declare     pDDsurface              void*
 declare     pDDpalette              void**
-declare     var_38                  u32
+
+struct      MarniSurface
+base        MarniSurface3
+declare     is_vmem                 u32
+
+struct      MarniSurfaceX
+base        MarniSurface
+declare     texture_handle          u32
+declare     pDDtexture              void*
 
 struct      MarniMovie
 declare     flag                    u32                     0x94
@@ -554,6 +565,7 @@ declare     pos                     f64
 declare     var_A0                  s32
 
 struct      Marni
+declare     field_1800              MarniSurface3[64]       0x1800
 declare     modes                   u32                     0x008C7018
 declare     window_rect             u32[4]                  0x008C7CDC
 declare     pMaterial               void*                   0x008C7E94
@@ -630,6 +642,11 @@ declare     supportsFloat           u32
 declare     supportsZbuffer         u32
 declare     hwAccelerated2          u32
 
+struct      TexturePage
+declare     handle                  u32
+declare     var_04                  u32
+declare     var_08                  u32
+
 struct      GameTable
 declare     enable_dsound           bool                    0x00524EB6
 declare     graphics_ptr_data       u8                      0x00524EB9
@@ -654,6 +671,7 @@ declare     d3d_device_count        s32                     0x006449B8
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
+declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     vk_press                u8                      0x0067C9F8
 declare     input                   Input                   0x0067CA30
 declare     hwnd                    void*                   0x0068056C
@@ -797,7 +815,8 @@ declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
-declare     work_buffer             u32                     0x008FF8A0
+declare     work_buffer             u8[163840]              0x008FF8A0
+declare     work_buffer_2           u8[329712]              0x009278A0
 declare     cc_work                 CCWork                  0x00980B00
 declare     door_trans_mv           u8                      0x0098149E
 declare     byte_981FB7             u8                      0x00981FB7

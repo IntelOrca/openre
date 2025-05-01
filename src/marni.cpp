@@ -42,7 +42,7 @@ namespace openre::marni
     }
 
     // 0x00401000
-    int error()
+    int error(HRESULT hr)
     {
         return interop::call(0x00401000);
     }
@@ -64,7 +64,15 @@ namespace openre::marni
     // 0x0043F550
     void unload_texture_page(int page)
     {
-        interop::call<void, int>(0x0043F550, page);
+        auto& tp = gGameTable.texture_pages[page];
+        if (tp.handle != 0)
+        {
+            marni::unload_texture(gGameTable.pMarni, tp.handle);
+        }
+        tp.handle = 0;
+        tp.var_04 = 0;
+        tp.var_08 = 0;
+        update_timer();
     }
 
     // 0x00441710
@@ -174,6 +182,11 @@ namespace openre::marni
         self->bilinear ^= 1;
     }
 
+    static void surface_release(MarniSurface* self)
+    {
+        interop::thiscall<int, MarniSurface*>((uintptr_t)self->vtbl[8], self);
+    }
+
     static void surface_fill(MarniSurface* self, uint8_t r, uint8_t g, uint8_t b)
     {
         interop::thiscall<int, MarniSurface*, uint8_t, uint8_t, uint8_t>((uintptr_t)self->vtbl[0], self, r, g, b);
@@ -242,7 +255,7 @@ namespace openre::marni
         gGameTable.error = dd2->QueryInterface(IID_IDirect3D2, &self->pDirect3D2);
         if (gGameTable.error != 0)
         {
-            error();
+            error(gGameTable.error);
         }
         return gGameTable.error;
     }
@@ -396,15 +409,120 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x0040F2F0
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD)
+    {
+        if (fullscreen)
+        {
+            auto hr = pDD->SetCooperativeLevel(hWnd, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+            if (FAILED(hr))
+            {
+                out("SetCooperativeLevel to fullscreen failed", "MarniSystem DDSetCoopLevel");
+                return hr;
+            }
+        }
+        else
+        {
+            auto hr = pDD->SetCooperativeLevel(hWnd, DDSCL_NORMAL);
+            if (FAILED(hr))
+            {
+                out("SetCooperativeLevel to normal failed", "MarniSystem DDSetCoopLevel");
+                return hr;
+            }
+
+            hr = pDD->RestoreDisplayMode();
+            if (FAILED(hr))
+            {
+                error(hr);
+            }
+        }
+        return S_OK;
+    }
+
+    // 0x0040ECA0
+    static int surfacex_create_texture_object(MarniSurfaceX* self)
+    {
+        if (!self->bOpen)
+        {
+            out("", "Direct3DSurface::CreateTextureObject");
+            return 0;
+        }
+
+        auto pDDtexture = (LPDIRECT3DTEXTURE)self->pDDtexture;
+        if (pDDtexture != NULL)
+        {
+            pDDtexture->Release();
+            self->pDDtexture = NULL;
+        }
+
+        auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
+        auto hr = pDDsurface->QueryInterface(IID_IDirect3DTexture2, (LPVOID*)&pDDtexture);
+        if (FAILED(hr))
+        {
+            out("", "Direct3DSurface::CreateTextureObject");
+            error(hr);
+            surface_release(self);
+            return 0;
+        }
+
+        self->pDDtexture = pDDtexture;
+        return 1;
+    }
+
+    // 0x004149D0
+    void surface2_ctor(MarniSurface2* self)
+    {
+        std::memset(self, 0, sizeof(*self));
+        self->vtbl = (void**)0x005173B0;
+    }
+
+    // 0x00414A30
+    void surface2_release(MarniSurface2* self)
+    {
+        self->vtbl = (void**)0x005173B0;
+        surface2_vrelease(self);
+    }
+
+    // 0x00414A40
+    void surface2_vrelease(MarniSurface2* self)
+    {
+        interop::thiscall<int, MarniSurface2*>(0x00414A40, self);
+    }
+
+    // 0x00405EC0
+    int create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode)
+    {
+        return interop::thiscall<int, Marni*, MarniSurface2*, uint32_t>(0x00405EC0, self, pSrcSurface, mode);
+    }
+
+    // 0x004022E0
+    static void request_video_memory(Marni* self)
+    {
+        interop::thiscall<int, Marni*>(0x004022E0, self);
+    }
+
+    // 0x00416BE0
+    static void sub_416BE0(Marni* self, int handle)
+    {
+        interop::thiscall<int, Marni*, int>(0x00416BE0, self, handle);
+    }
+
+    // 0x00404CE0
+    void unload_texture(Marni* self, int handle)
+    {
+        interop::thiscall<int, Marni*, int>(0x00404CE0, self, handle);
+    }
+
     void init_hooks()
     {
-        // 0x004DBFD0
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x00407340, &enum_drivers);
+        interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x004DBFD0, &out_internal);
+        interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
     }
 }

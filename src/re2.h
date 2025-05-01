@@ -657,7 +657,7 @@ struct MarniSurfaceDesc
 };
 static_assert(sizeof(MarniSurfaceDesc) == 0x0C);
 
-struct MarniSurface
+struct MarniSurface2
 {
     void** vtbl;                        // 0x0000
     void* pBitmap;                      // 0x0004
@@ -681,11 +681,28 @@ struct MarniSurface
     uint8_t var_2C;                     // 0x002C
     uint8_t var_2D;                     // 0x002D
     int16_t var_2E;                     // 0x002E
+};
+static_assert(sizeof(MarniSurface2) == 0x30);
+
+struct MarniSurface3 : MarniSurface2
+{
     void* pDDsurface;                   // 0x0030
     void** pDDpalette;                  // 0x0034
-    uint32_t var_38;                    // 0x0038
+};
+static_assert(sizeof(MarniSurface3) == 0x38);
+
+struct MarniSurface : MarniSurface3
+{
+    uint32_t is_vmem;                   // 0x0038
 };
 static_assert(sizeof(MarniSurface) == 0x3C);
+
+struct MarniSurfaceX : MarniSurface
+{
+    uint32_t texture_handle;            // 0x003C
+    void* pDDtexture;                   // 0x0040
+};
+static_assert(sizeof(MarniSurfaceX) == 0x44);
 
 struct MarniMovie
 {
@@ -698,7 +715,9 @@ static_assert(sizeof(MarniMovie) == 0xA4);
 
 struct Marni
 {
-    uint8_t pad_0000[9203736];          // 0x0000
+    uint8_t pad_0000[6144];             // 0x0000
+    MarniSurface3 field_1800[64];       // 0x1800
+    uint8_t pad_2600[9194008];          // 0x2600
     uint32_t modes;                     // 0x8C7018
     uint8_t pad_8C701C[3264];           // 0x8C701C
     uint32_t window_rect[4];            // 0x8C7CDC
@@ -791,6 +810,14 @@ struct D3DDeviceInfo
 };
 static_assert(sizeof(D3DDeviceInfo) == 0x16C);
 
+struct TexturePage
+{
+    uint32_t handle;                    // 0x0000
+    uint32_t var_04;                    // 0x0004
+    uint32_t var_08;                    // 0x0008
+};
+static_assert(sizeof(TexturePage) == 0x0C);
+
 struct GameTable
 {
     uint8_t pad_0000[5394102];          // 0x0000
@@ -838,7 +865,9 @@ struct GameTable
     uint8_t is_480p;                    // 0x669AFC
     uint8_t pad_669AFD[14487];          // 0x669AFD
     uint32_t dword_66D394;              // 0x66D394
-    uint8_t pad_66D398[63072];          // 0x66D398
+    uint8_t pad_66D398[62528];          // 0x66D398
+    TexturePage texture_pages[41];      // 0x67C7D8
+    uint8_t pad_67C9C4[52];             // 0x67C9C4
     uint8_t vk_press;                   // 0x67C9F8
     uint8_t pad_67C9F9[55];             // 0x67C9F9
     Input input;                        // 0x67CA30
@@ -1048,8 +1077,9 @@ struct GameTable
     DoorInfo door_info;                 // 0x8E2880
     DoorEntity door_data[10];           // 0x8E2ACC
     uint8_t pad_8E37C4[114908];         // 0x8E37C4
-    uint32_t work_buffer;               // 0x8FF8A0
-    uint8_t pad_8FF8A4[528988];         // 0x8FF8A4
+    uint8_t work_buffer[163840];        // 0x8FF8A0
+    uint8_t work_buffer_2[329712];      // 0x9278A0
+    uint8_t pad_978090[35440];          // 0x978090
     CCWork cc_work;                     // 0x980B00
     uint8_t pad_9813EC[178];            // 0x9813EC
     uint8_t door_trans_mv;              // 0x98149E
