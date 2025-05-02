@@ -15,9 +15,10 @@ jobs:
           cmake --build out
     - name: Package
       run: |
-          cp out/openre.dll dist
+          cp lib/bin/*.dll dist
+          cp out/*.dll dist
           cp LICENSE README.md dist
-          chmod 664 dist/openre.dll
+          chmod 664 dist/*.dll
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
