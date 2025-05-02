@@ -7,6 +7,7 @@
 #include "itembox.h"
 #include "openre.h"
 #include "player.h"
+#include "scheduler.h"
 
 using namespace openre::audio;
 using namespace openre::file;
@@ -258,7 +259,7 @@ namespace openre::hud
     // 0x004FBEB0
     static void hud_itembox_1()
     {
-        if (dword_68A204->var_09 == 0)
+        if (gGameTable.ctcb->var_09 == 0)
         {
             gHudInfoPtr = &gHudInfo;
             gGameTable.byte_53DB74 = (uint8_t*)0x009864E0;
@@ -284,9 +285,9 @@ namespace openre::hud
             }
             hud_fade_set(512, -6144, 7, 1);
             task_sleep(1);
-            dword_68A204->var_09 = 1;
+            gGameTable.ctcb->var_09 = 1;
         }
-        else if (dword_68A204->var_09 == 1)
+        else if (gGameTable.ctcb->var_09 == 1)
         {
             hud_render_itembox_items();
             hud_render_items();
@@ -301,7 +302,7 @@ namespace openre::hud
             }
             else
             {
-                dword_68A204->var_09 = 0;
+                gGameTable.ctcb->var_09 = 0;
             }
         }
     }

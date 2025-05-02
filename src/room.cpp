@@ -13,6 +13,7 @@
 #include "rdt.h"
 #include "re2.h"
 #include "sce.h"
+#include "scheduler.h"
 
 #include <cstring>
 
