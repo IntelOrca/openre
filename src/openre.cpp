@@ -90,6 +90,12 @@ namespace openre
         _timer10 = time * 10;
     }
 
+    // 0x00509CE0
+    bool cutscene_active()
+    {
+        return check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE);
+    }
+
     // 0x004DD360
     static void read_osp()
     {

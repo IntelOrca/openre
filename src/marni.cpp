@@ -19,9 +19,14 @@ namespace openre::marni
     }
 
     static int sub_414B30(MarniMovie* self);
+    static int
+    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
     static int movie_seek(MarniMovie* self);
     static int movie_update(MarniMovie* self);
+    static int movie_update_window(MarniMovie* self);
     static void movie_release(MarniMovie* self);
+    static void __stdcall flip(Marni* self);
+    static void surface_fill(MarniSurface* self, int r, int g, int b);
 
     // 0x00401000
     int error(HRESULT hr)
@@ -29,20 +34,42 @@ namespace openre::marni
         return interop::call(0x00401000);
     }
 
+    // 0x00401E40
+    static int __stdcall prepare_movie(Marni* self)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        if (self->pMovie->flag == 0)
+            return 1;
+
+        surface_fill(&self->surface0, 0, 0, 0);
+        flip(self);
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+        {
+            surface_fill(&self->surface0, 0, 0, 0);
+            flip(self);
+            ((LPDIRECTDRAW)self->pDirectDraw)->FlipToGDISurface();
+            auto dwStyle = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
+            SetWindowLongA((HWND)self->hWnd, GWL_STYLE, dwStyle & ~(WS_CAPTION | WS_SIZEBOX | WS_TABSTOP));
+        }
+        return movie_update_window(self->pMovie);
+    }
+
     // 0x00401EF0
-    void __stdcall kill_movie(Marni* self)
+    static void __stdcall kill_movie(Marni* self)
     {
         movie_seek(self->pMovie);
     }
 
     // 0x00401F00
-    void __stdcall sub_401F00(Marni* self)
+    static void __stdcall sub_401F00(Marni* self)
     {
         sub_414B30(self->pMovie);
     }
 
     // 0x00401F10
-    void __stdcall syskeydown(Marni* self)
+    static void __stdcall syskeydown(Marni* self)
     {
         auto movie = self->pMovie;
         if (movie->flag == 0)
@@ -76,6 +103,55 @@ namespace openre::marni
             (dwValue & ~WS_POPUP) | (WS_TABSTOP | WS_GROUP | WS_SIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_BORDER));
     }
 
+    // 0x00401FD0
+    static int __stdcall set_movie_resolution(Marni* self, const char* path, int mode)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        RECT rc;
+        ZeroMemory(&rc, sizeof(RECT));
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+            rc.top = -(GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CYCAPTION));
+
+        if (self->resolutions[self->modes].width == 640)
+        {
+            rc.right = 640;
+            rc.bottom = 480;
+        }
+        else
+        {
+            rc.right = 320;
+            rc.bottom = 240;
+        }
+        return movie_open(
+            self->pMovie,
+            path,
+            (HWND)self->hWnd,
+            &rc,
+            (LPDIRECTDRAW2)self->pDirectDraw2,
+            (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
+    }
+
+    // 0x00402160
+    static int __stdcall arrange_object_contents(Marni* self, int a2, int* a3)
+    {
+        auto v3 = *(int*)(*((int*)self + 0x231DA6) + 4 * a2);
+        auto v4 = *(int*)(v3 + 52);
+        if ((v4 & 1) == 0)
+        {
+            out("invalid handle", "Direct3D::ArrangeObjectContents");
+            return 0;
+        }
+        if ((v4 & 0x10000) != 0)
+        {
+            out("this object is optimized! (required not be optimized)", "Direct3D::ArrangeObjectContents");
+            return 0;
+        }
+        *a3 = v3;
+        return 1;
+    }
+
     // 0x00414B30
     static int sub_414B30(MarniMovie* self)
     {
@@ -83,6 +159,14 @@ namespace openre::marni
             return 0;
 
         return interop::thiscall<int, MarniMovie*>(0x00414B30, self);
+    }
+
+    // 0x00414CF0
+    static int
+    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
+    {
+        return interop::thiscall<int, MarniMovie*, LPCSTR, HWND, LPRECT, LPDIRECTDRAW2, LPDIRECTDRAWSURFACE>(
+            0x00414CF0, self, path, hWnd, pRect, pDD2, pSurface);
     }
 
     // 0x00414C80
@@ -95,6 +179,12 @@ namespace openre::marni
     static int movie_update(MarniMovie* self)
     {
         return interop::thiscall<int, MarniMovie*>(0x00414C00, self);
+    }
+
+    // 0x00414B50
+    static int movie_update_window(MarniMovie* self)
+    {
+        return interop::thiscall<int, MarniMovie*>(0x00414B50, self);
     }
 
     // 0x00414FD0
@@ -260,9 +350,9 @@ namespace openre::marni
         interop::thiscall<int, MarniSurface*>((uintptr_t)self->vtbl[8], self);
     }
 
-    static void surface_fill(MarniSurface* self, uint8_t r, uint8_t g, uint8_t b)
+    static void surface_fill(MarniSurface* self, int r, int g, int b)
     {
-        interop::thiscall<int, MarniSurface*, uint8_t, uint8_t, uint8_t>((uintptr_t)self->vtbl[0], self, r, g, b);
+        interop::thiscall<int, MarniSurface*, int, int, int>((uintptr_t)self->vtbl[0], self, r, g, b);
     }
 
     static void flip_blt(Marni* self, DWORD width, DWORD height)
@@ -282,6 +372,16 @@ namespace openre::marni
         ddbltfx.dwDDFX = DDBLTFX_NOTEARING;
 
         dst->Blt(&dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
+    }
+
+    // 0x00402530
+    static int __stdcall request_display_mode_count(Marni* self)
+    {
+        if (self->is_gpu_active)
+            return self->res_count;
+
+        out("", "Direct3D::RequestDisplayModeCount");
+        return 0;
     }
 
     // 0x00402A80
@@ -316,6 +416,135 @@ namespace openre::marni
         {
             flip_blt(self, self->xsize, self->ysize);
         }
+    }
+
+    // 0x00416670
+    static uint8_t __stdcall sub_416670(MarniOt* pOt)
+    {
+        return pOt->var_10;
+    }
+
+    // 0x0040E800
+    static void __stdcall sub_40E800(Marni* self, uint8_t a2)
+    {
+        self->field_700C = a2 == 0 ? -1 : 0;
+        self->field_8C7010 = a2 == 0 ? -1 : 0;
+    }
+
+    // 0x00406A10
+    static void d3d_error_routine(int errorCode)
+    {
+        interop::call<void, int>(0x00406A10, errorCode);
+    }
+
+    // 0x0040C840
+    static void trans_priority_list(Marni* self, MarniOt* pOt)
+    {
+        interop::thiscall<int, Marni*, MarniOt*>(0x0040C840, self, pOt);
+    }
+
+    // 0x0040EAF0
+    static void sub_40EAF0(Marni* self, int index)
+    {
+        interop::thiscall<int, Marni*, int>(0x0040EAF0, self, index);
+    }
+
+    // 0x0040C790
+    static void draw_line_gourad(Marni* self, void* pPrim)
+    {
+        interop::thiscall<int, Marni*, void*>(0x0040C790, self, pPrim);
+    }
+    // 0x0040C6E0
+    static void draw_line_flat(Marni* self, void* pPrim)
+    {
+        interop::thiscall<int, Marni*, void*>(0x0040C6E0, self, pPrim);
+    }
+
+    static void __stdcall sub_40EC10(Marni* self)
+    {
+        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        pD3D2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        for (auto i = 0; i < self->field_8C7010; i++)
+        {
+            sub_40EAF0(self, i);
+        }
+
+        for (auto i = 0; i < self->field_700C; i++)
+        {
+            auto& record = self->field_5010[i];
+            if (record.gourad != nullptr)
+                draw_line_gourad(self, record.flat);
+            else
+                draw_line_flat(self, record.flat);
+        }
+    }
+
+    static void __stdcall do_render(Marni* self, MarniOt* pOt)
+    {
+        if (self->gpu_flag & GpuFlags::GPU_13)
+            return;
+
+        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        if (pD3D2 == nullptr || self->pViewport == nullptr)
+        {
+            out("tried to render regardless of not initializint to viewport or device", "Direct3D::do_render");
+            return;
+        }
+
+        gGameTable.error = pD3D2->BeginScene();
+        sub_40E800(self, sub_416670(pOt));
+        pD3D2->SetRenderState(D3DRENDERSTATE_ANISOTROPY, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_EDGEANTIALIAS, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_ANTIALIAS, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_SUBPIXEL, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_LASTPIXEL, 1);
+        if (FAILED(gGameTable.error))
+        {
+            d3d_error_routine(gGameTable.error);
+            return;
+        }
+
+        trans_priority_list(self, pOt);
+        sub_40EC10(self);
+        gGameTable.error = pD3D2->EndScene();
+        if (FAILED(gGameTable.error))
+        {
+            d3d_error_routine(gGameTable.error);
+            return;
+        }
+
+        D3DSTATS stats;
+        ZeroMemory(&stats, sizeof(D3DSTATS));
+        stats.dwSize = sizeof(D3DSTATS);
+        pD3D2->GetStats(&stats);
+        self->triangles_drawn = stats.dwTrianglesDrawn - gGameTable.d3d_triangles_drawn;
+        self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
+        gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
+        gGameTable.d3d_vertices_processed = stats.dwVerticesProcessed;
+    }
+
+    // 0x00402BC0
+    static void __stdcall draw(Marni* self)
+    {
+        if (self->var_8C7EE0 || !(self->gpu_flag & GpuFlags::GPU_9))
+            return;
+
+        if (gGameTable.dword_54413C > 0 && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
+        {
+            gGameTable.dword_54413C--;
+            surface_fill(&self->surface2, 0, 0, 1024);
+        }
+
+        if (self->gpu_flag & GpuFlags::GPU_13)
+        {
+            // Not implemented yet
+        }
+
+        self->cutscene_bars = cutscene_active();
+        do_render(self, &self->otag[3]); // backgrounds
+        do_render(self, &self->otag[1]); // objects
+        do_render(self, &self->otag[0]); // fg text
+        self->var_8C8318++;
     }
 
     // 0x00407440
@@ -596,12 +825,17 @@ namespace openre::marni
 
     void init_hooks()
     {
+        interop::hookThisCall(0x00401E40, &prepare_movie);
         interop::hookThisCall(0x00401EF0, &kill_movie);
         interop::hookThisCall(0x00401F00, &sub_401F00);
         interop::hookThisCall(0x00401F10, &syskeydown);
         interop::hookThisCall(0x00401F70, &update_movie);
+        interop::hookThisCall(0x00401FD0, &set_movie_resolution);
+        interop::hookThisCall(0x00402160, &arrange_object_contents);
         interop::hookThisCall(0x00406450, &move);
+        interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x00402A80, &flip);
+        interop::hookThisCall(0x00402BC0, &draw);
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);

@@ -713,13 +713,42 @@ struct MarniMovie
 };
 static_assert(sizeof(MarniMovie) == 0xA4);
 
+struct MarniOt
+{
+    int32_t zdepth;                     // 0x0000
+    int32_t pList;                      // 0x0004
+    int32_t is_valid;                   // 0x0008
+    int32_t var_0C;                     // 0x000C
+    uint8_t var_10;                     // 0x0010
+    uint8_t var_11;                     // 0x0011
+    uint8_t var_12;                     // 0x0012
+    uint8_t var_13;                     // 0x0013
+};
+static_assert(sizeof(MarniOt) == 0x14);
+
+struct MarniLineRecord
+{
+    void* gourad;                       // 0x0000
+    void* flat;                         // 0x0004
+};
+static_assert(sizeof(MarniLineRecord) == 0x08);
+
 struct Marni
 {
     uint8_t pad_0000[6144];             // 0x0000
     MarniSurface3 field_1800[64];       // 0x1800
-    uint8_t pad_2600[9194008];          // 0x2600
+    uint8_t pad_2600[10768];            // 0x2600
+    MarniLineRecord field_5010[8];      // 0x5010
+    uint8_t pad_5050[8124];             // 0x5050
+    int32_t field_700C;                 // 0x700C
+    uint8_t pad_7010[9175040];          // 0x7010
+    int32_t field_8C7010;               // 0x8C7010
+    uint8_t cutscene_bars;              // 0x8C7014
+    uint8_t pad_8C7015[3];              // 0x8C7015
     uint32_t modes;                     // 0x8C7018
-    uint8_t pad_8C701C[3264];           // 0x8C701C
+    uint8_t pad_8C701C[8];              // 0x8C701C
+    MarniOt otag[5];                    // 0x8C7024
+    uint8_t pad_8C7088[3156];           // 0x8C7088
     uint32_t window_rect[4];            // 0x8C7CDC
     uint8_t pad_8C7CEC[424];            // 0x8C7CEC
     void* pMaterial;                    // 0x8C7E94
@@ -760,7 +789,9 @@ struct Marni
     MarniSurface surfaceZ;              // 0x8C837C
     MarniSurface surface2;              // 0x8C83B8
     uint32_t gpu_flag;                  // 0x8C83F4
-    uint8_t pad_8C83F8[52];             // 0x8C83F8
+    uint32_t vertices_processed;        // 0x8C83F8
+    uint32_t triangles_drawn;           // 0x8C83FC
+    uint8_t pad_8C8400[44];             // 0x8C8400
     int32_t device_cnt;                 // 0x8C842C
     uint8_t pad_8C8430[4];              // 0x8C8430
     MarniSurface surface3;              // 0x8C8434
@@ -857,7 +888,10 @@ struct GameTable
     uint32_t error;                     // 0x543A18
     uint8_t pad_543A1C[4];              // 0x543A1C
     D3DDeviceInfo d3d_devices[5];       // 0x543A20
-    uint8_t pad_54413C[1050748];        // 0x54413C
+    int32_t dword_54413C;               // 0x54413C
+    uint32_t d3d_vertices_processed;    // 0x544140
+    uint32_t d3d_triangles_drawn;       // 0x544144
+    uint8_t pad_544148[1050736];        // 0x544148
     int32_t d3d_device_count;           // 0x6449B8
     uint8_t pad_6449BC[151864];         // 0x6449BC
     void* hFont;                        // 0x669AF4

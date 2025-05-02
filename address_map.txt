@@ -564,9 +564,28 @@ declare     flag                    u32                     0x94
 declare     pos                     f64
 declare     var_A0                  s32
 
+struct      MarniOt
+declare     zdepth                  s32
+declare     pList                   s32
+declare     is_valid                s32
+declare     var_0C                  s32
+declare     var_10                  u8
+declare     var_11                  u8
+declare     var_12                  u8
+declare     var_13                  u8
+
+struct      MarniLineRecord
+declare     gourad                  void*
+declare     flat                    void*
+
 struct      Marni
 declare     field_1800              MarniSurface3[64]       0x1800
+declare     field_5010              MarniLineRecord[8]      0x5010
+declare     field_700C              s32                     0x700C
+declare     field_8C7010            s32                     0x008C7010
+declare     cutscene_bars           u8                      0x008C7014
 declare     modes                   u32                     0x008C7018
+declare     otag                    MarniOt[5]              0x008C7024
 declare     window_rect             u32[4]                  0x008C7CDC
 declare     pMaterial               void*                   0x008C7E94
 declare     MaterialHandle          u32                     0x008C7E98
@@ -602,6 +621,8 @@ declare     surface0                MarniSurface            0x008C8340
 declare     surfaceZ                MarniSurface            0x008C837C
 declare     surface2                MarniSurface            0x008C83B8
 declare     gpu_flag                u32                     0x008C83F4
+declare     vertices_processed      u32                     0x008C83F8
+declare     triangles_drawn         u32                     0x008C83FC
 declare     device_cnt              s32                     0x008C842C
 declare     surface3                MarniSurface            0x008C8434
 
@@ -667,6 +688,9 @@ declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     byte_540780             u8[16]                  0x00540780
 declare     error                   u32                     0x00543A18
 declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
+declare     dword_54413C            s32                     0x0054413C
+declare     d3d_vertices_processed  u32                     0x00544140
+declare     d3d_triangles_drawn     u32                     0x00544144
 declare     d3d_device_count        s32                     0x006449B8
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
