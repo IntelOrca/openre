@@ -456,9 +456,49 @@ namespace openre::marni
     }
 
     // 0x004168F0
-    static void* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int a2, int a3)
+    static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index)
     {
-        return interop::thiscall<void*, Marni*, int, int>(0x004168F0, self, a2, a3);
+        auto texture = self->textures[handle];
+        if ((texture.var_00 & 0x2000) != 0)
+            return nullptr;
+
+        switch (texture.var_00 & ~0x14)
+        {
+        case 1:
+        case 2:
+        case 0x81:
+        case 0x82:
+        {
+            auto n = search_texture_object_0_from_1(self, handle, 0);
+            return n == 0 ? nullptr : &self->texture_nodes[n];
+        }
+        case 0x22:
+        case 0x41:
+        case 0x42:
+        case 0xC1:
+        case 0xC2:
+        {
+            auto n = search_texture_object_0_from_1(self, handle, index);
+            return n == 0 ? nullptr : &self->texture_nodes[n];
+        }
+        case 0xA1:
+        case 0xA2:
+        {
+            auto n = search_texture_object_0_from_1(self, handle, 0);
+            if (n == 0)
+                return 0;
+
+            auto result = &self->texture_nodes[n];
+            if (index < 0 || index >= texture.surface.pal_cnt)
+                return 0;
+
+            auto pDDsurface = (LPDIRECTDRAWSURFACE2)result->surface->pDDsurface;
+            auto pDDpalette = (LPDIRECTDRAWPALETTE)result->surface->pDDpalette[index];
+            pDDsurface->SetPalette(pDDpalette);
+            return result;
+        }
+        default: return nullptr;
+        }
     }
 
     // 0x004164D0
@@ -976,6 +1016,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
+        interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x004DBFD0, &out_internal);
