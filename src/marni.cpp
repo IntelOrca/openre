@@ -628,9 +628,26 @@ namespace openre::marni
     {
         int v5 = 0;
         int texture = 0;
+        char* v7 = nullptr;
+        uint32_t v8 = 0;
         int v19 = 0;
+        int v20 = 0;
+        int v11 = 0;
+        int v12 = 0;
+        MarniTexture* v15 = 0;
+        int v16 = 0;
+        int v17 = 0;
+        int v18 = 0;
+        MarniRes* v21 = 0;
+        int v22 = 0;
         int v27 = 0;
+        int v28 = 0;
+        int v29 = 0;
+        int v30 = 0;
+        int v31 = 0;
         int v39 = 0;
+        double v42 = 0;
+        double v44 = 0;
         int textureHandle = 0;
         DrawInfo drawInfo;
         int v34 = 0;
@@ -640,7 +657,7 @@ namespace openre::marni
         auto v3 = 0;
         auto v41 = 1;
         auto v40 = 0;
-
+        MarniTexture* tex;
         if ((pPrim->type & 4) == 0 && (self->gpu_flag & GpuFlags::GPU_19))
         {
             textureHandle = 0;
@@ -652,34 +669,33 @@ namespace openre::marni
             texture = gGameTable.dword_6449BC;
         if (!texture)
             goto LABEL_26;
-
+        tex = &self->textures[texture];
+        if (!tex->var_00)
         {
-            auto tex = &self->textures[texture];
-            if (tex->var_00 == 0)
-            {
-                out();
-                self->is_gpu_active = 0;
-                return 0;
-            }
-            if ((tex->var_00 & 0x4000) != 0)
-            {
-                v3 = 1;
-            }
-            else
-            {
-                auto pTexture = search_texture_object_0_from_1_in_condition(self, texture, pPrim->var_0C);
-                if (pTexture == nullptr)
-                    goto LABEL_26;
-                if ((pTexture->var_14 & 0x1000) != 0)
-                    goto LABEL_26;
-                if ((pTexture->var_14 & 4) != 0)
-                    v41 = 0;
-                drawInfo.texture = pTexture;
-                textureHandle = pTexture->surface->texture_handle;
-            }
-            if (tex->surface.var_2C != 0)
-                v40 = 1;
+            out();
+            self->is_gpu_active = 0;
+            return 0;
         }
+        if ((tex->var_00 & 0x4000) != 0)
+        {
+            v3 = 1;
+        }
+        else
+        {
+            auto pTexture = search_texture_object_0_from_1_in_condition(self, texture, pPrim->var_0C);
+            if (pTexture == nullptr)
+                goto LABEL_26;
+            v11 = pTexture->var_14;
+            if ((v11 & 0x1000) != 0)
+                goto LABEL_26;
+            if ((v11 & 4) != 0)
+                v41 = 0;
+            v12 = pTexture->surface->texture_handle;
+            drawInfo.texture = pTexture;
+            textureHandle = v12;
+        }
+        if (tex->surface.var_2C != 0)
+            v40 = 1;
 
         if (v3)
         {
@@ -690,12 +706,12 @@ namespace openre::marni
             v39 = 0;
             if ((self->gpu_flag & GpuFlags::GPU_11) != 0)
                 v39 = 0x8000;
-            auto v15 = &self->textures[pPrim->texture];
+            v15 = &self->textures[pPrim->texture];
             if ((v15->var_00 & 4) == 0 && (pPrim->type & 0x10000000) == 0)
             {
                 v39 = v39 | 1;
             }
-            auto v17 = pPrim->type & 0x700000;
+            v17 = pPrim->type & 0x700000;
             if (v17 > 0x300000)
             {
                 if (v17 == 0x400000)
@@ -713,8 +729,7 @@ namespace openre::marni
                     v39 = v19;
                     break;
                 case 0x100000:
-                {
-                    auto v20 = v39 | 0x10;
+                    v20 = v39 | 0x10;
                     v39 |= 0x10;
                     if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
                     {
@@ -722,10 +737,8 @@ namespace openre::marni
                         v39 = v19;
                     }
                     break;
-                }
                 case 0x200000:
-                {
-                    auto v18 = v39 | 0x20;
+                    v18 = v39 | 0x20;
                     v39 |= 0x20;
                     if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
                     {
@@ -734,11 +747,10 @@ namespace openre::marni
                     }
                     break;
                 }
-                }
             }
-            auto v21 = &self->resolutions[4 * self->modes];
-            auto v44 = 1.0;
-            auto v42 = 1.0;
+            v21 = &self->resolutions[4 * self->modes];
+            v44 = 1.0;
+            v42 = 1.0;
             if (v21->fullscreen != 2)
             {
                 v44 = (double)(v21->width / self->xsize) * self->aspect_x;
@@ -747,7 +759,7 @@ namespace openre::marni
 
             surface_lock(&v15->surface, 0, 0);
             surface_lock(&self->surface2, 0, 0);
-            auto v22 = v39 | 0x50;
+            v22 = v39 | 0x50;
             auto v23 = (double)(pPrim->y1 + 1) * v42;
             auto v24 = (double)(pPrim->x1 + 1) * textureHandle;
             auto v25 = (double)(pPrim->y0) * v42;
@@ -823,7 +835,9 @@ namespace openre::marni
                     goto LABEL_74;
                 }
             }
-            goto LABEL_26;
+        LABEL_26:
+            out();
+            return 0;
         }
         if (v5 != 73)
         {
@@ -846,81 +860,76 @@ namespace openre::marni
         if (!v27)
             return 1;
 
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, textureHandle);
+        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, drawInfo.zWriteEnable);
+        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+        dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
+        auto v32 = v41 && (pPrim->type & 0x10000000) == 0;
+        dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, drawInfo.shadeMode);
+        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
+        dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, drawInfo.specularEnable);
+        auto v33 = pPrim->type & 0xF00000;
+        if (v33 > 0x400000)
         {
-            auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-            dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, textureHandle);
-            dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, drawInfo.zWriteEnable);
-            dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
-            dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
-            auto v32 = v41 && (pPrim->type & 0x10000000) == 0;
-            dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, FALSE);
-            dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, drawInfo.shadeMode);
-            dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
-            dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, drawInfo.specularEnable);
-            auto v33 = pPrim->type & 0xF00000;
-            if (v33 > 0x400000)
-            {
-                if (v33 == 0x600000)
-                {
-                    v34 = 6;
-                    v35 = 5;
-                    goto LABEL_91;
-                }
-                if (v33 == 0x700000)
-                {
-                    v35 = 3;
-                    v34 = 3;
-                    goto LABEL_91;
-                }
-            }
-            else
-            {
-                if (v33 == 0x400000 || v33 == 0x100000)
-                {
-                    v34 = 6;
-                    v35 = 5;
-                    goto LABEL_91;
-                }
-                if (v33 == 0x200000 || v33 == 0x300000)
-                {
-                    v34 = 2;
-                LABEL_91:
-                    sub_40EA60(
-                        self,
-                        0,
-                        1,
-                        v35,
-                        v34,
-                        textureHandle,
-                        drawInfo.zWriteEnable != 0,
-                        drawInfo.shadeMode,
-                        drawInfo.var_94,
-                        drawInfo.specularEnable != 0,
-                        4,
-                        vertices,
-                        drawInfo.vertexCount);
-                    if (!gGameTable.error)
-                        return 1;
-                    out("", "");
-                    return 0;
-                }
-            }
-            if (v32 && v40)
+            if (v33 == 0x600000)
             {
                 v34 = 6;
                 v35 = 5;
                 goto LABEL_91;
             }
-            dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, FALSE);
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
-            set_filtering(self, 0);
-            dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, vertices, drawInfo.vertexCount, D3DDP_WAIT);
-            if (!gGameTable.error)
-                return 1;
+            if (v33 == 0x700000)
+            {
+                v35 = 3;
+                v34 = 3;
+                goto LABEL_91;
+            }
         }
-
-    LABEL_26:
+        else
+        {
+            if (v33 == 0x400000 || v33 == 0x100000)
+            {
+                v34 = 6;
+                v35 = 5;
+                goto LABEL_91;
+            }
+            if (v33 == 0x200000 || v33 == 0x300000)
+            {
+                v34 = 2;
+                v35 = 5;
+            LABEL_91:
+                sub_40EA60(
+                    self,
+                    0,
+                    1,
+                    v35,
+                    v34,
+                    textureHandle,
+                    drawInfo.zWriteEnable != 0,
+                    drawInfo.shadeMode,
+                    drawInfo.var_94,
+                    drawInfo.specularEnable != 0,
+                    4,
+                    vertices,
+                    drawInfo.vertexCount);
+                goto LABEL_94;
+            }
+        }
+        if (v32 && v40)
+        {
+            v34 = 6;
+            v35 = 5;
+            goto LABEL_91;
+        }
+        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
+        set_filtering(self, 0);
+        dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, vertices, drawInfo.vertexCount, D3DDP_WAIT);
+    LABEL_94:
+        if (!gGameTable.error)
+            return 1;
         out("", "");
         return 0;
     }
