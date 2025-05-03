@@ -437,27 +437,145 @@ namespace openre::marni
         interop::call<void, int>(0x00406A10, errorCode);
     }
 
+    // 0x00416AF0
+    static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index)
+    {
+        if (handle > 256)
+            return 0;
+
+        auto surface = &self->textures[handle];
+        if (surface->var_00 == 0)
+            return 0;
+
+        auto result = surface->head;
+        for (auto i = 0; i < index; i++)
+        {
+            result = self->texture_nodes[result].next;
+        }
+        return result;
+    }
+
+    // 0x004168F0
+    static void* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int a2, int a3)
+    {
+        return interop::thiscall<void*, Marni*, int, int>(0x004168F0, self, a2, a3);
+    }
+
+    // 0x004164D0
+    static Prim* __stdcall ot_get_primitive(MarniOt* self)
+    {
+        return interop::thiscall<Prim*, MarniOt*>(0x004164D0, self);
+    }
+
+    // 0x004074C0
+    static void __stdcall trans_matrix(Marni* self, Prim* pPrim)
+    {
+        interop::thiscall<int, Marni*, Prim*>(0x004074C0, self, pPrim);
+    }
+
+    // 0x00408140
+    static void __stdcall trans_object(Marni* self, MarniOt* pOt, Prim* pPrim)
+    {
+        interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x00408140, self, pOt, pPrim);
+    }
+
+    // 0x0040B260
+    static int __stdcall sub_40B260(Marni* self, Prim* pPrim, void* a3)
+    {
+        return interop::thiscall<int, Marni*, Prim*, void*>(0x0040B260, self, pPrim, a3);
+    }
+
+    // 0x0040E770
+    static void set_filtering(Marni* self, uint8_t a2)
+    {
+        interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
+    }
+
+    // 0x0040DF70
+    static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim)
+    {
+        return interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x0040DF70, self, pOt, pPrim);
+    }
+
+    // 0x00407480
+    static void __stdcall sub_407480(Marni* self, Prim* pOt)
+    {
+        interop::thiscall<int, Marni*, Prim*>(0x00407480, self, pOt);
+    }
+
+    // 0x0040C790
+    static void draw_line_gourad(Marni* self, PrimLine2* pPrim)
+    {
+        interop::thiscall<int, Marni*, PrimLine2*>(0x0040C790, self, pPrim);
+    }
+
+    // 0x0040C6E0
+    static void draw_line_flat(Marni* self, PrimLine2* pPrim)
+    {
+        interop::thiscall<int, Marni*, PrimLine2*>(0x0040C6E0, self, pPrim);
+    }
+
     // 0x0040C840
     static void trans_priority_list(Marni* self, MarniOt* pOt)
     {
-        interop::thiscall<int, Marni*, MarniOt*>(0x0040C840, self, pOt);
+        if (pOt == nullptr)
+            return;
+
+        if (self->gpu_flag & GpuFlags::GPU_13)
+        {
+            // Not implemented (software rendering?)
+        }
+        else
+        {
+            Prim* v8;
+            while ((v8 = ot_get_primitive(pOt)) != nullptr)
+            {
+                if ((v8->type & 0xFE00) != 0)
+                {
+                    trans_matrix(self, v8);
+                }
+                else
+                {
+                    switch (v8->type & 0xFFFFF)
+                    {
+                    case 0: break;
+                    case 17: draw_line_flat(self, (PrimLine2*)v8); break;
+                    case 18: draw_line_gourad(self, (PrimLine2*)v8); break;
+                    case 33:
+                    case 36:
+                    case 37:
+                    case 38:
+                    case 44:
+                    case 45:
+                    case 46:
+                    case 61:
+                    case 69:
+                    case 70:
+                    case 73:
+                    case 76:
+                    case 77: trans_spr_poly(self, pOt, (PrimSprite*)v8); break;
+                    case 88:
+                    case 0x100 | 88: trans_object(self, pOt, v8); break;
+                    case 256: sub_407480(self, v8); break;
+                    case 0x10000 | 44:
+                    case 0x10000 | 45:
+                    case 0x10000 | 73:
+                    case 0x10000 | 76:
+                    case 0x10000 | 77: trans_spr_poly(self, pOt, (PrimSprite*)v8); break;
+                    default:
+                        out("passed invalid primitive header...", "Direct3D::TransPriorityList");
+                        self->is_gpu_active = 0;
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     // 0x0040EAF0
     static void sub_40EAF0(Marni* self, int index)
     {
         interop::thiscall<int, Marni*, int>(0x0040EAF0, self, index);
-    }
-
-    // 0x0040C790
-    static void draw_line_gourad(Marni* self, void* pPrim)
-    {
-        interop::thiscall<int, Marni*, void*>(0x0040C790, self, pPrim);
-    }
-    // 0x0040C6E0
-    static void draw_line_flat(Marni* self, void* pPrim)
-    {
-        interop::thiscall<int, Marni*, void*>(0x0040C6E0, self, pPrim);
     }
 
     static void __stdcall sub_40EC10(Marni* self)
@@ -473,9 +591,9 @@ namespace openre::marni
         {
             auto& record = self->field_5010[i];
             if (record.gourad != nullptr)
-                draw_line_gourad(self, record.flat);
+                draw_line_gourad(self, (PrimLine2*)record.flat);
             else
-                draw_line_flat(self, record.flat);
+                draw_line_flat(self, (PrimLine2*)record.flat);
         }
     }
 
@@ -857,6 +975,7 @@ namespace openre::marni
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x00404CE0, &unload_texture);
+        interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x004DBFD0, &out_internal);
