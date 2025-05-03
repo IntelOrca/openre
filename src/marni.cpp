@@ -15,7 +15,9 @@ namespace openre::marni
         constexpr uint32_t GPU_7 = 0x80;
         constexpr uint32_t GPU_9 = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
+        constexpr uint32_t GPU_11 = 0x800;
         constexpr uint32_t GPU_13 = 0x2000;
+        constexpr uint32_t GPU_18 = 0x40000;
         constexpr uint32_t GPU_19 = 0x80000;
     }
 
@@ -686,7 +688,7 @@ namespace openre::marni
             if ((pPrim->type & 0xFFFFF) != 0x24)
                 goto LABEL_26;
             v39 = 0;
-            if ((self->gpu_flag & 0x800) != 0)
+            if ((self->gpu_flag & GpuFlags::GPU_11) != 0)
                 v39 = 0x8000;
             auto v15 = &self->textures[pPrim->texture];
             if ((v15->var_00 & 4) == 0 && (pPrim->type & 0x10000000) == 0)
@@ -713,8 +715,8 @@ namespace openre::marni
                 case 0x100000:
                 {
                     auto v20 = v39 | 0x10;
-                    v39 |= 0x10u;
-                    if ((self->gpu_flag & 0x40000) != 0)
+                    v39 |= 0x10;
+                    if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
                     {
                         v19 = v20 | 0x100;
                         v39 = v19;
@@ -725,7 +727,7 @@ namespace openre::marni
                 {
                     auto v18 = v39 | 0x20;
                     v39 |= 0x20;
-                    if ((self->gpu_flag & 0x40000) != 0)
+                    if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
                     {
                         v19 = v18 | 0x100;
                         v39 = v19;
