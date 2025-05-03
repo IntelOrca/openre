@@ -615,7 +615,7 @@ declare     bottom                  s32
 
 struct      MarniTextureNode
 declare     next                    u16
-declare     surface                 MarniSurface3*          0x08
+declare     surface                 MarniSurfaceX*          0x08
 declare     var_14                  u32                     0x14
 
 struct      MarniTexture
