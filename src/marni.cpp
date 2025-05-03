@@ -16,6 +16,7 @@ namespace openre::marni
         constexpr uint32_t GPU_9 = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
         constexpr uint32_t GPU_13 = 0x2000;
+        constexpr uint32_t GPU_19 = 0x80000;
     }
 
     static int sub_414B30(MarniMovie* self);
@@ -276,25 +277,14 @@ namespace openre::marni
     // 0x00406450
     static void __stdcall move(Marni* marni)
     {
-        HWND window = (HWND)marni->hWnd;
-        RECT rect = {};
-        rect.left = marni->window_rect[0];
-        rect.top = marni->window_rect[1];
-        rect.right = marni->window_rect[2];
-        rect.bottom = marni->window_rect[3];
-
+        auto window = (HWND)marni->hWnd;
         POINT point0 = {};
         ClientToScreen(window, &point0);
         POINT point1 = {};
         point1.x = marni->resolutions[marni->modes].width;
         point1.y = marni->resolutions[marni->modes].height;
         ClientToScreen(window, &point1);
-
-        SetRect(&rect, point0.x, point0.y, point1.x, point1.y);
-        marni->window_rect[0] = rect.left;
-        marni->window_rect[1] = rect.top;
-        marni->window_rect[2] = rect.right;
-        marni->window_rect[3] = rect.bottom;
+        SetRect((LPRECT)&marni->window_rect, point0.x, point0.y, point1.x, point1.y);
     }
 
     // 0x004065C0
@@ -345,14 +335,24 @@ namespace openre::marni
         self->bilinear ^= 1;
     }
 
-    static void surface_release(MarniSurface* self)
+    static void surface_release(MarniSurface2* self)
     {
-        interop::thiscall<int, MarniSurface*>((uintptr_t)self->vtbl[8], self);
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl[8], self);
     }
 
     static void surface_fill(MarniSurface* self, int r, int g, int b)
     {
         interop::thiscall<int, MarniSurface*, int, int, int>((uintptr_t)self->vtbl[0], self, r, g, b);
+    }
+
+    static int surface_lock(MarniSurface2* self, int a2, int a3)
+    {
+        return interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)self->vtbl[4], self, a2, a3);
+    }
+
+    static void surface_unlock(MarniSurface2* self)
+    {
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl[5], self);
     }
 
     static void flip_blt(Marni* self, DWORD width, DWORD height)
@@ -364,7 +364,7 @@ namespace openre::marni
         SetRect(&srcRect, 0, 0, width, height);
 
         RECT dstRect;
-        CopyRect(&dstRect, (LPRECT)self->window_rect);
+        CopyRect(&dstRect, (LPRECT)&self->window_rect);
 
         DDBLTFX ddbltfx;
         ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
@@ -803,10 +803,27 @@ namespace openre::marni
         interop::thiscall<int, Marni*>(0x004022E0, self);
     }
 
-    // 0x00416BE0
-    static void sub_416BE0(Marni* self, int handle)
+    // 0x00416B90
+    static void __stdcall sub_416B90(Marni* self, int a2)
     {
-        interop::thiscall<int, Marni*, int>(0x00416BE0, self, handle);
+        interop::thiscall<int, Marni*, int>(0x00416B90, self, a2);
+    }
+
+    static void __stdcall texture_surface_release(Marni* self, int handle)
+    {
+        auto& texture = self->textures[handle];
+        if (texture.var_00 != 0)
+        {
+            auto current = texture.head;
+            do
+            {
+                auto next = self->texture_nodes[current].next;
+                sub_416B90(self, current);
+                current = next;
+            } while (current != 0);
+            surface_release(&texture.surface);
+            texture.var_00 = 0;
+        }
     }
 
     // 0x00404CE0
@@ -815,10 +832,10 @@ namespace openre::marni
         if (handle == 0)
             return;
 
-        auto& surface3 = self->field_1800[handle];
-        if (surface3.vtbl != nullptr)
+        auto& texture = self->textures[handle];
+        if (texture.var_00 != 0)
         {
-            sub_416BE0(self, handle);
+            texture_surface_release(self, handle);
             request_video_memory(self);
         }
     }

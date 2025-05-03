@@ -631,6 +631,44 @@ struct Task
 };
 static_assert(sizeof(Task) == 0x24);
 
+struct Prim
+{
+    int32_t pNext;                      // 0x0000
+    int32_t type;                       // 0x0004
+};
+static_assert(sizeof(Prim) == 0x08);
+
+struct PrimLine : Prim
+{
+    int16_t x0;                         // 0x0008
+    int16_t y0;                         // 0x000A
+    int16_t x1;                         // 0x000C
+    int16_t y1;                         // 0x000E
+    uint32_t color0;                    // 0x0010
+};
+static_assert(sizeof(PrimLine) == 0x14);
+
+struct PrimLine2 : PrimLine
+{
+    uint32_t color1;                    // 0x0014
+};
+static_assert(sizeof(PrimLine2) == 0x18);
+
+struct PrimSprite : Prim
+{
+    uint32_t texture;                   // 0x0008
+    uint32_t var_0C;                    // 0x000C
+    int16_t x0;                         // 0x0010
+    int16_t y0;                         // 0x0012
+    int16_t x1;                         // 0x0014
+    int16_t y1;                         // 0x0016
+    uint8_t u0;                         // 0x0018
+    uint8_t v0;                         // 0x0019
+    uint8_t u1;                         // 0x001A
+    uint8_t v1;                         // 0x001B
+};
+static_assert(sizeof(PrimSprite) == 0x1C);
+
 struct MarniRes
 {
     uint32_t width;                     // 0x0000
@@ -716,9 +754,9 @@ static_assert(sizeof(MarniMovie) == 0xA4);
 struct MarniOt
 {
     int32_t zdepth;                     // 0x0000
-    int32_t pList;                      // 0x0004
+    Prim* pHead;                        // 0x0004
     int32_t is_valid;                   // 0x0008
-    int32_t var_0C;                     // 0x000C
+    Prim* pCurrent;                     // 0x000C
     uint8_t var_10;                     // 0x0010
     uint8_t var_11;                     // 0x0011
     uint8_t var_12;                     // 0x0012
@@ -733,10 +771,36 @@ struct MarniLineRecord
 };
 static_assert(sizeof(MarniLineRecord) == 0x08);
 
+struct WindowRect
+{
+    int32_t left;                       // 0x0000
+    int32_t top;                        // 0x0004
+    int32_t right;                      // 0x0008
+    int32_t bottom;                     // 0x000C
+};
+static_assert(sizeof(WindowRect) == 0x10);
+
+struct MarniTextureNode
+{
+    uint16_t next;                      // 0x0000
+    uint8_t pad_0002[18];               // 0x0002
+    uint32_t var_14;                    // 0x0014
+};
+static_assert(sizeof(MarniTextureNode) == 0x18);
+
+struct MarniTexture
+{
+    uint32_t var_00;                    // 0x0000
+    MarniSurface2 surface;              // 0x0004
+    uint16_t head;                      // 0x0034
+    uint16_t var_36;                    // 0x0036
+};
+static_assert(sizeof(MarniTexture) == 0x38);
+
 struct Marni
 {
-    uint8_t pad_0000[6144];             // 0x0000
-    MarniSurface3 field_1800[64];       // 0x1800
+    MarniTextureNode texture_nodes[256];// 0x0000
+    MarniTexture textures[64];          // 0x1800
     uint8_t pad_2600[10768];            // 0x2600
     MarniLineRecord field_5010[8];      // 0x5010
     uint8_t pad_5050[8124];             // 0x5050
@@ -749,7 +813,7 @@ struct Marni
     uint8_t pad_8C701C[8];              // 0x8C701C
     MarniOt otag[5];                    // 0x8C7024
     uint8_t pad_8C7088[3156];           // 0x8C7088
-    uint32_t window_rect[4];            // 0x8C7CDC
+    WindowRect window_rect;             // 0x8C7CDC
     uint8_t pad_8C7CEC[424];            // 0x8C7CEC
     void* pMaterial;                    // 0x8C7E94
     uint32_t MaterialHandle;            // 0x8C7E98
@@ -893,7 +957,8 @@ struct GameTable
     uint32_t d3d_triangles_drawn;       // 0x544144
     uint8_t pad_544148[1050736];        // 0x544148
     int32_t d3d_device_count;           // 0x6449B8
-    uint8_t pad_6449BC[151864];         // 0x6449BC
+    int32_t dword_6449BC;               // 0x6449BC
+    uint8_t pad_6449C0[151860];         // 0x6449C0
     void* hFont;                        // 0x669AF4
     uint8_t pad_669AF8[4];              // 0x669AF8
     uint8_t is_480p;                    // 0x669AFC
