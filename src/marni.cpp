@@ -531,6 +531,417 @@ namespace openre::marni
         interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
     }
 
+    // 0x0040EA60
+    static void __stdcall sub_40EA60(
+        Marni* self, int a0, int a1, int a2, int a3, int textureHandle, int a5, int shadeMode, int a7, int a8, int a9,
+        void* vertices, int vertexCount)
+    {
+        interop::thiscall<int, Marni*, int, int, int, int, int, int, int, int, int, int, void*, int>(
+            0x0040EA60, self, a0, a1, a2, a3, textureHandle, a5, shadeMode, a7, a8, a9, vertices, vertexCount);
+    }
+
+    struct DrawInfo
+    {
+        int zWriteEnable;
+        int shadeMode;
+        int var_94;
+        int specularEnable;
+        int vertexCount;
+        void* vertices;
+        void* texture;
+    };
+
+    static int __stdcall sub_40C470(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C470, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40C100(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C100, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40BCF0(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040BCF0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40CFD0(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040CFD0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40B560(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B560, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40B8D0(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B8D0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40D300(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D300, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40DD90(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DD90, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall MarniDrawPolyFT4(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DBA0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40D8D0(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D8D0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40DF60(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DF60, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40D560(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D560, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40A4B0(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A4B0, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40A830(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A830, self, pPrim, zWriteEnable);
+    }
+    static int __stdcall sub_40AB60(Marni* self, Prim* pPrim, DrawInfo* zWriteEnable)
+    {
+        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040AB60, self, pPrim, zWriteEnable);
+    }
+
+    // 0x0042F1D0
+    static void tex_spr(
+        MarniSurface2* surface, void* a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12,
+        int a13, int a14, int a15, int a16)
+    {
+        return interop::call<void, MarniSurface2*, void*, int, int, int, int, int, int, int, int, int, int, int, int, int, int>(
+            0x0042F1D0, surface, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16);
+    }
+
+    static int __stdcall trans_spr_poly_2(Marni* self, MarniOt* pOt, PrimSprite* pPrim)
+    {
+        int v5 = 0;
+        int texture = 0;
+        char* v7 = nullptr;
+        uint32_t v8 = 0;
+        int v19 = 0;
+        int type = 0;
+        int v20 = 0;
+        int v11 = 0;
+        int v12 = 0;
+        char* v15 = 0;
+        int v16 = 0;
+        int v17 = 0;
+        int v18 = 0;
+        int v21 = 0;
+        int v22 = 0;
+        int v27 = 0;
+        int v28 = 0;
+        int v29 = 0;
+        int v30 = 0;
+        int v31 = 0;
+        int v39 = 0;
+        int v42 = 0;
+        int v44 = 0;
+        int Gpu_flg = 0;
+        int textureHandle = 0;
+        DrawInfo drawInfo;
+        int v34 = 0;
+        int v35 = 0;
+        int vertices[32]{};
+        drawInfo.vertices = vertices;
+        auto v3 = 0;
+        auto v41 = 1;
+        auto v40 = 0;
+        MarniTextureNode* pTexture;
+        MarniTexture* tex;
+        if ((pPrim->type & 4) == 0 && (self->gpu_flag & GpuFlags::GPU_19))
+        {
+            textureHandle = 0;
+            goto LABEL_4;
+        }
+        if ((pPrim->type & 4) != 0)
+            texture = pPrim->texture;
+        else
+            texture = gGameTable.dword_6449BC;
+        if (!texture)
+            goto LABEL_26;
+        tex = &self->textures[texture];
+        v8 = tex->var_00;
+        if (!v8)
+        {
+            out();
+            self->is_gpu_active = 0;
+            return 0;
+        }
+        if ((v8 & 0x4000) != 0)
+        {
+            v3 = 1;
+        }
+        else
+        {
+            pTexture = search_texture_object_0_from_1_in_condition(self, texture, pPrim->var_0C);
+            if (pTexture == nullptr)
+                goto LABEL_26;
+            v11 = pTexture->var_14;
+            if ((v11 & 0x1000) != 0)
+                goto LABEL_26;
+            if ((v11 & 4) != 0)
+                v41 = 0;
+            v12 = *(int*)(pTexture[2] + 60);
+            drawInfo.texture = pTexture;
+            textureHandle = v12;
+        }
+        if (tex->surface.var_2C != 0)
+            v40 = 1;
+
+#if 0
+        if (v3)
+        {
+            if ((self->pMovie->flag & 2) == 0)
+                return 1;
+            type = pPrim->type;
+            if ((type & 0xFFFFF) != 0x24)
+                goto LABEL_26;
+            Gpu_flg = self->gpu_flag;
+            v39 = 0;
+            if ((Gpu_flg & 0x800) != 0)
+                v39 = 0x8000;
+            v15 = (char*)self + 56 * *(int*)&pPrim->x0;
+            if ((v15[6144] & 4) == 0 && (type & 0x10000000) == 0)
+            {
+                v16 = v39;
+                LOBYTE(v16) = v39 | 1;
+                v39 = v16;
+            }
+            v17 = type & 0x700000;
+            if (v17 > 0x300000)
+            {
+                if (v17 == 0x400000)
+                {
+                    v19 = v39;
+                    LOBYTE(v19) = v39 | 0x40;
+                    goto LABEL_43;
+                }
+            }
+            else
+            {
+                switch (v17)
+                {
+                case 0x300000u:
+                    v19 = v39;
+                    LOBYTE(v19) = v39 | 0x30;
+                    goto LABEL_43;
+                case 0x100000u:
+                    v20 = v39 | 0x10;
+                    v39 |= 0x10u;
+                    if ((Gpu_flg & 0x40000) != 0)
+                    {
+                        v19 = v20;
+                        BYTE1(v19) = BYTE1(v20) | 1;
+                        goto LABEL_43;
+                    }
+                    break;
+                case 0x200000u:
+                    v18 = v39 | 0x20;
+                    v39 |= 0x20u;
+                    if ((Gpu_flg & 0x40000) != 0)
+                    {
+                        v19 = v18;
+                        BYTE1(v19) = BYTE1(v18) | 1;
+                    LABEL_43:
+                        v39 = v19;
+                    }
+                    break;
+                }
+            }
+            v21 = &self->field_0[4 * self->modes];
+            if (v21[2301889] == 2)
+            {
+                v44 = 1.0;
+                v42 = 1.0;
+            }
+            else
+            {
+                v44 = (double)(v21[2301886] / self->xsize) * self->aspect_x;
+                v42 = (double)(v21[2301887] / self->xsize) * self->aspect_y;
+            }
+            (*(void(__thiscall**)(char*, _DWORD, _DWORD))(*((_DWORD*)v15 + 1537) + 16))(v15 + 6148, 0, 0);
+            surface_lock(&self->surface2, 0, 0);
+            v22 = v39;
+            BYTE1(v22) = BYTE1(v39) | 0x50;
+            v23 = (double)(SHIWORD(pPrim[1].pNext) + 1) * v42;
+            v24 = (double)(SLOWORD(pPrim[1].pNext) + 1) * v44;
+            v25 = (double)SHIWORD(pPrim->color) * v42;
+            v26 = (double)SLOWORD(pPrim->color) * v44;
+            tex_spr(
+                &self->Surface2,
+                (int)&this->field_1800[0][*(_DWORD*)&pPrim->x0].pBitmap,
+                self->window_rect.left + (__int64)v26,
+                self->window_rect.top + (__int64)v25,
+                self->window_rect.left + (__int64)v24,
+                self->window_rect.top + (__int64)v23,
+                LOBYTE(pPrim[1].type),
+                BYTE1(pPrim[1].type),
+                BYTE2(pPrim[1].type) + 1,
+                HIBYTE(pPrim[1].type) + 1,
+                self->window_rect.left,
+                self->window_rect.top,
+                self->window_rect.right,
+                self->window_rect.bottom,
+                0xFF808080,
+                v22);
+            surface_unlock(&self->surface2);
+            (*(void(__thiscall**)(int*))(this->field_1800[0][*(_DWORD*)&pPrim->x0].pBitmap + 20))(
+                &this->field_1800[0][*(_DWORD*)&pPrim->x0].pBitmap);
+            return 1;
+        }
+#endif
+
+    LABEL_4:
+        v5 = pPrim->type & 0xFFFFF;
+        if (v5 > 0x49)
+        {
+            if (v5 > 0x1002D)
+            {
+                v30 = v5 - 65609;
+                if (!v30)
+                {
+                    v27 = sub_40C470(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+                v31 = v30 - 3;
+                if (!v31)
+                {
+                    v27 = sub_40C100(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+                if (v31 == 1)
+                {
+                    v27 = sub_40BCF0(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+            }
+            else
+            {
+                if (v5 == 65581)
+                {
+                    v27 = sub_40CFD0(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+                v28 = v5 - 76;
+                if (!v28)
+                {
+                    v27 = sub_40B560(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+                v29 = v28 - 1;
+                if (!v29)
+                {
+                    v27 = sub_40B8D0(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+                if (v29 == 65503)
+                {
+                    v27 = sub_40D300(self, pPrim, &drawInfo);
+                    goto LABEL_74;
+                }
+            }
+        LABEL_26:
+            out();
+            return 0;
+        }
+        if (v5 != 73)
+        {
+            switch (v5)
+            {
+            case 33u: v27 = sub_40DD90(self, pPrim, &drawInfo); goto LABEL_74;
+            case 36u: v27 = MarniDrawPolyFT4(self, pPrim, &drawInfo); goto LABEL_74;
+            case 37u: v27 = sub_40D8D0(self, pPrim, &drawInfo); goto LABEL_74;
+            case 44u: v27 = sub_40DF60(self, pPrim, &drawInfo); goto LABEL_74;
+            case 45u: v27 = sub_40D560(self, pPrim, &drawInfo); goto LABEL_74;
+            case 61u: v27 = sub_40A4B0(self, pPrim, &drawInfo); goto LABEL_74;
+            case 69u: v27 = sub_40A830(self, pPrim, &drawInfo); goto LABEL_74;
+            case 70u: v27 = sub_40AB60(self, pPrim, &drawInfo); goto LABEL_74;
+            default: goto LABEL_26;
+            }
+        }
+        v27 = sub_40B260(self, pPrim, &drawInfo);
+
+    LABEL_74:
+        if (!v27)
+            return 1;
+
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, textureHandle);
+        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, drawInfo.zWriteEnable);
+        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, 1);
+        dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, 4);
+        auto v32 = v41 && (pPrim->type & 0x10000000) == 0;
+        dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, 0);
+        dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, drawInfo.shadeMode);
+        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, 1);
+        dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, drawInfo.specularEnable);
+        auto v33 = pPrim->type & 0xF00000;
+        if (v33 > 0x400000)
+        {
+            if (v33 == 0x600000)
+            {
+            LABEL_89:
+                v34 = 6;
+                goto LABEL_90;
+            }
+            if (v33 == 0x700000)
+            {
+                v35 = 3;
+                v34 = 3;
+                goto LABEL_91;
+            }
+        }
+        else
+        {
+            if (v33 == 0x400000 || v33 == 0x100000)
+                goto LABEL_89;
+            if (v33 == 0x200000 || v33 == 0x300000)
+            {
+                v34 = 2;
+            LABEL_90:
+                v35 = 5;
+            LABEL_91:
+                sub_40EA60(
+                    self,
+                    0,
+                    1,
+                    v35,
+                    v34,
+                    textureHandle,
+                    drawInfo.zWriteEnable != 0,
+                    drawInfo.shadeMode,
+                    drawInfo.var_94,
+                    drawInfo.specularEnable != 0,
+                    4,
+                    vertices,
+                    drawInfo.vertexCount);
+                goto LABEL_94;
+            }
+        }
+        if (v32 && v40)
+            goto LABEL_89;
+        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, 0);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, 4);
+        set_filtering(self, 0);
+        dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, vertices, drawInfo.vertexCount, 1);
+    LABEL_94:
+        if (!gGameTable.error)
+            return 1;
+        out("", "");
+        return 0;
+    }
+
     // 0x0040DF70
     static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim)
     {
