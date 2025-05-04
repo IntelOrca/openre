@@ -69,7 +69,7 @@ namespace openre::input
     };
 
     // 0x00410450
-    void input_wmkeyup(Input* self, int vk)
+    void __stdcall input_wmkeyup(Input* self, int vk)
     {
         for (int i = 0; i < 0x20; i++)
         {
@@ -81,7 +81,7 @@ namespace openre::input
     }
 
     // 0x00410410
-    void input_wmkeydown(Input* self, int vk)
+    void __stdcall input_wmkeydown(Input* self, int vk)
     {
         for (int i = 0; i < 0x20; i++)
         {
@@ -93,9 +93,9 @@ namespace openre::input
     }
 
     // 0x00410400
-    int input_get_some_byte()
+    int __stdcall input_get_some_byte(Input* self)
     {
-        return gGameTable.input.keyboard;
+        return self->keyboard;
     }
 
     static uint32_t input_keyboard_data[32] = {
@@ -176,9 +176,9 @@ namespace openre::input
 
     void input_init_hooks()
     {
-        writeJmp(0x00410450, &input_wmkeyup);
-        writeJmp(0x00410410, &input_wmkeydown);
-        writeJmp(0x00410400, &input_get_some_byte);
+        interop::hookThisCall(0x00410450, &input_wmkeyup);
+        interop::hookThisCall(0x00410410, &input_wmkeydown);
+        interop::hookThisCall(0x00410400, &input_get_some_byte);
         writeJmp(0x0043BB00, &sub_43BB00);
     }
 };
