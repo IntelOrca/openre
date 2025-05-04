@@ -64,6 +64,10 @@ namespace openre::marni
         int a13, int a14, int a15, int a16);
     static void __stdcall trans_priority_list(Marni* self, MarniOt* pOt);
     static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim);
+    static std::string __stdcall generate_res_string(const MarniRes* self);
+    static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth);
+    static bool __stdcall change_display_mode(Marni* self, int mode);
+    static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
 
     static void surface_release(MarniSurface2* self)
     {
@@ -235,7 +239,7 @@ namespace openre::marni
     // 0x00402500
     bool __stdcall change_resolution(Marni* self)
     {
-        return interop::thiscall<bool, Marni*>(0x00402500, self);
+        return change_display_mode(self, self->modes + 1 >= (uint32_t)self->res_count ? 0 : self->modes + 1);
     }
 
     // 0x00402530
@@ -323,6 +327,45 @@ namespace openre::marni
         do_render(self, &self->otag[1]); // objects
         do_render(self, &self->otag[0]); // fg text
         self->var_8C8318++;
+    }
+
+    // 0x00403060
+    static bool __stdcall change_display_mode(Marni* self, int mode)
+    {
+        std::string s;
+        if (mode < self->res_count)
+        {
+            auto originalMode = self->modes;
+            self->modes = mode;
+            const auto& r = self->resolutions[mode];
+            if (change_mode(self, r.width, r.height, r.depth))
+            {
+                out("Direct3D::ChangeDisplayMode - (%d->%d) w:%d h:%d bpp:%d", "");
+                oldstring_set(&gGameTable.marni_config.display_mode, generate_res_string(&r));
+                self->var_8C8318 = 0;
+                return true;
+            }
+            self->modes = originalMode;
+        }
+        else
+        {
+            out("you were about to set up invalid mode.", "MarniSystem Direct3D::ChangeMode");
+        }
+        return false;
+    }
+
+    // 0x00403170
+    static std::string __stdcall generate_res_string(const MarniRes* self)
+    {
+        char buffer[256];
+        std::snprintf(buffer, sizeof(buffer), "%dx%d %dbpp full:%d", self->width, self->height, self->depth, self->fullscreen);
+        return std::string(buffer);
+    }
+
+    // 0x00403220
+    static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth)
+    {
+        return interop::thiscall<int, Marni*, uint32_t, uint32_t, uint32_t>(0x00403220, self, width, height, depth);
     }
 
     // 0x00404CE0
@@ -1537,6 +1580,19 @@ namespace openre::marni
         self->bilinear ^= 1;
     }
 
+    // 0x0050BC60
+    static OldStdString* __stdcall oldstring_set_2(OldStdString* self, const char* s)
+    {
+        return interop::thiscall<OldStdString*, void*, const char*>(0x50BC60, self, s);
+    }
+
+    // 0x0050C400
+    static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s)
+    {
+        oldstring_set_2(self, s.c_str());
+        return self;
+    }
+
     void init_hooks()
     {
         interop::hookThisCall(0x00401E40, &prepare_movie);
@@ -1546,20 +1602,20 @@ namespace openre::marni
         interop::hookThisCall(0x00401F70, &update_movie);
         interop::hookThisCall(0x00401FD0, &set_movie_resolution);
         interop::hookThisCall(0x00402160, &arrange_object_contents);
-        interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);
-        interop::hookThisCall(0x00407440, &create_d3d);
-        interop::hookThisCall(0x00407340, &enum_drivers);
-        interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x00404CE0, &unload_texture);
-        interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
-        interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
+        interop::hookThisCall(0x00406450, &move);
+        interop::hookThisCall(0x00407340, &enum_drivers);
+        interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
-        interop::writeJmp(0x0040F1A0, &create_ddraw);
+        interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
+        interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::writeJmp(0x00406860, &query_ddraw2);
-        interop::writeJmp(0x004DBFD0, &out_internal);
+        interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
+        interop::writeJmp(0x004DBFD0, &out_internal);
     }
 }

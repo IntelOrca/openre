@@ -693,6 +693,10 @@ declare     triangles_drawn         u32                     0x008C83FC
 declare     device_cnt              s32                     0x008C842C
 declare     surface3                MarniSurface            0x008C8434
 
+struct      OldStdString
+declare     data                    char*
+declare     length                  u32
+
 struct      MarniConfig
 declare     key                     u32
 declare     var_04                  u32
@@ -716,8 +720,7 @@ declare     fadeflag                u8
 declare     var_4B                  u8
 declare     var_4C                  u32
 declare     var_50                  u32
-declare     var_54                  u32
-declare     var_58                  u32
+declare     display_mode            OldStdString
 declare     var_5C                  u8
 
 struct      D3DDeviceInfo

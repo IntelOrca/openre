@@ -890,6 +890,13 @@ struct Marni
 };
 static_assert(sizeof(Marni) == 0x8C8470);
 
+struct OldStdString
+{
+    char* data;                         // 0x0000
+    uint32_t length;                    // 0x0004
+};
+static_assert(sizeof(OldStdString) == 0x08);
+
 struct MarniConfig
 {
     uint32_t key;                       // 0x0000
@@ -914,8 +921,7 @@ struct MarniConfig
     uint8_t var_4B;                     // 0x004B
     uint32_t var_4C;                    // 0x004C
     uint32_t var_50;                    // 0x0050
-    uint32_t var_54;                    // 0x0054
-    uint32_t var_58;                    // 0x0058
+    OldStdString display_mode;          // 0x0054
     uint8_t var_5C;                     // 0x005C
 };
 static_assert(sizeof(MarniConfig) == 0x5D);
