@@ -3,6 +3,8 @@
 #include "openre.h"
 #include "re2.h"
 
+#include <algorithm>
+
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <d3d.h>
@@ -48,6 +50,7 @@ namespace openre::marni
     static int __stdcall movie_update(MarniMovie* self);
     static int __stdcall movie_update_window(MarniMovie* self);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
+    static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z);
     static int __stdcall ot_clear(MarniOt* self);
     static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
@@ -230,6 +233,24 @@ namespace openre::marni
         }
         *a3 = v3;
         return 1;
+    }
+
+    // 0x004021C0
+    static int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        if ((pPrim->type & 8) != 0)
+        {
+            out();
+            return 0;
+        }
+        else
+        {
+            ot_add_primitive_as_z(self->otag, pPrim, z);
+            return 1;
+        }
     }
 
     // 0x00402290
@@ -1448,6 +1469,24 @@ namespace openre::marni
         return interop::thiscall<Prim*, MarniOt*>(0x004164D0, self);
     }
 
+    // 0x00416500
+    static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z)
+    {
+        if (self->is_valid)
+        {
+            auto n = std::clamp(z, 0, self->zdepth - 1);
+            auto last = self->pHead + (self->zdepth - n) - 1;
+            pPrim->pNext = last->pNext;
+            last->pNext = pPrim;
+            return 1;
+        }
+        else
+        {
+            out("not valid class", "cPriorityList2::AddPrimitiveAsZ");
+            return 0;
+        }
+    }
+
     // 0x00416550
     static int __stdcall ot_clear(MarniOt* self)
     {
@@ -1684,6 +1723,7 @@ namespace openre::marni
         interop::hookThisCall(0x00401F70, &update_movie);
         interop::hookThisCall(0x00401FD0, &set_movie_resolution);
         interop::hookThisCall(0x00402160, &arrange_object_contents);
+        interop::hookThisCall(0x004021C0, &add_primitive_front);
         interop::hookThisCall(0x00402290, &clear_otags);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x00402A80, &flip);
@@ -1695,6 +1735,7 @@ namespace openre::marni
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::writeJmp(0x00406860, &query_ddraw2);
