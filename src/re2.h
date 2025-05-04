@@ -633,7 +633,7 @@ static_assert(sizeof(Task) == 0x24);
 
 struct Prim
 {
-    int32_t pNext;                      // 0x0000
+    Prim* pNext;                        // 0x0000
     int32_t type;                       // 0x0004
 };
 static_assert(sizeof(Prim) == 0x08);
@@ -985,14 +985,15 @@ struct GameTable
     ItemTypeDefinition item_def_tbl[64];// 0x53DE28
     uint8_t pad_53E028[10072];          // 0x53E028
     uint8_t byte_540780[16];            // 0x540780
-    uint8_t pad_540790[12936];          // 0x540790
+    uint8_t pad_540790[12932];          // 0x540790
+    void* dword_543A14;                 // 0x543A14
     uint32_t error;                     // 0x543A18
     uint8_t pad_543A1C[4];              // 0x543A1C
     D3DDeviceInfo d3d_devices[5];       // 0x543A20
     int32_t dword_54413C;               // 0x54413C
     uint32_t d3d_vertices_processed;    // 0x544140
     uint32_t d3d_triangles_drawn;       // 0x544144
-    uint8_t pad_544148[1050736];        // 0x544148
+    uint8_t unk_544148[1050736];        // 0x544148
     int32_t d3d_device_count;           // 0x6449B8
     int32_t dword_6449BC;               // 0x6449BC
     uint8_t pad_6449C0[151860];         // 0x6449C0

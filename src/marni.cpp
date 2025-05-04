@@ -48,6 +48,7 @@ namespace openre::marni
     static int __stdcall movie_update(MarniMovie* self);
     static int __stdcall movie_update_window(MarniMovie* self);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
+    static int __stdcall ot_clear(MarniOt* self);
     static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
@@ -229,6 +230,16 @@ namespace openre::marni
         }
         *a3 = v3;
         return 1;
+    }
+
+    // 0x00402290
+    static void __stdcall clear_otags(Marni* self)
+    {
+        for (auto i = 0; i < 5; i++)
+        {
+            ot_clear(&self->otag[i]);
+        }
+        gGameTable.dword_543A14 = &gGameTable.unk_544148;
     }
 
     // 0x004022E0
@@ -1437,6 +1448,25 @@ namespace openre::marni
         return interop::thiscall<Prim*, MarniOt*>(0x004164D0, self);
     }
 
+    // 0x00416550
+    static int __stdcall ot_clear(MarniOt* self)
+    {
+        if (!self->is_valid)
+            return 0;
+
+        for (auto i = 0; i < self->zdepth - 1; i++)
+        {
+            auto& prim = self->pHead[i];
+            prim.pNext = &prim + 1;
+        }
+
+        auto& lastPrim = self->pHead[self->zdepth - 1];
+        lastPrim.pNext = nullptr;
+        lastPrim.type = 0;
+        self->pCurrent = self->pHead;
+        return 1;
+    }
+
     // 0x00416670
     static uint8_t __stdcall sub_416670(MarniOt* pOt)
     {
@@ -1654,6 +1684,7 @@ namespace openre::marni
         interop::hookThisCall(0x00401F70, &update_movie);
         interop::hookThisCall(0x00401FD0, &set_movie_resolution);
         interop::hookThisCall(0x00402160, &arrange_object_contents);
+        interop::hookThisCall(0x00402290, &clear_otags);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);

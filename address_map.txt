@@ -502,7 +502,7 @@ declare     var_1C                  u32
 declare     var_20                  u32
 
 struct      Prim
-declare     pNext                   s32
+declare     pNext                   Prim*
 declare     type                    s32
 
 struct      PrimLine
@@ -759,11 +759,13 @@ declare     byte_53C78F             u8[70]                  0x0053C78F
 declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     byte_540780             u8[16]                  0x00540780
+declare     dword_543A14            void*                   0x00543A14
 declare     error                   u32                     0x00543A18
 declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
 declare     dword_54413C            s32                     0x0054413C
 declare     d3d_vertices_processed  u32                     0x00544140
 declare     d3d_triangles_drawn     u32                     0x00544144
+declare     unk_544148              u8[1050736]             0x00544148
 declare     d3d_device_count        s32                     0x006449B8
 declare     dword_6449BC            s32                     0x006449BC
 declare     hFont                   void*                   0x00669AF4
