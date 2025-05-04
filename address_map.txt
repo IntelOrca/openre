@@ -624,12 +624,32 @@ declare     surface                 MarniSurface2
 declare     head                    u16                     0x34
 declare     var_36                  u16                     0x36
 
+struct      MarniVertex
+declare     pad_00                  u8[32]
+
+struct      MarniDrawOp
+declare     vertices                MarniVertex[3]
+declare     average_z               f32                     0x60
+declare     filter                  u8                      0x64
+declare     var_68                  u32                     0x68
+declare     src_blend               u32                     0x6C
+declare     dst_blend               u32                     0x70
+declare     texture_handle          u32                     0x74
+declare     shade_mode              u32                     0x78
+declare     cull_mode               u32                     0x7C
+declare     z_func                  u32                     0x80
+declare     z_write_enable          u8                      0x84
+declare     specular_enable         u8                      0x85
+declare     pad_86                  u8[2]                   0x86
+
 struct      Marni
 declare     texture_nodes           MarniTextureNode[256]
 declare     textures                MarniTexture[64]        0x1800
 declare     field_5010              MarniLineRecord[8]      0x5010
 declare     field_700C              s32                     0x700C
-declare     field_8C7010            s32                     0x008C7010
+declare     draw_ops                MarniDrawOp[65536]      0x7010
+declare     draw_op_ptrs            MarniDrawOp*[65536]     0x00887010
+declare     num_draw_ops            s32                     0x008C7010
 declare     cutscene_bars           u8                      0x008C7014
 declare     modes                   u32                     0x008C7018
 declare     otag                    MarniOt[5]              0x008C7024

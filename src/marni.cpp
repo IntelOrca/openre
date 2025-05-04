@@ -3,6 +3,7 @@
 #include "openre.h"
 #include "re2.h"
 
+#define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <d3d.h>
 #include <ddraw.h>
@@ -430,7 +431,7 @@ namespace openre::marni
     static void __stdcall sub_40E800(Marni* self, uint8_t a2)
     {
         self->field_700C = a2 == 0 ? -1 : 0;
-        self->field_8C7010 = a2 == 0 ? -1 : 0;
+        self->num_draw_ops = a2 == 0 ? -1 : 0;
     }
 
     // 0x00406A10
@@ -533,20 +534,140 @@ namespace openre::marni
         interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
     }
 
-    // 0x0040EA60
-    static void __stdcall sub_40EA60(
-        Marni* self, int a0, int a1, int a2, int a3, int textureHandle, int a5, int shadeMode, int a7, int a8, int a9,
-        void* vertices, int vertexCount)
+    // 0x0040EAF0
+    static int __stdcall do_draw_op(Marni* self, int index)
     {
-        interop::thiscall<int, Marni*, int, int, int, int, int, int, int, int, int, int, void*, int>(
-            0x0040EA60, self, a0, a1, a2, a3, textureHandle, a5, shadeMode, a7, a8, a9, vertices, vertexCount);
+        auto op = self->draw_op_ptrs[index];
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        set_filtering(self, op->filter);
+        dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
+        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
+        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+        dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, op->texture_handle);
+        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, op->z_func);
+        dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, op->shade_mode);
+        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, op->cull_mode);
+        dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_SRCBLEND, op->src_blend);
+        dd2->SetRenderState(D3DRENDERSTATE_DESTBLEND, op->dst_blend);
+        return dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
+    }
+
+    // 0x0040E820
+    static int __stdcall insert_draw_op(
+        Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices)
+    {
+        // Check if any drawing op slots left
+        if (self->num_draw_ops >= 0x10000)
+            return self->num_draw_ops;
+
+        // Create new drawing op
+        auto newOp = &self->draw_ops[std::max(0, self->num_draw_ops)];
+        newOp->average_z = 0.0;
+        for (auto i = 0; i < 3; i++)
+        {
+            std::memcpy(&newOp->vertices[i], vertices[i], sizeof(D3DTLVERTEX));
+            newOp->average_z += vertices[i]->sz;
+        }
+        newOp->average_z /= 3;
+        newOp->filter = filter;
+        newOp->var_68 = a3;
+        newOp->src_blend = srcBlend;
+        newOp->dst_blend = dstBlend;
+        newOp->texture_handle = textureHandle;
+        newOp->z_write_enable = zWriteEnable;
+        newOp->shade_mode = shadeMode;
+        newOp->cull_mode = cullMode;
+        newOp->specular_enable = specularEnable;
+        newOp->z_func = self->num_draw_ops >= 0 ? zFunc : D3DCMP_ALWAYS;
+
+        // Insert op into draw op list based on sort criteria
+        auto num_draw_ops = self->num_draw_ops;
+        auto opIndex = 0;
+        if (num_draw_ops > 1)
+        {
+            auto end = num_draw_ops;
+            do
+            {
+                auto midpoint = opIndex + (end - opIndex) / 2;
+                auto midpointOp = self->draw_op_ptrs[midpoint];
+                if (midpointOp->average_z >= newOp->average_z)
+                {
+                    opIndex += (end - opIndex) / 2;
+                    if (newOp->average_z < midpointOp->average_z)
+                        continue;
+                }
+                end = midpoint;
+            } while (opIndex < end - 1);
+        }
+        while (opIndex < num_draw_ops)
+        {
+            if (newOp->average_z > self->draw_op_ptrs[opIndex]->average_z)
+                break;
+            opIndex++;
+        }
+        if (num_draw_ops != 0 && opIndex < num_draw_ops)
+        {
+            std::memmove(
+                &self->draw_op_ptrs[opIndex + 1],
+                &self->draw_op_ptrs[opIndex],
+                (num_draw_ops - opIndex) * sizeof(MarniDrawOp*));
+        }
+        self->draw_op_ptrs[opIndex] = newOp;
+
+        // Increment number of ops for batch draw, or immediately run the draw op
+        if (self->num_draw_ops >= 0)
+        {
+            self->num_draw_ops++;
+            return self->num_draw_ops;
+        }
+        else
+        {
+            return do_draw_op(self, 0);
+        }
+    }
+
+    // 0x0040EA60
+    static void __stdcall tessellate_insert_draw_op(
+        Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount)
+    {
+        if (vertexCount > 2)
+        {
+            auto v14 = &vertices[2];
+            for (auto i = 0; i < vertexCount - 2; i++)
+            {
+                LPD3DTLVERTEX newVertices[3];
+                newVertices[0] = &v14[-2];
+                newVertices[1] = &v14[-1];
+                newVertices[2] = v14;
+                insert_draw_op(
+                    self,
+                    filter,
+                    a1,
+                    srcBlend,
+                    dstBlend,
+                    textureHandle,
+                    zWriteEnable,
+                    shadeMode,
+                    cullMode,
+                    specularEnable,
+                    zFunc,
+                    newVertices);
+                v14++;
+            }
+        }
     }
 
     struct DrawInfo
     {
         int zWriteEnable;
         int shadeMode;
-        int var_94;
+        int cullMode;
         int specularEnable;
         int vertexCount;
         LPD3DTLVERTEX vertices;
@@ -650,8 +771,8 @@ namespace openre::marni
         double v44 = 0;
         int textureHandle = 0;
         DrawInfo drawInfo;
-        int v34 = 0;
-        int v35 = 0;
+        int dstBlend = 0;
+        int srcBlend = 0;
         D3DTLVERTEX vertices[4]{};
         drawInfo.vertices = vertices;
         auto v3 = 0;
@@ -876,14 +997,14 @@ namespace openre::marni
         {
             if (v33 == 0x600000)
             {
-                v34 = 6;
-                v35 = 5;
+                srcBlend = D3DBLEND_SRCALPHA;
+                dstBlend = D3DBLEND_INVSRCALPHA;
                 goto LABEL_91;
             }
             if (v33 == 0x700000)
             {
-                v35 = 3;
-                v34 = 3;
+                srcBlend = D3DBLEND_SRCCOLOR;
+                dstBlend = D3DBLEND_SRCCOLOR;
                 goto LABEL_91;
             }
         }
@@ -891,27 +1012,27 @@ namespace openre::marni
         {
             if (v33 == 0x400000 || v33 == 0x100000)
             {
-                v34 = 6;
-                v35 = 5;
+                srcBlend = D3DBLEND_SRCALPHA;
+                dstBlend = D3DBLEND_INVSRCALPHA;
                 goto LABEL_91;
             }
             if (v33 == 0x200000 || v33 == 0x300000)
             {
-                v34 = 2;
-                v35 = 5;
+                srcBlend = D3DBLEND_SRCALPHA;
+                dstBlend = D3DBLEND_ONE;
             LABEL_91:
-                sub_40EA60(
+                tessellate_insert_draw_op(
                     self,
                     0,
                     1,
-                    v35,
-                    v34,
+                    srcBlend,
+                    dstBlend,
                     textureHandle,
                     drawInfo.zWriteEnable != 0,
                     drawInfo.shadeMode,
-                    drawInfo.var_94,
+                    drawInfo.cullMode,
                     drawInfo.specularEnable != 0,
-                    4,
+                    D3DCMP_LESSEQUAL,
                     vertices,
                     drawInfo.vertexCount);
                 goto LABEL_94;
@@ -919,8 +1040,8 @@ namespace openre::marni
         }
         if (v32 && v40)
         {
-            v34 = 6;
-            v35 = 5;
+            srcBlend = D3DBLEND_SRCALPHA;
+            dstBlend = D3DBLEND_INVSRCALPHA;
             goto LABEL_91;
         }
         dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, FALSE);
@@ -1009,19 +1130,13 @@ namespace openre::marni
         }
     }
 
-    // 0x0040EAF0
-    static void sub_40EAF0(Marni* self, int index)
-    {
-        interop::thiscall<int, Marni*, int>(0x0040EAF0, self, index);
-    }
-
     static void __stdcall sub_40EC10(Marni* self)
     {
         auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
         pD3D2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
-        for (auto i = 0; i < self->field_8C7010; i++)
+        for (auto i = 0; i < self->num_draw_ops; i++)
         {
-            sub_40EAF0(self, i);
+            do_draw_op(self, i);
         }
 
         for (auto i = 0; i < self->field_700C; i++)
@@ -1414,6 +1529,7 @@ namespace openre::marni
         interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
+        interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x004DBFD0, &out_internal);

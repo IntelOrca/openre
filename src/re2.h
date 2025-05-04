@@ -799,6 +799,31 @@ struct MarniTexture
 };
 static_assert(sizeof(MarniTexture) == 0x38);
 
+struct MarniVertex
+{
+    uint8_t pad_00[32];                 // 0x0000
+};
+static_assert(sizeof(MarniVertex) == 0x20);
+
+struct MarniDrawOp
+{
+    MarniVertex vertices[3];            // 0x0000
+    float average_z;                    // 0x0060
+    uint8_t filter;                     // 0x0064
+    uint8_t pad_0065[3];                // 0x0065
+    uint32_t var_68;                    // 0x0068
+    uint32_t src_blend;                 // 0x006C
+    uint32_t dst_blend;                 // 0x0070
+    uint32_t texture_handle;            // 0x0074
+    uint32_t shade_mode;                // 0x0078
+    uint32_t cull_mode;                 // 0x007C
+    uint32_t z_func;                    // 0x0080
+    uint8_t z_write_enable;             // 0x0084
+    uint8_t specular_enable;            // 0x0085
+    uint8_t pad_86[2];                  // 0x0086
+};
+static_assert(sizeof(MarniDrawOp) == 0x88);
+
 struct Marni
 {
     MarniTextureNode texture_nodes[256];// 0x0000
@@ -807,8 +832,9 @@ struct Marni
     MarniLineRecord field_5010[8];      // 0x5010
     uint8_t pad_5050[8124];             // 0x5050
     int32_t field_700C;                 // 0x700C
-    uint8_t pad_7010[9175040];          // 0x7010
-    int32_t field_8C7010;               // 0x8C7010
+    MarniDrawOp draw_ops[65536];        // 0x7010
+    MarniDrawOp* draw_op_ptrs[65536];   // 0x887010
+    int32_t num_draw_ops;               // 0x8C7010
     uint8_t cutscene_bars;              // 0x8C7014
     uint8_t pad_8C7015[3];              // 0x8C7015
     uint32_t modes;                     // 0x8C7018
