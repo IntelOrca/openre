@@ -13,6 +13,7 @@ namespace openre::marni
 {
     namespace GpuFlags
     {
+        constexpr uint32_t GPU_3 = 0x8;
         constexpr uint32_t GPU_7 = 0x80;
         constexpr uint32_t GPU_9 = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
@@ -252,6 +253,12 @@ namespace openre::marni
         return 0;
     }
 
+    // 0x00402940
+    static void __stdcall restore_surfaces(Marni* self)
+    {
+        interop::thiscall<int, Marni*>(0x00402940, self);
+    }
+
     static void __stdcall flip_blt(Marni* self, DWORD width, DWORD height)
     {
         auto src = ((LPDIRECTDRAWSURFACE2)self->surface0.pDDsurface);
@@ -380,6 +387,51 @@ namespace openre::marni
             texture_surface_release(self, handle);
             request_video_memory(self);
         }
+    }
+
+    // 0x00404D20
+    static int __stdcall clear(Marni* self)
+    {
+        if (!(self->gpu_flag & GpuFlags::GPU_9) || !self->is_gpu_active || self->var_8C7EE0
+            || !(self->gpu_flag & GpuFlags::GPU_13) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
+        {
+            return 0;
+        }
+
+        if ((self->pMovie->flag & 2) != 0)
+            return 1;
+
+        auto pViewport = (LPDIRECT3DVIEWPORT)self->pViewport;
+
+        D3DRECT rect;
+        rect.x1 = 0;
+        rect.y1 = 0;
+        rect.x2 = self->xsize;
+        rect.y2 = self->ysize;
+
+        restore_surfaces(self);
+        if ((self->gpu_flag & GpuFlags::GPU_3) == 0)
+        {
+            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            {
+                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER);
+            }
+        }
+        else
+        {
+            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            {
+                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
+            }
+            else
+            {
+                surface_fill(&self->surface0, 0, self->ambient_b, 0);
+            }
+        }
+        if (gGameTable.error == 0)
+            return 1;
+        out();
+        return 0;
     }
 
     // 0x00404E40
@@ -1606,6 +1658,7 @@ namespace openre::marni
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);
         interop::hookThisCall(0x00404CE0, &unload_texture);
+        interop::hookThisCall(0x00404D20, &clear);
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);

@@ -868,7 +868,10 @@ struct Marni
     int32_t res_count;                  // 0x8C82F8
     uint8_t pad_8C82FC[28];             // 0x8C82FC
     int32_t var_8C8318;                 // 0x8C8318
-    uint8_t pad_8C831C[4];              // 0x8C831C
+    uint8_t ambient_b;                  // 0x8C831C
+    uint8_t ambient_g;                  // 0x8C831D
+    uint8_t ambient_r;                  // 0x8C831E
+    uint8_t pad_8C831F[1];              // 0x8C831F
     void* pDirectDraw;                  // 0x8C8320
     void* pDirectDraw2;                 // 0x8C8324
     MarniMovie* pMovie;                 // 0x8C8328

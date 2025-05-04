@@ -676,6 +676,9 @@ declare     desktop_bpp             s32                     0x008C7EF4
 declare     resolutions             MarniRes[64]            0x008C7EF8
 declare     res_count               s32                     0x008C82F8
 declare     var_8C8318              s32                     0x008C8318
+declare     ambient_b               u8                      0x008C831C
+declare     ambient_g               u8                      0x008C831D
+declare     ambient_r               u8                      0x008C831E
 declare     pDirectDraw             void*                   0x008C8320
 declare     pDirectDraw2            void*                   0x008C8324
 declare     pMovie                  MarniMovie*             0x008C8328
