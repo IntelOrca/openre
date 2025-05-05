@@ -657,6 +657,19 @@ struct MapStageInfo
 };
 static_assert(sizeof(MapStageInfo) == 0x08);
 
+struct Unknown6949F8
+{
+    uint8_t pad_0000[4];                // 0x0000
+    uint16_t var_04;                    // 0x0004
+    uint16_t var_06;                    // 0x0006
+    uint16_t var_08;                    // 0x0008
+    uint16_t var_0A;                    // 0x000A
+    uint8_t var_0C;                     // 0x000C
+    uint8_t pad_000D[1];                // 0x000D
+    uint8_t var_0E;                     // 0x000E
+};
+static_assert(sizeof(Unknown6949F8) == 0x0F);
+
 struct GameTable
 {
     uint8_t pad_0000[5394100];          // 0x0000
@@ -883,7 +896,9 @@ struct GameTable
     uint8_t pad_693E8C[20];             // 0x693E8C
     char ss_name_sbgm[260];             // 0x693EA0
     uint8_t byte_693FA4;                // 0x693FA4
-    uint8_t pad_693FA5[7859];           // 0x693FA5
+    uint8_t pad_693FA5[2643];           // 0x693FA5
+    Unknown6949F8* dword_6949F8;        // 0x6949F8
+    uint8_t pad_6949FC[5212];           // 0x6949FC
     uint32_t random_base;               // 0x695E58
     uint8_t* scd;                       // 0x695E5C
     Entity* c_em;                       // 0x695E60
@@ -941,7 +956,7 @@ struct GameTable
     Rdt* rdt;                           // 0x98861C
     uint32_t dword_988620;              // 0x988620
     void* mem_top;                      // 0x988624
-    ActorEntity* dword_988628;          // 0x988628
+    ActorEntity* actor_entity;          // 0x988628
     void* dword_98862C;                 // 0x98862C
     VCut* vcut_data[2];                 // 0x988630
     void* em_damage_table_16[48];       // 0x988638
@@ -951,7 +966,8 @@ struct GameTable
     void* door_aot_data;                // 0x988848
     uint8_t pad_98884C[4];              // 0x98884C
     void* aot_table[32];                // 0x988850
-    uint8_t pad_9888D0[8];              // 0x9888D0
+    Unknown6949F8* dword_9888D0;        // 0x9888D0
+    uint8_t pad_9888D4[4];              // 0x9888D4
     uint8_t byte_9888D8;                // 0x9888D8
     uint8_t byte_9888D9;                // 0x9888D9
     uint8_t pad_9888DA[5518];           // 0x9888DA
@@ -1117,15 +1133,6 @@ struct GameTable
     uint32_t dword_99CF70;              // 0x99CF70
 };
 static_assert(sizeof(GameTable) == 0x99CF74);
-
-struct Unknown6949F8
-{
-    uint8_t pad_0000[12];               // 0x0000
-    uint8_t var_0C;                     // 0x000C
-    uint8_t pad_000D[1];                // 0x000D
-    uint8_t var_0E;                     // 0x000E
-};
-static_assert(sizeof(Unknown6949F8) == 0x0F);
 
 struct Unknown988628
 {

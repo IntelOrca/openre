@@ -1,5 +1,6 @@
 #include "sce.h"
 #include "audio.h"
+#include "entity.h"
 #include "hud.h"
 #include "interop.hpp"
 #include "item.h"
@@ -42,12 +43,10 @@ namespace openre::sce
     static uint8_t& byte_691F74 = *((uint8_t*)0x691F74);
     static uint16_t& word_6949F0 = *((uint16_t*)0x6949F0);
     static uint16_t& word_6949F4 = *((uint16_t*)0x6949F4);
-    static Unknown6949F8*& dword_6949F8 = *((Unknown6949F8**)0x6949F8);
     static uint8_t& gQuestionFlags = *((uint8_t*)0x98504C);
     static uint8_t& gPickupItemName = *((uint8_t*)0x98504F);
     static Unknown988628*& dword_988628 = *((Unknown988628**)0x988628);
     static SceAotDoorData*& dword_988848 = *((SceAotDoorData**)0x988848);
-    static Unknown6949F8*& dword_9888D0 = *((Unknown6949F8**)0x9888D0);
     static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
     static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
     static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
@@ -525,7 +524,7 @@ namespace openre::sce
     static void sce_item(SceAotItemData* data)
     {
         gPickupItemName = data->type;
-        dword_9888D0 = dword_6949F8;
+        gGameTable.dword_9888D0 = gGameTable.dword_6949F8;
         gPickupItem = data->type;
         if ((_censorshipOff != 0) && (data->type == ITEM_TYPE_INK_RIBBON))
         {
@@ -582,16 +581,55 @@ namespace openre::sce
         _questionState = 0;
         gGameTable.dword_991FC4 = dword_989ED4;
         dword_989ED4 |= 0xFF000000;
-        byte_98E9A7 = dword_6949F8->var_0C;
+        byte_98E9A7 = gGameTable.dword_6949F8->var_0C;
     }
 
     // 0x004E99F0
     static void sce_itembox(const void*)
     {
-        _itemBoxObjIndex = dword_6949F8->var_0C;
-        byte_691F74 = dword_6949F8->var_0E;
+        _itemBoxObjIndex = gGameTable.dword_6949F8->var_0C;
+        byte_691F74 = gGameTable.dword_6949F8->var_0E;
         _questionState = ITEMBOX_INTERACT_STATE_INIT;
         dword_98E794 = &sce_itembox_callback;
+    }
+
+    // 0x004E9B70
+    static int sce_damage(int* a0)
+    {
+        auto& entity = gGameTable.actor_entity;
+
+        if (entity->status_flg & 2)
+        {
+            entity->status_flg &= 0xFFFD;
+        }
+
+        entity->damage_cnt |= 0x80;
+        entity->life -= *a0 >> 16;
+        if (entity->life >= 0)
+        {
+            entity->routine_0 = 2;
+            entity->routine_1 = *a0 & 0xFF;
+            entity->routine_2 = 0;
+            entity->routine_3 = 0;
+
+            auto direction = direction_check(
+                                 gGameTable.dword_6949F8->var_04 + (gGameTable.dword_6949F8->var_08 >> 1),
+                                 gGameTable.dword_6949F8->var_06 + (gGameTable.dword_6949F8->var_0A >> 1),
+                                 entity->m.pos.x,
+                                 entity->m.pos.z)
+                - entity->cdir.y;
+            entity->spd.x = 200;
+            add_speed_xz(entity, direction);
+        }
+        else if (entity->routine_0 != 3)
+        {
+            entity->routine_0 = 3;
+            entity->routine_1 = 0;
+            entity->routine_2 = 0;
+            entity->routine_3 = 0;
+        }
+
+        return 1;
     }
 
     static void set_sce_hook(SceKind sce, SceImpl impl)
@@ -612,5 +650,6 @@ namespace openre::sce
         set_sce_hook(SCE_WATER, reinterpret_cast<SceImpl>(&sce_water));
         set_sce_hook(SCE_SAVE, reinterpret_cast<SceImpl>(&sce_save));
         set_sce_hook(SCE_ITEMBOX, reinterpret_cast<SceImpl>(&sce_itembox));
+        set_sce_hook(SCE_DAMAGE, reinterpret_cast<SceImpl>(&sce_damage));
     }
 }

@@ -521,6 +521,14 @@ declare     room_num                u8
 declare     map                     u8
 declare     file_no                 s16
 
+struct      Unknown6949F8
+declare     var_04                  u16                     0x04
+declare     var_06                  u16                     0x06
+declare     var_08                  u16                     0x08
+declare     var_0A                  u16                     0x0A
+declare     var_0C                  u8                      0x0C
+declare     var_0E                  u8                      0x0E
+
 struct      GameTable
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
@@ -668,6 +676,7 @@ declare     current_bgm_address     u8*                     0x00693E84
 declare     cd_vol_0                u32                     0x00693E88
 declare     ss_name_sbgm            char[260]               0x00693EA0
 declare     byte_693FA4             u8                      0x00693FA4
+declare     dword_6949F8            Unknown6949F8*          0x006949F8
 declare     random_base             u32                     0x00695E58
 declare     scd                     u8*                     0x00695E5C
 declare     c_em                    Entity*                 0x00695E60
@@ -708,7 +717,7 @@ declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     dword_988620            u32                     0x00988620
 declare     mem_top                 void*                   0x00988624
-declare     dword_988628            ActorEntity*            0x00988628
+declare     actor_entity            ActorEntity*            0x00988628
 declare     dword_98862C            void*                   0x0098862C
 declare     vcut_data               VCut*[2]                0x00988630
 declare     em_damage_table_16      void*[48]               0x00988638
@@ -716,6 +725,7 @@ declare     em_die_table            void*[81]               0x009886F8
 declare     dword_98883C            u16*                    0x0098883C
 declare     door_aot_data           void*                   0x00988848
 declare     aot_table               void*[32]               0x00988850
+declare     dword_9888D0            Unknown6949F8*          0x009888D0
 declare     byte_9888D8             u8                      0x009888D8
 declare     byte_9888D9             u8                      0x009888D9
 declare     fg_rbj_set              u8                      0x00989E68
@@ -839,10 +849,6 @@ declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
 declare     dword_99CF6C            u32                     0x0099CF6C
 declare     dword_99CF70            u32                     0x0099CF70
-
-struct      Unknown6949F8
-declare     var_0C                  u8                      0x0C
-declare     var_0E                  u8                      0x0E
 
 struct      Unknown988628
 declare     var_10C                 u16                     0x10C
