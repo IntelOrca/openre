@@ -15,4 +15,5 @@ namespace openre
     int omd_in_check(Vec32* vec, ObjectEntity* object, int a2, int a3);
     void add_speed_xz(Entity* entity, int16_t d);
     void rbj_set();
+    int direction_check(int16_t a0, int16_t a1, int16_t a2, int16_t a3);
 }
