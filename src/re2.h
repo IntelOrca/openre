@@ -880,7 +880,8 @@ struct Marni
     float field_8C701C;                 // 0x8C701C
     uint32_t field_8C7020;              // 0x8C7020
     MarniOt otag[5];                    // 0x8C7024
-    uint8_t pad_8C7088[504];            // 0x8C7088
+    uint8_t field_8C7088[252];          // 0x8C7088
+    uint8_t field_8C7184[252];          // 0x8C7184
     uint32_t dwVidMemTotal;             // 0x8C7280
     uint8_t pad_8C7284[8];              // 0x8C7284
     uint32_t field_8C728C[256];         // 0x8C728C
@@ -1016,8 +1017,7 @@ struct MarniConfig
     uint8_t bilinear;                   // 0x0049
     uint8_t fadeflag;                   // 0x004A
     uint8_t var_4B;                     // 0x004B
-    uint32_t var_4C;                    // 0x004C
-    uint32_t var_50;                    // 0x0050
+    OldStdString device_name;           // 0x004C
     OldStdString display_mode;          // 0x0054
     uint8_t var_5C;                     // 0x005C
 };

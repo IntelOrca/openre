@@ -17,7 +17,7 @@ namespace openre::marni
     {
         constexpr uint32_t GPU_0 = 0x1;
         constexpr uint32_t GPU_1 = 0x2;
-        constexpr uint32_t GPU_2 = 0x4;
+        constexpr uint32_t INCLUDE_2X = 0x4;
         constexpr uint32_t GPU_3 = 0x8;
         constexpr uint32_t GPU_4 = 0x10;
         constexpr uint32_t ENUM_DEVICES = 0x40;
@@ -43,8 +43,12 @@ namespace openre::marni
 
     static void d3d_error_routine(int errorCode);
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2);
+    static int __stdcall enum_drivers(Marni* self);
+    static int __stdcall create_d3d(Marni* self);
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD);
+    static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
+    static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -72,6 +76,7 @@ namespace openre::marni
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
     static void __stdcall sub_40EC10(Marni* self);
+    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, int max, int* cntFound);
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
     static int __stdcall sub_414B30(MarniMovie* self);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
@@ -90,6 +95,7 @@ namespace openre::marni
     static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
+    static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s);
     static void __stdcall surface3_dtor(MarniSurface3* self);
 
     // 0x0050D905
@@ -956,7 +962,142 @@ namespace openre::marni
 
         out("you will be able to use the VideoMemory...%dbyte", "MarniSystem Direct3D::Direct3D");
         self->dwVidMemTotal = ddCaps.dwVidMemTotal;
-        // CreateDirect3D
+        if (!create_d3d(self))
+        {
+            out("failed to generate the object of Direct3D.", "MarniSystem Direct3D::Direct3D");
+            return self;
+        }
+
+        if (!enum_drivers(self))
+        {
+            out("failed to detect some driver.", "MarniSystem Direct3D::Direct3D");
+            return self;
+        }
+
+        for (auto i = 0; i < gGameTable.d3d_device_count; i++)
+        {
+            const auto& d = gGameTable.d3d_devices[i];
+            exception = 11;
+            auto isEq = oldstring_eq(&gGameTable.marni_config.device_name, std::string(d.lpDeviceName));
+            exception = 9;
+            if (isEq)
+            {
+                self->device_cnt = i;
+                break;
+            }
+        }
+
+        exception = 12;
+        oldstring_set(&gGameTable.marni_config.device_name, gGameTable.d3d_devices[self->device_cnt].lpDeviceName);
+        exception = 11;
+
+        if (gGameTable.d3d_devices[self->device_cnt].hwAccelerated2 || (self->gpu_flag & GpuFlags::GPU_13))
+        {
+            self->gpu_flag |= GpuFlags::INCLUDE_2X;
+        }
+
+        for (auto i = 0; i < gGameTable.d3d_device_count; i++)
+        {
+            const auto& d = gGameTable.d3d_devices[i];
+            // d.lpDeviceName
+            out("detect %s", "MarniSystem Direct3D::Direct3D");
+        }
+
+        int cntFound;
+        MarniRes res[64];
+        gGameTable.error = enum_display_mode((LPDIRECTDRAW2)self->pDirectDraw2, res, std::size(res), &cntFound);
+        if (gGameTable.error != 0)
+        {
+            out("failed to detect the mode.", "MarniSystem Direct3D::Direct3D");
+            return self;
+        }
+
+        for (auto i = 0; i < cntFound; i++)
+        {
+            const auto& r = res[i];
+            if (r.depth == 16 && r.width == 640 && r.height == 480)
+            {
+                auto v26 = &self->resolutions[self->res_count];
+                v26->width = r.width;
+                v26->height = r.height;
+                v26->depth = r.depth;
+                v26->fullscreen = 1;
+                self->res_count++;
+            }
+        }
+
+        if ((self->gpu_flag & GpuFlags::INCLUDE_2X) != 0)
+        {
+            auto& r = self->resolutions[self->res_count];
+            r.width = 2 * self->render_w;
+            r.height = 2 * self->render_h;
+            r.depth = self->desktop_bpp;
+            r.fullscreen = 0;
+            self->modes = self->res_count;
+            self->res_count++;
+        }
+
+        self->modes = 0;
+        for (auto i = 0; i < self->res_count; i++)
+        {
+            exception = 13;
+            auto isEq = oldstring_eq(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[i]));
+            exception = 9;
+            if (isEq)
+            {
+                self->modes = i;
+                break;
+            }
+        }
+
+        exception = 14;
+        oldstring_set(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[self->modes]));
+        exception = 9;
+        if (self->modes >= (uint32_t)self->res_count)
+        {
+            out("you specified invalid mode. correct disp num to 0 automatically.", "MarniSystem Direct3D::Direct3D");
+            self->modes = 0;
+        }
+
+        if (!init_all(self))
+        {
+            out("failed to initialize.", "MarniSystem Direct3D::Direct3D");
+            return self;
+        }
+
+        out("you will be able to use the following mode", "MarniSystem Direct3D::Direct3D");
+
+        for (auto i = 0; i < self->res_count; i++)
+        {
+            out("%d x %d x %d full=%d", "MarniSystem Direct3D::Direct3D");
+        }
+
+        if (self->gpu_flag & GpuFlags::GPU_13)
+        {
+            self->is_gpu_active = 1;
+            self->gpu_flag |= GpuFlags::GPU_1;
+        }
+        else
+        {
+            auto descA = (LPD3DDEVICEDESC)self->field_8C7088;
+            descA->dwSize = sizeof(D3DDEVICEDESC);
+            auto descB = (LPD3DDEVICEDESC)self->field_8C7184;
+            descB->dwSize = sizeof(D3DDEVICEDESC);
+            gGameTable.error = ((LPDIRECT3DDEVICE2)self->pDirectDevice2)->GetCaps(descA, descB);
+
+            MarniSurface2 surface;
+            surface2_ctor(&surface);
+            exception = 15;
+            surface2_create_work(&surface, 16, 16, 32, 0, -1);
+            surface.desc.a_bitcnt = 0;
+            surface2_vfill(&surface, 0, 0xFFFFFF, 0);
+            gGameTable.dword_6449BC = create_texture_handle(self, &surface, 2);
+            self->gpu_flag |= GpuFlags::GPU_1;
+            self->is_gpu_active = 1;
+            request_video_memory(self);
+            exception = 9;
+            surface2_release(&surface);
+        }
         return self;
     }
 
@@ -1769,6 +1910,12 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x0040F0F0
+    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, int max, int* cntFound)
+    {
+        return interop::thiscall<int, LPDIRECTDRAW2, MarniRes*, int, int*>(0x0040F0F0, lpDD2, res, max, cntFound);
+    }
+
     // 0x0040F1A0
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
     {
@@ -1869,6 +2016,19 @@ namespace openre::marni
         self->vtbl = (void**)0x0051737C;
         surfacey_vrelease(self);
         surface2_release(self);
+    }
+
+    // 0x00412BD0
+    static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
+    {
+        return interop::thiscall<int, MarniSurface2*, LPRECT, uint32_t, int>(0x00412BD0, self, pSrcRect, color, mode);
+    }
+
+    // 0x00414750
+    static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt)
+    {
+        return interop::thiscall<int, MarniSurface2*, int, int, int, int, int>(
+            0x00414750, self, width, height, depth, palBpp, palCnt);
     }
 
     // 0x004149D0
@@ -2236,6 +2396,14 @@ namespace openre::marni
     {
         oldstring_set_2(self, s.c_str());
         return self;
+    }
+
+    // 0x0050C550
+    static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s)
+    {
+        if (self->length != s.size())
+            return false;
+        return std::memcmp(self->data, s.c_str(), s.size()) == 0;
     }
 
     void init_hooks()

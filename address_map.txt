@@ -679,6 +679,8 @@ declare     modes                   u32                     0x008C7018
 declare     field_8C701C            f32                     0x008C701C
 declare     field_8C7020            u32                     0x008C7020
 declare     otag                    MarniOt[5]              0x008C7024
+declare     field_8C7088            u8[252]                 0x008C7088
+declare     field_8C7184            u8[252]                 0x008C7184
 declare     dwVidMemTotal           u32                     0x008C7280
 declare     field_8C728C            u32[256]                0x008C728C
 declare     polygons                PolygonObject**         0x008C7698
@@ -802,8 +804,7 @@ declare     perswrap                u8
 declare     bilinear                u8
 declare     fadeflag                u8
 declare     var_4B                  u8
-declare     var_4C                  u32
-declare     var_50                  u32
+declare     device_name             OldStdString
 declare     display_mode            OldStdString
 declare     var_5C                  u8
 
