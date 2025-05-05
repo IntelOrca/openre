@@ -636,7 +636,7 @@ namespace openre::player
             lateFlag = 512;
             goto LABEL_7;
         case PICK_UP_ITEM_INTERACT_STATE_REACHED:
-            gGameTable.byte_691F70 = 2;
+            gGameTable.hud_mode = 2;
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
             gGameTable.byte_991F80 = 1;
             gGameTable.dword_991FC4 = gGameTable.fg_stop;

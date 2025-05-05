@@ -20,8 +20,8 @@ namespace openre::hud
     void hud_fade_adjust(int no, int16_t kido, uint32_t rgb, PsxRect* rect);
     bool hud_fade_status(int no);
     void hud_fade_off(int no);
-
     int set_inventory_item(int slotId, int type, int quantity, int part);
+    void sort_inventory();
 
     void hud_init_hooks();
 }
