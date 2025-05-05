@@ -15,6 +15,9 @@ namespace openre::marni
 {
     namespace GpuFlags
     {
+        constexpr uint32_t GPU_0 = 0x1;
+        constexpr uint32_t GPU_1 = 0x2;
+        constexpr uint32_t GPU_2 = 0x4;
         constexpr uint32_t GPU_3 = 0x8;
         constexpr uint32_t GPU_7 = 0x80;
         constexpr uint32_t GPU_9 = 0x200;
@@ -41,6 +44,8 @@ namespace openre::marni
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
+    static int __stdcall init_all(Marni* self);
+    static int __stdcall clear_buffers(Marni* self);
     static void __stdcall flip(Marni* self);
     static void __stdcall move(Marni* marni);
     static int __stdcall movie_open(
@@ -71,6 +76,7 @@ namespace openre::marni
     static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim);
     static std::string __stdcall generate_res_string(const MarniRes* self);
     static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth);
+    static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
 
@@ -253,6 +259,32 @@ namespace openre::marni
         }
     }
 
+    // 0x00402210
+    static int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        ot_add_primitive_as_z(&self->otag[1], pPrim, z);
+        return 1;
+    }
+
+    // 0x00402240
+    static int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        if ((pPrim->type & 8) != 0)
+        {
+            out("you can't hang this primitive up to the priority list because this is ZCAL.", "Direct3D::AddPrimitiveBack");
+            return 0;
+        }
+
+        ot_add_primitive_as_z(&self->otag[3], pPrim, z);
+        return 1;
+    }
+
     // 0x00402290
     static void __stdcall clear_otags(Marni* self)
     {
@@ -286,9 +318,71 @@ namespace openre::marni
     }
 
     // 0x00402940
-    static void __stdcall restore_surfaces(Marni* self)
+    static int __stdcall restore_surfaces(Marni* self)
     {
-        interop::thiscall<int, Marni*>(0x00402940, self);
+        if (((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        {
+            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->Restore();
+            if (gGameTable.error)
+            {
+                out("Restoring of a Back surface failed.", "Direct3D::RestoreSurfaces");
+                error(gGameTable.error);
+                return 0;
+            }
+        }
+
+        if (((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        {
+            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->Restore();
+            if (gGameTable.error)
+            {
+                out("Restoring of a Back surface failed.", "Direct3D::RestoreSurfaces");
+                error(gGameTable.error);
+                return 0;
+            }
+        }
+
+        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+            return 1;
+
+        if (((LPDIRECTDRAWSURFACE)self->surfaceZ.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        {
+            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surfaceZ.pDDsurface)->Restore();
+            if (gGameTable.error)
+            {
+                out("Restoring of a Z surface failed.", "Direct3D::RestoreSurfaces");
+                error(gGameTable.error);
+                return 0;
+            }
+        }
+
+        if ((self->pMovie->flag & 2) != 0)
+            return 1;
+
+        for (auto i = 0; i < 256; i++)
+        {
+            const auto& node = self->texture_nodes[i];
+            if (node.var_14 == 0)
+                continue;
+
+            if ((node.var_14 & 0x2000) != 0)
+                continue;
+
+            auto v6 = node.surface;
+            if (v6 != nullptr && (v6->bOpen != 1 || ((LPDIRECTDRAWSURFACE)v6->pDDsurface)->IsLost() != DDERR_SURFACELOST))
+                continue;
+
+            for (auto j = 0; j < 256; j++)
+            {
+                if (!reload_texture(self, j))
+                {
+                    out("failed to reload texture...", "Direct3D::RestoreSurfaces");
+                    return 0;
+                }
+            }
+            break;
+        }
+        return 1;
     }
 
     static void __stdcall flip_blt(Marni* self, DWORD width, DWORD height)
@@ -404,7 +498,69 @@ namespace openre::marni
     // 0x00403220
     static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth)
     {
-        return interop::thiscall<int, Marni*, uint32_t, uint32_t, uint32_t>(0x00403220, self, width, height, depth);
+        if ((self->gpu_flag & GpuFlags::GPU_9) == 0)
+            return 0;
+
+        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+        {
+            self->aspect_x = 1.0;
+            self->aspect_y = 1.0;
+        }
+        else
+        {
+            self->aspect_x = (float)((double)width / self->render_w);
+            self->aspect_y = (float)((double)height / self->render_h);
+        }
+        self->xsize_old = self->xsize;
+        self->ysize_old = self->ysize;
+        self->bpp_old = self->bpp;
+        self->fullscreen_old = (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0;
+        self->xsize = width;
+        self->ysize = height;
+        self->bpp = depth;
+        clear_buffers(self);
+        if (!init_all(self))
+        {
+            out("this method failed for some problems to the initialize that for change mode of display for some problems.",
+                "Direct3D::ChangeMode");
+            out("this method will change not mode you specified but previous mode.", "Direct3D::ChangeMode");
+            self->xsize = self->xsize_old;
+            self->ysize = self->ysize_old;
+            self->bpp = self->bpp_old;
+            out("previous x=%d y=%d bpp=%d request x=%d y=%d bpp=%d", "Direct3D::ChangeMode");
+            clear_buffers(self);
+            if (!init_all(self))
+            {
+                out("occurred fatal error. this method couldn't come back for somethings.", "Direct3D::ChangeMode");
+                clear_buffers(self);
+                return 0;
+            }
+        }
+        if (!restore_surfaces(self))
+        {
+            out("this method failed for some problems to Reload that for change mode of display for some problems.",
+                "Direct3D::ChangeMode");
+            out("this method will change not mode you specified but previous mode.", "Direct3D::ChangeMode");
+            self->xsize = self->xsize_old;
+            self->ysize = self->ysize_old;
+            self->bpp = self->bpp_old;
+            out("previous x=%d y=%d bpp=%d request x=%d y=%d bpp=%d", "Direct3D::ChangeMode");
+            clear_buffers(self);
+            if (!init_all(self) || !restore_surfaces(self))
+            {
+                out("occurred fatal error at Reload. this method couldn't come back for somethings.", "Direct3D::ChangeMode");
+                clear_buffers(self);
+                return 0;
+            }
+        }
+        self->gpu_flag |= GpuFlags::GPU_9;
+        return 1;
+    }
+
+    // 0x004033F0
+    static int __stdcall reload_texture(Marni* self, int texture)
+    {
+        return interop::thiscall<int, Marni*, int>(0x004033F0, self, texture);
     }
 
     // 0x00404CE0
@@ -509,6 +665,18 @@ namespace openre::marni
         self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
         gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
         gGameTable.d3d_vertices_processed = stats.dwVerticesProcessed;
+    }
+
+    // 0x00403F30
+    static int __stdcall init_all(Marni* self)
+    {
+        return interop::thiscall<int, Marni*>(0x00403F30, self);
+    }
+
+    // 0x00404FA0
+    static int __stdcall clear_buffers(Marni* self)
+    {
+        return interop::thiscall<int, Marni*>(0x00404FA0, self);
     }
 
     // 0x00405EC0
@@ -1724,8 +1892,11 @@ namespace openre::marni
         interop::hookThisCall(0x00401FD0, &set_movie_resolution);
         interop::hookThisCall(0x00402160, &arrange_object_contents);
         interop::hookThisCall(0x004021C0, &add_primitive_front);
+        interop::hookThisCall(0x00402210, &add_primitive_scaler);
+        interop::hookThisCall(0x00402240, &add_primitive_back);
         interop::hookThisCall(0x00402290, &clear_otags);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
+        interop::hookThisCall(0x00402940, &restore_surfaces);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);
         interop::hookThisCall(0x00404CE0, &unload_texture);

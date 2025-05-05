@@ -664,7 +664,8 @@ declare     render_w                s32                     0x008C7EAC
 declare     render_h                s32                     0x008C7EB0
 declare     xsize_old               s32                     0x008C7EB4
 declare     ysize_old               s32                     0x008C7EB8
-declare     fullscreen_old          s32                     0x008C7EBC
+declare     bpp_old                 s32                     0x008C7EBC
+declare     fullscreen_old          s32                     0x008C7EC0
 declare     aspect_x                f32                     0x008C7ED4
 declare     aspect_y                f32                     0x008C7ED8
 declare     var_8C7EE0              s32                     0x008C7EE0

@@ -853,8 +853,9 @@ struct Marni
     int32_t render_h;                   // 0x8C7EB0
     int32_t xsize_old;                  // 0x8C7EB4
     int32_t ysize_old;                  // 0x8C7EB8
-    int32_t fullscreen_old;             // 0x8C7EBC
-    uint8_t pad_8C7EC0[20];             // 0x8C7EC0
+    int32_t bpp_old;                    // 0x8C7EBC
+    int32_t fullscreen_old;             // 0x8C7EC0
+    uint8_t pad_8C7EC4[16];             // 0x8C7EC4
     float aspect_x;                     // 0x8C7ED4
     float aspect_y;                     // 0x8C7ED8
     uint8_t pad_8C7EDC[4];              // 0x8C7EDC
