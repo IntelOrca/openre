@@ -156,6 +156,12 @@ namespace openre
 
     enum
     {
+        FG_MESSAGE_ANSWER_NO = 0,
+        FG_MESSAGE_WAITING_ANSWER = 7,
+    };
+
+    enum
+    {
         EX_BATTLE_MODE_LEVEL_1 = 1,
         EX_BATTLE_MODE_LEVEL_2 = 3,
         EX_BATTLE_MODE_LEVEL_3 = 3,
