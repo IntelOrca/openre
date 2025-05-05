@@ -41,6 +41,7 @@ namespace openre::marni
 
     static void d3d_error_routine(int errorCode);
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -50,13 +51,16 @@ namespace openre::marni
     static void __stdcall move(Marni* marni);
     static int __stdcall movie_open(
         MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
+    static void __stdcall movie_dtor(MarniMovie* self);
     static void __stdcall movie_release(MarniMovie* self);
     static int __stdcall movie_seek(MarniMovie* self);
     static int __stdcall movie_update(MarniMovie* self);
     static int __stdcall movie_update_window(MarniMovie* self);
+    static void __stdcall polygon_object_dtor(PolygonObject* self);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
     static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z);
     static int __stdcall ot_clear(MarniOt* self);
+    static void __stdcall ot_dtor(MarniOt* self);
     static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
@@ -79,6 +83,25 @@ namespace openre::marni
     static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
+    static void __stdcall surface3_dtor(MarniSurface3* self);
+
+    // 0x0050D905
+    void* cstd_malloc(size_t len)
+    {
+        return interop::call<void*, size_t>(0x0050D905, len);
+    }
+
+    // 0x0050D89C
+    void cstd_free(void* mem)
+    {
+        interop::call<void, void*>(0x0050D89C, mem);
+    }
+
+    // 0x0050CC9E
+    void __stdcall cstd_vector_dtor(void* elements, size_t elementSize, size_t count, void* cb)
+    {
+        interop::stdcall<void, void*, size_t, size_t, void*>(0x0050CC9E, elements, elementSize, count, cb);
+    }
 
     static void surface_release(MarniSurface2* self)
     {
@@ -677,6 +700,86 @@ namespace openre::marni
     static int __stdcall clear_buffers(Marni* self)
     {
         return interop::thiscall<int, Marni*>(0x00404FA0, self);
+    }
+
+    // 0x004050C0
+    static void __stdcall dtor(Marni* self)
+    {
+        if (self->pMovie != nullptr)
+        {
+            movie_dtor(self->pMovie);
+            cstd_free(self->pMovie);
+            self->pMovie = nullptr;
+        }
+
+        clear_buffers(self);
+
+        for (size_t i = 0; i < self->polygons_count; i++)
+        {
+            if (self->polygons[i] != nullptr)
+            {
+                polygon_object_dtor(self->polygons[i]);
+                cstd_free(self->polygons[i]);
+                self->polygons[i] = nullptr;
+            }
+        }
+        cstd_free(self->polygons);
+        self->polygons = nullptr;
+
+        for (auto i = 0; i < 256; i++)
+            unload_texture(self, i);
+
+        for (auto i = 0; i < 128; i++)
+        {
+            auto s = self->var_8C76A0[i];
+            if (s != nullptr)
+            {
+                surface3_dtor(s->surface);
+                cstd_free(s);
+            }
+        }
+
+        if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0 && self->pDirectDraw != nullptr)
+        {
+            self->is_gpu_busy = 1;
+            if (self->pDirectDraw2 != nullptr)
+            {
+                ((LPDIRECTDRAW2)self->pDirectDraw2)->RestoreDisplayMode();
+                dd_set_coop_level((HWND)self->hWnd, 0, (LPDIRECTDRAW)self->pDirectDraw2);
+            }
+            self->is_gpu_busy = 0;
+        }
+
+        if (self->pDirect3D2 != nullptr)
+        {
+            ((LPDIRECT3D2)self->pDirect3D2)->Release();
+            self->pDirect3D2 = nullptr;
+        }
+
+        if (self->pDirectDraw2 != nullptr)
+        {
+            ((LPDIRECTDRAW2)self->pDirectDraw2)->Release();
+            self->pDirectDraw2 = nullptr;
+        }
+
+        if (self->pDirectDraw != nullptr)
+        {
+            ((LPDIRECTDRAW)self->pDirectDraw)->Release();
+            self->pDirectDraw = nullptr;
+        }
+
+        surfacey_dtor(&self->surface3);
+        surfacey_dtor(&self->surface2);
+        surfacey_dtor(&self->surfaceZ);
+        surfacey_dtor(&self->surface0);
+
+        ot_dtor(&self->otag[4]);
+        ot_dtor(&self->otag[3]);
+        ot_dtor(&self->otag[2]);
+        ot_dtor(&self->otag[1]);
+        ot_dtor(&self->otag[0]);
+
+        cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
     }
 
     // 0x00405EC0
@@ -1570,6 +1673,20 @@ namespace openre::marni
         return S_OK;
     }
 
+    // 0x0040F580
+    static void __stdcall surfacey_vrelease(MarniSurface2* self)
+    {
+        interop::thiscall<int, MarniSurface2*>(0x0040F580, self);
+    }
+
+    // 0x0040FF20
+    void __stdcall surfacey_dtor(MarniSurface2* self)
+    {
+        self->vtbl = (void**)0x0051737C;
+        surfacey_vrelease(self);
+        surface2_release(self);
+    }
+
     // 0x004149D0
     void __stdcall surface2_ctor(MarniSurface2* self)
     {
@@ -1588,6 +1705,21 @@ namespace openre::marni
     void __stdcall surface2_vrelease(MarniSurface2* self)
     {
         interop::thiscall<int, MarniSurface2*>(0x00414A40, self);
+    }
+
+    // 0x00414AC0
+    static void __stdcall surface3_vrelease(MarniSurface3* self)
+    {
+        surface2_vrelease(self);
+        self->pDDsurface = nullptr;
+    }
+
+    // 0x00414AE0
+    static void __stdcall surface3_dtor(MarniSurface3* self)
+    {
+        self->vtbl = (void**)0x005173D4;
+        surface3_vrelease(self);
+        surface2_release(self);
     }
 
     // 0x00414B30
@@ -1625,10 +1757,23 @@ namespace openre::marni
             0x00414CF0, self, path, hWnd, pRect, pDD2, pSurface);
     }
 
+    // 0x00414FC0
+    static void __stdcall movie_dtor(MarniMovie* self)
+    {
+        movie_release(self);
+        CoUninitialize();
+    }
+
     // 0x00414FD0
     static void __stdcall movie_release(MarniMovie* self)
     {
         interop::thiscall<int, MarniMovie*>(0x00414FD0, self);
+    }
+
+    // 0x004164C0
+    static void __stdcall polygon_object_dtor(PolygonObject* self)
+    {
+        interop::thiscall<int, void*>(0x004164C0, self);
     }
 
     // 0x004164D0
@@ -1672,6 +1817,15 @@ namespace openre::marni
         lastPrim.type = 0;
         self->pCurrent = self->pHead;
         return 1;
+    }
+
+    // 0x00416610
+    static void __stdcall ot_dtor(MarniOt* self)
+    {
+        cstd_free(self->pHead);
+        self->pHead = nullptr;
+        self->zdepth = 0;
+        self->is_valid = 0;
     }
 
     // 0x00416670
@@ -1901,6 +2055,7 @@ namespace openre::marni
         interop::hookThisCall(0x00402BC0, &draw);
         interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::hookThisCall(0x00404D20, &clear);
+        interop::hookThisCall(0x004050C0, &dtor);
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);

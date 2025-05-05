@@ -824,6 +824,21 @@ struct MarniDrawOp
 };
 static_assert(sizeof(MarniDrawOp) == 0x88);
 
+struct PolygonObject
+{
+    void** vtbl;                        // 0x0000
+    uint8_t pad_0004[80];               // 0x0004
+    uint32_t var_54;                    // 0x0054
+};
+static_assert(sizeof(PolygonObject) == 0x58);
+
+struct Unknown8C76A0
+{
+    uint8_t pad_0000[8];                // 0x0000
+    MarniSurface3* surface;             // 0x0008
+};
+static_assert(sizeof(Unknown8C76A0) == 0x0C);
+
 struct Marni
 {
     MarniTextureNode texture_nodes[256];// 0x0000
@@ -840,7 +855,11 @@ struct Marni
     uint32_t modes;                     // 0x8C7018
     uint8_t pad_8C701C[8];              // 0x8C701C
     MarniOt otag[5];                    // 0x8C7024
-    uint8_t pad_8C7088[3156];           // 0x8C7088
+    uint8_t pad_8C7088[1552];           // 0x8C7088
+    PolygonObject** polygons;           // 0x8C7698
+    uint32_t polygons_count;            // 0x8C769C
+    Unknown8C76A0* var_8C76A0[128];     // 0x8C76A0
+    uint8_t pad_8C78A0[1084];           // 0x8C78A0
     WindowRect window_rect;             // 0x8C7CDC
     uint8_t pad_8C7CEC[424];            // 0x8C7CEC
     void* pMaterial;                    // 0x8C7E94
