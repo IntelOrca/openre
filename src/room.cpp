@@ -298,7 +298,7 @@ namespace openre::room
                     {
                         gGameTable.mem_top = rdt_get_offset<void*>(RdtOffsetKind::VB);
                     }
-                    gGameTable.dword_988628 = &gGameTable.pl;
+                    gGameTable.actor_entity = &gGameTable.pl;
                     gGameTable.pl.routine_0 = 0;
                     gGameTable.pl.routine_1 = 0;
                     gGameTable.pl.routine_2 = 0;

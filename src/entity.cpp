@@ -75,4 +75,10 @@ namespace openre
     {
         interop::call(0x004B4480);
     }
+
+    // 0x004B2360
+    int direction_check(int16_t a0, int16_t a1, int16_t a2, int16_t a3)
+    {
+        return interop::call<int, int16_t, int16_t, int16_t, int16_t>(0x004B2360, a0, a1, a2, a3);
+    }
 }
