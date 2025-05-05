@@ -11,6 +11,7 @@ namespace openre::marni
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
     void __stdcall unload_texture(Marni* self, int handle);
 
+    MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self);
     void __stdcall surfacey_dtor(MarniSurface2* self);
     void __stdcall surface2_ctor(MarniSurface2* self);
     void __stdcall surface2_release(MarniSurface2* self);

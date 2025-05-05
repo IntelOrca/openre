@@ -588,6 +588,11 @@ base        MarniSurface
 declare     texture_handle          u32
 declare     pDDtexture              void*
 
+struct      MarniSurfaceY
+base        MarniSurface
+declare     texture_handle          u32
+declare     pDDtexture              void*
+
 struct      MarniMovie
 declare     flag                    u32                     0x94
 declare     pos                     f64
@@ -649,9 +654,21 @@ declare     var_54                  u32                     0x54
 struct      Unknown8C76A0
 declare     surface                 MarniSurface3*          0x08
 
+struct      MarniLight
+declare     var_0C                  u32                     0x0C
+declare     var_10                  u32                     0x10
+declare     var_14                  f32                     0x14
+declare     var_18                  f32                     0x18
+declare     var_1C                  f32                     0x1C
+declare     var_20                  f32                     0x20
+declare     var_2C                  u32                     0x2C
+
 struct      Marni
 declare     texture_nodes           MarniTextureNode[256]
-declare     textures                MarniTexture[64]        0x1800
+declare     textures                MarniTexture[256]       0x1800
+declare     field_5000              u32                     0x5000
+declare     field_5004              u32                     0x5004
+declare     field_5008              u32                     0x5008
 declare     field_5010              MarniLineRecord[8]      0x5010
 declare     field_700C              s32                     0x700C
 declare     draw_ops                MarniDrawOp[65536]      0x7010
@@ -659,11 +676,50 @@ declare     draw_op_ptrs            MarniDrawOp*[65536]     0x00887010
 declare     num_draw_ops            s32                     0x008C7010
 declare     cutscene_bars           u8                      0x008C7014
 declare     modes                   u32                     0x008C7018
+declare     field_8C701C            f32                     0x008C701C
+declare     field_8C7020            u32                     0x008C7020
 declare     otag                    MarniOt[5]              0x008C7024
+declare     dwVidMemTotal           u32                     0x008C7280
+declare     field_8C728C            u32[256]                0x008C728C
 declare     polygons                PolygonObject**         0x008C7698
 declare     polygons_count          u32                     0x008C769C
 declare     var_8C76A0              Unknown8C76A0*[128]     0x008C76A0
 declare     window_rect             WindowRect              0x008C7CDC
+declare     pClipper                void*                   0x008C7CEC
+declare     lights                  MarniLight[6]           0x008C7CF0
+declare     field_8C7E10            u32                     0x008C7E10
+declare     field_8C7E14            u32                     0x008C7E14
+declare     field_8C7E18            f32                     0x008C7E18
+declare     field_8C7E1C            u32                     0x008C7E1C
+declare     field_8C7E20            u32                     0x008C7E20
+declare     field_8C7E24            u32                     0x008C7E24
+declare     field_8C7E28            f32                     0x008C7E28
+declare     field_8C7E2C            u32                     0x008C7E2C
+declare     field_8C7E30            u32                     0x008C7E30
+declare     field_8C7E34            u32                     0x008C7E34
+declare     field_8C7E38            f32                     0x008C7E38
+declare     field_8C7E3C            u32                     0x008C7E3C
+declare     field_8C7E40            u32                     0x008C7E40
+declare     field_8C7E44            u32                     0x008C7E44
+declare     field_8C7E48            u32                     0x008C7E48
+declare     field_8C7E4C            u32                     0x008C7E4C
+declare     field_8C7E50            f32                     0x008C7E50
+declare     field_8C7E54            f32                     0x008C7E54
+declare     field_8C7E58            f32                     0x008C7E58
+declare     field_8C7E5C            u32                     0x008C7E5C
+declare     field_8C7E60            f32                     0x008C7E60
+declare     field_8C7E64            f32                     0x008C7E64
+declare     field_8C7E68            f32                     0x008C7E68
+declare     field_8C7E6C            u32                     0x008C7E6C
+declare     field_8C7E70            f32                     0x008C7E70
+declare     field_8C7E74            f32                     0x008C7E74
+declare     field_8C7E78            f32                     0x008C7E78
+declare     field_8C7E7C            u32                     0x008C7E7C
+declare     field_8C7E80            u32                     0x008C7E80
+declare     field_8C7E84            u32                     0x008C7E84
+declare     field_8C7E88            u32                     0x008C7E88
+declare     field_8C7E8C            u32                     0x008C7E8C
+declare     field_8C7E90            u32                     0x008C7E90
 declare     pMaterial               void*                   0x008C7E94
 declare     MaterialHandle          u32                     0x008C7E98
 declare     pDirect3D2              void*                   0x008C7E9C
@@ -676,8 +732,11 @@ declare     xsize_old               s32                     0x008C7EB4
 declare     ysize_old               s32                     0x008C7EB8
 declare     bpp_old                 s32                     0x008C7EBC
 declare     fullscreen_old          s32                     0x008C7EC0
+declare     field_8C7EC4            s32                     0x008C7EC4
+declare     field_8C7EC8            s32                     0x008C7EC8
 declare     aspect_x                f32                     0x008C7ED4
 declare     aspect_y                f32                     0x008C7ED8
+declare     field_8C7EDC            u32                     0x008C7EDC
 declare     var_8C7EE0              s32                     0x008C7EE0
 declare     var_8C7EE4              s32                     0x008C7EE4
 declare     is_gpu_busy             s32                     0x008C7EE8
@@ -686,10 +745,13 @@ declare     desktop_h               s32                     0x008C7EF0
 declare     desktop_bpp             s32                     0x008C7EF4
 declare     resolutions             MarniRes[64]            0x008C7EF8
 declare     res_count               s32                     0x008C82F8
+declare     field_8C82FC            s32                     0x008C82FC
+declare     field_8C8300            s32                     0x008C8300
 declare     var_8C8318              s32                     0x008C8318
 declare     ambient_b               u8                      0x008C831C
 declare     ambient_g               u8                      0x008C831D
 declare     ambient_r               u8                      0x008C831E
+declare     ambient_a               u8                      0x008C831F
 declare     pDirectDraw             void*                   0x008C8320
 declare     pDirectDraw2            void*                   0x008C8324
 declare     pMovie                  MarniMovie*             0x008C8328
@@ -704,7 +766,15 @@ declare     surface2                MarniSurface            0x008C83B8
 declare     gpu_flag                u32                     0x008C83F4
 declare     vertices_processed      u32                     0x008C83F8
 declare     triangles_drawn         u32                     0x008C83FC
+declare     field_8C8410            u32                     0x008C8410
+declare     field_8C8414            u32                     0x008C8414
+declare     field_8C8418            u32                     0x008C8418
+declare     field_8C841C            u32                     0x008C841C
+declare     field_8C8420            u32                     0x008C8420
+declare     field_8C8424            f32                     0x008C8424
+declare     field_8C8428            u32                     0x008C8428
 declare     device_cnt              s32                     0x008C842C
+declare     field_8C8430            s32                     0x008C8430
 declare     surface3                MarniSurface            0x008C8434
 
 struct      OldStdString

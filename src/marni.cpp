@@ -19,6 +19,8 @@ namespace openre::marni
         constexpr uint32_t GPU_1 = 0x2;
         constexpr uint32_t GPU_2 = 0x4;
         constexpr uint32_t GPU_3 = 0x8;
+        constexpr uint32_t GPU_4 = 0x10;
+        constexpr uint32_t ENUM_DEVICES = 0x40;
         constexpr uint32_t GPU_7 = 0x80;
         constexpr uint32_t GPU_9 = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
@@ -40,6 +42,7 @@ namespace openre::marni
     };
 
     static void d3d_error_routine(int errorCode);
+    static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2);
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD);
     static void __stdcall destroy(Marni* marni);
@@ -51,21 +54,25 @@ namespace openre::marni
     static void __stdcall move(Marni* marni);
     static int __stdcall movie_open(
         MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
+    static MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode);
     static void __stdcall movie_dtor(MarniMovie* self);
     static void __stdcall movie_release(MarniMovie* self);
     static int __stdcall movie_seek(MarniMovie* self);
     static int __stdcall movie_update(MarniMovie* self);
     static int __stdcall movie_update_window(MarniMovie* self);
     static void __stdcall polygon_object_dtor(PolygonObject* self);
+    static MarniOt* __stdcall ot_ctor(MarniOt* self, size_t a2, int a3);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
     static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z);
     static int __stdcall ot_clear(MarniOt* self);
+    static int __stdcall ot_alloc(MarniOt* self, int depth, int a3);
     static void __stdcall ot_dtor(MarniOt* self);
     static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
     static void __stdcall sub_40EC10(Marni* self);
+    static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
     static int __stdcall sub_414B30(MarniMovie* self);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
     static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index);
@@ -101,6 +108,12 @@ namespace openre::marni
     void __stdcall cstd_vector_dtor(void* elements, size_t elementSize, size_t count, void* cb)
     {
         interop::stdcall<void, void*, size_t, size_t, void*>(0x0050CC9E, elements, elementSize, count, cb);
+    }
+
+    // 0x0050CD7C
+    void __stdcall cstd_vector_ctor(void* elements, size_t elementSize, size_t count, void* cb, void* cb2)
+    {
+        interop::stdcall<void, void*, size_t, size_t, void*, void*>(0x0050CD7C, elements, elementSize, count, cb, cb2);
     }
 
     static void surface_release(MarniSurface2* self)
@@ -780,6 +793,171 @@ namespace openre::marni
         ot_dtor(&self->otag[0]);
 
         cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
+    }
+
+    // 0x00405320
+    static Marni* __stdcall init(Marni* self, HWND hWnd, int width, int height)
+    {
+        cstd_vector_ctor(self->textures, sizeof(MarniTexture), 256, (void*)0x405DC0, (void*)0x405310);
+        auto exception = 0;
+        ot_ctor(&self->otag[0], 4096, 1);
+        ot_ctor(&self->otag[1], 4096, 1);
+        ot_ctor(&self->otag[2], 4096, 1);
+        ot_ctor(&self->otag[3], 4096, 1);
+        ot_ctor(&self->otag[4], 4096, 1);
+        surfacey_ctor((MarniSurfaceY*)&self->surface0);
+        surfacey_ctor((MarniSurfaceY*)&self->surfaceZ);
+        surfacey_ctor((MarniSurfaceY*)&self->surface2);
+        surfacey_ctor((MarniSurfaceY*)&self->surface3);
+        self->is_gpu_active = 0;
+        auto v5 = (MarniMovie*)cstd_malloc(0xA8);
+        exception = 10;
+        self->pMovie = v5 == nullptr ? nullptr : movie_ctor(v5, 0);
+        self->field_8C8420 = 0;
+        self->field_8C841C = 0;
+        self->field_8C8418 = 0;
+        self->field_8C8414 = 0;
+        self->field_8C8428 = 0;
+        self->field_8C8424 = 0.0f;
+        self->field_8C8410 = 0;
+        exception = 9;
+        std::memset(self, 0, 0x1800);
+        for (auto i = 0; i < 256; i++)
+        {
+            self->textures[i].var_00 = 0;
+        }
+        self->field_8C7E18 = 1.0f;
+        self->field_8C7E28 = 1.0f;
+        self->field_8C7E38 = 1.0f;
+        self->field_8C7E10 = 0;
+        self->field_8C7E14 = 0;
+        self->field_8C7E1C = 0;
+        self->field_8C7E20 = 0;
+        self->field_8C7E24 = 0;
+        self->field_8C7E2C = 0;
+        self->field_8C7E30 = 0;
+        self->field_8C7E34 = 0;
+        self->field_8C7E3C = 0;
+        self->field_8C7E40 = 0;
+        self->field_8C7E44 = 0;
+        self->field_8C7E48 = 0;
+        self->field_8C7E4C = 0;
+        self->field_8C7E50 = 255.0f;
+        self->field_8C7E54 = 255.0f;
+        self->field_8C7E58 = 255.0f;
+        self->field_8C7E5C = 0;
+        self->field_8C7E60 = 255.0f;
+        self->field_8C7E64 = 255.0f;
+        self->field_8C7E68 = 255.0f;
+        self->field_8C7E6C = 0;
+        self->field_8C7E70 = 255.0f;
+        self->field_8C7E74 = 255.0f;
+        self->field_8C7E78 = 255.0f;
+        self->field_8C7E7C = 0;
+        self->field_8C7E80 = 0;
+        self->field_8C7E84 = 0;
+        self->field_8C7E88 = 0;
+        self->field_8C7E8C = 0;
+        self->field_5000 = 4;
+        self->field_5008 = 0;
+        self->field_5004 = 0;
+        self->gpu_flag = 0;
+        self->field_8C7EDC = 260;
+        ot_alloc(&self->otag[0], 16, 0);
+        ot_alloc(&self->otag[1], 0, 1);
+        ot_alloc(&self->otag[3], 16, 0);
+        self->hWnd = hWnd;
+        self->render_w = width;
+
+        self->xsize = width;
+        self->ysize = height;
+        self->dwVidMemFree = 0;
+        self->is_gpu_active = 0;
+        self->field_8C7EC4 = width / 2;
+        self->render_h = height;
+        self->aspect_x = (float)(self->xsize / (double)width);
+        self->aspect_y = (float)(self->ysize / (double)height);
+        self->field_8C7EC8 = height / 2;
+        self->var_8C7EE4 = 0;
+        self->var_8C7EE0 = 0;
+        std::memset(self->resolutions, 0, sizeof(self->resolutions));
+        self->res_count = 0;
+        self->field_8C8300 = 3;
+        self->field_8C7E90 = 0;
+        self->field_8C82FC = 0;
+        self->desktop_w = GetSystemMetrics(0);
+        self->desktop_h = GetSystemMetrics(1);
+        auto DC = GetDC(0);
+        auto DeviceCaps = GetDeviceCaps(DC, 14);
+        self->desktop_bpp = GetDeviceCaps(DC, 12) * DeviceCaps;
+        ReleaseDC(0, DC);
+        self->bpp = self->desktop_bpp;
+        self->gpu_flag |= GpuFlags::GPU_4;
+        self->is_gpu_busy = 0;
+        *((uint32_t*)&self->ambient_b) = 0;
+        self->var_8C8318 = 0;
+        std::memset(self->var_8C76A0, 0, sizeof(self->var_8C76A0));
+        self->pClipper = nullptr;
+        self->pDirectDraw = 0;
+        self->pMaterial = 0;
+        self->pViewport = 0;
+        self->pDirectDevice2 = nullptr;
+        self->pDirect3D2 = 0;
+        self->pDirectDraw2 = 0;
+        self->field_8C8430 = 0;
+        std::memset(self->field_8C728C, 0, sizeof(self->field_8C728C));
+        self->dwVidMemTotal = 0;
+        self->res_count = 0;
+        self->polygons_count = 512;
+        self->polygons = (PolygonObject**)cstd_malloc(512 * sizeof(PolygonObject*));
+        std::memset(self->polygons, 0, 512 * sizeof(PolygonObject*));
+        self->field_8C701C = -0.5;
+        self->field_8C7020 = 0;
+        self->is_gpu_active = 0;
+        self->pMaterial = 0;
+        self->MaterialHandle = 0;
+        self->device_cnt = 0;
+        std::memset(self->lights, 0, sizeof(self->lights));
+        for (auto i = 0; i < 6; i++)
+        {
+            self->lights->var_14 = 0.5f;
+            self->lights->var_18 = 0.5f;
+            self->lights->var_1C = 0.5f;
+            self->lights->var_20 = 0.5f;
+        }
+
+        DWORD isDefault;
+        gGameTable.error = create_ddraw(self->gpu_flag & GpuFlags::ENUM_DEVICES, (LPDIRECTDRAW*)&self->pDirectDraw, &isDefault);
+        if (gGameTable.error != 0)
+        {
+            out("The Marni failed to generate DirectDraw com.", "MarniSystem Direct3D::Direct3D");
+            error(gGameTable.error);
+            return self;
+        }
+
+        self->gpu_flag |= isDefault == 0 ? 0 : GpuFlags::GPU_7;
+        gGameTable.error = query_ddraw2((LPDIRECTDRAW)self->pDirectDraw, (LPDIRECTDRAW2*)&self->pDirectDraw2);
+        if (gGameTable.error != 0)
+        {
+            out("failed to generate DirectDraw2 COM", "MarniSystem Direct3D::Direct3D");
+            error(gGameTable.error);
+            return self;
+        }
+
+        DDCAPS ddCaps;
+        ddCaps.dwSize = sizeof(DDCAPS);
+        gGameTable.error = ((LPDIRECTDRAW)self->pDirectDraw)->GetCaps(&ddCaps, NULL);
+        if (gGameTable.error != 0)
+        {
+            out("GetCaps failed err", "MarniSystem Direct3D::Direct3D");
+            error(gGameTable.error);
+            return self;
+        }
+
+        out("you will be able to use the VideoMemory...%dbyte", "MarniSystem Direct3D::Direct3D");
+        self->dwVidMemTotal = ddCaps.dwVidMemTotal;
+        // CreateDirect3D
+        return self;
     }
 
     // 0x00405EC0
@@ -1679,6 +1857,12 @@ namespace openre::marni
         interop::thiscall<int, MarniSurface2*>(0x0040F580, self);
     }
 
+    // 0x0040FEF0
+    MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self)
+    {
+        return interop::thiscall<MarniSurfaceY*, MarniSurfaceY*>(0x0040FEF0, self);
+    }
+
     // 0x0040FF20
     void __stdcall surfacey_dtor(MarniSurface2* self)
     {
@@ -1757,6 +1941,12 @@ namespace openre::marni
             0x00414CF0, self, path, hWnd, pRect, pDD2, pSurface);
     }
 
+    // 0x00414F50
+    static MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode)
+    {
+        return interop::thiscall<MarniMovie*, MarniMovie*, int>(0x00414F50, self, mode);
+    }
+
     // 0x00414FC0
     static void __stdcall movie_dtor(MarniMovie* self)
     {
@@ -1774,6 +1964,12 @@ namespace openre::marni
     static void __stdcall polygon_object_dtor(PolygonObject* self)
     {
         interop::thiscall<int, void*>(0x004164C0, self);
+    }
+
+    // 0x00416630
+    static MarniOt* __stdcall ot_ctor(MarniOt* self, size_t a2, int a3)
+    {
+        return interop::thiscall<MarniOt*, MarniOt*, size_t, int>(0x00416630, self, a2, a3);
     }
 
     // 0x004164D0
@@ -1817,6 +2013,12 @@ namespace openre::marni
         lastPrim.type = 0;
         self->pCurrent = self->pHead;
         return 1;
+    }
+
+    // 0x004165B0
+    static int __stdcall ot_alloc(MarniOt* self, int depth, int a3)
+    {
+        return interop::thiscall<int, MarniOt*, int, int>(0x004165B0, self, depth, a3);
     }
 
     // 0x00416610
@@ -2056,6 +2258,7 @@ namespace openre::marni
         interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::hookThisCall(0x00404D20, &clear);
         interop::hookThisCall(0x004050C0, &dtor);
+        interop::hookThisCall(0x00405320, &init);
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);
