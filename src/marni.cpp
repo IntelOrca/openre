@@ -726,12 +726,11 @@ namespace openre::marni
         else
             self->gpu_flag |= GpuFlags::GPU_FULLSCREEN;
         self->xsize = r.width;
-        auto pDirectDraw2 = self->pDirectDraw2;
         self->ysize = r.height;
         self->bpp = r.depth;
         self->is_gpu_busy = 1;
         gGameTable.error
-            = dd_set_coop_level((HWND)self->hWnd, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPDIRECTDRAW2)pDirectDraw2);
+            = dd_set_coop_level((HWND)self->hWnd, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPDIRECTDRAW2)self->pDirectDraw2);
         self->is_gpu_busy = 0;
         if (gGameTable.error)
         {
@@ -874,7 +873,7 @@ namespace openre::marni
         }
         else
         {
-            desc.dwFlags = 1;
+            desc.dwFlags = DDSD_CAPS;
             desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
             gGameTable.error
                 = ((LPDIRECTDRAW2)self->pDirectDraw2)
@@ -954,13 +953,13 @@ namespace openre::marni
         }
         self->surface2.pDDpalette = nullptr;
         ddrawdesc2surfdesc(&desc, &self->surface2.desc);
-        self->surface2.width = desc.dwWidth;
-        self->surface2.bpp = desc.ddpfPixelFormat.dwRGBBitCount;
+        self->surface2.width = (int16_t)desc.dwWidth;
+        self->surface2.bpp = (uint8_t)desc.ddpfPixelFormat.dwRGBBitCount;
         self->surface2.desc.a_bitcnt = 0;
         self->surface2.is_vmem = desc.ddsCaps.dwCaps & DDSCAPS_HWCODEC ? 1 : 0;
         self->surface2.var_25 = 0;
-        self->surface2.height = desc.dwHeight;
-        self->surface2.pitch = desc.lPitch;
+        self->surface2.height = (int16_t)desc.dwHeight;
+        self->surface2.pitch = (int16_t)desc.lPitch;
         self->surface2.var_27 = 1;
         self->surface2.var_28 = 0;
         self->surface2.var_29 = 0;
@@ -1038,33 +1037,37 @@ namespace openre::marni
             if (gGameTable.error)
                 error(gGameTable.error);
 
-            if (self->field_8C8300 <= 6
-                && !((LPDIRECT3D2)self->pDirect3D2)->CreateMaterial((LPDIRECT3DMATERIAL2*)&self->pMaterial, NULL))
-            {
-                D3DMATERIAL mat;
-                ((LPDIRECT3DMATERIAL2)self->pMaterial)
-                    ->GetHandle((LPDIRECT3DDEVICE2)self->pDirectDevice2, (LPD3DMATERIALHANDLE)&self->MaterialHandle);
-                ZeroMemory(&mat, sizeof(D3DMATERIAL));
-                mat.dwSize = sizeof(D3DMATERIAL);
-                mat.ambient.r = (double)self->ambient_r * 0.0039215689;
-                mat.emissive.r = 0.0;
-                mat.ambient.a = 1.0;
-                mat.diffuse.r = mat.ambient.r;
-                mat.ambient.g = (double)self->ambient_g * 0.0039215689;
-                mat.dwRampSize = 32;
-                mat.diffuse.g = mat.ambient.g;
-                mat.ambient.b = (double)self->ambient_b * 0.0039215689;
-                // mat.dcvDiffuse.b = mat.ambient.b;
-                ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
-                ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetBackground(self->MaterialHandle);
-                self->is_gpu_active = 1;
-                return 1;
-            }
-            else
+            if (self->field_8C8300 > 6)
             {
                 out();
                 return 0;
             }
+
+            gGameTable.error = ((LPDIRECT3D2)self->pDirect3D2)->CreateMaterial((LPDIRECT3DMATERIAL2*)&self->pMaterial, NULL);
+            if (gGameTable.error != 0)
+            {
+                out();
+                return 0;
+            }
+
+            ((LPDIRECT3DMATERIAL2)self->pMaterial)
+                ->GetHandle((LPDIRECT3DDEVICE2)self->pDirectDevice2, (LPD3DMATERIALHANDLE)&self->MaterialHandle);
+            D3DMATERIAL mat;
+            ZeroMemory(&mat, sizeof(D3DMATERIAL));
+            mat.dwSize = sizeof(D3DMATERIAL);
+            mat.ambient.r = (float)(self->ambient_r * 0.0039215689);
+            mat.ambient.g = (float)(self->ambient_g * 0.0039215689);
+            mat.ambient.b = (float)(self->ambient_b * 0.0039215689);
+            mat.ambient.a = 1.0;
+            mat.diffuse.r = mat.ambient.r;
+            mat.diffuse.g = mat.ambient.g;
+            mat.diffuse.b = mat.ambient.b;
+            mat.emissive.r = 0.0;
+            mat.dwRampSize = 32;
+            ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
+            ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetBackground(self->MaterialHandle);
+            self->is_gpu_active = 1;
+            return 1;
         }
         if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
             surface_fill(&self->surface2, 0, 0, 0);
