@@ -43,10 +43,12 @@ namespace openre::marni
 
     static void d3d_error_routine(int errorCode);
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2);
+    static int __stdcall create_device(Marni* self);
+    static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ);
     static int __stdcall enum_drivers(Marni* self);
     static int __stdcall create_d3d(Marni* self);
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
-    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD);
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     static void __stdcall destroy(Marni* marni);
@@ -75,8 +77,11 @@ namespace openre::marni
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
+    static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect);
     static void __stdcall sub_40EC10(Marni* self);
+    static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc);
     static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count);
+    static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface);
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
     static int __stdcall sub_414B30(MarniMovie* self);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
@@ -97,6 +102,7 @@ namespace openre::marni
     static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
     static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s);
     static void __stdcall surface3_dtor(MarniSurface3* self);
+    static int __stdcall get_z_buffer_caps(Marni* self);
 
     // 0x0050D905
     void* cstd_malloc(size_t len)
@@ -712,7 +718,358 @@ namespace openre::marni
     // 0x00403F30
     static int __stdcall init_all(Marni* self)
     {
-        return interop::thiscall<int, Marni*>(0x00403F30, self);
+        // return interop::thiscall<int, Marni*>(0x00403F30, self);
+
+        const auto& r = self->resolutions[self->modes];
+        if (r.fullscreen <= 0)
+            self->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
+        else
+            self->gpu_flag |= GpuFlags::GPU_FULLSCREEN;
+        self->xsize = r.width;
+        auto pDirectDraw2 = self->pDirectDraw2;
+        self->ysize = r.height;
+        self->bpp = r.depth;
+        self->is_gpu_busy = 1;
+        gGameTable.error
+            = dd_set_coop_level((HWND)self->hWnd, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPDIRECTDRAW2)pDirectDraw2);
+        self->is_gpu_busy = 0;
+        if (gGameTable.error)
+        {
+            out();
+            error(gGameTable.error);
+            self->is_gpu_active = 0;
+            return 0;
+        }
+        get_z_buffer_caps(self);
+        invalidate_window(
+            (HWND)self->hWnd, self->xsize, self->ysize, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPRECT)&self->window_rect);
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+        {
+            self->is_gpu_busy = 1;
+            gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)->SetDisplayMode(self->xsize, self->ysize, self->bpp, 0, 0);
+            self->is_gpu_busy = 0;
+            if (gGameTable.error)
+            {
+                out();
+                error(gGameTable.error);
+                self->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
+                return 0;
+            }
+
+            const auto& r2 = self->resolutions[self->modes];
+            switch (r2.fullscreen)
+            {
+            case 1: SetRect((LPRECT)&self->window_rect, 0, 0, r2.width, r2.height); break;
+            case 2:
+                self->xsize = self->render_w;
+                self->ysize = self->render_h;
+                SetRect(
+                    (LPRECT)&self->window_rect,
+                    (r2.width / 2) - (self->render_w / 2),
+                    (r2.height / 2) - (self->render_h / 2),
+                    (r2.width / 2) + (self->render_w / 2),
+                    (r2.height / 2) + (self->render_h / 2));
+                break;
+            case 3:
+                self->xsize = self->render_w;
+                self->ysize = self->render_h;
+                SetRect((LPRECT)&self->window_rect, 0, 0, r2.width, r2.height);
+                break;
+            }
+            gGameTable.dword_54413C = 1;
+        }
+        else if (self->resolutions[self->modes].fullscreen == 0xFFFFFFFF)
+        {
+            self->xsize = self->render_w;
+            self->ysize = self->render_h;
+        }
+
+        DDSURFACEDESC desc;
+        ZeroMemory(&desc, sizeof(DDSURFACEDESC));
+        desc.dwSize = sizeof(DDSURFACEDESC);
+        self->aspect_x = (float)((double)self->xsize / self->render_w);
+        self->aspect_y = (float)((double)self->ysize / self->render_h);
+
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+        {
+            auto fullscreen = self->resolutions[self->modes].fullscreen;
+            if (fullscreen == 1)
+            {
+                desc.dwBackBufferCount = 1;
+                desc.dwFlags = DDSD_BACKBUFFERCOUNT | DDSD_CAPS;
+                desc.ddsCaps.dwCaps = DDSCAPS_3DDEVICE | DDSCAPS_PRIMARYSURFACE | DDSCAPS_FLIP | DDSCAPS_COMPLEX;
+                gGameTable.error
+                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
+                if (gGameTable.error != 0)
+                {
+                    out();
+                    return 0;
+                }
+
+                DDSCAPS v55;
+                v55.dwCaps = DDSCAPS_BACKBUFFER;
+                gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)
+                                       ->GetAttachedSurface((LPDDSCAPS)&v55, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface);
+                if (gGameTable.error != 0)
+                {
+                    out();
+                    return 0;
+                }
+            }
+            else if (fullscreen > 1 && fullscreen <= 3)
+            {
+                desc.dwFlags = DDSD_CAPS;
+                desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+                gGameTable.error
+                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
+                if (gGameTable.error != 0)
+                {
+                    out();
+                    return 0;
+                }
+                desc.dwWidth = self->xsize;
+                desc.ddsCaps.dwCaps
+                    = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
+                desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+                desc.dwHeight = self->ysize;
+                gGameTable.error
+                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface, NULL);
+                if (gGameTable.error)
+                {
+                    out();
+                    return 0;
+                }
+                gGameTable.error
+                    = ((LPDIRECTDRAW2)self->pDirectDraw2)->CreateClipper(0, (LPDIRECTDRAWCLIPPER*)&self->pClipper, NULL);
+                if (gGameTable.error)
+                {
+                    out();
+                    return 0;
+                }
+                gGameTable.error = ((LPDIRECTDRAWCLIPPER)self->pClipper)->SetHWnd(0, (HWND)self->hWnd);
+                if (gGameTable.error)
+                {
+                    out();
+                    return 0;
+                }
+                gGameTable.error
+                    = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
+                if (gGameTable.error)
+                {
+                    out();
+                    return 0;
+                }
+            }
+            get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
+            RECT rc;
+            SetRect(&rc, 0, 0, desc.dwWidth, desc.dwHeight);
+
+            DDBLTFX ddbltfx;
+            ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
+            ddbltfx.dwSize = sizeof(DDBLTFX);
+            ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->Blt(&rc, 0, 0, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
+        }
+        else
+        {
+            desc.dwFlags = 1;
+            desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+            gGameTable.error
+                = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                      ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
+            if (gGameTable.error != 0)
+            {
+                out();
+                return 0;
+            }
+            desc.dwWidth = self->xsize;
+            desc.ddsCaps.dwCaps
+                = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
+            desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+            desc.dwHeight = self->ysize;
+            gGameTable.error
+                = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                      ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface, NULL);
+            if (gGameTable.error)
+            {
+                out();
+                return 0;
+            }
+            gGameTable.error
+                = ((LPDIRECTDRAW2)self->pDirectDraw2)->CreateClipper(0, (LPDIRECTDRAWCLIPPER*)&self->pClipper, NULL);
+            if (gGameTable.error)
+            {
+                out();
+                return 0;
+            }
+            gGameTable.error = ((LPDIRECTDRAWCLIPPER)self->pClipper)->SetHWnd(0, (HWND)self->hWnd);
+            if (gGameTable.error)
+            {
+                out();
+                return 0;
+            }
+            gGameTable.error
+                = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
+            if (gGameTable.error)
+            {
+                out();
+                return 0;
+            }
+        }
+
+        gGameTable.error = get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+        self->surface0.pDDpalette = nullptr;
+        ddrawdesc2surfdesc(&desc, &self->surface0.desc);
+        self->surface0.height = self->ysize;
+        self->surface0.width = self->xsize;
+        self->surface0.bpp = (uint8_t)desc.ddpfPixelFormat.dwRGBBitCount;
+        self->surface0.var_25 = 0;
+        self->surface0.pitch = (int16_t)desc.lPitch;
+        self->surface0.var_27 = 1;
+        self->surface0.var_28 = 0;
+        self->surface0.var_29 = 0;
+        self->surface0.bOpen = 1;
+        self->surface0.is_vmem = desc.ddsCaps.dwCaps & DDSCAPS_HWCODEC ? 1 : 0;
+
+        if (self->surface0.bpp == 16)
+        {
+            if (self->surface0.desc.b_bitcnt + self->surface0.desc.r_bitcnt + self->surface0.desc.g_bitcnt == 15)
+                self->gpu_flag |= GpuFlags::GPU_11;
+            else
+                self->gpu_flag &= ~GpuFlags::GPU_11;
+        }
+        surface_fill(&self->surface0, 0, 0, 0);
+        gGameTable.error = get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+        self->surface2.pDDpalette = nullptr;
+        ddrawdesc2surfdesc(&desc, &self->surface2.desc);
+        self->surface2.width = desc.dwWidth;
+        self->surface2.bpp = desc.ddpfPixelFormat.dwRGBBitCount;
+        self->surface2.desc.a_bitcnt = 0;
+        self->surface2.is_vmem = desc.ddsCaps.dwCaps & DDSCAPS_HWCODEC ? 1 : 0;
+        self->surface2.var_25 = 0;
+        self->surface2.height = desc.dwHeight;
+        self->surface2.pitch = desc.lPitch;
+        self->surface2.var_27 = 1;
+        self->surface2.var_28 = 0;
+        self->surface2.var_29 = 0;
+        self->surface2.bOpen = 1;
+        if (!(self->gpu_flag & GpuFlags::GPU_13))
+        {
+            if (self->surfaceZ.pDDsurface != nullptr)
+            {
+                surface_release(&self->surfaceZ);
+                self->surfaceZ.pDDsurface = nullptr;
+            }
+
+            LPDIRECTDRAWSURFACE lpZBuffer;
+            if (!create_zbuffer(self, self->xsize, self->ysize, &lpZBuffer))
+            {
+                out();
+                return 0;
+            }
+
+            self->surfaceZ.desc.r_bitcnt = 5;
+            self->surfaceZ.desc.g_shift = 5;
+            self->surfaceZ.desc.g_bitcnt = 5;
+            self->surfaceZ.desc.b_bitcnt = 5;
+            self->surfaceZ.desc.r_mask = 31;
+            self->surfaceZ.desc.g_mask = 31;
+            self->surfaceZ.desc.b_mask = 31;
+            self->surfaceZ.pDDsurface = lpZBuffer;
+            self->surfaceZ.height = self->ysize;
+            self->surfaceZ.pDDpalette = 0;
+            self->surfaceZ.desc.r_shift = 0;
+            self->surfaceZ.desc.b_shift = 10;
+            self->surfaceZ.bpp = 16;
+            self->surfaceZ.var_25 = 0;
+            self->surfaceZ.width = self->xsize;
+            self->surfaceZ.pitch = 2 * self->xsize;
+            self->surfaceZ.var_27 = 1;
+            self->surfaceZ.var_28 = 0;
+            self->surfaceZ.var_29 = 0;
+            self->surfaceZ.bOpen = 1;
+
+            if (!create_device(self))
+            {
+                out();
+                return 0;
+            }
+
+            gGameTable.error = ((LPDIRECT3D2)self->pDirect3D2)->CreateViewport((LPDIRECT3DVIEWPORT2*)&self->pViewport, NULL);
+            if (gGameTable.error != 0)
+            {
+                out();
+                return 0;
+            }
+
+            gGameTable.error = ((LPDIRECT3DDEVICE2)self->pDirectDevice2)->AddViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
+            if (gGameTable.error != 0)
+            {
+                out();
+                return 0;
+            }
+
+            D3DVIEWPORT2 vp;
+            ZeroMemory(&vp, sizeof(D3DVIEWPORT2));
+            vp.dwSize = sizeof(D3DVIEWPORT2);
+            vp.dwX = 0;
+            vp.dwY = 0;
+            vp.dwWidth = self->xsize;
+            vp.dwHeight = self->ysize;
+            vp.dvClipX = -1.0;
+            vp.dvClipY = -1.0;
+            vp.dvClipWidth = 2.0;
+            vp.dvClipHeight = 2.0;
+            vp.dvMinZ = 0.0;
+            vp.dvMaxZ = 1.0;
+            gGameTable.error = ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetViewport2(&vp);
+            if (gGameTable.error)
+                error(gGameTable.error);
+
+            if (self->field_8C8300 <= 6
+                && !((LPDIRECT3D2)self->pDirect3D2)->CreateMaterial((LPDIRECT3DMATERIAL2*)&self->pMaterial, NULL))
+            {
+                D3DMATERIAL mat;
+                ((LPDIRECT3DMATERIAL2)self->pMaterial)
+                    ->GetHandle((LPDIRECT3DDEVICE2)self->pDirectDevice2, (LPD3DMATERIALHANDLE)&self->MaterialHandle);
+                ZeroMemory(&mat, sizeof(D3DMATERIAL));
+                mat.dwSize = sizeof(D3DMATERIAL);
+                mat.ambient.r = (double)self->ambient_r * 0.0039215689;
+                mat.emissive.r = 0.0;
+                mat.ambient.a = 1.0;
+                mat.diffuse.r = mat.ambient.r;
+                mat.ambient.g = (double)self->ambient_g * 0.0039215689;
+                mat.dwRampSize = 32;
+                mat.diffuse.g = mat.ambient.g;
+                mat.ambient.b = (double)self->ambient_b * 0.0039215689;
+                // mat.dcvDiffuse.b = mat.ambient.b;
+                ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
+                ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetBackground(self->MaterialHandle);
+                self->is_gpu_active = 1;
+                return 1;
+            }
+            else
+            {
+                out();
+                return 0;
+            }
+        }
+        if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
+            surface_fill(&self->surface2, 0, 0, 0);
+        self->is_gpu_active = 1;
+        return 1;
     }
 
     // 0x00404FA0
@@ -764,7 +1121,7 @@ namespace openre::marni
             if (self->pDirectDraw2 != nullptr)
             {
                 ((LPDIRECTDRAW2)self->pDirectDraw2)->RestoreDisplayMode();
-                dd_set_coop_level((HWND)self->hWnd, 0, (LPDIRECTDRAW)self->pDirectDraw2);
+                dd_set_coop_level((HWND)self->hWnd, 0, (LPDIRECTDRAW2)self->pDirectDraw2);
             }
             self->is_gpu_busy = 0;
         }
@@ -1100,6 +1457,12 @@ namespace openre::marni
         return self;
     }
 
+    // 0x00405DD0
+    static int __stdcall get_z_buffer_caps(Marni* self)
+    {
+        return interop::thiscall<int, Marni*>(0x00405DD0, self);
+    }
+
     // 0x00405EC0
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode)
     {
@@ -1175,6 +1538,18 @@ namespace openre::marni
         case 32: return DDBD_32;
         default: out("", "D3DIBPPToDDBD"); return 0;
         }
+    }
+
+    // 0x00406D90
+    static int __stdcall create_device(Marni* self)
+    {
+        return interop::thiscall<int, Marni*>(0x00406D90, self);
+    }
+
+    // 0x00407020
+    static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
+    {
+        return interop::thiscall<int, Marni*, int, int, LPDIRECTDRAWSURFACE*>(0x00407020, self, width, height, pDDsurfaceZ);
     }
 
     // 0x00407290
@@ -1717,17 +2092,17 @@ namespace openre::marni
         return 0;
     }
 
+    // 0x0040E770
+    static void set_filtering(Marni* self, uint8_t a2)
+    {
+        interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
+    }
+
     // 0x0040E800
     static void __stdcall sub_40E800(Marni* self, uint8_t a2)
     {
         self->field_700C = a2 == 0 ? -1 : 0;
         self->num_draw_ops = a2 == 0 ? -1 : 0;
-    }
-
-    // 0x0040E770
-    static void set_filtering(Marni* self, uint8_t a2)
-    {
-        interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
     }
 
     // 0x0040E820
@@ -1859,6 +2234,12 @@ namespace openre::marni
         return dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
     }
 
+    // 0x0040EE60
+    static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect)
+    {
+        return interop::call<int, HWND, int, int, int, LPRECT>(0x0040EE60, hWnd, width, height, fullscreen, lpResRect);
+    }
+
     // 0x0040EC10
     static void __stdcall sub_40EC10(Marni* self)
     {
@@ -1909,6 +2290,12 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x0040EF50
+    static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc)
+    {
+        return interop::call<int, LPDDSURFACEDESC, MarniSurfaceDesc*>(0x0040EF50, pDDesc, pDesc);
+    }
+
     // 0x0040F090
     static HRESULT CALLBACK enum_display_mode_callback(LPDDSURFACEDESC pDesc, LPVOID pContext)
     {
@@ -1942,6 +2329,12 @@ namespace openre::marni
         }
         *count = ctx[2];
         return 0;
+    }
+
+    // 0x0040F170
+    static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface)
+    {
+        return interop::call<HRESULT, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE>(0x0040F170, lpDDSurfaceDesc, lpDDSurface);
     }
 
     // 0x0040F1A0
@@ -1997,7 +2390,7 @@ namespace openre::marni
     }
 
     // 0x0040F2F0
-    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW pDD)
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD)
     {
         if (fullscreen)
         {
