@@ -1074,7 +1074,7 @@ namespace openre::marni
         if (self->gpu_flag & GpuFlags::GPU_13)
         {
             self->is_gpu_active = 1;
-            self->gpu_flag |= GpuFlags::GPU_1;
+            self->gpu_flag |= GpuFlags::GPU_9;
         }
         else
         {
@@ -1091,7 +1091,7 @@ namespace openre::marni
             surface.desc.a_bitcnt = 0;
             surface2_vfill(&surface, 0, 0xFFFFFF, 0);
             gGameTable.dword_6449BC = create_texture_handle(self, &surface, 2);
-            self->gpu_flag |= GpuFlags::GPU_1;
+            self->gpu_flag |= GpuFlags::GPU_9;
             self->is_gpu_active = 1;
             request_video_memory(self);
             exception = 9;
