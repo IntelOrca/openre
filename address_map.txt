@@ -597,6 +597,7 @@ struct      MarniMovie
 declare     flag                    u32                     0x94
 declare     pos                     f64
 declare     var_A0                  s32
+declare     var_A4                  s32
 
 struct      MarniOt
 declare     zdepth                  s32

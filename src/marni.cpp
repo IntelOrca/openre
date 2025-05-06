@@ -76,7 +76,7 @@ namespace openre::marni
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
     static void __stdcall sub_40EC10(Marni* self);
-    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, int max, int* cntFound);
+    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count);
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
     static int __stdcall sub_414B30(MarniMovie* self);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
@@ -816,7 +816,7 @@ namespace openre::marni
         surfacey_ctor((MarniSurfaceY*)&self->surface2);
         surfacey_ctor((MarniSurfaceY*)&self->surface3);
         self->is_gpu_active = 0;
-        auto v5 = (MarniMovie*)cstd_malloc(0xA8);
+        auto v5 = (MarniMovie*)cstd_malloc(sizeof(MarniMovie));
         exception = 10;
         self->pMovie = v5 == nullptr ? nullptr : movie_ctor(v5, 0);
         self->field_8C8420 = 0;
@@ -870,7 +870,7 @@ namespace openre::marni
         self->gpu_flag = 0;
         self->field_8C7EDC = 260;
         ot_alloc(&self->otag[0], 16, 0);
-        ot_alloc(&self->otag[1], 0, 1);
+        ot_alloc(&self->otag[1], 4096, 1);
         ot_alloc(&self->otag[3], 16, 0);
         self->hWnd = hWnd;
         self->render_w = width;
@@ -891,12 +891,11 @@ namespace openre::marni
         self->field_8C8300 = 3;
         self->field_8C7E90 = 0;
         self->field_8C82FC = 0;
-        self->desktop_w = GetSystemMetrics(0);
-        self->desktop_h = GetSystemMetrics(1);
-        auto DC = GetDC(0);
-        auto DeviceCaps = GetDeviceCaps(DC, 14);
-        self->desktop_bpp = GetDeviceCaps(DC, 12) * DeviceCaps;
-        ReleaseDC(0, DC);
+        self->desktop_w = GetSystemMetrics(SM_CXSCREEN);
+        self->desktop_h = GetSystemMetrics(SM_CYSCREEN);
+        auto dc = GetDC(NULL);
+        self->desktop_bpp = GetDeviceCaps(dc, BITSPIXEL) * GetDeviceCaps(dc, PLANES);
+        ReleaseDC(NULL, dc);
         self->bpp = self->desktop_bpp;
         self->gpu_flag |= GpuFlags::GPU_4;
         self->is_gpu_busy = 0;
@@ -962,7 +961,7 @@ namespace openre::marni
 
         out("you will be able to use the VideoMemory...%dbyte", "MarniSystem Direct3D::Direct3D");
         self->dwVidMemTotal = ddCaps.dwVidMemTotal;
-        if (!create_d3d(self))
+        if (create_d3d(self) != 0)
         {
             out("failed to generate the object of Direct3D.", "MarniSystem Direct3D::Direct3D");
             return self;
@@ -1003,16 +1002,16 @@ namespace openre::marni
             out("detect %s", "MarniSystem Direct3D::Direct3D");
         }
 
-        int cntFound;
+        size_t numDisplayModes;
         MarniRes res[64];
-        gGameTable.error = enum_display_mode((LPDIRECTDRAW2)self->pDirectDraw2, res, std::size(res), &cntFound);
+        gGameTable.error = enum_display_mode((LPDIRECTDRAW2)self->pDirectDraw2, res, std::size(res), &numDisplayModes);
         if (gGameTable.error != 0)
         {
             out("failed to detect the mode.", "MarniSystem Direct3D::Direct3D");
             return self;
         }
 
-        for (auto i = 0; i < cntFound; i++)
+        for (size_t i = 0; i < numDisplayModes; i++)
         {
             const auto& r = res[i];
             if (r.depth == 16 && r.width == 640 && r.height == 480)
@@ -1910,10 +1909,39 @@ namespace openre::marni
         return 1;
     }
 
-    // 0x0040F0F0
-    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, int max, int* cntFound)
+    // 0x0040F090
+    static HRESULT CALLBACK enum_display_mode_callback(LPDDSURFACEDESC pDesc, LPVOID pContext)
     {
-        return interop::thiscall<int, LPDIRECTDRAW2, MarniRes*, int, int*>(0x0040F0F0, lpDD2, res, max, cntFound);
+        auto max = ((LPDWORD)pContext)[0];
+        auto index = ((LPDWORD)pContext)[2];
+        if (index >= max)
+            return DDENUMRET_CANCEL;
+
+        auto resolutions = (MarniRes*)((LPDWORD)pContext)[1];
+        auto& r = resolutions[index];
+        r.width = pDesc->dwWidth;
+        r.height = pDesc->dwHeight;
+        r.depth = pDesc->ddpfPixelFormat.dwRGBBitCount;
+
+        ((LPDWORD)pContext)[2] = index + 1;
+        return DDENUMRET_OK;
+    }
+
+    // 0x0040F0F0
+    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count)
+    {
+        // return interop::thiscall<int, LPDIRECTDRAW2, MarniRes*, int, int*>(0x0040F0F0, lpDD2, res, max, cntFound);
+
+        DWORD ctx[3] = { max, (DWORD)res, 0 };
+        auto result = lpDD2->EnumDisplayModes(0, NULL, ctx, enum_display_mode_callback);
+        if (FAILED(result))
+        {
+            out("failed to retrieve a display modes", "MarniSystem Direct3D::EnumDisplayMode");
+            *count = 0;
+            error(result);
+        }
+        *count = ctx[2];
+        return 0;
     }
 
     // 0x0040F1A0
@@ -2401,7 +2429,7 @@ namespace openre::marni
     // 0x0050C550
     static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s)
     {
-        if (self->length != s.size())
+        if (self->length - 1 != s.size())
             return false;
         return std::memcmp(self->data, s.c_str(), s.size()) == 0;
     }

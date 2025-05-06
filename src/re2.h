@@ -755,8 +755,9 @@ struct MarniMovie
     uint32_t flag;                      // 0x0094
     double pos;                         // 0x0098
     int32_t var_A0;                     // 0x00A0
+    int32_t var_A4;                     // 0x00A4
 };
-static_assert(sizeof(MarniMovie) == 0xA4);
+static_assert(sizeof(MarniMovie) == 0xA8);
 
 struct MarniOt
 {
