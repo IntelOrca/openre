@@ -1,4 +1,5 @@
 #include "room.h"
+#include "adt.h"
 #include "audio.h"
 #include "camera.h"
 #include "enemy.h"
@@ -18,6 +19,7 @@
 using namespace openre::audio;
 using namespace openre::camera;
 using namespace openre::file;
+using namespace openre::graphics;
 using namespace openre::player;
 using namespace openre::sce;
 using namespace openre::rdt;

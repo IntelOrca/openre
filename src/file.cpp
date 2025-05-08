@@ -131,11 +131,6 @@ namespace openre::file
     {
         return interop::call<void*, size_t>(0x00441630, size);
     }
-    // 0x0043C590
-    int load_adt(const char* path, uint32_t* bufferSize, int mode)
-    {
-        return interop::call<int, const char*, uint32_t*, int>(0x0043C590, path, bufferSize, mode);
-    }
 
     // 0x0043FF40
     int tim_buffer_to_surface(int* timPtr, int page, int mode)
