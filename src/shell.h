@@ -28,6 +28,14 @@ namespace openre
         uint8_t isMod{};
     };
 
+    struct Color4f
+    {
+        float r;
+        float g;
+        float b;
+        float a;
+    };
+
     struct OpenREVertex
     {
         float x;
@@ -47,6 +55,7 @@ namespace openre
     {
         OpenREPrimKind kind;
         TextureHandle texture;
+        Color4f color;
         OpenREVertex vertices[4];
     };
 
