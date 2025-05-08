@@ -118,6 +118,7 @@ namespace openre
             GLuint handle;
             glGenTextures(1, &handle);
             glBindTexture(GL_TEXTURE_2D, handle);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
@@ -126,7 +127,7 @@ namespace openre
             texture.handle = handle;
             texture.width = width;
             texture.height = height;
-            return textures.size() - 1;
+            return textures.size();
         }
 
         void pushPrimitive(const OpenREPrim& prim) override
@@ -175,6 +176,9 @@ namespace openre
             glLoadIdentity();
             glOrtho(0, renderWidth, renderHeight, 0, 1, -1);
             glEnable(GL_CULL_FACE);
+
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
 
         void update()
@@ -184,21 +188,21 @@ namespace openre
 
         void render()
         {
-            glColor3f(1.0f, 1.0f, 1.0f);
             for (const auto& p : primitives)
             {
                 if (p.kind == OpenREPrimKind::TextureQuad)
                 {
-                    if (p.texture < textures.size())
+                    if (p.texture != 0 && p.texture <= textures.size())
                     {
                         glEnable(GL_TEXTURE_2D);
-                        glBindTexture(GL_TEXTURE_2D, textures[p.texture].handle);
+                        glBindTexture(GL_TEXTURE_2D, textures[p.texture - 1].handle);
                     }
                     else
                     {
                         glDisable(GL_TEXTURE_2D);
                     }
                     glBegin(GL_QUADS);
+                    glColor4f(p.color.r, p.color.g, p.color.b, p.color.a);
                     for (auto i = 0; i < 4; i++)
                     {
                         glVertex3f(p.vertices[i].x, p.vertices[i].y, p.vertices[i].z);
@@ -213,11 +217,12 @@ namespace openre
         }
     };
 
-    static void pushQuad(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h)
+    static void pushQuad(OpenREShell& shell, TextureHandle texture, Color4f color, float x, float y, float z, float w, float h)
     {
         OpenREPrim prim;
         prim.kind = OpenREPrimKind::TextureQuad;
         prim.texture = texture;
+        prim.color = color;
         prim.vertices[0].x = x;
         prim.vertices[0].y = y;
         prim.vertices[0].z = z;
@@ -377,16 +382,64 @@ namespace openre
 
     static bool initialized;
     static TextureHandle title;
+    static float fade;
+    static int timer;
+    static int state;
 
     static void tick(OpenREShell& shell)
     {
+        const int fadeTime = 60;
+        const int waitTime = 120;
+
         if (!initialized)
         {
             initialized = true;
             title = readTextureFile(shell, "texture/splashbg", 320, 240);
+            fade = 1;
+            timer = 30;
+            state = -1;
         }
 
-        pushQuad(shell, title, 0, 0, 0, 320, 240);
+        if (state == -1)
+        {
+            timer--;
+            if (timer <= 0)
+            {
+                timer = fadeTime;
+                state++;
+            }
+        }
+        else if (state == 0)
+        {
+            timer--;
+            fade -= (1.0f / fadeTime);
+            if (timer <= 0)
+            {
+                timer = waitTime;
+                state++;
+            }
+        }
+        else if (state == 1)
+        {
+            timer--;
+            if (timer <= 0)
+            {
+                timer = fadeTime;
+                state++;
+            }
+        }
+        else if (state == 2)
+        {
+            timer--;
+            fade += (1.0f / fadeTime);
+            if (timer <= 0)
+            {
+                state++;
+            }
+        }
+
+        pushQuad(shell, title, { 1, 1, 1, 1 }, 0, 0, 0, 320, 240);
+        pushQuad(shell, 0, { 0, 0, 0, fade }, 0, 0, 0, 320, 240);
     }
 
     void openreMain(int argc, const char** argv)
