@@ -36,7 +36,7 @@
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Configuration)\</IntDir>
     <IncludePath>$(ProjectDir)..\lib\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)..\lib\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)..\lib\lib\x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -50,7 +50,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>ddraw.lib;dxguid.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sdl3.lib;opengl32.lib;ddraw.lib;dxguid.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -94,6 +94,7 @@
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="scheduler.cpp" />
+    <ClCompile Include="shell.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
   </ItemGroup>
@@ -120,6 +121,7 @@
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
     <ClInclude Include="scheduler.h" />
+    <ClInclude Include="shell.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
   </ItemGroup>

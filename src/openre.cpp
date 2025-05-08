@@ -18,6 +18,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "shell.h"
 #include "tim.h"
 #include "title.h"
 
@@ -929,12 +930,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
+static void winmain()
+{
+    openreMain(0, nullptr);
+}
+
 void onAttach()
 {
     uint8_t b{};
     interop::readMemory(0x401E40, &b, sizeof(b));
     gClassicRebirthEnabled = (b == 0xE9);
 
+    interop::writeJmp(0x00441ED0, winmain);
     // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
     // interop::writeJmp(0x004EDF40, &snd_se_walk);
     // interop::writeJmp(0x00502D40, &read_file_into_buffer);
