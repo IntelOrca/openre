@@ -15,6 +15,7 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "relua.h"
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
@@ -928,6 +929,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
     default: return DefWindowProc(hWnd, Msg, wParam, lParam);
     }
     return 0;
+}
+
+void openreMain(int argc, const char** argv)
+{
+    auto shell = createShell();
+    auto luaVm = openre::lua::createLuaVm();
+    luaVm->setShell(shell.get());
+    luaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
+
+    auto initialized = false;
+    shell->setUpdate([&luaVm, &initialized]() {
+        if (!initialized)
+        {
+            initialized = true;
+            luaVm->run("M:\\git\\openre\\games\\re2\\script\\main.lua");
+        }
+        luaVm->callHooks(openre::lua::HookKind::tick);
+    });
+    shell->run();
 }
 
 static void winmain()

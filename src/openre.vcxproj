@@ -72,7 +72,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="adt.cpp" />
+    <ClCompile Include="gfxadt.cpp" />
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="door.cpp" />
@@ -82,6 +82,7 @@
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="fswatch.cpp" />
+    <ClCompile Include="gfxbmp.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -100,11 +101,11 @@
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="shell.cpp" />
+    <ClCompile Include="shellext.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="adt.h" />
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="door.h" />
@@ -112,6 +113,7 @@
     <ClInclude Include="entity.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="fswatch.h" />
+    <ClInclude Include="gfx.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="interop.hpp" />

@@ -215,3 +215,5 @@ namespace openre
         return (T)(remainder == 0 ? iValue : iValue + a - remainder);
     }
 }
+
+void openreMain(int argc, const char** argv);
