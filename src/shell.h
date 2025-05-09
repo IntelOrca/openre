@@ -28,6 +28,12 @@ namespace openre
         uint8_t isMod{};
     };
 
+    struct Size
+    {
+        uint32_t width;
+        uint32_t height;
+    };
+
     struct Color4f
     {
         float r;
@@ -59,6 +65,14 @@ namespace openre
         OpenREVertex vertices[4];
     };
 
+    struct TextureBuffer
+    {
+        std::vector<uint8_t> pixels;
+        uint32_t width{};
+        uint32_t height{};
+        uint8_t bpp{};
+    };
+
     class OpenREShell
     {
     public:
@@ -69,7 +83,8 @@ namespace openre
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
 
         // Graphics
-        virtual TextureHandle loadTexture(uint32_t width, uint32_t height, void* pixels) = 0;
+        virtual Size getRenderSize() = 0;
+        virtual TextureHandle loadTexture(const TextureBuffer& textureBuffer) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
     };
 
@@ -80,5 +95,8 @@ namespace openre::shellextensions
 {
     TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
+    void drawTexture(
+        OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,
+        float t1);
     void fade(OpenREShell& shell, float r, float g, float b, float a);
 }

@@ -20,6 +20,7 @@ using namespace openre::shellextensions;
 namespace openre::lua
 {
     constexpr const char* METATABLE_ENTITY = "meta_entity";
+    constexpr const char* METATABLE_GFX = "meta_gfx";
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
 
     class LuaVmImpl : public LuaVm
@@ -35,6 +36,27 @@ namespace openre::lua
         std::vector<HookInfo> _subscriptions;
         std::function<void(const std::string& s)> _logCallback;
         OpenREShell* _shell{};
+
+        struct UserType
+        {
+            uint32_t kind;
+        };
+
+        struct UserTexture : public UserType
+        {
+            TextureHandle handle;
+            uint32_t width;
+            uint32_t height;
+        };
+
+        struct UserTextureRect : public UserType
+        {
+            TextureHandle handle;
+            float s0;
+            float t0;
+            float s1;
+            float t1;
+        };
 
     public:
         LuaVmImpl()
@@ -139,6 +161,7 @@ namespace openre::lua
             setGlobal("re.getEntity", apiGetEntity);
 
             setGlobal("gfx.loadTexture", apiGfxLoadTexture);
+            setGlobal("gfx.getTextureRect", apiGfxGetTextureRect);
             setGlobal("gfx.drawTexture", apiGfxDrawTexture);
             setGlobal("gfx.fade", apiGfxFade);
 
@@ -150,7 +173,10 @@ namespace openre::lua
             setGlobal("EntityKind.object", 4);
             setGlobal("EntityKind.door", 5);
 
+            setMetatable(METATABLE_GFX, apiGfxGetProperty);
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
+
+            attachMetatable("gfx", METATABLE_GFX);
 
             setGlobal("unsafe.read", unsafe_read);
             setGlobal("unsafe.write", unsafe_write);
@@ -189,13 +215,29 @@ namespace openre::lua
             lua_pop(_state, 1);
         }
 
-        void setMetatable(const char* name, lua_CFunction getter, lua_CFunction setter)
+        void attachMetatable(const char* name, const char* metatableName)
+        {
+            getOrCreateAndPushGlobal(name);
+            luaL_getmetatable(_state, metatableName);
+            lua_setmetatable(_state, -2);
+            lua_pop(_state, 1);
+        }
+
+        void setMetatable(const char* name, lua_CFunction getter, lua_CFunction setter = nullptr)
         {
             luaL_newmetatable(_state, name);
-            lua_pushcfunction(_state, getter);
-            lua_setfield(_state, -2, "__index");
-            lua_pushcfunction(_state, setter);
-            lua_setfield(_state, -2, "__newindex");
+            if (getter != nullptr)
+            {
+                lua_pushlightuserdata(_state, this);
+                lua_pushcclosure(_state, getter, 1);
+                lua_setfield(_state, -2, "__index");
+            }
+            if (setter != nullptr)
+            {
+                lua_pushlightuserdata(_state, this);
+                lua_pushcclosure(_state, setter, 1);
+                lua_setfield(_state, -2, "__newindex");
+            }
             lua_pop(_state, 1);
         }
 
@@ -423,6 +465,32 @@ namespace openre::lua
             return 0;
         }
 
+        static int apiGfxGetProperty(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto key = luaL_checkstring(L, 2);
+            if (strcmp(key, "screenWidth") == 0)
+            {
+                lua_pushinteger(L, shell->getRenderSize().width);
+            }
+            else if (strcmp(key, "screenHeight") == 0)
+            {
+                lua_pushinteger(L, shell->getRenderSize().height);
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+
         static int apiGfxLoadTexture(lua_State* L)
         {
             auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
@@ -444,8 +512,39 @@ namespace openre::lua
                 return 1;
             }
 
-            auto custom = (TextureHandle*)lua_newuserdata(L, sizeof(TextureHandle));
-            *custom = textureHandle;
+            auto custom = (UserTexture*)lua_newuserdata(L, sizeof(UserTexture));
+            custom->kind = 0;
+            custom->handle = textureHandle;
+            custom->width = static_cast<uint32_t>(width);
+            custom->height = static_cast<uint32_t>(height);
+            luaL_getmetatable(L, METATABLE_TEXTURE);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int apiGfxGetTextureRect(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto texture = (UserTexture*)lua_touserdata(L, 1);
+            auto left = luaL_checkinteger(L, 2);
+            auto top = luaL_checkinteger(L, 3);
+            auto right = luaL_checkinteger(L, 4);
+            auto bottom = luaL_checkinteger(L, 5);
+
+            auto custom = (UserTextureRect*)lua_newuserdata(L, sizeof(UserTextureRect));
+            custom->kind = 1;
+            custom->handle = texture->handle;
+            custom->s0 = left / (float)texture->width;
+            custom->t0 = top / (float)texture->height;
+            custom->s1 = right / (float)texture->width;
+            custom->t1 = bottom / (float)texture->height;
             luaL_getmetatable(L, METATABLE_TEXTURE);
             lua_setmetatable(L, -2);
             return 1;
@@ -460,14 +559,23 @@ namespace openre::lua
                 return 0;
             }
 
-            auto texture = lua_touserdata(L, 1);
+            auto texture = (UserType*)lua_touserdata(L, 1);
             auto x = static_cast<float>(luaL_checknumber(L, 2));
             auto y = static_cast<float>(luaL_checknumber(L, 3));
             auto z = static_cast<float>(luaL_checknumber(L, 4));
             auto w = static_cast<float>(luaL_checknumber(L, 5));
             auto h = static_cast<float>(luaL_checknumber(L, 6));
 
-            drawTexture(*shell, *((TextureHandle*)texture), x, y, z, w, h);
+            if (texture->kind == 0)
+            {
+                drawTexture(*shell, ((UserTexture*)texture)->handle, x, y, z, w, h);
+            }
+            else if (texture->kind == 1)
+            {
+                auto rect = (UserTextureRect*)texture;
+                drawTexture(*shell, rect->handle, x, y, z, w, h, rect->s0, rect->t0, rect->s1, rect->t1);
+            }
+
             return 0;
         }
 
