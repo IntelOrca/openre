@@ -1,5 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include "mod.h"
 #include "openre.h"
 #include "relua.h"
