@@ -75,3 +75,10 @@ namespace openre
 
     void openreMain(int argc, const char** argv);
 }
+
+namespace openre::shellextensions
+{
+    TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
+    void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
+    void fade(OpenREShell& shell, float r, float g, float b, float a);
+}

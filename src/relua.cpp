@@ -3,6 +3,7 @@
 #include "mod.h"
 #include "openre.h"
 #include "sce.h"
+#include "shell.h"
 #include <cstdio>
 #include <filesystem>
 #include <lua.hpp>
@@ -14,10 +15,12 @@
 namespace fs = std::filesystem;
 
 using namespace openre::modding;
+using namespace openre::shellextensions;
 
 namespace openre::lua
 {
     constexpr const char* METATABLE_ENTITY = "meta_entity";
+    constexpr const char* METATABLE_TEXTURE = "meta_texture";
 
     class LuaVmImpl : public LuaVm
     {
@@ -31,6 +34,7 @@ namespace openre::lua
         lua_State* _state;
         std::vector<HookInfo> _subscriptions;
         std::function<void(const std::string& s)> _logCallback;
+        OpenREShell* _shell{};
 
     public:
         LuaVmImpl()
@@ -78,6 +82,11 @@ namespace openre::lua
             _logCallback = s;
         }
 
+        void setShell(OpenREShell* shell) override
+        {
+            _shell = shell;
+        }
+
     private:
         static constexpr luaL_Reg standardLibraries[] = { { "_G", luaopen_base },
                                                           { LUA_COLIBNAME, luaopen_coroutine },
@@ -102,7 +111,8 @@ namespace openre::lua
 
         void log(const std::string& s)
         {
-            _logCallback(s);
+            if (_logCallback)
+                _logCallback(s);
         }
 
         void createState()
@@ -127,6 +137,10 @@ namespace openre::lua
             setGlobal("re.getFlag", apiGetFlag);
             setGlobal("re.setFlag", apiSetFlag);
             setGlobal("re.getEntity", apiGetEntity);
+
+            setGlobal("gfx.loadTexture", apiGfxLoadTexture);
+            setGlobal("gfx.drawTexture", apiGfxDrawTexture);
+            setGlobal("gfx.fade", apiGfxFade);
 
             setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::tick));
 
@@ -406,6 +420,72 @@ namespace openre::lua
             }
 
             interop::writeMemory(address, buffer.data(), buffer.size());
+            return 0;
+        }
+
+        static int apiGfxLoadTexture(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto path = luaL_checkstring(L, 1);
+            auto width = luaL_checkinteger(L, 2);
+            auto height = luaL_checkinteger(L, 3);
+
+            auto textureHandle = loadTexture(*shell, path, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+            if (textureHandle == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto custom = (TextureHandle*)lua_newuserdata(L, sizeof(TextureHandle));
+            *custom = textureHandle;
+            luaL_getmetatable(L, METATABLE_TEXTURE);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int apiGfxDrawTexture(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                return 0;
+            }
+
+            auto texture = lua_touserdata(L, 1);
+            auto x = static_cast<float>(luaL_checknumber(L, 2));
+            auto y = static_cast<float>(luaL_checknumber(L, 3));
+            auto z = static_cast<float>(luaL_checknumber(L, 4));
+            auto w = static_cast<float>(luaL_checknumber(L, 5));
+            auto h = static_cast<float>(luaL_checknumber(L, 6));
+
+            drawTexture(*shell, *((TextureHandle*)texture), x, y, z, w, h);
+            return 0;
+        }
+
+        static int apiGfxFade(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                return 0;
+            }
+
+            auto r = static_cast<float>(luaL_checknumber(L, 1));
+            auto g = static_cast<float>(luaL_checknumber(L, 2));
+            auto b = static_cast<float>(luaL_checknumber(L, 3));
+            auto a = static_cast<float>(luaL_checknumber(L, 4));
+
+            fade(*shell, r, g, b, a);
             return 0;
         }
     };
