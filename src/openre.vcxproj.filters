@@ -102,6 +102,15 @@
     <ClCompile Include="fswatch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="gfxadt.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gfxbmp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shellext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -186,6 +195,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="fswatch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gfx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

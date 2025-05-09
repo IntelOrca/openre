@@ -5,6 +5,11 @@
 #include <memory>
 #include <string_view>
 
+namespace openre::graphics
+{
+    struct TextureBuffer;
+}
+
 namespace openre
 {
     using TextureHandle = uint32_t;
@@ -65,14 +70,6 @@ namespace openre
         OpenREVertex vertices[4];
     };
 
-    struct TextureBuffer
-    {
-        std::vector<uint8_t> pixels;
-        uint32_t width{};
-        uint32_t height{};
-        uint8_t bpp{};
-    };
-
     class OpenREShell
     {
     public:
@@ -84,11 +81,11 @@ namespace openre
 
         // Graphics
         virtual Size getRenderSize() = 0;
-        virtual TextureHandle loadTexture(const TextureBuffer& textureBuffer) = 0;
+        virtual TextureHandle loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
     };
 
-    void openreMain(int argc, const char** argv);
+    std::unique_ptr<OpenREShell> createShell();
 }
 
 namespace openre::shellextensions

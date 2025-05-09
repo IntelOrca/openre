@@ -1,5 +1,5 @@
 #include "shell.h"
-#include "adt.h"
+#include "gfx.h"
 #include "relua.h"
 
 #include <filesystem>
@@ -17,6 +17,8 @@ extern "C" {
 }
 
 namespace fs = std::filesystem;
+
+using namespace openre::graphics;
 
 namespace openre
 {
@@ -320,215 +322,8 @@ namespace openre
         }
     };
 
-    static void pushQuad(OpenREShell& shell, TextureHandle texture, Color4f color, float x, float y, float z, float w, float h,
-        float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1)
+    std::unique_ptr<OpenREShell> createShell()
     {
-        OpenREPrim prim;
-        prim.kind = OpenREPrimKind::TextureQuad;
-        prim.texture = texture;
-        prim.color = color;
-        prim.vertices[0].x = x;
-        prim.vertices[0].y = y;
-        prim.vertices[0].z = z;
-        prim.vertices[0].s = s0;
-        prim.vertices[0].t = t0;
-        prim.vertices[1].x = x;
-        prim.vertices[1].y = y + h;
-        prim.vertices[1].z = z;
-        prim.vertices[1].s = s0;
-        prim.vertices[1].t = t1;
-        prim.vertices[2].x = x + w;
-        prim.vertices[2].y = y + h;
-        prim.vertices[2].z = z;
-        prim.vertices[2].s = s1;
-        prim.vertices[2].t = t1;
-        prim.vertices[3].x = x + w;
-        prim.vertices[3].y = y;
-        prim.vertices[3].z = z;
-        prim.vertices[3].s = s1;
-        prim.vertices[3].t = t0;
-        shell.pushPrimitive(prim);
-    }
-
-#pragma pack(push, 1)
-    struct BitmapFileHeader
-    {
-        uint16_t signature;
-        uint32_t fileSize;
-        uint16_t reserved1;
-        uint16_t reserved2;
-        uint32_t pixelOffset;
-    };
-
-    struct BitmapHeader
-    {
-        uint32_t size;
-        uint32_t width;
-        uint32_t height;
-        uint16_t planes;
-        uint16_t bpp;
-    };
-#pragma pack(pop)
-
-    static TextureBuffer decodeAdt(std::vector<uint8_t> input, uint32_t width, uint32_t height)
-    {
-        auto buffer = openre::graphics::decodeAdt(input.data(), input.size());
-        if (buffer.empty())
-            return {};
-
-        // Reorganize
-        auto reorgBuffer = new uint8_t[320 * 240 * 2];
-        auto src = buffer.data();
-        auto dst = reorgBuffer;
-        for (uint32_t y = 0; y < 240; y++)
-        {
-            std::memcpy(dst, src, 256 * 2);
-            src += 256 * 2;
-            dst += 320 * 2;
-        }
-
-        src = buffer.data() + (256 * 256 * 2);
-        dst = reorgBuffer + (256 * 2);
-        for (uint32_t y = 0; y < 128; y++)
-        {
-            std::memcpy(dst, src, 64 * 2);
-            src += 128 * 2;
-            dst += 320 * 2;
-        }
-        src = buffer.data() + (256 * 256 * 2) + (64 * 2);
-        for (uint32_t y = 128; y < 240; y++)
-        {
-            std::memcpy(dst, src, 64 * 2);
-            src += 128 * 2;
-            dst += 320 * 2;
-        }
-
-        // R5G5B5 to RGB888
-        auto numPixels = 320 * 240;
-        std::vector<uint8_t> newBuffer(numPixels * 3);
-        src = reorgBuffer;
-        dst = newBuffer.data();
-        for (int i = 0; i < numPixels; i++)
-        {
-            auto c16 = src[0] | (src[1] << 8);
-            auto r = ((c16 >> 0) & 0b11111) * 8;
-            auto g = ((c16 >> 5) & 0b11111) * 8;
-            auto b = ((c16 >> 10) & 0b11111) * 8;
-            *dst++ = r;
-            *dst++ = g;
-            *dst++ = b;
-            src += 2;
-        }
-
-        TextureBuffer result;
-        result.pixels = std::move(newBuffer);
-        result.width = 320;
-        result.height = 240;
-        result.bpp = 24;
-        return result;
-    }
-
-    static TextureBuffer decodeBmp(std::vector<uint8_t> input)
-    {
-        auto header1 = (BitmapFileHeader*)input.data();
-        auto header2 = (BitmapHeader*)(input.data() + 14);
-        auto pixelData = input.data() + header1->pixelOffset;
-        auto bytesPerPixel = header2->bpp / 8;
-
-        TextureBuffer result;
-        result.width = static_cast<uint32_t>(header2->width);
-        result.height = static_cast<uint32_t>(header2->height);
-        result.bpp = static_cast<uint8_t>(header2->bpp);
-        result.pixels.resize(result.width * result.height * bytesPerPixel);
-
-        auto pitch = ((header2->width * bytesPerPixel) + 3) & ~3;
-        auto src = pixelData;
-        auto dst = result.pixels.data() + ((result.height - 1) * result.width * bytesPerPixel);
-        for (uint32_t y = 0; y < result.height; y++)
-        {
-            auto srcLine = src;
-            auto dstLine = dst;
-            for (uint32_t x = 0; x < result.width; x++)
-            {
-                auto b = *srcLine++;
-                auto g = *srcLine++;
-                auto r = *srcLine++;
-                *dstLine++ = r;
-                *dstLine++ = g;
-                *dstLine++ = b;
-                if (bytesPerPixel == 4)
-                {
-                    *dstLine++ = *srcLine++;
-                }
-            }
-            src += pitch;
-            dst -= result.width * bytesPerPixel;
-        }
-        return result;
-    }
-
-    void openreMain(int argc, const char** argv)
-    {
-        auto shell = std::make_unique<SDL2OpenREShell>();
-        auto luaVm = openre::lua::createLuaVm();
-        luaVm->setShell(shell.get());
-        luaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
-
-        auto initialized = false;
-        shell->setUpdate([&luaVm, &initialized]() {
-            if (!initialized)
-            {
-                initialized = true;
-                luaVm->run("M:\\git\\openre\\games\\re2\\script\\main.lua");
-            }
-            luaVm->callHooks(openre::lua::HookKind::tick);
-        });
-        shell->run();
-    }
-
-    namespace shellextensions
-    {
-        TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
-        {
-            std::vector<std::string_view> extensions = { ".adt", ".bmp" };
-            auto streamResult = shell.getStream(path, extensions);
-            if (!streamResult.found)
-                return {};
-
-            auto& stream = streamResult.stream;
-            stream->seek(0, SEEK_END);
-            auto length = static_cast<size_t>(stream->tell());
-            stream->seek(0, SEEK_SET);
-            std::vector<uint8_t> buffer(length);
-            stream->read(buffer.data(), length);
-
-            TextureBuffer textureBuffer;
-            if (streamResult.extensionIndex == 0)
-            {
-                textureBuffer = decodeAdt(std::move(buffer), width, height);
-            }
-            else
-            {
-                textureBuffer = decodeBmp(std::move(buffer));
-            }
-
-            return shell.loadTexture(textureBuffer);
-        }
-
-        void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1, float t1)
-        {
-            pushQuad(shell, texture, { 1, 1, 1, 1 }, x, y, z, w, h, s0, t0, s1, t1);
-        }
-
-        void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h)
-        {
-            drawTexture(shell, texture, x, y, z, w, h, 0, 0, 1, 1);
-        }
-
-        void fade(OpenREShell& shell, float r, float g, float b, float a)
-        {
-            auto size = shell.getRenderSize();
-            pushQuad(shell, 0, { r, g, b, a }, 0, 0, 1, (float)size.width, (float)size.height);
-        }
+        return std::make_unique<SDL2OpenREShell>();
     }
 }
