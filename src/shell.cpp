@@ -1,5 +1,6 @@
 #include "shell.h"
 #include "gfx.h"
+#include "movie.h"
 #include "relua.h"
 
 #include <filesystem>
@@ -10,15 +11,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
-}
-
 namespace fs = std::filesystem;
 
 using namespace openre::graphics;
+using namespace openre::movie;
 
 namespace openre
 {
@@ -56,9 +52,9 @@ namespace openre
             return SDL_WriteIO(this->baseStream, buffer, size);
         }
 
-        void seek(int64_t offset, int origin) override
+        int64_t seek(int64_t offset, int origin) override
         {
-            SDL_SeekIO(this->baseStream, offset, (SDL_IOWhence)origin);
+            return SDL_SeekIO(this->baseStream, offset, (SDL_IOWhence)origin);
         }
 
         int64_t tell() const override
@@ -72,6 +68,13 @@ namespace openre
         GLuint handle;
         uint32_t width;
         uint32_t height;
+    };
+
+    struct MovieWrapper
+    {
+        MovieHandle handle{};
+        std::unique_ptr<MoviePlayer> movie;
+        GLuint textureGlHandle;
     };
 
     class SDL2OpenREShell : public OpenREShell
@@ -101,6 +104,9 @@ namespace openre
         PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers{};
         PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer{};
         PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D{};
+        PFNGLCLEARTEXIMAGEPROC glClearTexImage{};
+
+        std::vector<MovieWrapper> movies;
 
     public:
         ~SDL2OpenREShell() {}
@@ -166,6 +172,24 @@ namespace openre
             primitives.push_back(prim);
         }
 
+        MovieHandle loadMovie(std::unique_ptr<MoviePlayer> movie) override
+        {
+            auto& movieWrapper = this->movies.emplace_back();
+            movieWrapper.handle = this->movies.size();
+            movieWrapper.movie = std::move(movie);
+            updateMovie(movieWrapper);
+            return movieWrapper.handle;
+        }
+
+        MoviePlayer* getMovie(MovieHandle handle) override
+        {
+            if (handle > 0 && handle <= movies.size())
+            {
+                return movies[handle - 1].movie.get();
+            }
+            return nullptr;
+        }
+
         void setUpdate(std::function<void()> callback) override
         {
             updateCallback = callback;
@@ -220,6 +244,7 @@ namespace openre
             glGenFramebuffers = (PFNGLGENFRAMEBUFFERSPROC)SDL_GL_GetProcAddress("glGenFramebuffers");
             glBindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)SDL_GL_GetProcAddress("glBindFramebuffer");
             glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)SDL_GL_GetProcAddress("glFramebufferTexture2D");
+            glClearTexImage = (PFNGLCLEARTEXIMAGEPROC)SDL_GL_GetProcAddress("glClearTexImage");
         }
 
         void createRenderBuffer()
@@ -238,7 +263,56 @@ namespace openre
 
         void update()
         {
+            updateMovies();
             updateCallback();
+        }
+
+        void updateMovies()
+        {
+            for (auto& movieWrapper : movies)
+            {
+                updateMovie(movieWrapper);
+            }
+        }
+
+        void updateMovie(MovieWrapper& movieWrapper)
+        {
+            if (movieWrapper.movie->getState() != MovieState::playing)
+                return;
+
+            movieWrapper.movie->dequeueNextFrame();
+            if (movieWrapper.textureGlHandle == 0)
+            {
+                glGenTextures(1, &movieWrapper.textureGlHandle);
+                glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
+                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            }
+            if (movieWrapper.textureGlHandle != 0)
+            {
+                glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
+
+                auto frameTextureBuffer = movieWrapper.movie->getVideoFrame();
+                if (frameTextureBuffer == nullptr)
+                {
+                    GLfloat clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    glClearTexImage(movieWrapper.textureGlHandle, 0, GL_RGB, GL_UNSIGNED_BYTE, clearColor);
+                }
+                else
+                {
+                    glTexImage2D(
+                        GL_TEXTURE_2D,
+                        0,
+                        GL_RGB,
+                        frameTextureBuffer->width,
+                        frameTextureBuffer->height,
+                        0,
+                        GL_RGB,
+                        GL_UNSIGNED_BYTE,
+                        frameTextureBuffer->pixels.data());
+                }
+            }
         }
 
         void render()
@@ -254,21 +328,41 @@ namespace openre
             glOrtho(0, this->renderWidth, this->renderHeight, 0, 1, -1);
             for (auto& p : primitives)
             {
-                if (p.kind == OpenREPrimKind::TextureQuad)
+                if (p.kind == OpenREPrimKind::TextureQuad || p.kind == OpenREPrimKind::MovieQuad)
                 {
                     if (p.color.a == 0)
                         continue;
 
                     auto textureEnabled = false;
-                    if (p.texture != 0 && p.texture <= textures.size())
+                    if (p.kind == OpenREPrimKind::TextureQuad)
                     {
-                        glEnable(GL_TEXTURE_2D);
-                        glBindTexture(GL_TEXTURE_2D, textures[p.texture - 1].handle);
-                        textureEnabled = true;
+                        if (p.texture != 0 && p.texture <= textures.size())
+                        {
+                            glEnable(GL_TEXTURE_2D);
+                            glBindTexture(GL_TEXTURE_2D, textures[p.texture - 1].handle);
+                            textureEnabled = true;
+                        }
+                        else
+                        {
+                            glDisable(GL_TEXTURE_2D);
+                        }
                     }
-                    else
+                    else if (p.kind == OpenREPrimKind::MovieQuad)
                     {
-                        glDisable(GL_TEXTURE_2D);
+                        if (p.movie != 0 && p.movie <= movies.size())
+                        {
+                            auto& movieWrapper = movies[p.movie - 1];
+                            if (movieWrapper.textureGlHandle != 0)
+                            {
+                                glEnable(GL_TEXTURE_2D);
+                                glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
+                                textureEnabled = true;
+                            }
+                        }
+                        else
+                        {
+                            glDisable(GL_TEXTURE_2D);
+                        }
                     }
 
                     if (textureEnabled || p.color.a != 1)
