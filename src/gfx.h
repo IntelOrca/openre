@@ -5,6 +5,12 @@
 
 namespace openre::graphics
 {
+    struct Size
+    {
+        uint32_t width;
+        uint32_t height;
+    };
+
     struct TextureBuffer
     {
         std::vector<uint8_t> pixels;

@@ -73,8 +73,14 @@ function scheduler:fadeOut(time)
     return self
 end
 
+local STATE_START = 0
+local STATE_SPLASH = 1
+local STATE_MOVIE = 2
+local STATE_MENU = 3
+
 local initialized = false
 local splashTexture
+local introMovie
 local titleBgTexture
 local logo1Texture
 local logo2Texture
@@ -82,9 +88,10 @@ local logo1TextureA
 local logo1TextureB
 local logo1TextureC
 local logo1TextureD
-local state
+local state = STATE_START
 
 local enableSplash = true
+local enableVideo = true
 
 function init()
     splashTexture = gfx.loadTexture("texture/splashbg", 320, 240);
@@ -100,15 +107,26 @@ function init()
         scheduler
             :wait(60)
             :exec(function()
-                state = 1
+                state = STATE_SPLASH
             end)
             :fadeIn(60)
             :wait(120)
             :fadeOut(60)
     end
+    if enableVideo then
+        scheduler
+            :exec(function()
+                state = STATE_MOVIE
+                introMovie = gfx.loadMovie("movie/intro")
+                introMovie:play()
+            end)
+            :run(function()
+                return introMovie.state == MovieState.playing
+            end)
+    end
     scheduler
         :exec(function()
-            state = 2
+            state = STATE_MENU
         end)
         :fadeIn(60)
         :run(function()
@@ -127,9 +145,11 @@ function draw()
     local height = 240 * scale
     local x = 0
     local y = (renderSize.height / 2) - (height / 2)
-    if state == 1 then
+    if state == STATE_SPLASH then
         gfx.drawTexture(splashTexture, x, y, 0, width, height);
-    elseif state == 2 then
+    elseif state == STATE_MOVIE then
+        gfx.drawTexture(introMovie, x, y, 0, width, height)
+    elseif state == STATE_MENU then
         gfx.drawTexture(titleBgTexture, x, y, 0, width, height);
         drawLogo(4)
     end

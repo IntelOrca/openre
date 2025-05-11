@@ -5,14 +5,12 @@ using namespace openre::graphics;
 
 namespace openre::shellextensions
 {
-    static void pushQuad(
-        OpenREShell& shell, TextureHandle texture, Color4f color, float x, float y, float z, float w, float h, float s0 = 0,
-        float t0 = 0, float s1 = 1, float t1 = 1)
+    static OpenREPrim
+    createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1)
     {
-        OpenREPrim prim;
+        OpenREPrim prim{};
         prim.kind = OpenREPrimKind::TextureQuad;
-        prim.texture = texture;
-        prim.color = color;
+        prim.color = { 1, 1, 1, 1 };
         prim.vertices[0].x = x;
         prim.vertices[0].y = y;
         prim.vertices[0].z = z;
@@ -33,7 +31,7 @@ namespace openre::shellextensions
         prim.vertices[3].z = z;
         prim.vertices[3].s = s1;
         prim.vertices[3].t = t0;
-        shell.pushPrimitive(prim);
+        return prim;
     }
 
     TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
@@ -67,7 +65,9 @@ namespace openre::shellextensions
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,
         float t1)
     {
-        pushQuad(shell, texture, { 1, 1, 1, 1 }, x, y, z, w, h, s0, t0, s1, t1);
+        auto prim = createQuad(x, y, z, w, h, s0, t0, s1, t1);
+        prim.texture = texture;
+        shell.pushPrimitive(prim);
     }
 
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h)
@@ -75,9 +75,19 @@ namespace openre::shellextensions
         drawTexture(shell, texture, x, y, z, w, h, 0, 0, 1, 1);
     }
 
+    void drawMovie(OpenREShell& shell, MovieHandle movie, float x, float y, float z, float w, float h)
+    {
+        auto prim = createQuad(x, y, z, w, h);
+        prim.kind = OpenREPrimKind::MovieQuad;
+        prim.movie = movie;
+        shell.pushPrimitive(prim);
+    }
+
     void fade(OpenREShell& shell, float r, float g, float b, float a)
     {
         auto size = shell.getRenderSize();
-        pushQuad(shell, 0, { r, g, b, a }, 0, 0, 1, (float)size.width, (float)size.height);
+        auto prim = createQuad(0, 0, 1, (float)size.width, (float)size.height);
+        prim.color = { r, g, b, a };
+        shell.pushPrimitive(prim);
     }
 }

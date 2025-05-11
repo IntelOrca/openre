@@ -1,5 +1,8 @@
 #pragma once
 
+#include "gfx.h"
+#include "movie.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -13,6 +16,7 @@ namespace openre::graphics
 namespace openre
 {
     using TextureHandle = uint32_t;
+    using MovieHandle = uint32_t;
 
     class Stream
     {
@@ -21,7 +25,7 @@ namespace openre
 
         virtual size_t read(void* buffer, size_t size) = 0;
         virtual size_t write(const void* buffer, size_t size) = 0;
-        virtual void seek(int64_t offset, int origin) = 0;
+        virtual int64_t seek(int64_t offset, int origin) = 0;
         virtual int64_t tell() const = 0;
     };
 
@@ -31,12 +35,6 @@ namespace openre
         uint8_t found{};
         uint8_t extensionIndex{};
         uint8_t isMod{};
-    };
-
-    struct Size
-    {
-        uint32_t width;
-        uint32_t height;
     };
 
     struct Color4f
@@ -60,12 +58,17 @@ namespace openre
     {
         Unknown,
         TextureQuad,
+        MovieQuad,
     };
 
     struct OpenREPrim
     {
         OpenREPrimKind kind;
-        TextureHandle texture;
+        union
+        {
+            TextureHandle texture;
+            MovieHandle movie;
+        };
         Color4f color;
         OpenREVertex vertices[4];
     };
@@ -80,9 +83,13 @@ namespace openre
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
 
         // Graphics
-        virtual Size getRenderSize() = 0;
+        virtual openre::graphics::Size getRenderSize() = 0;
         virtual TextureHandle loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
+
+        // Movie
+        virtual MovieHandle loadMovie(std::unique_ptr<openre::movie::MoviePlayer> movie) = 0;
+        virtual openre::movie::MoviePlayer* getMovie(MovieHandle handle) = 0;
     };
 
     std::unique_ptr<OpenREShell> createShell();
@@ -95,5 +102,6 @@ namespace openre::shellextensions
     void drawTexture(
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,
         float t1);
+    void drawMovie(OpenREShell& shell, MovieHandle movie, float x, float y, float z, float w, float h);
     void fade(OpenREShell& shell, float r, float g, float b, float a);
 }

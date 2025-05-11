@@ -1,6 +1,7 @@
 #include "relua.h"
 #include "interop.hpp"
 #include "mod.h"
+#include "movie.h"
 #include "openre.h"
 #include "sce.h"
 #include "shell.h"
@@ -15,12 +16,14 @@
 namespace fs = std::filesystem;
 
 using namespace openre::modding;
+using namespace openre::movie;
 using namespace openre::shellextensions;
 
 namespace openre::lua
 {
     constexpr const char* METATABLE_ENTITY = "meta_entity";
     constexpr const char* METATABLE_GFX = "meta_gfx";
+    constexpr const char* METATABLE_MOVIE = "meta_movie";
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
 
     class LuaVmImpl : public LuaVm
@@ -37,9 +40,16 @@ namespace openre::lua
         std::function<void(const std::string& s)> _logCallback;
         OpenREShell* _shell{};
 
+        enum class UserTypeKind
+        {
+            texture,
+            textureRect,
+            movie,
+        };
+
         struct UserType
         {
-            uint32_t kind;
+            UserTypeKind kind;
         };
 
         struct UserTexture : public UserType
@@ -56,6 +66,11 @@ namespace openre::lua
             float t0;
             float s1;
             float t1;
+        };
+
+        struct UserMovie : public UserType
+        {
+            MovieHandle handle;
         };
 
     public:
@@ -164,6 +179,7 @@ namespace openre::lua
             setGlobal("gfx.getTextureRect", apiGfxGetTextureRect);
             setGlobal("gfx.drawTexture", apiGfxDrawTexture);
             setGlobal("gfx.fade", apiGfxFade);
+            setGlobal("gfx.loadMovie", apiGfxLoadMovie);
 
             setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::tick));
 
@@ -173,8 +189,16 @@ namespace openre::lua
             setGlobal("EntityKind.object", 4);
             setGlobal("EntityKind.door", 5);
 
+            setGlobal("MovieState.blank", static_cast<int32_t>(MovieState::blank));
+            setGlobal("MovieState.unsupported", static_cast<int32_t>(MovieState::unsupported));
+            setGlobal("MovieState.error", static_cast<int32_t>(MovieState::error));
+            setGlobal("MovieState.stopped", static_cast<int32_t>(MovieState::stopped));
+            setGlobal("MovieState.playing", static_cast<int32_t>(MovieState::playing));
+            setGlobal("MovieState.finished", static_cast<int32_t>(MovieState::finished));
+
             setMetatable(METATABLE_GFX, apiGfxGetProperty);
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
+            setMetatable(METATABLE_MOVIE, movie_get);
 
             attachMetatable("gfx", METATABLE_GFX);
 
@@ -513,7 +537,7 @@ namespace openre::lua
             }
 
             auto custom = (UserTexture*)lua_newuserdata(L, sizeof(UserTexture));
-            custom->kind = 0;
+            custom->kind = UserTypeKind::texture;
             custom->handle = textureHandle;
             custom->width = static_cast<uint32_t>(width);
             custom->height = static_cast<uint32_t>(height);
@@ -539,7 +563,7 @@ namespace openre::lua
             auto bottom = luaL_checkinteger(L, 5);
 
             auto custom = (UserTextureRect*)lua_newuserdata(L, sizeof(UserTextureRect));
-            custom->kind = 1;
+            custom->kind = UserTypeKind::textureRect;
             custom->handle = texture->handle;
             custom->s0 = left / (float)texture->width;
             custom->t0 = top / (float)texture->height;
@@ -559,21 +583,26 @@ namespace openre::lua
                 return 0;
             }
 
-            auto texture = (UserType*)lua_touserdata(L, 1);
+            auto arg0 = (UserType*)lua_touserdata(L, 1);
             auto x = static_cast<float>(luaL_checknumber(L, 2));
             auto y = static_cast<float>(luaL_checknumber(L, 3));
             auto z = static_cast<float>(luaL_checknumber(L, 4));
             auto w = static_cast<float>(luaL_checknumber(L, 5));
             auto h = static_cast<float>(luaL_checknumber(L, 6));
 
-            if (texture->kind == 0)
+            if (arg0->kind == UserTypeKind::texture)
             {
-                drawTexture(*shell, ((UserTexture*)texture)->handle, x, y, z, w, h);
+                drawTexture(*shell, ((UserTexture*)arg0)->handle, x, y, z, w, h);
             }
-            else if (texture->kind == 1)
+            else if (arg0->kind == UserTypeKind::textureRect)
             {
-                auto rect = (UserTextureRect*)texture;
+                auto rect = (UserTextureRect*)arg0;
                 drawTexture(*shell, rect->handle, x, y, z, w, h, rect->s0, rect->t0, rect->s1, rect->t1);
+            }
+            else if (arg0->kind == UserTypeKind::movie)
+            {
+                auto movie = (UserMovie*)arg0;
+                drawMovie(*shell, movie->handle, x, y, z, w, h);
             }
 
             return 0;
@@ -594,6 +623,88 @@ namespace openre::lua
             auto a = static_cast<float>(luaL_checknumber(L, 4));
 
             fade(*shell, r, g, b, a);
+            return 0;
+        }
+
+        static int apiGfxLoadMovie(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto path = luaL_checkstring(L, 1);
+
+            auto stream = shell->getStream(path, { ".mp4", ".mpg" });
+            if (!stream.found)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto movie = createMoviePlayer();
+            movie->open(std::move(stream.stream));
+
+            auto movieHandle = shell->loadMovie(std::move(movie));
+            if (movieHandle == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto custom = (UserMovie*)lua_newuserdata(L, sizeof(UserMovie));
+            custom->kind = UserTypeKind::movie;
+            custom->handle = movieHandle;
+            luaL_getmetatable(L, METATABLE_MOVIE);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int movie_get(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto userMovie = (UserMovie*)luaL_checkudata(L, 1, METATABLE_MOVIE);
+            auto key = luaL_checkstring(L, 2);
+            if (strcmp(key, "play") == 0)
+            {
+                lua_pushlightuserdata(L, ptr);
+                lua_pushcclosure(L, movie_play, 1);
+                return 1;
+            }
+            else if (strcmp(key, "state") == 0)
+            {
+                auto movie = shell->getMovie(userMovie->handle);
+                lua_pushnumber(L, static_cast<int32_t>(movie->getState()));
+                return 1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        static int movie_play(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            auto shell = ptr->_shell;
+            if (!shell)
+            {
+                return 0;
+            }
+
+            auto userMovie = (UserMovie*)luaL_checkudata(L, 1, METATABLE_MOVIE);
+            auto movie = shell->getMovie(userMovie->handle);
+            movie->play();
             return 0;
         }
     };

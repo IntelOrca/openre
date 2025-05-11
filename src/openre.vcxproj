@@ -92,6 +92,7 @@
     <ClCompile Include="math.cpp" />
     <ClCompile Include="mod.cpp" />
     <ClCompile Include="model.cpp" />
+    <ClCompile Include="movie.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
@@ -123,6 +124,7 @@
     <ClInclude Include="math.h" />
     <ClInclude Include="mod.h" />
     <ClInclude Include="model.h" />
+    <ClInclude Include="movie.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
