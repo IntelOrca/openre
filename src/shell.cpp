@@ -74,7 +74,8 @@ namespace openre
     {
         MovieHandle handle{};
         std::unique_ptr<MoviePlayer> movie;
-        GLuint textureGlHandle;
+        GLuint textureGlHandle{};
+        SDL_AudioStream* audioStream{};
     };
 
     class SDL2OpenREShell : public OpenREShell
@@ -107,6 +108,8 @@ namespace openre
         PFNGLCLEARTEXIMAGEPROC glClearTexImage{};
 
         std::vector<MovieWrapper> movies;
+
+        SDL_AudioDeviceID outputAudioDevice{};
 
     public:
         ~SDL2OpenREShell() {}
@@ -199,9 +202,26 @@ namespace openre
         {
             init();
 
+            auto tickRate = 60;
+            auto msPerTick = 1000 / tickRate;
+            auto lastTick = SDL_GetTicks();
             auto done = false;
             while (!done)
             {
+                auto now = SDL_GetTicks();
+                auto duration = now - lastTick;
+                if (duration < msPerTick)
+                {
+                    auto remaining = msPerTick - duration;
+                    if (duration >= 2)
+                    {
+                        SDL_Delay(static_cast<uint32_t>(duration - 1));
+                    }
+                    continue;
+                }
+
+                lastTick = now;
+
                 SDL_Event event;
                 while (SDL_PollEvent(&event))
                 {
@@ -237,6 +257,12 @@ namespace openre
             glClearColor(0, 0, 0, 0);
 
             createRenderBuffer();
+
+            SDL_AudioSpec spec;
+            spec.channels = 2;
+            spec.format = SDL_AUDIO_S16;
+            spec.freq = 44100;
+            outputAudioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
         }
 
         void initGl()
@@ -280,7 +306,8 @@ namespace openre
             if (movieWrapper.movie->getState() != MovieState::playing)
                 return;
 
-            movieWrapper.movie->dequeueNextFrame();
+            auto videoFormat = movieWrapper.movie->getVideoFormat();
+            auto videoFrame = movieWrapper.movie->dequeueVideoFrame();
             if (movieWrapper.textureGlHandle == 0)
             {
                 glGenTextures(1, &movieWrapper.textureGlHandle);
@@ -292,9 +319,7 @@ namespace openre
             if (movieWrapper.textureGlHandle != 0)
             {
                 glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
-
-                auto frameTextureBuffer = movieWrapper.movie->getVideoFrame();
-                if (frameTextureBuffer == nullptr)
+                if (videoFrame.endTime == 0)
                 {
                     GLfloat clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                     glClearTexImage(movieWrapper.textureGlHandle, 0, GL_RGB, GL_UNSIGNED_BYTE, clearColor);
@@ -305,13 +330,32 @@ namespace openre
                         GL_TEXTURE_2D,
                         0,
                         GL_RGB,
-                        frameTextureBuffer->width,
-                        frameTextureBuffer->height,
+                        videoFormat.resolution.width,
+                        videoFormat.resolution.height,
                         0,
                         GL_RGB,
                         GL_UNSIGNED_BYTE,
-                        frameTextureBuffer->pixels.data());
+                        videoFrame.data.data());
                 }
+            }
+
+            auto audioFormat = movieWrapper.movie->getAudioFormat();
+            auto audioFrame = movieWrapper.movie->dequeueAudioFrame();
+            if (movieWrapper.audioStream == nullptr)
+            {
+                SDL_AudioSpec spec;
+                spec.channels = audioFormat.channels;
+                spec.format = SDL_AUDIO_S16;
+                spec.freq = audioFormat.sampleRate;
+                movieWrapper.audioStream = SDL_CreateAudioStream(&spec, nullptr);
+                if (movieWrapper.audioStream != nullptr)
+                {
+                    SDL_BindAudioStream(this->outputAudioDevice, movieWrapper.audioStream);
+                }
+            }
+            if (movieWrapper.audioStream != nullptr)
+            {
+                SDL_PutAudioStreamData(movieWrapper.audioStream, audioFrame.data.data(), audioFrame.data.size());
             }
         }
 

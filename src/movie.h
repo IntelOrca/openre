@@ -1,23 +1,13 @@
 #pragma once
 
 #include "gfx.h"
+#include "sfx.h"
 
 #include <memory>
 
 namespace openre
 {
     class Stream;
-}
-
-namespace openre::audio
-{
-    struct AudioBuffer
-    {
-        std::vector<uint8_t> data;
-        uint32_t sampleRate{};
-        uint8_t channels{};
-        uint8_t bitsPerSample{};
-    };
 }
 
 namespace openre::movie
@@ -32,6 +22,13 @@ namespace openre::movie
         finished
     };
 
+    struct MovieFrame
+    {
+        int64_t beginTime{};
+        int64_t endTime{};
+        std::vector<uint8_t> data;
+    };
+
     class MoviePlayer
     {
     public:
@@ -42,17 +39,14 @@ namespace openre::movie
         virtual void play() = 0;
         virtual void stop() = 0;
         virtual void setPosition(float position) = 0;
-        virtual void queueFrames(uint32_t count) = 0;
-        virtual void dequeueNextFrame() = 0;
 
         virtual MovieState getState() const = 0;
         virtual float getPosition() const = 0;
         virtual float getDuration() const = 0;
-        virtual openre::graphics::Size getResolution() const = 0;
-        virtual uint32_t getSampleRate() const = 0;
-        virtual uint32_t getFrameRate() const = 0;
-        virtual const openre::audio::AudioBuffer* getAudioFrame() = 0;
-        virtual const openre::graphics::TextureBuffer* getVideoFrame() = 0;
+        virtual openre::audio::AudioFormat getAudioFormat() const = 0;
+        virtual openre::graphics::VideoFormat getVideoFormat() const = 0;
+        virtual MovieFrame dequeueAudioFrame() = 0;
+        virtual MovieFrame dequeueVideoFrame() = 0;
     };
 
     std::unique_ptr<MoviePlayer> createMoviePlayer();

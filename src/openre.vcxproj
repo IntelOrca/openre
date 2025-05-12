@@ -134,6 +134,7 @@
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
     <ClInclude Include="scheduler.h" />
+    <ClInclude Include="sfx.h" />
     <ClInclude Include="shell.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />

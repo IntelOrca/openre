@@ -1,8 +1,8 @@
 #include "movie.h"
-#include "gfx.h"
 #include "shell.h"
 
 #include <chrono>
+#include <queue>
 #include <stdexcept>
 
 #define ENABLE_MOVIE_FFMPEG
@@ -14,6 +14,7 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+using namespace openre::audio;
 using namespace openre::graphics;
 using namespace openre::movie;
 
@@ -106,9 +107,11 @@ namespace openre::movie
     private:
         MovieState state{};
         std::unique_ptr<Stream> inputStream;
-        std::unique_ptr<TextureBuffer> textureBuffer;
+        std::queue<MovieFrame> audioFrames;
+        std::queue<MovieFrame> videoFrames;
         std::chrono::time_point<std::chrono::high_resolution_clock> lastUpdate;
         float position{};
+        int64_t audioFrameIndex{};
         int64_t videoFrameIndex{};
 
         AVFormatContext* ctx{};
@@ -116,13 +119,13 @@ namespace openre::movie
         AVStream* audioStream{};
         const AVCodec* audioCodec{};
         AVCodecContext* audioCodecCtx{};
-        AVFrameQueue audioFrames;
+        AVFrame* rawAudioFrame{};
 
         AVStream* videoStream{};
         const AVCodec* videoCodec{};
         AVCodecContext* videoCodecCtx{};
-        AVFrame* rawFrame{};
-        AVFrameQueue videoFrames;
+        AVFrame* rawVideoFrame{};
+        AVFrame* convertedVideoFrame{};
         SwsContext* swsCtx{};
 
     public:
@@ -197,8 +200,12 @@ namespace openre::movie
                     this->audioCodecCtx = avcodec_alloc_context3(this->audioCodec);
                     if (this->audioCodecCtx != nullptr)
                     {
-                        if (avcodec_parameters_to_context(this->audioCodecCtx, this->audioStream->codecpar) != 0
-                            || avcodec_open2(this->audioCodecCtx, this->audioCodec, nullptr) != 0)
+                        if (avcodec_parameters_to_context(this->audioCodecCtx, this->audioStream->codecpar) == 0
+                            && avcodec_open2(this->audioCodecCtx, this->audioCodec, nullptr) == 0)
+                        {
+                            this->rawAudioFrame = av_frame_alloc();
+                        }
+                        else
                         {
                             avcodec_free_context(&this->audioCodecCtx);
                         }
@@ -217,7 +224,8 @@ namespace openre::movie
                         if (avcodec_parameters_to_context(this->videoCodecCtx, this->videoStream->codecpar) == 0
                             && avcodec_open2(this->videoCodecCtx, this->videoCodec, nullptr) == 0)
                         {
-                            this->rawFrame = av_frame_alloc();
+                            this->rawVideoFrame = av_frame_alloc();
+                            this->convertedVideoFrame = av_frame_alloc();
                             this->swsCtx = sws_getContext(
                                 this->videoCodecCtx->width,
                                 this->videoCodecCtx->height,
@@ -239,14 +247,13 @@ namespace openre::movie
             }
 
             this->state = MovieState::stopped;
-            this->videoFrames = AVFrameQueue(8);
             this->position = 0;
             this->videoFrameIndex = 0;
         }
 
         void close() override
         {
-            av_frame_free(&this->rawFrame);
+            av_frame_free(&this->rawVideoFrame);
 
             if (this->state != MovieState::error)
                 this->state = MovieState::blank;
@@ -274,81 +281,16 @@ namespace openre::movie
 
         void setPosition(float position) {}
 
-        void queueFrames(uint32_t count) override
+        AudioFormat getAudioFormat() const override
         {
-            while (this->videoFrames.getSize() < count)
-            {
-                AVPacket packet;
-                auto ret = av_read_frame(ctx, &packet);
-                if (ret < 0)
-                    break;
-
-                if (packet.stream_index == videoStream->index)
-                {
-                    ret = avcodec_send_packet(videoCodecCtx, &packet);
-                    if (ret == 0)
-                    {
-                        ret = avcodec_receive_frame(videoCodecCtx, this->rawFrame);
-                        if (ret == 0)
-                        {
-                            auto frame = this->videoFrames.queue();
-                            if (frame == nullptr)
-                                break;
-
-                            ret = sws_scale_frame(swsCtx, frame, this->rawFrame);
-                            if (ret == 0)
-                            {
-                                // yay
-                            }
-                        }
-                    }
-                }
-                av_packet_unref(&packet);
-            }
+            return { static_cast<uint32_t>(this->audioCodecCtx->sample_rate),
+                     static_cast<uint8_t>(this->audioCodecCtx->ch_layout.nb_channels),
+                     static_cast<uint8_t>(this->audioCodecCtx->sample_fmt) };
         }
-
-        void dequeueNextFrame()
+        VideoFormat getVideoFormat() const override
         {
-            if (this->state != MovieState::playing)
-                return;
-
-            auto now = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count();
-            this->position += duration / 1000.0f;
-            this->lastUpdate = now;
-
-            AVFrame* frame{};
-            while (true)
-            {
-                queueFrames(4);
-
-                auto frameDuration = 1.0f / this->getFrameRate();
-                auto nextFameTimeCode = this->videoFrameIndex * frameDuration;
-                if (this->position < nextFameTimeCode)
-                    break;
-
-                this->videoFrameIndex++;
-
-                frame = videoFrames.dequeue();
-                if (frame == nullptr)
-                {
-                    this->state = MovieState::finished;
-                }
-            }
-
-            if (frame == nullptr)
-                return;
-
-            if (!this->textureBuffer)
-            {
-                this->textureBuffer = std::make_unique<TextureBuffer>();
-                this->textureBuffer->width = this->videoCodecCtx->width;
-                this->textureBuffer->height = this->videoCodecCtx->height;
-                this->textureBuffer->bpp = 24;
-                this->textureBuffer->pixels.resize(this->videoCodecCtx->width * this->videoCodecCtx->height * 3);
-            }
-
-            std::memcpy(this->textureBuffer->pixels.data(), frame->data[0], this->textureBuffer->pixels.size());
+            return { { static_cast<uint32_t>(this->videoCodecCtx->width), static_cast<uint32_t>(this->videoCodecCtx->height) },
+                     static_cast<uint16_t>(this->videoCodecCtx->framerate.num / this->videoCodecCtx->framerate.den) };
         }
 
         MovieState getState() const
@@ -385,14 +327,22 @@ namespace openre::movie
             return this->videoCodecCtx->framerate.num / this->videoCodecCtx->framerate.den;
         }
 
-        const openre::audio::AudioBuffer* getAudioFrame()
+        MovieFrame dequeueAudioFrame() override
         {
-            return nullptr;
+            bufferFrames(256);
+
+            auto frame = std::move(this->audioFrames.front());
+            this->audioFrames.pop();
+            return frame;
         }
 
-        const openre::graphics::TextureBuffer* getVideoFrame()
+        MovieFrame dequeueVideoFrame() override
         {
-            return textureBuffer.get();
+            bufferFrames(256);
+
+            auto frame = std::move(this->videoFrames.front());
+            this->videoFrames.pop();
+            return frame;
         }
 
     private:
@@ -402,11 +352,70 @@ namespace openre::movie
             close();
         }
 
-        void throwOnError(int returnCode)
+        void bufferFrames(uint32_t count)
         {
-            if (returnCode != 0)
+            for (size_t p = 0; p < count; p++)
             {
-                throw std::runtime_error("Failed with code");
+                AVPacket packet;
+                auto ret = av_read_frame(ctx, &packet);
+                if (ret < 0)
+                    break;
+
+                if (packet.stream_index == audioStream->index)
+                {
+                    ret = avcodec_send_packet(audioCodecCtx, &packet);
+                    if (ret == 0)
+                    {
+                        ret = avcodec_receive_frame(audioCodecCtx, this->rawAudioFrame);
+                        if (ret == 0)
+                        {
+                            auto& frame = this->audioFrames.emplace();
+                            frame.beginTime = 1000 * this->audioFrameIndex * this->audioCodecCtx->frame_size
+                                / this->audioCodecCtx->sample_rate;
+                            this->audioFrameIndex++;
+                            frame.endTime = 1000 * this->audioFrameIndex * this->audioCodecCtx->frame_size
+                                / this->audioCodecCtx->sample_rate;
+
+                            auto numSamples = this->rawAudioFrame->nb_samples;
+                            auto numChannels = this->rawAudioFrame->ch_layout.nb_channels;
+                            frame.data.resize(numSamples * numChannels * sizeof(uint16_t));
+                            auto dst = reinterpret_cast<uint16_t*>(frame.data.data());
+                            for (auto i = 0; i < numSamples; i++)
+                            {
+                                for (auto n = 0; n < numChannels; n++)
+                                {
+                                    *dst++ = reinterpret_cast<uint16_t*>(this->rawAudioFrame->data[n])[i];
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (packet.stream_index == videoStream->index)
+                {
+                    ret = avcodec_send_packet(videoCodecCtx, &packet);
+                    if (ret == 0)
+                    {
+                        ret = avcodec_receive_frame(videoCodecCtx, this->rawVideoFrame);
+                        if (ret == 0)
+                        {
+                            ret = sws_scale_frame(swsCtx, this->convertedVideoFrame, this->rawVideoFrame);
+                            if (ret >= 0)
+                            {
+                                auto& frame = this->videoFrames.emplace();
+                                frame.beginTime = this->videoFrameIndex * ((int64_t)1000 * this->videoCodecCtx->framerate.den)
+                                    / this->videoCodecCtx->framerate.num;
+                                this->videoFrameIndex++;
+                                frame.endTime = this->videoFrameIndex * ((int64_t)1000 * this->videoCodecCtx->framerate.den)
+                                    / this->videoCodecCtx->framerate.num;
+
+                                auto frameSize = this->convertedVideoFrame->width * this->convertedVideoFrame->height * 3;
+                                frame.data.resize(frameSize);
+                                std::memcpy(frame.data.data(), this->convertedVideoFrame->data[0], frameSize);
+                            }
+                        }
+                    }
+                }
+                av_packet_unref(&packet);
             }
         }
     };
