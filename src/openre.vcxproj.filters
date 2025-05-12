@@ -206,5 +206,8 @@
     <ClInclude Include="movie.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="sfx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

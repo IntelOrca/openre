@@ -7,8 +7,8 @@ namespace openre::graphics
 {
     struct Size
     {
-        uint32_t width;
-        uint32_t height;
+        uint32_t width{};
+        uint32_t height{};
     };
 
     struct TextureBuffer
@@ -17,6 +17,12 @@ namespace openre::graphics
         uint32_t width{};
         uint32_t height{};
         uint8_t bpp{};
+    };
+
+    struct VideoFormat
+    {
+        openre::graphics::Size resolution;
+        uint16_t framesPerSecond{};
     };
 
     TextureBuffer adt2TextureBuffer(std::vector<uint8_t> input, uint32_t width, uint32_t height);

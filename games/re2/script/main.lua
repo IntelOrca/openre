@@ -90,7 +90,7 @@ local logo1TextureC
 local logo1TextureD
 local state = STATE_START
 
-local enableSplash = true
+local enableSplash = false
 local enableVideo = true
 
 function init()
