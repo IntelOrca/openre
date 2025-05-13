@@ -491,8 +491,7 @@ namespace openre::lua
 
         static int apiGfxGetProperty(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
             {
                 lua_pushnil(L);
@@ -517,8 +516,7 @@ namespace openre::lua
 
         static int apiGfxLoadTexture(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
             {
                 lua_pushnil(L);
@@ -536,8 +534,7 @@ namespace openre::lua
                 return 1;
             }
 
-            auto custom = (UserTexture*)lua_newuserdata(L, sizeof(UserTexture));
-            custom->kind = UserTypeKind::texture;
+            auto custom = CreateUserObject<UserTexture>(L, UserTypeKind::texture);
             custom->handle = textureHandle;
             custom->width = static_cast<uint32_t>(width);
             custom->height = static_cast<uint32_t>(height);
@@ -548,8 +545,7 @@ namespace openre::lua
 
         static int apiGfxGetTextureRect(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
             {
                 lua_pushnil(L);
@@ -562,8 +558,7 @@ namespace openre::lua
             auto right = luaL_checkinteger(L, 4);
             auto bottom = luaL_checkinteger(L, 5);
 
-            auto custom = (UserTextureRect*)lua_newuserdata(L, sizeof(UserTextureRect));
-            custom->kind = UserTypeKind::textureRect;
+            auto custom = CreateUserObject<UserTextureRect>(L, UserTypeKind::textureRect);
             custom->handle = texture->handle;
             custom->s0 = left / (float)texture->width;
             custom->t0 = top / (float)texture->height;
@@ -576,12 +571,9 @@ namespace openre::lua
 
         static int apiGfxDrawTexture(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
-            {
                 return 0;
-            }
 
             auto arg0 = (UserType*)lua_touserdata(L, 1);
             auto x = static_cast<float>(luaL_checknumber(L, 2));
@@ -610,8 +602,7 @@ namespace openre::lua
 
         static int apiGfxFade(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
             {
                 return 0;
@@ -628,8 +619,7 @@ namespace openre::lua
 
         static int apiGfxLoadMovie(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
             {
                 lua_pushnil(L);
@@ -655,8 +645,7 @@ namespace openre::lua
                 return 1;
             }
 
-            auto custom = (UserMovie*)lua_newuserdata(L, sizeof(UserMovie));
-            custom->kind = UserTypeKind::movie;
+            auto custom = CreateUserObject<UserMovie>(L, UserTypeKind::movie);
             custom->handle = movieHandle;
             luaL_getmetatable(L, METATABLE_MOVIE);
             lua_setmetatable(L, -2);
@@ -665,25 +654,30 @@ namespace openre::lua
 
         static int movie_get(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
-            if (!shell)
+            auto self = GetContext(L);
+            if (!self->_shell)
             {
                 lua_pushnil(L);
                 return 1;
             }
 
-            auto userMovie = (UserMovie*)luaL_checkudata(L, 1, METATABLE_MOVIE);
+            auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
             auto key = luaL_checkstring(L, 2);
             if (strcmp(key, "play") == 0)
             {
-                lua_pushlightuserdata(L, ptr);
+                lua_pushlightuserdata(L, self);
                 lua_pushcclosure(L, movie_play, 1);
+                return 1;
+            }
+            else if (strcmp(key, "stop") == 0)
+            {
+                lua_pushlightuserdata(L, self);
+                lua_pushcclosure(L, movie_stop, 1);
                 return 1;
             }
             else if (strcmp(key, "state") == 0)
             {
-                auto movie = shell->getMovie(userMovie->handle);
+                auto movie = self->_shell->getMovie(userMovie->handle);
                 lua_pushnumber(L, static_cast<int32_t>(movie->getState()));
                 return 1;
             }
@@ -695,17 +689,49 @@ namespace openre::lua
 
         static int movie_play(lua_State* L)
         {
-            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto shell = ptr->_shell;
+            auto shell = GetContextShell(L);
             if (!shell)
-            {
                 return 0;
-            }
 
-            auto userMovie = (UserMovie*)luaL_checkudata(L, 1, METATABLE_MOVIE);
+            auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
             auto movie = shell->getMovie(userMovie->handle);
             movie->play();
             return 0;
+        }
+
+        static int movie_stop(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+                return 0;
+
+            auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
+            auto movie = shell->getMovie(userMovie->handle);
+            movie->stop();
+            return 0;
+        }
+
+        static LuaVmImpl* GetContext(lua_State* L)
+        {
+            return static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+        }
+
+        static OpenREShell* GetContextShell(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+            return ptr->_shell;
+        }
+
+        template<typename T> static T* GetUserObject(lua_State* L, int ud, const char* metatableName)
+        {
+            return (T*)luaL_checkudata(L, 1, metatableName);
+        }
+
+        template<typename T> static T* CreateUserObject(lua_State* L, UserTypeKind kind)
+        {
+            auto result = (T*)lua_newuserdata(L, sizeof(T));
+            result->kind = kind;
+            return result;
         }
     };
 
