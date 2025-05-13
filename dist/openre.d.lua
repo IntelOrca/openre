@@ -140,4 +140,7 @@ InputCommand = {
 input = {}
 
 ---@param ... InputCommand
-function input.pressedAny(...) end
+function input.isDown(...) end
+
+---@param ... InputCommand
+function input.isPressed(...) end

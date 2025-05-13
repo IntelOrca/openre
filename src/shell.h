@@ -1,8 +1,10 @@
 #pragma once
 
 #include "gfx.h"
+#include "input.h"
 #include "movie.h"
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -73,6 +75,13 @@ namespace openre
         OpenREVertex vertices[4];
     };
 
+    class InputState
+    {
+    public:
+        std::array<bool, 32> commandsDown;
+        std::array<bool, 32> commandsPressed;
+    };
+
     class OpenREShell
     {
     public:
@@ -90,6 +99,9 @@ namespace openre
         // Movie
         virtual MovieHandle loadMovie(std::unique_ptr<openre::movie::MoviePlayer> movie) = 0;
         virtual openre::movie::MoviePlayer* getMovie(MovieHandle handle) = 0;
+
+        // Input
+        virtual InputState& getInputState() = 0;
     };
 
     std::unique_ptr<OpenREShell> createShell();

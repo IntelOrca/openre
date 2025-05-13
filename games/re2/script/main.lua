@@ -121,9 +121,9 @@ function init()
                 introMovie:play()
             end)
             :run(function()
-                -- if input.pressedAny(InputCommand.menuStart, InputCommand.menuApply, InputCommand.menuCancel) then
-                --     introMovie.stop()
-                -- end
+                if input.isPressed(InputCommand.menuStart, InputCommand.menuApply, InputCommand.menuCancel) then
+                    introMovie:stop()
+                end
                 return introMovie.state == MovieState.playing
             end)
     end
