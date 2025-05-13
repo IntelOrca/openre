@@ -91,7 +91,7 @@ local logo1TextureD
 local state = STATE_START
 
 local enableSplash = false
-local enableVideo = true
+local enableVideo = false
 
 function init()
     splashTexture = gfx.loadTexture("texture/splashbg", 320, 240);
@@ -151,12 +151,12 @@ function draw()
         gfx.drawTexture(introMovie, x, y, 0, width, height)
     elseif state == STATE_MENU then
         gfx.drawTexture(titleBgTexture, x, y, 0, width, height);
-        drawLogo(4)
+        drawLogo(scale)
     end
 end
 
 function drawLogo(scale)
-    local left = (gfx.screenWidth / 2) - ((256 * scale) / 2)
+    local left = (gfx.screenWidth / 2) - ((288 * scale) / 2)
     local top = (gfx.screenHeight / 5) - ((96 * scale) / 2)
 
     gfx.drawTexture(logo1TextureA, left, top, 0, 128 * scale, 80 * scale);
