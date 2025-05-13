@@ -1,4 +1,5 @@
 #include "relua.h"
+#include "input.h"
 #include "interop.hpp"
 #include "mod.h"
 #include "movie.h"
@@ -15,6 +16,7 @@
 
 namespace fs = std::filesystem;
 
+using namespace openre::input;
 using namespace openre::modding;
 using namespace openre::movie;
 using namespace openre::shellextensions;
@@ -180,6 +182,29 @@ namespace openre::lua
             setGlobal("gfx.drawTexture", apiGfxDrawTexture);
             setGlobal("gfx.fade", apiGfxFade);
             setGlobal("gfx.loadMovie", apiGfxLoadMovie);
+
+            setGlobal("input.isDown", apiInputIsDown<false>);
+            setGlobal("input.isPressed", apiInputIsDown<true>);
+
+            setGlobal("InputCommand.up", static_cast<int32_t>(InputCommand::up));
+            setGlobal("InputCommand.down", static_cast<int32_t>(InputCommand::down));
+            setGlobal("InputCommand.left", static_cast<int32_t>(InputCommand::left));
+            setGlobal("InputCommand.right", static_cast<int32_t>(InputCommand::right));
+            setGlobal("InputCommand.menuStart", static_cast<int32_t>(InputCommand::menuStart));
+            setGlobal("InputCommand.menuApply", static_cast<int32_t>(InputCommand::menuApply));
+            setGlobal("InputCommand.menuCancel", static_cast<int32_t>(InputCommand::menuCancel));
+            setGlobal("InputCommand.inventory", static_cast<int32_t>(InputCommand::inventory));
+            setGlobal("InputCommand.map", static_cast<int32_t>(InputCommand::map));
+            setGlobal("InputCommand.aimManual", static_cast<int32_t>(InputCommand::aimManual));
+            setGlobal("InputCommand.aimAuto", static_cast<int32_t>(InputCommand::aimAuto));
+            setGlobal("InputCommand.aimAutoEnemy", static_cast<int32_t>(InputCommand::aimAutoEnemy));
+            setGlobal("InputCommand.aimAutoObject", static_cast<int32_t>(InputCommand::aimAutoObject));
+            setGlobal("InputCommand.aimNext", static_cast<int32_t>(InputCommand::aimNext));
+            setGlobal("InputCommand.fire", static_cast<int32_t>(InputCommand::fire));
+            setGlobal("InputCommand.reload", static_cast<int32_t>(InputCommand::reload));
+            setGlobal("InputCommand.run", static_cast<int32_t>(InputCommand::run));
+            setGlobal("InputCommand.menu", static_cast<int32_t>(InputCommand::menu));
+            setGlobal("InputCommand.quickTurn", static_cast<int32_t>(InputCommand::quickTurn));
 
             setGlobal("HookKind.tick", static_cast<int32_t>(HookKind::tick));
 
@@ -709,6 +734,37 @@ namespace openre::lua
             auto movie = shell->getMovie(userMovie->handle);
             movie->stop();
             return 0;
+        }
+
+        template<bool TPressed> static int apiInputIsDown(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+                return 0;
+
+            auto& inputState = shell->getInputState();
+            auto numArgs = lua_gettop(L);
+            auto result = false;
+            for (auto i = 1; i <= numArgs; i++)
+            {
+                if (lua_isinteger(L, i))
+                {
+                    auto argValue = lua_tointeger(L, i);
+                    if (argValue >= 0 && argValue < 32)
+                    {
+                        auto state = TPressed ? inputState.commandsPressed[static_cast<size_t>(argValue)]
+                                              : inputState.commandsDown[static_cast<size_t>(argValue)];
+                        if (state)
+                        {
+                            result = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            lua_pushboolean(L, result);
+            return 1;
         }
 
         static LuaVmImpl* GetContext(lua_State* L)

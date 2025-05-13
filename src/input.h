@@ -4,6 +4,29 @@
 
 namespace openre::input
 {
+    enum class InputCommand
+    {
+        up,
+        down,
+        left,
+        right,
+        menuStart,
+        menuApply,
+        menuCancel,
+        inventory,
+        map,
+        aimManual,
+        aimAuto,
+        aimAutoEnemy,
+        aimAutoObject,
+        aimNext,
+        fire,
+        reload,
+        run,
+        menu,
+        quickTurn,
+    };
+
     enum InputKey
     {
         INPUT_NONE = (0 << 0),

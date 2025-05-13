@@ -14,6 +14,7 @@
 namespace fs = std::filesystem;
 
 using namespace openre::graphics;
+using namespace openre::input;
 using namespace openre::movie;
 
 namespace openre
@@ -79,6 +80,18 @@ namespace openre
         MovieFrame nextFrame;
     };
 
+    enum class InputBindingKind
+    {
+        Keyboard,
+        Gamepad
+    };
+
+    struct InputBinding
+    {
+        InputBindingKind kind;
+        int code;
+    };
+
     class SDL2OpenREShell : public OpenREShell
     {
     private:
@@ -111,6 +124,11 @@ namespace openre
         std::vector<MovieWrapper> movies;
 
         SDL_AudioDeviceID outputAudioDevice{};
+
+        std::vector<std::vector<InputBinding>> inputBindings;
+        std::vector<SDL_Gamepad*> gamePads;
+        uint64_t gamePadsLastCheck{};
+        InputState inputState{};
 
     public:
         ~SDL2OpenREShell() {}
@@ -235,12 +253,17 @@ namespace openre
             }
         }
 
+        InputState& getInputState() override
+        {
+            return inputState;
+        }
+
     private:
         void init()
         {
             basePaths = { "M:\\git\\openre\\games\\re2hd", "M:\\git\\openre\\games\\re2" };
 
-            SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+            SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
             this->window = SDL_CreateWindow("OpenRE", windowWidth, windowHeight, SDL_WINDOW_OPENGL);
             this->glContext = SDL_GL_CreateContext(window);
             SDL_GL_MakeCurrent(window, glContext);
@@ -290,6 +313,7 @@ namespace openre
 
         void update()
         {
+            updateInputState();
             updateMovies();
             updateCallback();
         }
@@ -466,6 +490,116 @@ namespace openre
             glVertex2f((float)this->windowWidth, 0);
             glEnd();
             SDL_GL_SwapWindow(window);
+        }
+
+        void initGamePadBindings()
+        {
+            addBinding(InputCommand::up, InputBindingKind::Keyboard, SDL_SCANCODE_UP);
+            addBinding(InputCommand::up, InputBindingKind::Keyboard, SDL_SCANCODE_W);
+            addBinding(InputCommand::down, InputBindingKind::Keyboard, SDL_SCANCODE_DOWN);
+            addBinding(InputCommand::down, InputBindingKind::Keyboard, SDL_SCANCODE_S);
+            addBinding(InputCommand::left, InputBindingKind::Keyboard, SDL_SCANCODE_LEFT);
+            addBinding(InputCommand::left, InputBindingKind::Keyboard, SDL_SCANCODE_A);
+            addBinding(InputCommand::right, InputBindingKind::Keyboard, SDL_SCANCODE_RIGHT);
+            addBinding(InputCommand::right, InputBindingKind::Keyboard, SDL_SCANCODE_D);
+            addBinding(InputCommand::menuCancel, InputBindingKind::Keyboard, SDL_SCANCODE_ESCAPE);
+            addBinding(InputCommand::menuApply, InputBindingKind::Keyboard, SDL_SCANCODE_RETURN);
+            addBinding(InputCommand::menuStart, InputBindingKind::Keyboard, SDL_SCANCODE_SPACE);
+
+            addBinding(InputCommand::up, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+            addBinding(InputCommand::left, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+            addBinding(InputCommand::right, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+            addBinding(InputCommand::down, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+            addBinding(InputCommand::menuStart, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_TOUCHPAD);
+            addBinding(InputCommand::menuStart, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_START);
+            addBinding(InputCommand::menuApply, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+            addBinding(InputCommand::menuCancel, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_EAST);
+            addBinding(InputCommand::menuCancel, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_BACK);
+        }
+
+        void addBinding(InputCommand command, InputBindingKind kind, int code)
+        {
+            auto index = static_cast<size_t>(command);
+            inputBindings.resize(std::max(inputBindings.size(), index + 1));
+
+            auto& commandBinding = inputBindings[index];
+            commandBinding.push_back({ kind, code });
+        }
+
+        void updateGamePadList()
+        {
+            int count;
+            auto gamePadIds = SDL_GetGamepads(&count);
+            for (auto i = 0; i < count; i++)
+            {
+                auto gamePad = SDL_OpenGamepad(gamePadIds[i]);
+                if (gamePad != nullptr)
+                {
+                    gamePads.push_back(gamePad);
+                }
+            }
+            SDL_free(gamePadIds);
+        }
+
+        void updateInputState()
+        {
+            if (inputBindings.size() == 0)
+            {
+                initGamePadBindings();
+            }
+
+            auto now = SDL_GetTicks();
+            if (gamePadsLastCheck == 0 || now - gamePadsLastCheck > 15000)
+            {
+                gamePadsLastCheck = now;
+                updateGamePadList();
+            }
+
+            for (size_t i = 0; i < inputBindings.size(); i++)
+            {
+                auto oldState = inputState.commandsDown[i];
+                inputState.commandsDown[i] = false;
+                inputState.commandsPressed[i] = false;
+
+                const auto& commandBinding = inputBindings[i];
+                for (const auto& b : commandBinding)
+                {
+                    if (checkBinding(b))
+                    {
+                        inputState.commandsDown[i] = true;
+                        if (!oldState)
+                            inputState.commandsPressed[i] = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        bool checkBinding(InputBinding b)
+        {
+            if (b.kind == InputBindingKind::Keyboard)
+            {
+                int numKeys;
+                auto keys = SDL_GetKeyboardState(&numKeys);
+                if (numKeys > b.code)
+                {
+                    if (keys[b.code])
+                    {
+                        return true;
+                    }
+                }
+            }
+            else if (b.kind == InputBindingKind::Gamepad)
+            {
+                for (const auto& gamePad : gamePads)
+                {
+                    if (SDL_GetGamepadButton(gamePad, (SDL_GamepadButton)b.code))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     };
 
