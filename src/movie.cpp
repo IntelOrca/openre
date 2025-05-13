@@ -109,7 +109,7 @@ namespace openre::movie
         std::unique_ptr<Stream> inputStream;
         std::queue<MovieFrame> audioFrames;
         std::queue<MovieFrame> videoFrames;
-        std::chrono::time_point<std::chrono::high_resolution_clock> lastUpdate;
+        std::chrono::time_point<std::chrono::high_resolution_clock> playTimePoint;
         float position{};
         int64_t audioFrameIndex{};
         int64_t videoFrameIndex{};
@@ -270,8 +270,10 @@ namespace openre::movie
 
         void play() override
         {
+            bufferFrames(256);
+
             this->state = MovieState::playing;
-            this->lastUpdate = std::chrono::high_resolution_clock::now();
+            this->playTimePoint = std::chrono::high_resolution_clock::now();
         }
 
         void stop() override
@@ -300,7 +302,9 @@ namespace openre::movie
 
         float getPosition() const
         {
-            return this->position;
+            auto now = std::chrono::high_resolution_clock::now();
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - this->playTimePoint).count();
+            return ms / 1000.0f;
         }
 
         float getDuration() const
@@ -329,19 +333,39 @@ namespace openre::movie
 
         MovieFrame dequeueAudioFrame() override
         {
-            bufferFrames(256);
+            if (this->state != MovieState::playing)
+                return {};
+
+            bufferFrames(128);
+
+            if (this->audioFrames.size() == 0)
+                return {};
 
             auto frame = std::move(this->audioFrames.front());
             this->audioFrames.pop();
+
+            if (this->audioFrames.size() == 0 && this->videoFrames.size() == 0)
+                this->state = MovieState::stopped;
+
             return frame;
         }
 
         MovieFrame dequeueVideoFrame() override
         {
-            bufferFrames(256);
+            if (this->state != MovieState::playing)
+                return {};
+
+            bufferFrames(128);
+
+            if (this->videoFrames.size() == 0)
+                return {};
 
             auto frame = std::move(this->videoFrames.front());
             this->videoFrames.pop();
+
+            if (this->audioFrames.size() == 0 && this->videoFrames.size() == 0)
+                this->state = MovieState::stopped;
+
             return frame;
         }
 
@@ -354,7 +378,7 @@ namespace openre::movie
 
         void bufferFrames(uint32_t count)
         {
-            for (size_t p = 0; p < count; p++)
+            while (this->videoFrames.size() < count || this->audioFrames.size() < count)
             {
                 AVPacket packet;
                 auto ret = av_read_frame(ctx, &packet);

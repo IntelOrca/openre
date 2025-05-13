@@ -76,6 +76,7 @@ namespace openre
         std::unique_ptr<MoviePlayer> movie;
         GLuint textureGlHandle{};
         SDL_AudioStream* audioStream{};
+        MovieFrame nextFrame;
     };
 
     class SDL2OpenREShell : public OpenREShell
@@ -91,14 +92,14 @@ namespace openre
 
         std::function<void()> updateCallback;
 
-        // uint32_t windowWidth = 320 * 4;
-        // uint32_t windowHeight = 240 * 4;
-        // uint32_t renderWidth = 320 * 4;
-        // uint32_t renderHeight = 240 * 4;
-        uint32_t windowWidth = 1920;
-        uint32_t windowHeight = 1080;
-        uint32_t renderWidth = 1920;
-        uint32_t renderHeight = 1080;
+        uint32_t windowWidth = 320 * 2;
+        uint32_t windowHeight = 240 * 2;
+        uint32_t renderWidth = 320 * 1;
+        uint32_t renderHeight = 240 * 1;
+        // uint32_t windowWidth = 1920;
+        // uint32_t windowHeight = 1080;
+        // uint32_t renderWidth = 1920;
+        // uint32_t renderHeight = 1080;
 
         std::vector<fs::path> basePaths;
 
@@ -306,8 +307,16 @@ namespace openre
             if (movieWrapper.movie->getState() != MovieState::playing)
                 return;
 
+            auto currentTimeCode = (int64_t)(movieWrapper.movie->getPosition() * 1000);
+            if (movieWrapper.nextFrame.endTime <= currentTimeCode)
+            {
+                do
+                {
+                    movieWrapper.nextFrame = movieWrapper.movie->dequeueVideoFrame();
+                } while (movieWrapper.nextFrame.endTime != 0 && movieWrapper.nextFrame.endTime <= currentTimeCode);
+            }
+
             auto videoFormat = movieWrapper.movie->getVideoFormat();
-            auto videoFrame = movieWrapper.movie->dequeueVideoFrame();
             if (movieWrapper.textureGlHandle == 0)
             {
                 glGenTextures(1, &movieWrapper.textureGlHandle);
@@ -319,7 +328,7 @@ namespace openre
             if (movieWrapper.textureGlHandle != 0)
             {
                 glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
-                if (videoFrame.endTime == 0)
+                if (movieWrapper.nextFrame.endTime == 0)
                 {
                     GLfloat clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                     glClearTexImage(movieWrapper.textureGlHandle, 0, GL_RGB, GL_UNSIGNED_BYTE, clearColor);
@@ -335,7 +344,7 @@ namespace openre
                         0,
                         GL_RGB,
                         GL_UNSIGNED_BYTE,
-                        videoFrame.data.data());
+                        movieWrapper.nextFrame.data.data());
                 }
             }
 
