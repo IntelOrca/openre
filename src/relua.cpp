@@ -1,4 +1,5 @@
 #include "relua.h"
+#include "font.h"
 #include "input.h"
 #include "interop.hpp"
 #include "mod.h"
@@ -16,6 +17,7 @@
 
 namespace fs = std::filesystem;
 
+using namespace openre::graphics;
 using namespace openre::input;
 using namespace openre::modding;
 using namespace openre::movie;
@@ -27,6 +29,7 @@ namespace openre::lua
     constexpr const char* METATABLE_GFX = "meta_gfx";
     constexpr const char* METATABLE_MOVIE = "meta_movie";
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
+    constexpr const char* METATABLE_FONT = "meta_font";
 
     class LuaVmImpl : public LuaVm
     {
@@ -46,6 +49,7 @@ namespace openre::lua
         {
             texture,
             textureRect,
+            font,
             movie,
         };
 
@@ -68,6 +72,11 @@ namespace openre::lua
             float t0;
             float s1;
             float t1;
+        };
+
+        struct UserFont : public UserType
+        {
+            FontHandle handle;
         };
 
         struct UserMovie : public UserType
@@ -181,6 +190,8 @@ namespace openre::lua
             setGlobal("gfx.getTextureRect", apiGfxGetTextureRect);
             setGlobal("gfx.drawTexture", apiGfxDrawTexture);
             setGlobal("gfx.fade", apiGfxFade);
+            setGlobal("gfx.loadFont", apiGfxLoadFont);
+            setGlobal("gfx.drawText", apiGfxDrawText);
             setGlobal("gfx.loadMovie", apiGfxLoadMovie);
 
             setGlobal("input.isDown", apiInputIsDown<false>);
@@ -639,6 +650,49 @@ namespace openre::lua
             auto a = static_cast<float>(luaL_checknumber(L, 4));
 
             fade(*shell, r, g, b, a);
+            return 0;
+        }
+
+        static int apiGfxLoadFont(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto path = luaL_checkstring(L, 1);
+
+            auto fontHandle = loadFont(*shell, path);
+            if (fontHandle == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto custom = CreateUserObject<UserFont>(L, UserTypeKind::font);
+            custom->handle = fontHandle;
+            luaL_getmetatable(L, METATABLE_FONT);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int apiGfxDrawText(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+                return 0;
+
+            auto font = (UserFont*)lua_touserdata(L, 1);
+            auto text = luaL_checkstring(L, 2);
+            auto x = static_cast<float>(luaL_checknumber(L, 3));
+            auto y = static_cast<float>(luaL_checknumber(L, 4));
+            auto z = static_cast<float>(luaL_checknumber(L, 5));
+            auto w = static_cast<float>(luaL_checknumber(L, 6));
+            auto h = static_cast<float>(luaL_checknumber(L, 7));
+
+            drawText(*shell, font->handle, text, x, y, z, w, h);
             return 0;
         }
 

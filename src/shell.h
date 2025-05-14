@@ -12,12 +12,14 @@
 
 namespace openre::graphics
 {
+    struct FontData;
     struct TextureBuffer;
 }
 
 namespace openre
 {
     using TextureHandle = uint32_t;
+    using FontHandle = uint32_t;
     using MovieHandle = uint32_t;
 
     class Stream
@@ -60,6 +62,7 @@ namespace openre
     {
         Unknown,
         TextureQuad,
+        FontQuad,
         MovieQuad,
     };
 
@@ -69,6 +72,7 @@ namespace openre
         union
         {
             TextureHandle texture;
+            FontHandle font;
             MovieHandle movie;
         };
         Color4f color;
@@ -94,6 +98,10 @@ namespace openre
         // Graphics
         virtual openre::graphics::Size getRenderSize() = 0;
         virtual TextureHandle loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
+        virtual FontHandle
+        loadFont(const openre::graphics::TextureBuffer& textureBuffer, const openre::graphics::FontData& fontData)
+            = 0;
+        virtual const openre::graphics::FontData* getFontData(FontHandle handle) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
 
         // Movie
@@ -109,6 +117,7 @@ namespace openre
 
 namespace openre::shellextensions
 {
+    OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1);
     TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
     void drawTexture(
@@ -116,4 +125,5 @@ namespace openre::shellextensions
         float t1);
     void drawMovie(OpenREShell& shell, MovieHandle movie, float x, float y, float z, float w, float h);
     void fade(OpenREShell& shell, float r, float g, float b, float a);
+    FontHandle loadFont(OpenREShell& shell, std::string_view path);
 }

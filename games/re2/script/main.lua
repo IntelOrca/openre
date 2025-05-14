@@ -88,6 +88,8 @@ local logo1TextureA
 local logo1TextureB
 local logo1TextureC
 local logo1TextureD
+local font1
+local font2
 local state = STATE_START
 
 local enableSplash = false
@@ -102,6 +104,8 @@ function init()
     logo1TextureB = gfx.getTextureRect(logo1Texture, 0, 80, 128, 128)
     logo1TextureC = gfx.getTextureRect(logo2Texture, 0, 0, 128, 32)
     logo1TextureD = gfx.getTextureRect(logo2Texture, 0, 32, 128, 128)
+    font1 = gfx.loadFont("font/font1")
+    font2 = gfx.loadFont("font/font2")
 
     if enableSplash then
         scheduler
@@ -156,6 +160,15 @@ function draw()
         gfx.drawTexture(titleBgTexture, x, y, 0, width, height);
         drawLogo(scale)
     end
+
+    gfx.drawText(font1, "OpenRE, Resident Evil 2, Version 1.0", 4 * scale, renderSize.height - (8 * scale), 0,
+        renderSize.width,
+        renderSize.height)
+    gfx.drawText(font2,
+        '<span scale="2"><span color="rgba(255, 255, 255, 0.5)">ORIGINAL MODE</span>\nLEON CLAIRE\n<span color="rgb(255, 0, 0)">EXIT</span></span>',
+        32,
+        164, 0,
+        renderSize.width, renderSize.height)
 end
 
 function drawLogo(scale)

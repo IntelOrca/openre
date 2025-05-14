@@ -94,6 +94,21 @@ function gfx.getTextureRect(texture, left, top, right, bottom) end
 ---@param bottom integer
 function gfx.drawTexture(texture, left, top, depth, right, bottom) end
 
+---@class Font
+
+---@param path string
+---@return Font
+function gfx.loadFont(path) end
+
+---@param font Font
+---@param text string
+---@param left integer
+---@param top integer
+---@param depth integer
+---@param right integer
+---@param bottom integer
+function gfx.drawText(font, text, left, top, depth, right, bottom) end
+
 ---@enum MovieState
 MovieState = {
     blank = 0,

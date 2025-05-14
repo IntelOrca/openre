@@ -1,4 +1,5 @@
 #include "shell.h"
+#include "font.h"
 #include "gfx.h"
 #include "movie.h"
 #include "relua.h"
@@ -71,6 +72,13 @@ namespace openre
         uint32_t height;
     };
 
+    struct Font
+    {
+        FontHandle handle{};
+        GLuint textureGlHandle{};
+        FontData fontData;
+    };
+
     struct MovieWrapper
     {
         MovieHandle handle{};
@@ -107,8 +115,8 @@ namespace openre
 
         uint32_t windowWidth = 320 * 2;
         uint32_t windowHeight = 240 * 2;
-        uint32_t renderWidth = 320 * 1;
-        uint32_t renderHeight = 240 * 1;
+        uint32_t renderWidth = 320 * 2;
+        uint32_t renderHeight = 240 * 2;
         // uint32_t windowWidth = 1920;
         // uint32_t windowHeight = 1080;
         // uint32_t renderWidth = 1920;
@@ -121,6 +129,7 @@ namespace openre
         PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D{};
         PFNGLCLEARTEXIMAGEPROC glClearTexImage{};
 
+        std::vector<Font> fonts;
         std::vector<MovieWrapper> movies;
 
         SDL_AudioDeviceID outputAudioDevice{};
@@ -163,30 +172,30 @@ namespace openre
 
         TextureHandle loadTexture(const TextureBuffer& textureBuffer) override
         {
-            GLuint handle;
-            glGenTextures(1, &handle);
-            glBindTexture(GL_TEXTURE_2D, handle);
-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            auto fmt = textureBuffer.bpp == 32 ? GL_RGBA : GL_RGB;
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                fmt,
-                textureBuffer.width,
-                textureBuffer.height,
-                0,
-                fmt,
-                GL_UNSIGNED_BYTE,
-                textureBuffer.pixels.data());
-
             auto& texture = textures.emplace_back();
-            texture.handle = handle;
+            texture.handle = allocateTexture(textureBuffer);
             texture.width = textureBuffer.width;
             texture.height = textureBuffer.height;
             return textures.size();
+        }
+
+        FontHandle loadFont(const openre::graphics::TextureBuffer& textureBuffer, const FontData& fontData) override
+        {
+            auto& font = this->fonts.emplace_back();
+            font.handle = this->fonts.size();
+            font.textureGlHandle = allocateTexture(textureBuffer);
+            font.fontData = fontData;
+            return font.handle;
+        }
+
+        const FontData* getFontData(FontHandle handle) override
+        {
+            if (this->fonts.size() >= handle)
+            {
+                auto& font = this->fonts[handle - 1];
+                return &font.fontData;
+            }
+            return nullptr;
         }
 
         void pushPrimitive(const OpenREPrim& prim) override
@@ -297,6 +306,29 @@ namespace openre
             glClearTexImage = (PFNGLCLEARTEXIMAGEPROC)SDL_GL_GetProcAddress("glClearTexImage");
         }
 
+        GLuint allocateTexture(const TextureBuffer& textureBuffer)
+        {
+            GLuint handle{};
+            glGenTextures(1, &handle);
+            glBindTexture(GL_TEXTURE_2D, handle);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            auto fmt = textureBuffer.bpp == 32 ? GL_RGBA : GL_RGB;
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                fmt,
+                textureBuffer.width,
+                textureBuffer.height,
+                0,
+                fmt,
+                GL_UNSIGNED_BYTE,
+                textureBuffer.pixels.data());
+            return handle;
+        }
+
         void createRenderBuffer()
         {
             glGenFramebuffers(1, &renderFrameBufferHandle);
@@ -394,7 +426,7 @@ namespace openre
 
         void render()
         {
-            std::sort(primitives.begin(), primitives.end(), [](const OpenREPrim& a, const OpenREPrim& b) {
+            std::stable_sort(primitives.begin(), primitives.end(), [](const OpenREPrim& a, const OpenREPrim& b) {
                 return a.vertices[0].z < b.vertices[0].z;
             });
 
@@ -405,7 +437,8 @@ namespace openre
             glOrtho(0, this->renderWidth, this->renderHeight, 0, 1, -1);
             for (auto& p : primitives)
             {
-                if (p.kind == OpenREPrimKind::TextureQuad || p.kind == OpenREPrimKind::MovieQuad)
+                if (p.kind == OpenREPrimKind::TextureQuad || p.kind == OpenREPrimKind::FontQuad
+                    || p.kind == OpenREPrimKind::MovieQuad)
                 {
                     if (p.color.a == 0)
                         continue;
@@ -417,6 +450,19 @@ namespace openre
                         {
                             glEnable(GL_TEXTURE_2D);
                             glBindTexture(GL_TEXTURE_2D, textures[p.texture - 1].handle);
+                            textureEnabled = true;
+                        }
+                        else
+                        {
+                            glDisable(GL_TEXTURE_2D);
+                        }
+                    }
+                    else if (p.kind == OpenREPrimKind::FontQuad)
+                    {
+                        if (p.font != 0 && p.font <= fonts.size())
+                        {
+                            glEnable(GL_TEXTURE_2D);
+                            glBindTexture(GL_TEXTURE_2D, fonts[p.font - 1].textureGlHandle);
                             textureEnabled = true;
                         }
                         else
