@@ -1,3 +1,4 @@
+#include "font.h"
 #include "gfx.h"
 #include "shell.h"
 
@@ -5,8 +6,14 @@ using namespace openre::graphics;
 
 namespace openre::shellextensions
 {
-    static OpenREPrim
-    createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1)
+    struct LoadFileResult
+    {
+        bool success{};
+        uint8_t extensionIndex{};
+        std::vector<uint8_t> buffer;
+    };
+
+    OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0, float t0, float s1, float t1)
     {
         OpenREPrim prim{};
         prim.kind = OpenREPrimKind::TextureQuad;
@@ -34,9 +41,8 @@ namespace openre::shellextensions
         return prim;
     }
 
-    TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
+    static LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions)
     {
-        std::vector<std::string_view> extensions = { ".adt", ".bmp" };
         auto streamResult = shell.getStream(path, extensions);
         if (!streamResult.found)
             return {};
@@ -47,17 +53,26 @@ namespace openre::shellextensions
         stream->seek(0, SEEK_SET);
         std::vector<uint8_t> buffer(length);
         stream->read(buffer.data(), length);
+        return { true, streamResult.extensionIndex, buffer };
+    }
 
+    static TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
+    {
+        auto result = loadFile(shell, path, { ".adt", ".bmp" });
         TextureBuffer textureBuffer;
-        if (streamResult.extensionIndex == 0)
+        if (result.extensionIndex == 0)
         {
-            textureBuffer = adt2TextureBuffer(std::move(buffer), width, height);
+            return adt2TextureBuffer(std::move(result.buffer), width, height);
         }
         else
         {
-            textureBuffer = bmp2TextureBuffer(std::move(buffer));
+            return bmp2TextureBuffer(std::move(result.buffer));
         }
+    }
 
+    TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
+    {
+        auto textureBuffer = loadTextureBuffer(shell, path, width, height);
         return shell.loadTexture(textureBuffer);
     }
 
@@ -89,5 +104,12 @@ namespace openre::shellextensions
         auto prim = createQuad(0, 0, 1, (float)size.width, (float)size.height);
         prim.color = { r, g, b, a };
         shell.pushPrimitive(prim);
+    }
+
+    FontHandle loadFont(OpenREShell& shell, std::string_view path)
+    {
+        auto textureBuffer = loadTextureBuffer(shell, path, 256, 256);
+        auto fontData = loadFile(shell, path, { ".dat" });
+        return shell.loadFont(textureBuffer, loadFontData(fontData.buffer));
     }
 }
