@@ -1,5 +1,6 @@
 #include "sce.h"
 #include "audio.h"
+#include "entity.h"
 #include "hud.h"
 #include "interop.hpp"
 #include "item.h"
@@ -29,40 +30,10 @@ namespace openre::sce
 
     using SceImpl = int (*)(void*);
 
-    static SceAotBase** gAotTable = (SceAotBase**)0x988850;
-    static uint8_t& gAotCount = *((uint8_t*)0x98E528);
     static SceImpl* gScdImplTable = (SceImpl*)0x53B46C;
-    static uint8_t& _questionState = *((uint8_t*)0x98E542);
-
-    static uint8_t& _censorshipOff = *((uint8_t*)0x6805B3);
-    static int16_t& _itemBoxSpeed = *((int16_t*)0x689C90);
-    static int16_t& _itemBoxAcceleration = *((int16_t*)0x689C98);
-    static ObjectEntity*& _itemBoxObj = *((ObjectEntity**)0x689CA8);
-    static uint8_t& gHudMode = *((uint8_t*)0x691F70);
-    static uint8_t& byte_691F74 = *((uint8_t*)0x691F74);
-    static uint16_t& word_6949F0 = *((uint16_t*)0x6949F0);
-    static uint16_t& word_6949F4 = *((uint16_t*)0x6949F4);
-    static Unknown6949F8*& dword_6949F8 = *((Unknown6949F8**)0x6949F8);
-    static uint8_t& gQuestionFlags = *((uint8_t*)0x98504C);
-    static uint8_t& gPickupItemName = *((uint8_t*)0x98504F);
-    static Unknown988628*& dword_988628 = *((Unknown988628**)0x988628);
-    static SceAotDoorData*& dword_988848 = *((SceAotDoorData**)0x988848);
-    static Unknown6949F8*& dword_9888D0 = *((Unknown6949F8**)0x9888D0);
-    static uint32_t& dword_989ED4 = *((uint32_t*)0x989ED4);
-    static uint8_t*& dword_98A110 = *((uint8_t**)0x98A110);
-    static uint8_t& _itemBoxObjIndex = *((uint8_t*)0x98E533);
-    static void*& dword_98E790 = *((void**)0x98E790);
-    static Action& dword_98E794 = *((Action*)0x98E794);
-    static uint8_t& byte_98E9A7 = *((uint8_t*)0x98E9A7);
-    static uint16_t& word_98EAE4 = *((uint16_t*)0x98EAE4);
-    static uint16_t& word_98EAE6 = *((uint16_t*)0x98EAE6);
-    static uint8_t& gPickupItem = *((uint8_t*)0x98E529);
 
     constexpr uint8_t KEY_LOCKED = 255;
     constexpr uint8_t KEY_UNLOCK = 254;
-
-    constexpr uint8_t QUESTION_FLAG_ANSWER_NO = 1 << 0;
-    constexpr uint8_t QUESTION_FLAG_IS_WAITING = 1 << 7;
 
     constexpr uint32_t MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE = 0;
     constexpr uint32_t MESSAGE_KIND_WILL_YOU_USE_USE_INK_RIBBON = 1;
@@ -309,12 +280,6 @@ namespace openre::sce
         entry = aot;
     }
 
-    // 0x00502690
-    static void sort_item()
-    {
-        interop::call<void>(0x00502690);
-    }
-
     // 0x004E95F0
     static void use_key()
     {
@@ -351,7 +316,7 @@ namespace openre::sce
                 // Discard key
                 inventory[gGameTable.dword_689CA0].Type = ITEM_TYPE_NONE;
                 inventory[gGameTable.dword_689CA0].Part = 0;
-                sort_item();
+                sort_inventory();
             }
             gGameTable.dword_98E790 = 0;
         }
@@ -363,29 +328,29 @@ namespace openre::sce
         constexpr uint8_t STATE_QUESTION = 0;
         constexpr uint8_t STATE_ANSWER = 1;
 
-        if (_questionState == STATE_QUESTION)
+        if (gGameTable.question_state == STATE_QUESTION)
         {
             auto inventoryIndex = inventory_find_item(ITEM_TYPE_INK_RIBBON);
             if (inventoryIndex < 0)
             {
-                dword_989ED4 = gGameTable.dword_991FC4;
+                gGameTable.fg_stop = gGameTable.dword_991FC4;
                 show_message(0, 0x100, MESSAGE_KIND_INK_RIBBON_REQUIRED_TO_SAVE, 0xFF000000);
-                dword_98E794 = nullptr;
-                _questionState = STATE_QUESTION;
+                gGameTable.action_fn = nullptr;
+                gGameTable.question_state = STATE_QUESTION;
             }
             else
             {
                 show_message(0, 0x100, MESSAGE_KIND_WILL_YOU_USE_USE_INK_RIBBON, 0xFF000000);
-                _questionState = STATE_ANSWER;
+                gGameTable.question_state = STATE_ANSWER;
             }
         }
-        else if (_questionState == STATE_ANSWER && !(gQuestionFlags & QUESTION_FLAG_IS_WAITING))
+        else if (gGameTable.question_state == STATE_ANSWER && !(check_flag(FlagGroup::Message, FG_MESSAGE_WAITING_ANSWER)))
         {
-            dword_98E794 = nullptr;
-            _questionState = STATE_QUESTION;
-            if (gQuestionFlags & QUESTION_FLAG_ANSWER_NO)
+            gGameTable.action_fn = nullptr;
+            gGameTable.question_state = STATE_QUESTION;
+            if (check_flag(FlagGroup::Message, FG_MESSAGE_ANSWER_NO))
             {
-                dword_989ED4 = gGameTable.dword_991FC4;
+                gGameTable.fg_stop = gGameTable.dword_991FC4;
             }
             else
             {
@@ -398,46 +363,46 @@ namespace openre::sce
     // 0x004E9A20
     static void sce_itembox_callback()
     {
-        switch (_questionState)
+        switch (gGameTable.question_state)
         {
         case ITEMBOX_INTERACT_STATE_INIT:
-            gGameTable.dword_991FC4 = dword_989ED4;
-            dword_989ED4 |= 0x7F000000;
-            _itemBoxSpeed = 1;
-            _itemBoxAcceleration = 3;
+            gGameTable.dword_991FC4 = gGameTable.fg_stop;
+            gGameTable.fg_stop |= 0x7F000000;
+            gGameTable.itembox_speed = 1;
+            gGameTable.itembox_acceleration = 3;
             snd_se_on(0x2150000);
-            _questionState = ITEMBOX_INTERACT_STATE_OPENING;
-            _itemBoxObj = GetObjectEntity(_itemBoxObjIndex);
+            gGameTable.question_state = ITEMBOX_INTERACT_STATE_OPENING;
+            gGameTable.itembox_obj = GetObjectEntity(gGameTable.itembox_obj_index);
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_OPENING:
-            _itemBoxObj->cdir.z -= _itemBoxSpeed;
-            _itemBoxSpeed += _itemBoxAcceleration;
-            if (_itemBoxObj->cdir.z < -399)
+            gGameTable.itembox_obj->cdir.z -= gGameTable.itembox_speed;
+            gGameTable.itembox_speed += gGameTable.itembox_acceleration;
+            if (gGameTable.itembox_obj->cdir.z < -399)
             {
-                _questionState = ITEMBOX_INTERACT_STATE_OPENED;
-                _itemBoxAcceleration = -_itemBoxAcceleration;
+                gGameTable.question_state = ITEMBOX_INTERACT_STATE_OPENED;
+                gGameTable.itembox_acceleration = -gGameTable.itembox_speed;
             }
             break;
         case ITEMBOX_INTERACT_STATE_OPENED:
-            _itemBoxObj->cdir.z -= _itemBoxSpeed;
-            if (_itemBoxSpeed + _itemBoxAcceleration > 0)
+            gGameTable.itembox_obj->cdir.z -= gGameTable.itembox_speed;
+            if (gGameTable.itembox_speed + gGameTable.itembox_acceleration > 0)
             {
-                _itemBoxSpeed += _itemBoxAcceleration;
+                gGameTable.itembox_speed += gGameTable.itembox_acceleration;
                 break;
             }
-            gHudMode = HUD_MODE_ITEM_BOX;
+            gGameTable.hud_mode = HUD_MODE_ITEM_BOX;
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
             gGameTable.byte_991F80 = 1;
-            _itemBoxSpeed = 0;
-            _questionState = ITEMBOX_INTERACT_STATE_CLOSING;
+            gGameTable.itembox_speed = 0;
+            gGameTable.question_state = ITEMBOX_INTERACT_STATE_CLOSING;
             [[fallthrough]];
         case ITEMBOX_INTERACT_STATE_CLOSING:
-            _itemBoxSpeed++;
-            if (_itemBoxSpeed > 4)
+            gGameTable.itembox_speed++;
+            if (gGameTable.itembox_speed > 4)
             {
-                _itemBoxObj->cdir.z = 0;
-                _questionState = 0;
-                dword_98E794 = nullptr;
+                gGameTable.itembox_obj->cdir.z = 0;
+                gGameTable.question_state = 0;
+                gGameTable.action_fn = nullptr;
             }
             break;
         }
@@ -446,8 +411,8 @@ namespace openre::sce
     // 0x004E9440
     static void sce_auto(const void*)
     {
-        word_98EAE4 = word_6949F0;
-        word_98EAE6 = word_6949F4;
+        gGameTable.scd_variables_00 = gGameTable.word_6949F0;
+        gGameTable.word_98EAE6 = gGameTable.word_6949F4;
     }
 
     // 0x004E9460
@@ -458,7 +423,8 @@ namespace openre::sce
 
         auto isClaire = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
         auto hasPartner = check_flag(FlagGroup::Status, FG_STATUS_PARTNER);
-        if (isClaire && hasPartner && (dword_98A110[0] & 1) && (dword_98A110[0x21D] & 0x20))
+        auto partner = gGameTable.splayer_work;
+        if (isClaire && hasPartner && (partner->be_flg & 1) && (partner->var_21D & 0x20))
         {
             show_message(0, 0x100, MESSAGE_KIND_LEAVE_SHERRY_BEHIND, 0xFF000000);
             return 0;
@@ -469,7 +435,15 @@ namespace openre::sce
         {
             gGameTable.byte_991F80 = 1;
             gGameTable.door_aot_data = data;
-            dword_989ED4 |= 0xFF000000;
+            set_flag(FlagGroup::Stop, FG_STOP_00, true);
+            set_flag(FlagGroup::Stop, FG_STOP_01, true);
+            set_flag(FlagGroup::Stop, FG_STOP_02, true);
+            set_flag(FlagGroup::Stop, FG_STOP_03, true);
+            set_flag(FlagGroup::Stop, FG_STOP_04, true);
+            set_flag(FlagGroup::Stop, FG_STOP_05, true);
+            set_flag(FlagGroup::Stop, FG_STOP_06, true);
+            set_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT, true);
+            set_flag(FlagGroup::Stop, FG_STOP_08, true);
             return 0;
         }
 
@@ -495,10 +469,10 @@ namespace openre::sce
                 return 0;
             }
 
-            gPickupItemName = key;
+            gGameTable.pickup_item_type = key;
             show_message(0, 0x100, MESSAGE_KIND_YOU_USED_KEY_X, 0xFF000000);
             snd_se_on(0x2250000);
-            dword_98E790 = &use_key;
+            gGameTable.dword_98E790 = (uint32_t)&use_key;
             gGameTable.byte_98E541 = inventoryIndex + 1;
         }
 
@@ -524,10 +498,10 @@ namespace openre::sce
     // 0x004E96C0
     static void sce_item(SceAotItemData* data)
     {
-        gPickupItemName = data->type;
-        dword_9888D0 = dword_6949F8;
-        gPickupItem = data->type;
-        if ((_censorshipOff != 0) && (data->type == ITEM_TYPE_INK_RIBBON))
+        gGameTable.pickup_item_type = data->type;
+        gGameTable.dword_9888D0 = gGameTable.dword_6949F8;
+        gGameTable.pickup_item = data->type;
+        if (gGameTable.censorship_off && (data->type == ITEM_TYPE_INK_RIBBON))
         {
             data->amount = 2;
         }
@@ -544,8 +518,8 @@ namespace openre::sce
         {
             // No pick up animation
             gGameTable.byte_991F80 = 1;
-            gGameTable.dword_991FC4 = dword_989ED4;
-            gHudMode = HUD_MODE_PICKUP_ITEM;
+            gGameTable.dword_991FC4 = gGameTable.fg_stop;
+            gGameTable.hud_mode = HUD_MODE_PICKUP_ITEM;
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
     }
@@ -571,27 +545,66 @@ namespace openre::sce
     // 0x004E9880
     static void sce_water(const uint16_t* data)
     {
-        auto unk = dword_988628;
-        unk->var_10C = *data;
+        auto entity = gGameTable.actor_entity;
+        entity->water = *data;
     }
 
     // 0x004E98F0
     static void sce_save(const void*)
     {
-        dword_98E794 = &sce_save_callback;
-        _questionState = 0;
-        gGameTable.dword_991FC4 = dword_989ED4;
-        dword_989ED4 |= 0xFF000000;
-        byte_98E9A7 = dword_6949F8->var_0C;
+        gGameTable.action_fn = &sce_save_callback;
+        gGameTable.question_state = 0;
+        gGameTable.dword_991FC4 = gGameTable.fg_stop;
+        gGameTable.fg_stop |= 0xFF000000;
+        gGameTable.byte_98E9A7 = gGameTable.dword_6949F8->var_0C;
     }
 
     // 0x004E99F0
     static void sce_itembox(const void*)
     {
-        _itemBoxObjIndex = dword_6949F8->var_0C;
-        byte_691F74 = dword_6949F8->var_0E;
-        _questionState = ITEMBOX_INTERACT_STATE_INIT;
-        dword_98E794 = &sce_itembox_callback;
+        gGameTable.itembox_obj_index = gGameTable.dword_6949F8->var_0C;
+        gGameTable.byte_691F74 = gGameTable.dword_6949F8->var_0E;
+        gGameTable.question_state = ITEMBOX_INTERACT_STATE_INIT;
+        gGameTable.action_fn = &sce_itembox_callback;
+    }
+
+    // 0x004E9B70
+    static int sce_damage(int* a0)
+    {
+        auto& entity = gGameTable.actor_entity;
+
+        if (entity->status_flg & ENTITY_STATUS_FLAG_2)
+        {
+            entity->status_flg &= ~ENTITY_STATUS_FLAG_2;
+        }
+
+        entity->damage_cnt |= 0x80;
+        entity->life -= *a0 >> 16;
+        if (entity->life >= 0)
+        {
+            entity->routine_0 = 2;
+            entity->routine_1 = *a0 & 0xFF;
+            entity->routine_2 = 0;
+            entity->routine_3 = 0;
+
+            auto direction = direction_check(
+                                 gGameTable.dword_6949F8->var_04 + (gGameTable.dword_6949F8->var_08 >> 1),
+                                 gGameTable.dword_6949F8->var_06 + (gGameTable.dword_6949F8->var_0A >> 1),
+                                 entity->m.pos.x,
+                                 entity->m.pos.z)
+                - entity->cdir.y;
+            entity->spd.x = 200;
+            add_speed_xz(entity, direction);
+        }
+        else if (entity->routine_0 != 3)
+        {
+            entity->routine_0 = 3;
+            entity->routine_1 = 0;
+            entity->routine_2 = 0;
+            entity->routine_3 = 0;
+        }
+
+        return 1;
     }
 
     static void set_sce_hook(SceKind sce, SceImpl impl)
@@ -612,5 +625,6 @@ namespace openre::sce
         set_sce_hook(SCE_WATER, reinterpret_cast<SceImpl>(&sce_water));
         set_sce_hook(SCE_SAVE, reinterpret_cast<SceImpl>(&sce_save));
         set_sce_hook(SCE_ITEMBOX, reinterpret_cast<SceImpl>(&sce_itembox));
+        set_sce_hook(SCE_DAMAGE, reinterpret_cast<SceImpl>(&sce_damage));
     }
 }
