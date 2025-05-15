@@ -136,9 +136,15 @@ namespace openre
 
     enum
     {
+        FG_STOP_00 = 0,
+        FG_STOP_01 = 1,
         FG_STOP_02 = 2,
+        FG_STOP_03 = 3,
+        FG_STOP_04 = 4,
+        FG_STOP_05 = 5,
         FG_STOP_06 = 6,
         FG_STOP_DISABLE_INPUT = 7,
+        FG_STOP_08 = 8,
     };
 
     enum

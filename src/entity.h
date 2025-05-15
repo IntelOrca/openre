@@ -4,6 +4,11 @@
 
 namespace openre
 {
+    enum
+    {
+        ENTITY_STATUS_FLAG_2 = 2
+    };
+
     Kage* kage_work_set(Kage** pK, uint32_t offset, uint32_t half, uint32_t color, const Vec32* pPos);
     void kage_work_init();
     void kage_work9_init();

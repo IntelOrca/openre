@@ -435,7 +435,15 @@ namespace openre::sce
         {
             gGameTable.byte_991F80 = 1;
             gGameTable.door_aot_data = data;
-            gGameTable.fg_stop |= 0xFF000000;
+            set_flag(FlagGroup::Stop, FG_STOP_00, true);
+            set_flag(FlagGroup::Stop, FG_STOP_01, true);
+            set_flag(FlagGroup::Stop, FG_STOP_02, true);
+            set_flag(FlagGroup::Stop, FG_STOP_03, true);
+            set_flag(FlagGroup::Stop, FG_STOP_04, true);
+            set_flag(FlagGroup::Stop, FG_STOP_05, true);
+            set_flag(FlagGroup::Stop, FG_STOP_06, true);
+            set_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT, true);
+            set_flag(FlagGroup::Stop, FG_STOP_08, true);
             return 0;
         }
 
@@ -565,9 +573,9 @@ namespace openre::sce
     {
         auto& entity = gGameTable.actor_entity;
 
-        if (entity->status_flg & 2)
+        if (entity->status_flg & ENTITY_STATUS_FLAG_2)
         {
-            entity->status_flg &= 0xFFFD;
+            entity->status_flg &= ~ENTITY_STATUS_FLAG_2;
         }
 
         entity->damage_cnt |= 0x80;
