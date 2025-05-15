@@ -152,7 +152,22 @@ InputCommand = {
     quickTurn = 211,
 }
 
-input = {}
+input = {
+    led = {
+        ---@type number
+        red = 0,
+        ---@type number
+        green = 0,
+        ---@type number
+        blue = 0
+    },
+    rumble = {
+        ---@type number
+        low = 0,
+        ---@type number
+        high = 0
+    }
+}
 
 ---@param ... InputCommand
 function input.isDown(...) end
