@@ -16,6 +16,11 @@ namespace openre::graphics
     struct TextureBuffer;
 }
 
+namespace openre::logging
+{
+    class Logger;
+}
+
 namespace openre
 {
     using TextureHandle = uint32_t;
@@ -105,6 +110,7 @@ namespace openre
         virtual void run() = 0;
 
         // General
+        virtual openre::logging::Logger& getLogger() = 0;
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
 
         // Graphics
