@@ -348,6 +348,7 @@ namespace openre
             updateInputState();
             updateMovies();
             updateCallback();
+            updateInputEffects();
         }
 
         void updateMovies()
@@ -361,7 +362,13 @@ namespace openre
         void updateMovie(MovieWrapper& movieWrapper)
         {
             if (movieWrapper.movie->getState() != MovieState::playing)
-                return;
+            {
+                glDeleteTextures(1, &movieWrapper.textureGlHandle);
+                movieWrapper.textureGlHandle = 0;
+                SDL_DestroyAudioStream(movieWrapper.audioStream);
+                movieWrapper.audioStream = nullptr;
+                movieWrapper.nextFrame = {};
+            }
 
             auto currentTimeCode = (int64_t)(movieWrapper.movie->getPosition() * 1000);
             if (movieWrapper.nextFrame.endTime <= currentTimeCode)
@@ -646,6 +653,27 @@ namespace openre
                 }
             }
             return false;
+        }
+
+        template<typename T>
+        static inline T denormalize(float value, T max)
+        {
+            return static_cast<T>(std::clamp<float>((value * max) / 1.0f, 0, max));
+        }
+
+        void updateInputEffects()
+        {
+            auto& inputState = this->inputState;
+            auto red = denormalize<uint8_t>(inputState.led.r, 0xFF);
+            auto green = denormalize<uint8_t>(inputState.led.g, 0xFF);
+            auto blue = denormalize<uint8_t>(inputState.led.b, 0xFF);
+            auto low = denormalize<uint16_t>(inputState.rumble.low, 0xFFFF);
+            auto high = denormalize<uint16_t>(inputState.rumble.high, 0xFFFF);
+            for (const auto& gamePad : gamePads)
+            {
+                SDL_SetGamepadLED(gamePad, red, green, blue);
+                SDL_RumbleGamepad(gamePad, low, high, 1024);
+            }
         }
     };
 

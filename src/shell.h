@@ -41,12 +41,22 @@ namespace openre
         uint8_t isMod{};
     };
 
-    struct Color4f
+    struct Color3f
     {
         float r;
         float g;
         float b;
+    };
+
+    struct Color4f : Color3f
+    {
         float a;
+    };
+
+    struct Rumble
+    {
+        float low;
+        float high;
     };
 
     struct OpenREVertex
@@ -84,6 +94,8 @@ namespace openre
     public:
         std::array<bool, 32> commandsDown;
         std::array<bool, 32> commandsPressed;
+        Color3f led;
+        Rumble rumble;
     };
 
     class OpenREShell

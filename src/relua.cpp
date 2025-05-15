@@ -23,10 +23,39 @@ using namespace openre::modding;
 using namespace openre::movie;
 using namespace openre::shellextensions;
 
+// LUA extensions
+namespace openre::lua
+{
+    template<typename T> T luaxGetTable(lua_State* L, const char* key, int idx);
+
+    template<> float luaxGetTable(lua_State* L, const char* key, int idx)
+    {
+        auto tableIndex = lua_absindex(L, idx);
+        lua_pushstring(L, key);
+        lua_gettable(L, tableIndex);
+        auto result = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+        return static_cast<float>(result);
+    }
+
+    template<typename T> void luaxSetTable(lua_State* L, const char* key, T value, int idx)
+    {
+        static_assert(std::is_arithmetic<T>());
+        auto tableIndex = lua_absindex(L, idx);
+        lua_pushstring(L, key);
+        if constexpr (std::is_floating_point<T>::value)
+            lua_pushnumber(L, value);
+        else
+            lua_pushinteger(L, value);
+        lua_settable(L, tableIndex);
+    }
+}
+
 namespace openre::lua
 {
     constexpr const char* METATABLE_ENTITY = "meta_entity";
     constexpr const char* METATABLE_GFX = "meta_gfx";
+    constexpr const char* METATABLE_INPUT = "meta_input";
     constexpr const char* METATABLE_MOVIE = "meta_movie";
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
     constexpr const char* METATABLE_FONT = "meta_font";
@@ -234,9 +263,11 @@ namespace openre::lua
 
             setMetatable(METATABLE_GFX, apiGfxGetProperty);
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
+            setMetatable(METATABLE_INPUT, apiInputGetProperty, apiInputSetProperty);
             setMetatable(METATABLE_MOVIE, movie_get);
 
             attachMetatable("gfx", METATABLE_GFX);
+            attachMetatable("input", METATABLE_INPUT);
 
             setGlobal("unsafe.read", unsafe_read);
             setGlobal("unsafe.write", unsafe_write);
@@ -787,6 +818,63 @@ namespace openre::lua
             auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
             auto movie = shell->getMovie(userMovie->handle);
             movie->stop();
+            return 0;
+        }
+
+        static int apiInputGetProperty(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto& inputState = shell->getInputState();
+
+            auto key = luaL_checkstring(L, 2);
+            if (strcmp(key, "led") == 0)
+            {
+                lua_newtable(L);
+                luaxSetTable(L, "red", inputState.led.r, -1);
+                luaxSetTable(L, "green", inputState.led.g, -1);
+                luaxSetTable(L, "blue", inputState.led.b, -1);
+            }
+            else if (strcmp(key, "rumble") == 0)
+            {
+                lua_newtable(L);
+                luaxSetTable(L, "low", inputState.rumble.low, -1);
+                luaxSetTable(L, "high", inputState.rumble.high, -1);
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+
+        static int apiInputSetProperty(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto& inputState = shell->getInputState();
+            auto key = luaL_checkstring(L, 2);
+            if (strcmp(key, "led") == 0)
+            {
+                inputState.led.r = luaxGetTable<float>(L, "red", 3);
+                inputState.led.g = luaxGetTable<float>(L, "green", 3);
+                inputState.led.b = luaxGetTable<float>(L, "blue", 3);
+            }
+            else if (strcmp(key, "rumble") == 0)
+            {
+                inputState.rumble.low = luaxGetTable<float>(L, "low", 3);
+                inputState.rumble.high = luaxGetTable<float>(L, "high", 3);
+            }
             return 0;
         }
 
