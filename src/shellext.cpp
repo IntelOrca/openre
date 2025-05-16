@@ -1,18 +1,12 @@
 #include "font.h"
 #include "gfx.h"
+#include "resmgr.h"
 #include "shell.h"
 
 using namespace openre::graphics;
 
 namespace openre::shellextensions
 {
-    struct LoadFileResult
-    {
-        bool success{};
-        uint8_t extensionIndex{};
-        std::vector<uint8_t> buffer;
-    };
-
     OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0, float t0, float s1, float t1)
     {
         OpenREPrim prim{};
@@ -41,7 +35,7 @@ namespace openre::shellextensions
         return prim;
     }
 
-    static LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions)
+    LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions)
     {
         auto streamResult = shell.getStream(path, extensions);
         if (!streamResult.found)
@@ -90,7 +84,7 @@ namespace openre::shellextensions
         drawTexture(shell, texture, x, y, z, w, h, 0, 0, 1, 1);
     }
 
-    void drawMovie(OpenREShell& shell, MovieHandle movie, float x, float y, float z, float w, float h)
+    void drawMovie(OpenREShell& shell, ResourceCookie movie, float x, float y, float z, float w, float h)
     {
         auto prim = createQuad(x, y, z, w, h);
         prim.kind = OpenREPrimKind::MovieQuad;
@@ -104,12 +98,5 @@ namespace openre::shellextensions
         auto prim = createQuad(0, 0, 1, (float)size.width, (float)size.height);
         prim.color = { r, g, b, a };
         shell.pushPrimitive(prim);
-    }
-
-    FontHandle loadFont(OpenREShell& shell, std::string_view path)
-    {
-        auto textureBuffer = loadTextureBuffer(shell, path, 256, 256);
-        auto fontData = loadFile(shell, path, { ".dat" });
-        return shell.loadFont(textureBuffer, loadFontData(fontData.buffer));
     }
 }

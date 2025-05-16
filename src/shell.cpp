@@ -1,9 +1,9 @@
 #include "shell.h"
-#include "font.h"
 #include "gfx.h"
 #include "logger.h"
 #include "movie.h"
 #include "relua.h"
+#include "resmgr.h"
 
 #include <filesystem>
 #include <memory>
@@ -22,6 +22,8 @@ using namespace openre::movie;
 
 namespace openre
 {
+    class SDL2OpenREShell;
+
     class FileStream : public Stream
     {
     private:
@@ -74,20 +76,33 @@ namespace openre
         uint32_t height;
     };
 
-    struct Font
+    class MovieResource : public Resource
     {
-        FontHandle handle{};
-        GLuint textureGlHandle{};
-        FontData fontData;
-    };
-
-    struct MovieWrapper
-    {
-        MovieHandle handle{};
+    public:
+        SDL2OpenREShell& shell;
+        ResourceHandle handle{};
         std::unique_ptr<MoviePlayer> movie;
         GLuint textureGlHandle{};
         SDL_AudioStream* audioStream{};
         MovieFrame nextFrame;
+
+        MovieResource(SDL2OpenREShell& shell)
+            : shell(shell)
+            , movie(createMoviePlayer())
+        {
+        }
+
+        ~MovieResource() override
+        {
+            releaseResources();
+        }
+
+        const char* getName() const override
+        {
+            return "movie";
+        }
+
+        void releaseResources();
     };
 
     enum class InputBindingKind
@@ -106,6 +121,7 @@ namespace openre
     {
     private:
         std::unique_ptr<Logger> logger;
+        std::unique_ptr<ResourceManager> resourceManager;
 
         SDL_Window* window{};
 
@@ -133,9 +149,6 @@ namespace openre
         PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D{};
         PFNGLCLEARTEXIMAGEPROC glClearTexImage{};
 
-        std::vector<Font> fonts;
-        std::vector<MovieWrapper> movies;
-
         SDL_AudioDeviceID outputAudioDevice{};
 
         std::vector<std::vector<InputBinding>> inputBindings;
@@ -147,10 +160,11 @@ namespace openre
         SDL2OpenREShell()
         {
 #if DEBUG
-            logger = createConsoleLogger(LogVerbosity::debug);
+            this->logger = createConsoleLogger(LogVerbosity::debug);
 #else
-            logger = createConsoleLogger(LogVerbosity::verbose);
+            this->logger = createConsoleLogger(LogVerbosity::verbose);
 #endif
+            this->resourceManager = std::make_unique<ResourceManager>(*this->logger);
         }
 
         ~SDL2OpenREShell() {}
@@ -158,6 +172,11 @@ namespace openre
         Logger& getLogger() override
         {
             return *logger;
+        }
+
+        ResourceManager& getResourceManager() override
+        {
+            return *resourceManager;
         }
 
         StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) override
@@ -201,52 +220,38 @@ namespace openre
             return nextHandle;
         }
 
-        FontHandle loadFont(const openre::graphics::TextureBuffer& textureBuffer, const FontData& fontData) override
-        {
-            auto nextHandle = this->fonts.size() + 1;
-            this->logger->log(LogVerbosity::verbose, "Load font %d", nextHandle);
-
-            auto& font = this->fonts.emplace_back();
-            font.handle = nextHandle;
-            font.textureGlHandle = allocateTexture(textureBuffer);
-            font.fontData = fontData;
-            return nextHandle;
-        }
-
-        const FontData* getFontData(FontHandle handle) override
-        {
-            if (this->fonts.size() >= handle)
-            {
-                auto& font = this->fonts[handle - 1];
-                return &font.fontData;
-            }
-            return nullptr;
-        }
-
         void pushPrimitive(const OpenREPrim& prim) override
         {
             primitives.push_back(prim);
         }
 
-        MovieHandle loadMovie(std::unique_ptr<MoviePlayer> movie) override
+        ResourceCookie loadMovie(std::string_view path) override
         {
-            auto nextHandle = this->movies.size() + 1;
-            this->logger->log(LogVerbosity::verbose, "Load movie %d", nextHandle);
+            auto& resourceManager = *this->resourceManager;
+            auto result = resourceManager.addRef(path);
+            if (result)
+                return result;
 
-            auto& movieWrapper = this->movies.emplace_back();
-            movieWrapper.handle = nextHandle;
-            movieWrapper.movie = std::move(movie);
-            updateMovie(movieWrapper);
-            return nextHandle;
+            auto stream = getStream(path, { ".mp4", ".mpg" });
+            if (!stream.found)
+                return 0;
+
+            auto movieResource = std::make_unique<MovieResource>(*this);
+            movieResource->movie->open(std::move(stream.stream));
+            auto handle = resourceManager.add(path, std::move(movieResource));
+
+            auto movieResource2 = resourceManager.fromHandle<MovieResource>(handle);
+            movieResource2->handle = handle;
+            auto cookie = resourceManager.addRef(handle);
+
+            updateMovie(handle);
+            return cookie;
         }
 
-        MoviePlayer* getMovie(MovieHandle handle) override
+        MoviePlayer* getMovie(ResourceCookie cookie) override
         {
-            if (handle > 0 && handle <= movies.size())
-            {
-                return movies[handle - 1].movie.get();
-            }
-            return nullptr;
+            auto resource = resourceManager->fromCookie<MovieResource>(cookie);
+            return resource == nullptr ? nullptr : resource->movie.get();
         }
 
         void setUpdate(std::function<void()> callback) override
@@ -401,65 +406,60 @@ namespace openre
 
         void updateMovies()
         {
-            for (auto& movieWrapper : movies)
+            auto& resourceManager = *this->resourceManager;
+            auto handle = resourceManager.getFirst<MovieResource>();
+            while (handle != 0)
             {
-                updateMovie(movieWrapper);
+                updateMovie(handle);
+                handle = resourceManager.getNext(handle);
             }
         }
 
-        void updateMovie(MovieWrapper& movieWrapper)
+        void updateMovie(ResourceHandle handle)
         {
-            if (movieWrapper.movie->getState() != MovieState::playing)
+            auto movieResource = this->resourceManager->fromHandle<MovieResource>(handle);
+            if (movieResource == nullptr)
+                return;
+
+            if (movieResource->movie->getState() != MovieState::playing)
             {
-                if (movieWrapper.textureGlHandle != 0)
-                {
-                    this->logger->log(LogVerbosity::verbose, "Destroy texture for movie %d", movieWrapper.handle);
-                    glDeleteTextures(1, &movieWrapper.textureGlHandle);
-                    movieWrapper.textureGlHandle = 0;
-                }
-                if (movieWrapper.audioStream != nullptr)
-                {
-                    this->logger->log(LogVerbosity::verbose, "Destroy audio stream for movie %d", movieWrapper.handle);
-                    SDL_DestroyAudioStream(movieWrapper.audioStream);
-                    movieWrapper.audioStream = nullptr;
-                }
-                movieWrapper.nextFrame = {};
+                movieResource->releaseResources();
                 return;
             }
 
-            auto currentTimeCode = (int64_t)(movieWrapper.movie->getPosition() * 1000);
-            if (movieWrapper.nextFrame.endTime <= currentTimeCode)
+            auto currentTimeCode = (int64_t)(movieResource->movie->getPosition() * 1000);
+            if (movieResource->nextFrame.endTime <= currentTimeCode)
             {
                 do
                 {
-                    movieWrapper.nextFrame = movieWrapper.movie->dequeueVideoFrame();
-                } while (movieWrapper.nextFrame.endTime != 0 && movieWrapper.nextFrame.endTime <= currentTimeCode);
+                    movieResource->nextFrame = movieResource->movie->dequeueVideoFrame();
+                } while (movieResource->nextFrame.endTime != 0 && movieResource->nextFrame.endTime <= currentTimeCode);
             }
 
-            auto videoFormat = movieWrapper.movie->getVideoFormat();
-            if (movieWrapper.textureGlHandle == 0)
+            auto videoFormat = movieResource->movie->getVideoFormat();
+            if (movieResource->textureGlHandle == 0)
             {
-                this->logger->log(LogVerbosity::verbose, "Create texture for movie %d", movieWrapper.handle);
-                glGenTextures(1, &movieWrapper.textureGlHandle);
-                if (movieWrapper.textureGlHandle == 0)
+                this->logger->log(LogVerbosity::verbose, "Create texture for movie %d", handle);
+                glGenTextures(1, &movieResource->textureGlHandle);
+                if (movieResource->textureGlHandle == 0)
                 {
-                    this->logger->log(LogVerbosity::error, "Failed to create texture for movie %d", movieWrapper.handle);
+                    this->logger->log(LogVerbosity::error, "Failed to create texture for movie %d", handle);
                 }
                 else
                 {
-                    glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
+                    glBindTexture(GL_TEXTURE_2D, movieResource->textureGlHandle);
                     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 }
             }
-            if (movieWrapper.textureGlHandle != 0)
+            if (movieResource->textureGlHandle != 0)
             {
-                glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
-                if (movieWrapper.nextFrame.endTime == 0)
+                glBindTexture(GL_TEXTURE_2D, movieResource->textureGlHandle);
+                if (movieResource->nextFrame.endTime == 0)
                 {
                     GLfloat clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-                    glClearTexImage(movieWrapper.textureGlHandle, 0, GL_RGB, GL_UNSIGNED_BYTE, clearColor);
+                    glClearTexImage(movieResource->textureGlHandle, 0, GL_RGB, GL_UNSIGNED_BYTE, clearColor);
                 }
                 else
                 {
@@ -472,32 +472,32 @@ namespace openre
                         0,
                         GL_RGB,
                         GL_UNSIGNED_BYTE,
-                        movieWrapper.nextFrame.data.data());
+                        movieResource->nextFrame.data.data());
                 }
             }
 
-            auto audioFormat = movieWrapper.movie->getAudioFormat();
-            auto audioFrame = movieWrapper.movie->dequeueAudioFrame();
-            if (movieWrapper.audioStream == nullptr)
+            auto audioFormat = movieResource->movie->getAudioFormat();
+            auto audioFrame = movieResource->movie->dequeueAudioFrame();
+            if (movieResource->audioStream == nullptr)
             {
-                this->logger->log(LogVerbosity::verbose, "Create audio stream for movie %d", movieWrapper.handle);
+                this->logger->log(LogVerbosity::verbose, "Create audio stream for movie %d", handle);
                 SDL_AudioSpec spec;
                 spec.channels = audioFormat.channels;
                 spec.format = SDL_AUDIO_S16;
                 spec.freq = audioFormat.sampleRate;
-                movieWrapper.audioStream = SDL_CreateAudioStream(&spec, nullptr);
-                if (movieWrapper.audioStream == nullptr)
+                movieResource->audioStream = SDL_CreateAudioStream(&spec, nullptr);
+                if (movieResource->audioStream == nullptr)
                 {
-                    this->logger->log(LogVerbosity::error, "Failed to create audio stream for movie %d", movieWrapper.handle);
+                    this->logger->log(LogVerbosity::error, "Failed to create audio stream for movie %d", handle);
                 }
                 else
                 {
-                    SDL_BindAudioStream(this->outputAudioDevice, movieWrapper.audioStream);
+                    SDL_BindAudioStream(this->outputAudioDevice, movieResource->audioStream);
                 }
             }
-            if (movieWrapper.audioStream != nullptr)
+            if (movieResource->audioStream != nullptr)
             {
-                SDL_PutAudioStreamData(movieWrapper.audioStream, audioFrame.data.data(), audioFrame.data.size());
+                SDL_PutAudioStreamData(movieResource->audioStream, audioFrame.data.data(), audioFrame.data.size());
             }
         }
 
@@ -514,8 +514,7 @@ namespace openre
             glOrtho(0, this->renderWidth, this->renderHeight, 0, 1, -1);
             for (auto& p : primitives)
             {
-                if (p.kind == OpenREPrimKind::TextureQuad || p.kind == OpenREPrimKind::FontQuad
-                    || p.kind == OpenREPrimKind::MovieQuad)
+                if (p.kind == OpenREPrimKind::TextureQuad || p.kind == OpenREPrimKind::MovieQuad)
                 {
                     if (p.color.a == 0)
                         continue;
@@ -534,28 +533,15 @@ namespace openre
                             glDisable(GL_TEXTURE_2D);
                         }
                     }
-                    else if (p.kind == OpenREPrimKind::FontQuad)
-                    {
-                        if (p.font != 0 && p.font <= fonts.size())
-                        {
-                            glEnable(GL_TEXTURE_2D);
-                            glBindTexture(GL_TEXTURE_2D, fonts[p.font - 1].textureGlHandle);
-                            textureEnabled = true;
-                        }
-                        else
-                        {
-                            glDisable(GL_TEXTURE_2D);
-                        }
-                    }
                     else if (p.kind == OpenREPrimKind::MovieQuad)
                     {
-                        if (p.movie != 0 && p.movie <= movies.size())
+                        auto movieResource = this->resourceManager->fromCookie<MovieResource>(p.movie);
+                        if (movieResource != nullptr)
                         {
-                            auto& movieWrapper = movies[p.movie - 1];
-                            if (movieWrapper.textureGlHandle != 0)
+                            if (movieResource->textureGlHandle != 0)
                             {
                                 glEnable(GL_TEXTURE_2D);
-                                glBindTexture(GL_TEXTURE_2D, movieWrapper.textureGlHandle);
+                                glBindTexture(GL_TEXTURE_2D, movieResource->textureGlHandle);
                                 textureEnabled = true;
                             }
                         }
@@ -745,6 +731,23 @@ namespace openre
             }
         }
     };
+
+    void MovieResource::releaseResources()
+    {
+        if (this->textureGlHandle != 0)
+        {
+            shell.getLogger().log(LogVerbosity::verbose, "Destroy texture for movie %d", this->handle);
+            glDeleteTextures(1, &this->textureGlHandle);
+            this->textureGlHandle = 0;
+        }
+        if (this->audioStream != nullptr)
+        {
+            shell.getLogger().log(LogVerbosity::verbose, "Destroy audio stream for movie %d", this->handle);
+            SDL_DestroyAudioStream(this->audioStream);
+            this->audioStream = nullptr;
+        }
+        this->nextFrame = {};
+    }
 
     std::unique_ptr<OpenREShell> createShell()
     {

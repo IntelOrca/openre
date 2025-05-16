@@ -3,16 +3,17 @@
 #include "gfx.h"
 #include "input.h"
 #include "movie.h"
+#include "resmgr.h"
 
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 namespace openre::graphics
 {
-    struct FontData;
     struct TextureBuffer;
 }
 
@@ -24,8 +25,8 @@ namespace openre::logging
 namespace openre
 {
     using TextureHandle = uint32_t;
-    using FontHandle = uint32_t;
-    using MovieHandle = uint32_t;
+
+    class ResourceManager;
 
     class Stream
     {
@@ -77,7 +78,6 @@ namespace openre
     {
         Unknown,
         TextureQuad,
-        FontQuad,
         MovieQuad,
     };
 
@@ -87,8 +87,7 @@ namespace openre
         union
         {
             TextureHandle texture;
-            FontHandle font;
-            MovieHandle movie;
+            ResourceCookie movie;
         };
         Color4f color;
         OpenREVertex vertices[4];
@@ -111,20 +110,17 @@ namespace openre
 
         // General
         virtual openre::logging::Logger& getLogger() = 0;
+        virtual ResourceManager& getResourceManager() = 0;
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
 
         // Graphics
         virtual openre::graphics::Size getRenderSize() = 0;
         virtual TextureHandle loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
-        virtual FontHandle
-        loadFont(const openre::graphics::TextureBuffer& textureBuffer, const openre::graphics::FontData& fontData)
-            = 0;
-        virtual const openre::graphics::FontData* getFontData(FontHandle handle) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
 
         // Movie
-        virtual MovieHandle loadMovie(std::unique_ptr<openre::movie::MoviePlayer> movie) = 0;
-        virtual openre::movie::MoviePlayer* getMovie(MovieHandle handle) = 0;
+        virtual ResourceCookie loadMovie(std::string_view path) = 0;
+        virtual openre::movie::MoviePlayer* getMovie(ResourceCookie handle) = 0;
 
         // Input
         virtual InputState& getInputState() = 0;
@@ -135,13 +131,20 @@ namespace openre
 
 namespace openre::shellextensions
 {
+    struct LoadFileResult
+    {
+        bool success{};
+        uint8_t extensionIndex{};
+        std::vector<uint8_t> buffer;
+    };
+
+    LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions);
     OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1);
     TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
     void drawTexture(
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,
         float t1);
-    void drawMovie(OpenREShell& shell, MovieHandle movie, float x, float y, float z, float w, float h);
+    void drawMovie(OpenREShell& shell, ResourceCookie movie, float x, float y, float z, float w, float h);
     void fade(OpenREShell& shell, float r, float g, float b, float a);
-    FontHandle loadFont(OpenREShell& shell, std::string_view path);
 }

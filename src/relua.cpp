@@ -5,6 +5,7 @@
 #include "mod.h"
 #include "movie.h"
 #include "openre.h"
+#include "resmgr.h"
 #include "sce.h"
 #include "shell.h"
 #include <cstdio>
@@ -105,12 +106,12 @@ namespace openre::lua
 
         struct UserFont : public UserType
         {
-            FontHandle handle;
+            ResourceCookie cookie;
         };
 
         struct UserMovie : public UserType
         {
-            MovieHandle handle;
+            ResourceCookie cookie;
         };
 
     public:
@@ -264,7 +265,7 @@ namespace openre::lua
             setMetatable(METATABLE_GFX, apiGfxGetProperty);
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
             setMetatable(METATABLE_INPUT, apiInputGetProperty, apiInputSetProperty);
-            setMetatable(METATABLE_MOVIE, movie_get);
+            setMetatable(METATABLE_MOVIE, movie_get, nullptr, movie_gc);
 
             attachMetatable("gfx", METATABLE_GFX);
             attachMetatable("input", METATABLE_INPUT);
@@ -314,7 +315,7 @@ namespace openre::lua
             lua_pop(_state, 1);
         }
 
-        void setMetatable(const char* name, lua_CFunction getter, lua_CFunction setter = nullptr)
+        void setMetatable(const char* name, lua_CFunction getter, lua_CFunction setter = nullptr, lua_CFunction gc = nullptr)
         {
             luaL_newmetatable(_state, name);
             if (getter != nullptr)
@@ -328,6 +329,12 @@ namespace openre::lua
                 lua_pushlightuserdata(_state, this);
                 lua_pushcclosure(_state, setter, 1);
                 lua_setfield(_state, -2, "__newindex");
+            }
+            if (gc != nullptr)
+            {
+                lua_pushlightuserdata(_state, this);
+                lua_pushcclosure(_state, gc, 1);
+                lua_setfield(_state, -2, "__gc");
             }
             lua_pop(_state, 1);
         }
@@ -661,7 +668,7 @@ namespace openre::lua
             else if (arg0->kind == UserTypeKind::movie)
             {
                 auto movie = (UserMovie*)arg0;
-                drawMovie(*shell, movie->handle, x, y, z, w, h);
+                drawMovie(*shell, movie->cookie, x, y, z, w, h);
             }
 
             return 0;
@@ -695,15 +702,15 @@ namespace openre::lua
 
             auto path = luaL_checkstring(L, 1);
 
-            auto fontHandle = loadFont(*shell, path);
-            if (fontHandle == 0)
+            auto fontCookie = loadFont(*shell, path);
+            if (fontCookie == 0)
             {
                 lua_pushnil(L);
                 return 1;
             }
 
             auto custom = CreateUserObject<UserFont>(L, UserTypeKind::font);
-            custom->handle = fontHandle;
+            custom->cookie = fontCookie;
             luaL_getmetatable(L, METATABLE_FONT);
             lua_setmetatable(L, -2);
             return 1;
@@ -723,7 +730,7 @@ namespace openre::lua
             auto w = static_cast<float>(luaL_checknumber(L, 6));
             auto h = static_cast<float>(luaL_checknumber(L, 7));
 
-            drawText(*shell, font->handle, text, x, y, z, w, h);
+            drawText(*shell, font->cookie, text, x, y, z, w, h);
             return 0;
         }
 
@@ -737,18 +744,7 @@ namespace openre::lua
             }
 
             auto path = luaL_checkstring(L, 1);
-
-            auto stream = shell->getStream(path, { ".mp4", ".mpg" });
-            if (!stream.found)
-            {
-                lua_pushnil(L);
-                return 1;
-            }
-
-            auto movie = createMoviePlayer();
-            movie->open(std::move(stream.stream));
-
-            auto movieHandle = shell->loadMovie(std::move(movie));
+            auto movieHandle = shell->loadMovie(path);
             if (movieHandle == 0)
             {
                 lua_pushnil(L);
@@ -756,10 +752,26 @@ namespace openre::lua
             }
 
             auto custom = CreateUserObject<UserMovie>(L, UserTypeKind::movie);
-            custom->handle = movieHandle;
+            custom->cookie = movieHandle;
             luaL_getmetatable(L, METATABLE_MOVIE);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        static int movie_gc(lua_State* L)
+        {
+            auto self = GetContext(L);
+            if (!self->_shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
+
+            auto& resourceManager = self->_shell->getResourceManager();
+            resourceManager.release(userMovie->cookie);
+            return 0;
         }
 
         static int movie_get(lua_State* L)
@@ -787,7 +799,7 @@ namespace openre::lua
             }
             else if (strcmp(key, "state") == 0)
             {
-                auto movie = self->_shell->getMovie(userMovie->handle);
+                auto movie = self->_shell->getMovie(userMovie->cookie);
                 lua_pushnumber(L, static_cast<int32_t>(movie->getState()));
                 return 1;
             }
@@ -804,7 +816,7 @@ namespace openre::lua
                 return 0;
 
             auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
-            auto movie = shell->getMovie(userMovie->handle);
+            auto movie = shell->getMovie(userMovie->cookie);
             movie->play();
             return 0;
         }
@@ -816,7 +828,7 @@ namespace openre::lua
                 return 0;
 
             auto userMovie = GetUserObject<UserMovie>(L, 1, METATABLE_MOVIE);
-            auto movie = shell->getMovie(userMovie->handle);
+            auto movie = shell->getMovie(userMovie->cookie);
             movie->stop();
             return 0;
         }

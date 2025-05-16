@@ -98,6 +98,7 @@
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="relua.cpp" />
+    <ClCompile Include="resmgr.cpp" />
     <ClCompile Include="room.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
@@ -133,6 +134,7 @@
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
     <ClInclude Include="relua.h" />
+    <ClInclude Include="resmgr.h" />
     <ClInclude Include="room.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />

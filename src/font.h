@@ -1,5 +1,6 @@
 #pragma once
 
+#include "resmgr.h"
 #include "shell.h"
 
 #include <cstdint>
@@ -44,6 +45,7 @@ namespace openre::graphics
         }
     };
 
+    ResourceCookie loadFont(OpenREShell& shell, std::string_view path);
     FontData loadFontData(std::vector<uint8_t> buffer);
-    void drawText(OpenREShell& shell, FontHandle font, std::string_view text, float x, float y, float z, float w, float h);
+    void drawText(OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, float w, float h);
 }
