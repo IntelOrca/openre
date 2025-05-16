@@ -13,14 +13,8 @@ namespace openre::graphics
     class FontResource : public Resource
     {
     public:
-        TextureHandle textureHandle;
+        ResourceCookie textureCookie{};
         FontData fontData;
-
-        FontResource(TextureHandle textureHandle, FontData fontData)
-            : textureHandle(textureHandle)
-            , fontData(fontData)
-        {
-        }
 
         const char* getName() const override
         {
@@ -33,13 +27,16 @@ namespace openre::graphics
     ResourceCookie loadFont(OpenREShell& shell, std::string_view path)
     {
         auto& resourceManager = shell.getResourceManager();
-        auto result = resourceManager.addRef(path);
-        if (result)
-            return result;
+        auto fontCookie = resourceManager.addRef<FontResource>(path);
+        if (fontCookie)
+            return fontCookie;
 
-        auto textureHandle = loadTexture(shell, path, 256, 256);
-        auto fontData = loadFontData(shell, path);
-        return resourceManager.addFirstRef(path, std::make_unique<FontResource>(textureHandle, fontData));
+        fontCookie = resourceManager.addFirstRef(path, std::make_unique<FontResource>());
+
+        auto fontResource = resourceManager.fromCookie<FontResource>(fontCookie);
+        fontResource->textureCookie = shell.loadTexture(path, 256, 256);
+        fontResource->fontData = loadFontData(shell, path);
+        return fontCookie;
     }
 
     static FontData loadFontData(OpenREShell& shell, std::string_view path)
@@ -403,7 +400,7 @@ namespace openre::graphics
                         chWidth = (c.right - c.left) * fmt.scale;
                         chHeight = (c.bottom - c.top) * fmt.scale;
                         auto prim = createQuad(chLeft, chTop, z, chWidth, chHeight, s0, t0, s1, t1);
-                        prim.texture = fontResource->textureHandle;
+                        prim.texture = fontResource->textureCookie;
                         prim.color = fmt.color;
                         shell.pushPrimitive(prim);
                         break;
