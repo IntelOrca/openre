@@ -130,6 +130,9 @@ function init()
                 end
                 return introMovie.state == MovieState.playing
             end)
+            :exec(function()
+                introMovie = nil
+            end)
     end
     scheduler
         :exec(function()

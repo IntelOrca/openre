@@ -10,10 +10,46 @@ using namespace openre::shellextensions;
 
 namespace openre::graphics
 {
-    FontData loadFontData(std::vector<uint8_t> buffer)
+    class FontResource : public Resource
     {
+    public:
+        TextureHandle textureHandle;
+        FontData fontData;
+
+        FontResource(TextureHandle textureHandle, FontData fontData)
+            : textureHandle(textureHandle)
+            , fontData(fontData)
+        {
+        }
+
+        const char* getName() const override
+        {
+            return "font";
+        }
+    };
+
+    static FontData loadFontData(OpenREShell& shell, std::string_view path);
+
+    ResourceCookie loadFont(OpenREShell& shell, std::string_view path)
+    {
+        auto& resourceManager = shell.getResourceManager();
+        auto result = resourceManager.addRef(path);
+        if (result)
+            return result;
+
+        auto textureHandle = loadTexture(shell, path, 256, 256);
+        auto fontData = loadFontData(shell, path);
+        return resourceManager.addFirstRef(path, std::make_unique<FontResource>(textureHandle, fontData));
+    }
+
+    static FontData loadFontData(OpenREShell& shell, std::string_view path)
+    {
+        auto loadResult = loadFile(shell, path, { ".dat" });
+        if (!loadResult.success)
+            return {};
+
         FontData font;
-        auto src = reinterpret_cast<uint32_t*>(buffer.data());
+        auto src = reinterpret_cast<uint32_t*>(loadResult.buffer.data());
         src++; // magic
         src++; // version
         font.width = *src++;
@@ -327,14 +363,16 @@ namespace openre::graphics
         }
     };
 
-    void drawText(OpenREShell& shell, FontHandle font, std::string_view text, float x, float y, float z, float w, float h)
+    void drawText(OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, float w, float h)
     {
-        auto fontData = shell.getFontData(font);
-        if (fontData == nullptr)
+        auto& resourceManager = shell.getResourceManager();
+        auto fontResource = resourceManager.fromCookie<FontResource>(font);
+        if (fontResource == nullptr)
             return;
 
-        auto defaultCharWidth = fontData->getDefaultCharWidth();
-        auto lineHeight = fontData->getLineHeight();
+        auto& fontData = fontResource->fontData;
+        auto defaultCharWidth = fontData.getDefaultCharWidth();
+        auto lineHeight = fontData.getLineHeight();
 
         auto chLeft = x;
         auto chTop = y;
@@ -354,19 +392,18 @@ namespace openre::graphics
                     chTop += chHeight;
                     continue;
                 }
-                for (auto& c : fontData->chars)
+                for (auto& c : fontData.chars)
                 {
                     if (c.codepoint == ch)
                     {
-                        auto s0 = c.left / (float)fontData->width;
-                        auto t0 = c.top / (float)fontData->height;
-                        auto s1 = c.right / (float)fontData->width;
-                        auto t1 = c.bottom / (float)fontData->height;
+                        auto s0 = c.left / (float)fontData.width;
+                        auto t0 = c.top / (float)fontData.height;
+                        auto s1 = c.right / (float)fontData.width;
+                        auto t1 = c.bottom / (float)fontData.height;
                         chWidth = (c.right - c.left) * fmt.scale;
                         chHeight = (c.bottom - c.top) * fmt.scale;
                         auto prim = createQuad(chLeft, chTop, z, chWidth, chHeight, s0, t0, s1, t1);
-                        prim.kind = OpenREPrimKind::FontQuad;
-                        prim.font = font;
+                        prim.texture = fontResource->textureHandle;
                         prim.color = fmt.color;
                         shell.pushPrimitive(prim);
                         break;
