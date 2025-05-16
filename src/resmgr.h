@@ -58,8 +58,8 @@ namespace openre
         ~ResourceManager();
 
         ResourceHandle add(std::string_view path, std::unique_ptr<Resource> resource, std::type_index typeIndex);
+        ResourceCookie addRef(std::string_view path, std::type_index typeIndex);
         ResourceCookie addRef(ResourceHandle handle);
-        ResourceCookie addRef(std::string_view path);
         void release(ResourceCookie cookie);
 
         ResourceHandle getFirst(std::type_index typeIndex) const;
@@ -68,6 +68,11 @@ namespace openre
         template<typename T> ResourceHandle add(std::string_view path, std::unique_ptr<T> resource)
         {
             return this->add(path, std::move(resource), std::type_index(typeid(T)));
+        }
+
+        template<typename T> ResourceCookie addRef(std::string_view path)
+        {
+            return this->addRef(path, std::type_index(typeid(T)));
         }
 
         template<typename T> ResourceHandle addFirstRef(std::string_view path, std::unique_ptr<T> resource)
@@ -108,6 +113,6 @@ namespace openre
         }
 
     private:
-        ResourceHandle find(std::string_view path) const;
+        ResourceHandle find(std::string_view path, std::type_index typeIndex) const;
     };
 }

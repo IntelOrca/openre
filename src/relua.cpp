@@ -59,6 +59,7 @@ namespace openre::lua
     constexpr const char* METATABLE_INPUT = "meta_input";
     constexpr const char* METATABLE_MOVIE = "meta_movie";
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
+    constexpr const char* METATABLE_TEXTURE_RECT = "meta_textureRect";
     constexpr const char* METATABLE_FONT = "meta_font";
 
     class LuaVmImpl : public LuaVm
@@ -90,14 +91,14 @@ namespace openre::lua
 
         struct UserTexture : public UserType
         {
-            TextureHandle handle;
+            ResourceCookie cookie;
             uint32_t width;
             uint32_t height;
         };
 
         struct UserTextureRect : public UserType
         {
-            TextureHandle handle;
+            ResourceCookie cookie;
             float s0;
             float t0;
             float s1;
@@ -266,6 +267,8 @@ namespace openre::lua
             setMetatable(METATABLE_ENTITY, entity_get, entity_set);
             setMetatable(METATABLE_INPUT, apiInputGetProperty, apiInputSetProperty);
             setMetatable(METATABLE_MOVIE, movie_get, nullptr, movie_gc);
+            setMetatable(METATABLE_TEXTURE, nullptr, nullptr, texture_gc);
+            setMetatable(METATABLE_TEXTURE_RECT, nullptr, nullptr, textureRect_gc);
 
             attachMetatable("gfx", METATABLE_GFX);
             attachMetatable("input", METATABLE_INPUT);
@@ -601,15 +604,15 @@ namespace openre::lua
             auto width = luaL_checkinteger(L, 2);
             auto height = luaL_checkinteger(L, 3);
 
-            auto textureHandle = loadTexture(*shell, path, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-            if (textureHandle == 0)
+            auto cookie = shell->loadTexture(path, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+            if (cookie == 0)
             {
                 lua_pushnil(L);
                 return 1;
             }
 
             auto custom = CreateUserObject<UserTexture>(L, UserTypeKind::texture);
-            custom->handle = textureHandle;
+            custom->cookie = cookie;
             custom->width = static_cast<uint32_t>(width);
             custom->height = static_cast<uint32_t>(height);
             luaL_getmetatable(L, METATABLE_TEXTURE);
@@ -633,14 +636,46 @@ namespace openre::lua
             auto bottom = luaL_checkinteger(L, 5);
 
             auto custom = CreateUserObject<UserTextureRect>(L, UserTypeKind::textureRect);
-            custom->handle = texture->handle;
+            custom->cookie = texture->cookie;
             custom->s0 = left / (float)texture->width;
             custom->t0 = top / (float)texture->height;
             custom->s1 = right / (float)texture->width;
             custom->t1 = bottom / (float)texture->height;
-            luaL_getmetatable(L, METATABLE_TEXTURE);
+            luaL_getmetatable(L, METATABLE_TEXTURE_RECT);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        static int texture_gc(lua_State* L)
+        {
+            auto self = GetContext(L);
+            if (!self->_shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto userTexture = GetUserObject<UserTexture>(L, 1, METATABLE_TEXTURE);
+
+            auto& resourceManager = self->_shell->getResourceManager();
+            resourceManager.release(userTexture->cookie);
+            return 0;
+        }
+
+        static int textureRect_gc(lua_State* L)
+        {
+            auto self = GetContext(L);
+            if (!self->_shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto userTextureRect = GetUserObject<UserTextureRect>(L, 1, METATABLE_TEXTURE_RECT);
+
+            auto& resourceManager = self->_shell->getResourceManager();
+            resourceManager.release(userTextureRect->cookie);
+            return 0;
         }
 
         static int apiGfxDrawTexture(lua_State* L)
@@ -658,12 +693,12 @@ namespace openre::lua
 
             if (arg0->kind == UserTypeKind::texture)
             {
-                drawTexture(*shell, ((UserTexture*)arg0)->handle, x, y, z, w, h);
+                drawTexture(*shell, ((UserTexture*)arg0)->cookie, x, y, z, w, h);
             }
             else if (arg0->kind == UserTypeKind::textureRect)
             {
                 auto rect = (UserTextureRect*)arg0;
-                drawTexture(*shell, rect->handle, x, y, z, w, h, rect->s0, rect->t0, rect->s1, rect->t1);
+                drawTexture(*shell, rect->cookie, x, y, z, w, h, rect->s0, rect->t0, rect->s1, rect->t1);
             }
             else if (arg0->kind == UserTypeKind::movie)
             {
@@ -744,15 +779,15 @@ namespace openre::lua
             }
 
             auto path = luaL_checkstring(L, 1);
-            auto movieHandle = shell->loadMovie(path);
-            if (movieHandle == 0)
+            auto cookie = shell->loadMovie(path);
+            if (cookie == 0)
             {
                 lua_pushnil(L);
                 return 1;
             }
 
             auto custom = CreateUserObject<UserMovie>(L, UserTypeKind::movie);
-            custom->cookie = movieHandle;
+            custom->cookie = cookie;
             luaL_getmetatable(L, METATABLE_MOVIE);
             lua_setmetatable(L, -2);
             return 1;

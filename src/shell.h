@@ -86,7 +86,7 @@ namespace openre
         OpenREPrimKind kind;
         union
         {
-            TextureHandle texture;
+            ResourceCookie texture;
             ResourceCookie movie;
         };
         Color4f color;
@@ -115,7 +115,7 @@ namespace openre
 
         // Graphics
         virtual openre::graphics::Size getRenderSize() = 0;
-        virtual TextureHandle loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
+        virtual ResourceCookie loadTexture(std::string_view path, uint32_t width, uint32_t height) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
 
         // Movie
@@ -140,7 +140,7 @@ namespace openre::shellextensions
 
     LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions);
     OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1);
-    TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
+    openre::graphics::TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
     void drawTexture(
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,

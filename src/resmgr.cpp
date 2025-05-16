@@ -15,7 +15,7 @@ namespace openre
     ResourceHandle ResourceManager::add(std::string_view path, std::unique_ptr<Resource> resource, std::type_index typeIndex)
     {
         auto typeId = &typeid(resource);
-        auto existingHandle = find(path);
+        auto existingHandle = find(path, typeIndex);
         if (existingHandle != 0)
         {
             logger.log(LogVerbosity::warning, "Resource already loaded for path '%s'", std::string(path).c_str());
@@ -71,9 +71,9 @@ namespace openre
         return cookie;
     }
 
-    ResourceCookie ResourceManager::addRef(std::string_view path)
+    ResourceCookie ResourceManager::addRef(std::string_view path, std::type_index typeIndex)
     {
-        return addRef(find(path));
+        return addRef(find(path, typeIndex));
     }
 
     void ResourceManager::release(ResourceCookie cookie)
@@ -147,10 +147,11 @@ namespace openre
         return 0;
     }
 
-    ResourceHandle ResourceManager::find(std::string_view path) const
+    ResourceHandle ResourceManager::find(std::string_view path, std::type_index typeIndex) const
     {
-        auto result = std::find_if(
-            this->resources.begin(), this->resources.end(), [path](const ResourceEntry& r) { return r.path == path; });
+        auto result = std::find_if(this->resources.begin(), this->resources.end(), [path, typeIndex](const ResourceEntry& r) {
+            return r.typeIndex == typeIndex && r.path == path;
+        });
         if (result != this->resources.end())
         {
             return result->handle;

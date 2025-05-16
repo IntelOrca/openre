@@ -50,7 +50,7 @@ namespace openre::shellextensions
         return { true, streamResult.extensionIndex, buffer };
     }
 
-    static TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
+    TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
     {
         auto result = loadFile(shell, path, { ".adt", ".bmp" });
         TextureBuffer textureBuffer;
@@ -62,12 +62,6 @@ namespace openre::shellextensions
         {
             return bmp2TextureBuffer(std::move(result.buffer));
         }
-    }
-
-    TextureHandle loadTexture(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
-    {
-        auto textureBuffer = loadTextureBuffer(shell, path, width, height);
-        return shell.loadTexture(textureBuffer);
     }
 
     void drawTexture(

@@ -69,11 +69,23 @@ namespace openre
         }
     };
 
-    struct GLTexture
+    class TextureResource : public Resource
     {
-        GLuint handle;
-        uint32_t width;
-        uint32_t height;
+    public:
+        SDL2OpenREShell& shell;
+        ResourceHandle handle{};
+        Size size;
+        GLuint glHandle{};
+
+        TextureResource(SDL2OpenREShell& shell)
+            : shell(shell)
+        {
+        }
+
+        const char* getName() const override
+        {
+            return "texture";
+        }
     };
 
     class MovieResource : public Resource
@@ -128,7 +140,6 @@ namespace openre
         SDL_GLContext glContext{};
         GLuint renderFrameBufferHandle{};
         GLuint renderFrameBufferTexture{};
-        std::vector<GLTexture> textures;
         std::vector<OpenREPrim> primitives;
 
         std::function<void()> updateCallback;
@@ -207,17 +218,23 @@ namespace openre
             return { this->renderWidth, this->renderHeight };
         }
 
-        TextureHandle loadTexture(const TextureBuffer& textureBuffer) override
+        ResourceCookie loadTexture(std::string_view path, uint32_t width, uint32_t height) override
         {
-            auto nextHandle = textures.size() + 1;
-            this->logger->log(
-                LogVerbosity::verbose, "Load texture %d (%dx%d)", nextHandle, textureBuffer.width, textureBuffer.height);
+            auto& resourceManager = *this->resourceManager;
+            auto cookie = resourceManager.addRef<TextureResource>(path);
+            if (cookie)
+                return cookie;
 
-            auto& texture = textures.emplace_back();
-            texture.handle = allocateTexture(textureBuffer);
-            texture.width = textureBuffer.width;
-            texture.height = textureBuffer.height;
-            return nextHandle;
+            cookie = resourceManager.addFirstRef(path, std::make_unique<TextureResource>(*this));
+
+            auto textureResource = resourceManager.fromCookie<TextureResource>(cookie);
+
+            auto textureBuffer = shellextensions::loadTextureBuffer(*this, path, width, height);
+            textureResource->glHandle = allocateTexture(textureBuffer);
+            textureResource->size.width = textureBuffer.width;
+            textureResource->size.height = textureBuffer.height;
+
+            return cookie;
         }
 
         void pushPrimitive(const OpenREPrim& prim) override
@@ -228,9 +245,9 @@ namespace openre
         ResourceCookie loadMovie(std::string_view path) override
         {
             auto& resourceManager = *this->resourceManager;
-            auto result = resourceManager.addRef(path);
-            if (result)
-                return result;
+            auto cookie = resourceManager.addRef<MovieResource>(path);
+            if (cookie)
+                return cookie;
 
             auto stream = getStream(path, { ".mp4", ".mpg" });
             if (!stream.found)
@@ -242,7 +259,7 @@ namespace openre
 
             auto movieResource2 = resourceManager.fromHandle<MovieResource>(handle);
             movieResource2->handle = handle;
-            auto cookie = resourceManager.addRef(handle);
+            cookie = resourceManager.addRef(handle);
 
             updateMovie(handle);
             return cookie;
@@ -522,10 +539,11 @@ namespace openre
                     auto textureEnabled = false;
                     if (p.kind == OpenREPrimKind::TextureQuad)
                     {
-                        if (p.texture != 0 && p.texture <= textures.size())
+                        auto textureResource = this->resourceManager->fromCookie<TextureResource>(p.texture);
+                        if (textureResource != nullptr && textureResource->glHandle != 0)
                         {
                             glEnable(GL_TEXTURE_2D);
-                            glBindTexture(GL_TEXTURE_2D, textures[p.texture - 1].handle);
+                            glBindTexture(GL_TEXTURE_2D, textureResource->glHandle);
                             textureEnabled = true;
                         }
                         else
