@@ -184,6 +184,8 @@ namespace openre
     int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
     void update_timer();
+    void* operator_new(const size_t size);
+    void operator_delete(void* memoryBlock);
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()

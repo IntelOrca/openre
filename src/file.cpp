@@ -129,8 +129,21 @@ namespace openre::file
     // 0x00441630
     void* file_alloc(const size_t size)
     {
-        return interop::call<void*, size_t>(0x00441630, size);
+        if (gGameTable.file_buffer)
+        {
+            operator_delete(gGameTable.file_buffer);
+            gGameTable.file_buffer = 0;
+        }
+        if (!size)
+        {
+            return 0;
+        }
+
+        auto memoryBlock = operator_new(size);
+        gGameTable.file_buffer = memoryBlock;
+        return memoryBlock;
     }
+
     // 0x0043C590
     int load_adt(const char* path, uint32_t* bufferSize, int mode)
     {
