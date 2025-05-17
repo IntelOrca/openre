@@ -86,11 +86,16 @@ namespace openre::shellextensions
         shell.pushPrimitive(prim);
     }
 
+    void drawSolid(OpenREShell& shell, Color4f color, float x, float y, float z, float w, float h)
+    {
+        auto prim = createQuad(x, y, z, w, h);
+        prim.color = color;
+        shell.pushPrimitive(prim);
+    }
+
     void fade(OpenREShell& shell, float r, float g, float b, float a)
     {
         auto size = shell.getRenderSize();
-        auto prim = createQuad(0, 0, 1, (float)size.width, (float)size.height);
-        prim.color = { r, g, b, a };
-        shell.pushPrimitive(prim);
+        drawSolid(shell, { r, g, b, a }, 0, 0, 1, (float)size.width, (float)size.height);
     }
 }

@@ -61,6 +61,12 @@ function unsafe.write(address, bytes) end
 ---@class Texture
 ---@class TextureRect
 
+---@class Color4f
+---@field red number
+---@field green number
+---@field blue number
+---@field alpha number
+
 gfx = {
     ---@type integer
     screenWidth = 0,
@@ -86,13 +92,21 @@ function gfx.loadTexture(path, width, height) end
 ---@return TextureRect
 function gfx.getTextureRect(texture, left, top, right, bottom) end
 
----@param texture Texture | TextureRect
+---@param texture Texture | TextureRect | nil
 ---@param left integer
 ---@param top integer
 ---@param depth integer
----@param right integer
----@param bottom integer
-function gfx.drawTexture(texture, left, top, depth, right, bottom) end
+---@param width integer
+---@param height integer
+function gfx.drawTexture(texture, left, top, depth, width, height) end
+
+---@param color Color4f
+---@param left integer
+---@param top integer
+---@param depth integer
+---@param width integer
+---@param height integer
+function gfx.drawSolid(color, left, top, depth, width, height) end
 
 ---@class Font
 

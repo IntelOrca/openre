@@ -146,5 +146,6 @@ namespace openre::shellextensions
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,
         float t1);
     void drawMovie(OpenREShell& shell, ResourceCookie movie, float x, float y, float z, float w, float h);
+    void drawSolid(OpenREShell& shell, Color4f color, float x, float y, float z, float w, float h);
     void fade(OpenREShell& shell, float r, float g, float b, float a);
 }

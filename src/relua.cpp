@@ -71,6 +71,8 @@ namespace openre::lua
             int ref;
         };
 
+        std::filesystem::path path;
+        std::filesystem::file_time_type pathWriteTime;
         lua_State* _state;
         std::vector<HookInfo> _subscriptions;
         std::function<void(const std::string& s)> _logCallback;
@@ -125,17 +127,36 @@ namespace openre::lua
 
         ~LuaVmImpl() override
         {
+            close();
+        }
+
+        void close()
+        {
+            this->_subscriptions.clear();
             lua_close(_state);
+            _state = nullptr;
         }
 
         void run(const std::filesystem::path& path) override
         {
-            const auto& scriptPath = path;
-            auto result = luaL_dofile(_state, scriptPath.string().c_str());
+            this->path = path;
+            this->pathWriteTime = std::filesystem::last_write_time(path);
+            auto result = luaL_dofile(_state, path.string().c_str());
             if (result != LUA_OK)
             {
                 auto errString = lua_tostring(_state, -1);
                 log("Error: " + std::string(errString));
+            }
+        }
+
+        void reloadIfChanged() override
+        {
+            auto currentWriteTime = std::filesystem::last_write_time(this->path);
+            if (currentWriteTime != this->pathWriteTime)
+            {
+                this->close();
+                this->createState();
+                this->run(this->path);
             }
         }
 
@@ -154,6 +175,11 @@ namespace openre::lua
                     }
                 }
             }
+        }
+
+        void gc() override
+        {
+            lua_gc(_state, LUA_GCCOLLECT);
         }
 
         void setLogCallback(std::function<void(const std::string& s)> s) override
@@ -185,8 +211,7 @@ namespace openre::lua
                                                            "rawequal",
                                                            "rawget",
                                                            "rawset",
-                                                           "setfenv",
-                                                           "setmetatable" };
+                                                           "setfenv" };
 
         void log(const std::string& s)
         {
@@ -197,6 +222,7 @@ namespace openre::lua
         void createState()
         {
             _state = luaL_newstate();
+            lua_gc(_state, LUA_GCSTOP);
 
             // Standard LUA APIs
             for (const auto& r : standardLibraries)
@@ -220,6 +246,7 @@ namespace openre::lua
             setGlobal("gfx.loadTexture", apiGfxLoadTexture);
             setGlobal("gfx.getTextureRect", apiGfxGetTextureRect);
             setGlobal("gfx.drawTexture", apiGfxDrawTexture);
+            setGlobal("gfx.drawSolid", apiGfxDrawSolid);
             setGlobal("gfx.fade", apiGfxFade);
             setGlobal("gfx.loadFont", apiGfxLoadFont);
             setGlobal("gfx.drawText", apiGfxDrawText);
@@ -629,6 +656,8 @@ namespace openre::lua
                 return 1;
             }
 
+            auto& resourceManager = shell->getResourceManager();
+
             auto texture = (UserTexture*)lua_touserdata(L, 1);
             auto left = luaL_checkinteger(L, 2);
             auto top = luaL_checkinteger(L, 3);
@@ -636,7 +665,7 @@ namespace openre::lua
             auto bottom = luaL_checkinteger(L, 5);
 
             auto custom = CreateUserObject<UserTextureRect>(L, UserTypeKind::textureRect);
-            custom->cookie = texture->cookie;
+            custom->cookie = resourceManager.dupRef(texture->cookie);
             custom->s0 = left / (float)texture->width;
             custom->t0 = top / (float)texture->height;
             custom->s1 = right / (float)texture->width;
@@ -685,6 +714,9 @@ namespace openre::lua
                 return 0;
 
             auto arg0 = (UserType*)lua_touserdata(L, 1);
+            if (arg0 == nullptr)
+                return 0;
+
             auto x = static_cast<float>(luaL_checknumber(L, 2));
             auto y = static_cast<float>(luaL_checknumber(L, 3));
             auto z = static_cast<float>(luaL_checknumber(L, 4));
@@ -706,6 +738,27 @@ namespace openre::lua
                 drawMovie(*shell, movie->cookie, x, y, z, w, h);
             }
 
+            return 0;
+        }
+
+        static int apiGfxDrawSolid(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+                return 0;
+
+            Color4f color{};
+            color.r = luaxGetTable<float>(L, "red", 1);
+            color.g = luaxGetTable<float>(L, "green", 1);
+            color.b = luaxGetTable<float>(L, "blue", 1);
+            color.a = luaxGetTable<float>(L, "alpha", 1);
+
+            auto x = static_cast<float>(luaL_checknumber(L, 2));
+            auto y = static_cast<float>(luaL_checknumber(L, 3));
+            auto z = static_cast<float>(luaL_checknumber(L, 4));
+            auto w = static_cast<float>(luaL_checknumber(L, 5));
+            auto h = static_cast<float>(luaL_checknumber(L, 6));
+            drawSolid(*shell, color, x, y, z, w, h);
             return 0;
         }
 
@@ -758,6 +811,9 @@ namespace openre::lua
                 return 0;
 
             auto font = (UserFont*)lua_touserdata(L, 1);
+            if (font == nullptr)
+                return 0;
+
             auto text = luaL_checkstring(L, 2);
             auto x = static_cast<float>(luaL_checknumber(L, 3));
             auto y = static_cast<float>(luaL_checknumber(L, 4));

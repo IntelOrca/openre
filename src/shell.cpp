@@ -524,7 +524,11 @@ namespace openre
                 return a.vertices[0].z < b.vertices[0].z;
             });
 
-            glBindFramebuffer(GL_FRAMEBUFFER, renderFrameBufferHandle);
+            if (this->renderFrameBufferHandle != 0)
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, this->renderFrameBufferHandle);
+            }
+            glClear(GL_COLOR_BUFFER_BIT);
             glViewport(0, 0, this->renderWidth, this->renderHeight);
             glMatrixMode(GL_PROJECTION);
             glLoadIdentity();
@@ -597,25 +601,28 @@ namespace openre
 
         void renderToBackBuffer()
         {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0, this->windowWidth, this->windowHeight);
-            glBindTexture(GL_TEXTURE_2D, renderFrameBufferTexture);
-            glDisable(GL_BLEND);
-            glEnable(GL_TEXTURE_2D);
-            glMatrixMode(GL_PROJECTION);
-            glLoadIdentity();
-            glOrtho(0, this->windowWidth, this->windowHeight, 0, 1, -1);
-            glBegin(GL_QUADS);
-            glColor3d(1, 1, 1);
-            glTexCoord2f(0.0f, 1.0f);
-            glVertex2f(0, 0);
-            glTexCoord2f(0.0f, 0.0f);
-            glVertex2f(0, (float)this->windowHeight);
-            glTexCoord2f(1.0f, 0.0f);
-            glVertex2f((float)this->windowWidth, (float)this->windowHeight);
-            glTexCoord2f(1.0f, 1.0f);
-            glVertex2f((float)this->windowWidth, 0);
-            glEnd();
+            if (this->renderFrameBufferHandle != 0)
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, this->windowWidth, this->windowHeight);
+                glBindTexture(GL_TEXTURE_2D, renderFrameBufferTexture);
+                glDisable(GL_BLEND);
+                glEnable(GL_TEXTURE_2D);
+                glMatrixMode(GL_PROJECTION);
+                glLoadIdentity();
+                glOrtho(0, this->windowWidth, this->windowHeight, 0, 1, -1);
+                glBegin(GL_QUADS);
+                glColor3d(1, 1, 1);
+                glTexCoord2f(0.0f, 1.0f);
+                glVertex2f(0, 0);
+                glTexCoord2f(0.0f, 0.0f);
+                glVertex2f(0, (float)this->windowHeight);
+                glTexCoord2f(1.0f, 0.0f);
+                glVertex2f((float)this->windowWidth, (float)this->windowHeight);
+                glTexCoord2f(1.0f, 1.0f);
+                glVertex2f((float)this->windowWidth, 0);
+                glEnd();
+            }
             SDL_GL_SwapWindow(window);
         }
 
