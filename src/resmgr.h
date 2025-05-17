@@ -60,6 +60,7 @@ namespace openre
         ResourceHandle add(std::string_view path, std::unique_ptr<Resource> resource, std::type_index typeIndex);
         ResourceCookie addRef(std::string_view path, std::type_index typeIndex);
         ResourceCookie addRef(ResourceHandle handle);
+        ResourceCookie dupRef(ResourceCookie cookie);
         void release(ResourceCookie cookie);
 
         ResourceHandle getFirst(std::type_index typeIndex) const;

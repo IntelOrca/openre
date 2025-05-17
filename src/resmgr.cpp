@@ -76,6 +76,14 @@ namespace openre
         return addRef(find(path, typeIndex));
     }
 
+    ResourceCookie ResourceManager::dupRef(ResourceCookie cookie)
+    {
+        if (cookie == 0)
+            return 0;
+
+        return addRef(this->cookies[cookie - 1]);
+    }
+
     void ResourceManager::release(ResourceCookie cookie)
     {
         if (cookie == 0 || cookie > this->cookies.size())

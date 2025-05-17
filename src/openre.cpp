@@ -939,12 +939,16 @@ void openreMain(int argc, const char** argv)
     luaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
 
     auto initialized = false;
-    shell->setUpdate([&luaVm, &initialized]() {
+    shell->setUpdate([&luaVm, &initialized, &shell]() {
         if (!initialized)
         {
             initialized = true;
             luaVm->run("M:\\git\\openre\\games\\re2\\script\\main.lua");
         }
+        luaVm->gc();
+#if DEBUG
+        luaVm->reloadIfChanged();
+#endif
         luaVm->callHooks(openre::lua::HookKind::tick);
     });
     shell->run();

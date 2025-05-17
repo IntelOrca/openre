@@ -66,14 +66,28 @@ namespace openre::graphics
             src++; // reserved
             src++; // reserved
             src++; // reserved
+
+            c.s0 = c.left / (float)font.width;
+            c.t0 = c.top / (float)font.height;
+            c.s1 = c.right / (float)font.width;
+            c.t1 = c.bottom / (float)font.height;
         }
         return font;
     }
+
+    constexpr uint8_t HALIGN_LEFT = 0;
+    constexpr uint8_t HALIGN_CENTER = 1;
+    constexpr uint8_t HALIGN_RIGHT = 2;
+    constexpr uint8_t VALIGN_TOP = 0;
+    constexpr uint8_t VALIGN_CENTER = 1;
+    constexpr uint8_t VALIGN_BOTTOM = 2;
 
     struct TextFormatting
     {
         Color4f color = { 1, 1, 1, 1 };
         float scale = 1;
+        uint8_t halign = HALIGN_LEFT;
+        uint8_t valign = VALIGN_TOP;
     };
 
     class TextParser
@@ -151,6 +165,14 @@ namespace openre::graphics
                     else if (key == "scale")
                     {
                         fmt.scale = std::stof(std::string(value));
+                    }
+                    else if (key == "halign")
+                    {
+                        fmt.halign = parseAlignment(value);
+                    }
+                    else if (key == "valign")
+                    {
+                        fmt.valign = parseAlignment(value);
                     }
                 }
                 else
@@ -358,6 +380,17 @@ namespace openre::graphics
             }
             return { values[0] / 255.0f, values[1] / 255.0f, values[2] / 255.0f, values[3] };
         }
+
+        static uint8_t parseAlignment(std::string_view str)
+        {
+            if (str == "left" || str == "top")
+                return HALIGN_LEFT;
+            if (str == "center")
+                return HALIGN_CENTER;
+            if (str == "right" || str == "bottom")
+                return HALIGN_RIGHT;
+            return HALIGN_LEFT;
+        }
     };
 
     void drawText(OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, float w, float h)
@@ -371,13 +404,23 @@ namespace openre::graphics
         auto defaultCharWidth = fontData.getDefaultCharWidth();
         auto lineHeight = fontData.getLineHeight();
 
-        auto chLeft = x;
-        auto chTop = y;
+        auto halign = HALIGN_LEFT;
+        auto valign = VALIGN_TOP;
+        auto blkLeft = 0.0f;
+        auto blkTop = 0.0f;
+        auto blkRight = 0.0f;
+        auto blkBottom = 0.0f;
+        auto chLeft = 0.0f;
+        auto chTop = 0.0f;
 
+        std::vector<OpenREPrim> primitives;
         TextParser parser(text);
         while (parser.parse())
         {
             auto& fmt = parser.getFormatting();
+            halign = fmt.halign;
+            valign = fmt.valign;
+
             auto s = std::string(parser.getNextSpan());
             for (auto& ch : s)
             {
@@ -385,7 +428,7 @@ namespace openre::graphics
                 auto chHeight = lineHeight * fmt.scale;
                 if (ch == '\n')
                 {
-                    chLeft = x;
+                    chLeft = 0;
                     chTop += chHeight;
                     continue;
                 }
@@ -393,21 +436,62 @@ namespace openre::graphics
                 {
                     if (c.codepoint == ch)
                     {
-                        auto s0 = c.left / (float)fontData.width;
-                        auto t0 = c.top / (float)fontData.height;
-                        auto s1 = c.right / (float)fontData.width;
-                        auto t1 = c.bottom / (float)fontData.height;
-                        chWidth = (c.right - c.left) * fmt.scale;
-                        chHeight = (c.bottom - c.top) * fmt.scale;
-                        auto prim = createQuad(chLeft, chTop, z, chWidth, chHeight, s0, t0, s1, t1);
+                        chWidth = c.getWidth() * fmt.scale;
+                        chHeight = c.getHeight() * fmt.scale;
+                        auto chRight = chLeft + chWidth;
+                        auto chBottom = chTop + chHeight;
+                        blkRight = std::max(blkRight, chRight);
+                        blkBottom = std::max(blkBottom, chBottom);
+                        auto prim = createQuad(chLeft, chTop, z, chWidth, chHeight, c.s0, c.t0, c.s1, c.t1);
                         prim.texture = fontResource->textureCookie;
                         prim.color = fmt.color;
-                        shell.pushPrimitive(prim);
+                        primitives.push_back(prim);
                         break;
                     }
                 }
                 chLeft += chWidth;
             }
+        }
+
+        if (halign == HALIGN_LEFT)
+        {
+            blkLeft = x;
+            blkRight += blkLeft;
+        }
+        else if (halign == HALIGN_CENTER)
+        {
+            blkLeft = ((x + w) - blkRight) / 2;
+            blkRight += blkLeft;
+        }
+        else if (halign == HALIGN_RIGHT)
+        {
+            blkLeft = x + w - blkRight;
+            blkRight += blkLeft;
+        }
+        if (valign == VALIGN_TOP)
+        {
+            blkTop = y;
+            blkBottom += blkTop;
+        }
+        else if (valign == VALIGN_CENTER)
+        {
+            blkTop = ((y + h) - blkBottom) / 2;
+            blkBottom += blkTop;
+        }
+        else if (valign == VALIGN_BOTTOM)
+        {
+            blkTop = y + h - blkBottom;
+            blkBottom += blkTop;
+        }
+
+        for (auto& p : primitives)
+        {
+            for (auto& v : p.vertices)
+            {
+                v.x += blkLeft;
+                v.y += blkTop;
+            }
+            shell.pushPrimitive(p);
         }
     }
 }

@@ -16,6 +16,10 @@ namespace openre::graphics
         uint32_t top{};
         uint32_t right{};
         uint32_t bottom{};
+        float s0{};
+        float s1{};
+        float t0{};
+        float t1{};
 
         inline uint32_t getWidth() const
         {
@@ -46,6 +50,5 @@ namespace openre::graphics
     };
 
     ResourceCookie loadFont(OpenREShell& shell, std::string_view path);
-    FontData loadFontData(std::vector<uint8_t> buffer);
     void drawText(OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, float w, float h);
 }
