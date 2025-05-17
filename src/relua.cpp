@@ -61,6 +61,7 @@ namespace openre::lua
     constexpr const char* METATABLE_TEXTURE = "meta_texture";
     constexpr const char* METATABLE_TEXTURE_RECT = "meta_textureRect";
     constexpr const char* METATABLE_FONT = "meta_font";
+    constexpr const char* METATABLE_SOUND = "meta_sound";
 
     class LuaVmImpl : public LuaVm
     {
@@ -84,6 +85,7 @@ namespace openre::lua
             textureRect,
             font,
             movie,
+            sound,
         };
 
         struct UserType
@@ -113,6 +115,11 @@ namespace openre::lua
         };
 
         struct UserMovie : public UserType
+        {
+            ResourceCookie cookie;
+        };
+
+        struct UserSound : public UserType
         {
             ResourceCookie cookie;
         };
@@ -251,6 +258,9 @@ namespace openre::lua
             setGlobal("gfx.loadFont", apiGfxLoadFont);
             setGlobal("gfx.drawText", apiGfxDrawText);
             setGlobal("gfx.loadMovie", apiGfxLoadMovie);
+
+            setGlobal("sfx.loadSound", apiSfxLoadSound);
+            setGlobal("sfx.playSound", apiSfxPlaySound);
 
             setGlobal("input.isDown", apiInputIsDown<false>);
             setGlobal("input.isPressed", apiInputIsDown<true>);
@@ -847,6 +857,44 @@ namespace openre::lua
             luaL_getmetatable(L, METATABLE_MOVIE);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        static int apiSfxLoadSound(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto path = luaL_checkstring(L, 1);
+            auto cookie = shell->loadSound(path);
+            if (cookie == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto custom = CreateUserObject<UserSound>(L, UserTypeKind::sound);
+            custom->cookie = cookie;
+            luaL_getmetatable(L, METATABLE_SOUND);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        static int apiSfxPlaySound(lua_State* L)
+        {
+            auto shell = GetContextShell(L);
+            if (!shell)
+                return 0;
+
+            auto sound = (UserSound*)lua_touserdata(L, 1);
+            if (sound == nullptr)
+                return 0;
+
+            shell->playSound(sound->cookie);
+            return 0;
         }
 
         static int movie_gc(lua_State* L)
