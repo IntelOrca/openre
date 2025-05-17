@@ -141,6 +141,18 @@ function Movie:play() end
 
 function Movie:stop() end
 
+sfx = {}
+
+---@param path string
+---@return Sound
+function sfx.loadSound(path) end
+
+---@param sound Sound
+function sfx.playSound(sound) end
+
+---@class Sound
+local Sound = {}
+
 ---@enum InputCommand
 InputCommand = {
     up = 1,

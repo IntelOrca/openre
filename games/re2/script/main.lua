@@ -94,7 +94,6 @@ local STATE_MOVIE = 2
 local STATE_MENU = 3
 local STATE_NOTHING = 4
 
-local initialized = false
 local splashTexture
 local introMovie
 local titleBgTexture
@@ -102,8 +101,13 @@ local logo1Texture
 local logo2Texture
 local font1
 local font2
-local state = STATE_START
+local selectSound
+local applySound
+local backSound
+local residentEvilSound
 
+local initialized = false
+local state = STATE_START
 local enableSplash = false
 local enableVideo = false
 
@@ -153,6 +157,7 @@ local menu = {
         action = function()
             menuState = 4
             flashTicks = 0
+            sfx.playSound(residentEvilSound)
         end
     },
     {
@@ -383,6 +388,7 @@ function MenuItem:update()
                 if self.up ~= nil then
                     self.up.selectReady = true
                     self.selected = false
+                    sfx.playSound(selectSound)
                 end
             end
         elseif input.isDown(InputCommand.down) then
@@ -391,6 +397,7 @@ function MenuItem:update()
                 if self.down ~= nil then
                     self.down.selectReady = true
                     self.selected = false
+                    sfx.playSound(selectSound)
                 end
             end
         else
@@ -458,6 +465,10 @@ function init()
             logo2Texture = gfx.loadTexture("texture/logo2", 128, 128)
             font1 = gfx.loadFont("font/font1")
             font2 = gfx.loadFont("font/font2")
+            selectSound = sfx.loadSound("sound/select")
+            applySound = sfx.loadSound("sound/apply")
+            backSound = sfx.loadSound("sound/back")
+            residentEvilSound = sfx.loadSound("sound/residentevil")
         end)
 
     if enableSplash then
@@ -549,6 +560,7 @@ function initializeScene()
         startMenuItem:fade(0)
         logoSceneObject:move(logoSceneObject.x, 160)
         menuState = 1
+        sfx.playSound(applySound)
     end
     scene:add(startMenuItem)
 
@@ -603,6 +615,7 @@ function update()
                 value.selected = false
                 value:fade(0)
             end
+            sfx.playSound(backSound)
         end
     elseif menuState == 3 then
         if not menuItems[1].transitioning then

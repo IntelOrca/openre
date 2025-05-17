@@ -117,6 +117,18 @@ namespace openre
         void releaseResources();
     };
 
+    class SoundResource : public Resource
+    {
+    public:
+        SDL_AudioStream* stream{};
+        std::vector<uint8_t> data{};
+
+        const char* getName() const override
+        {
+            return "sound";
+        }
+    };
+
     enum class InputBindingKind
     {
         Keyboard,
@@ -160,6 +172,7 @@ namespace openre
         PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D{};
         PFNGLCLEARTEXIMAGEPROC glClearTexImage{};
 
+        SDL_AudioSpec outputAudioSpec{};
         SDL_AudioDeviceID outputAudioDevice{};
 
         std::vector<std::vector<InputBinding>> inputBindings;
@@ -271,6 +284,50 @@ namespace openre
             return resource == nullptr ? nullptr : resource->movie.get();
         }
 
+        ResourceCookie loadSound(std::string_view path) override
+        {
+            auto cookie = this->resourceManager->addRef<SoundResource>(path);
+            if (cookie != 0)
+                return cookie;
+
+            auto resource = std::make_unique<SoundResource>();
+            auto result = shellextensions::loadFile(*this, path, { ".wav" });
+            if (result.success)
+            {
+                auto stream = SDL_IOFromConstMem(result.buffer.data(), result.buffer.size());
+                if (stream != nullptr)
+                {
+                    SDL_AudioSpec spec{};
+                    uint8_t* srcData{};
+                    uint32_t srcLength{};
+                    if (SDL_LoadWAV_IO(stream, true, &spec, &srcData, &srcLength))
+                    {
+                        resource->stream = SDL_CreateAudioStream(&spec, nullptr);
+                        if (resource->stream != nullptr)
+                        {
+                            if (SDL_BindAudioStream(this->outputAudioDevice, resource->stream))
+                            {
+                                resource->data = std::vector<uint8_t>(srcData, srcData + srcLength);
+                            }
+                        }
+                        SDL_free(srcData);
+                    }
+                }
+            }
+            return resourceManager->addFirstRef(path, std::move(resource));
+        }
+
+        void playSound(ResourceCookie sound) override
+        {
+            auto resource = this->resourceManager->fromCookie<SoundResource>(sound);
+            if (resource == nullptr || resource->stream == nullptr)
+                return;
+
+            SDL_ClearAudioStream(resource->stream);
+            SDL_PutAudioStreamData(resource->stream, resource->data.data(), resource->data.size());
+            SDL_FlushAudioStream(resource->stream);
+        }
+
         void setUpdate(std::function<void()> callback) override
         {
             updateCallback = callback;
@@ -346,11 +403,10 @@ namespace openre
 
             createRenderBuffer();
 
-            SDL_AudioSpec spec;
-            spec.channels = 2;
-            spec.format = SDL_AUDIO_S16;
-            spec.freq = 44100;
-            outputAudioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
+            this->outputAudioSpec.channels = 2;
+            this->outputAudioSpec.format = SDL_AUDIO_S16;
+            this->outputAudioSpec.freq = 44100;
+            this->outputAudioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &this->outputAudioSpec);
         }
 
         void initGl()

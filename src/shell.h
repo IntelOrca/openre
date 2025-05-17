@@ -122,6 +122,10 @@ namespace openre
         virtual ResourceCookie loadMovie(std::string_view path) = 0;
         virtual openre::movie::MoviePlayer* getMovie(ResourceCookie handle) = 0;
 
+        // Audio
+        virtual ResourceCookie loadSound(std::string_view path) = 0;
+        virtual void playSound(ResourceCookie sound) = 0;
+
         // Input
         virtual InputState& getInputState() = 0;
     };
