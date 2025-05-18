@@ -40,7 +40,7 @@ namespace openre::modding
         log("Startup");
         this->luaVm = createLuaVm();
         this->luaVm->setLogCallback([this](const std::string& s) -> void { this->log(s); });
-        this->luaVm->run(this->scriptPath);
+        this->luaVm->run(this->scriptPath.u8string());
     }
 
     void Mod::callHooks(HookKind kind)

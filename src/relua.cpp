@@ -9,14 +9,11 @@
 #include "sce.h"
 #include "shell.h"
 #include <cstdio>
-#include <filesystem>
 #include <lua.hpp>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <tuple>
-
-namespace fs = std::filesystem;
 
 using namespace openre::graphics;
 using namespace openre::input;
@@ -72,8 +69,7 @@ namespace openre::lua
             int ref;
         };
 
-        std::filesystem::path path;
-        std::filesystem::file_time_type pathWriteTime;
+        std::string_view path;
         lua_State* _state;
         std::vector<HookInfo> _subscriptions;
         std::function<void(const std::string& s)> _logCallback;
@@ -144,27 +140,10 @@ namespace openre::lua
             _state = nullptr;
         }
 
-        void run(const std::filesystem::path& path) override
+        void run(std::string_view path) override
         {
             this->path = path;
-            this->pathWriteTime = std::filesystem::last_write_time(path);
-            auto result = luaL_dofile(_state, path.string().c_str());
-            if (result != LUA_OK)
-            {
-                auto errString = lua_tostring(_state, -1);
-                log("Error: " + std::string(errString));
-            }
-        }
-
-        void reloadIfChanged() override
-        {
-            auto currentWriteTime = std::filesystem::last_write_time(this->path);
-            if (currentWriteTime != this->pathWriteTime)
-            {
-                this->close();
-                this->createState();
-                this->run(this->path);
-            }
+            loadScript(this->_state, path);
         }
 
         void callHooks(HookKind kind) override
@@ -226,6 +205,65 @@ namespace openre::lua
                 _logCallback(s);
         }
 
+        void loadScript(lua_State* L, std::string_view path)
+        {
+            if (pushRequireResult(L, path))
+                return;
+
+            auto loadResult = loadFile(*this->_shell, path, { ".lua" });
+            if (loadResult.success)
+            {
+                std::string chunk((const char*)loadResult.buffer.data(), loadResult.buffer.size());
+                if (luaL_loadbufferx(_state, chunk.c_str(), chunk.size(), std::string(path).c_str(), "t") == LUA_OK)
+                {
+                    if (lua_pcall(L, 0, LUA_MULTRET, 0) == LUA_OK)
+                    {
+                        setRequireResult(L, path);
+                        pushRequireResult(L, path);
+                        return;
+                    }
+                }
+
+                auto errString = lua_tostring(_state, -1);
+                lua_pop(_state, 1);
+                log("Error: " + std::string(errString));
+            }
+        }
+
+        static bool pushRequireResult(lua_State* L, std::string_view path)
+        {
+            lua_getfield(L, LUA_REGISTRYINDEX, "loaded");
+            lua_pushlstring(L, path.data(), path.size());
+            lua_gettable(L, -2);
+            lua_remove(L, -2);
+            if (lua_isnil(L, -1))
+            {
+                lua_pop(L, 1);
+                return false;
+            }
+            else
+            {
+                lua_pushstring(L, "result");
+                lua_gettable(L, -2);
+                lua_remove(L, -2);
+                return true;
+            }
+        }
+
+        static void setRequireResult(lua_State* L, std::string_view path)
+        {
+            lua_newtable(L);
+            lua_pushstring(L, "result");
+            lua_pushvalue(L, -3);
+            lua_remove(L, -4);
+            lua_settable(L, -3);
+            lua_getfield(L, LUA_REGISTRYINDEX, "loaded");
+            lua_pushlstring(L, path.data(), path.size());
+            lua_pushvalue(L, -3);
+            lua_settable(L, -3);
+            lua_pop(L, 2);
+        }
+
         void createState()
         {
             _state = luaL_newstate();
@@ -243,8 +281,13 @@ namespace openre::lua
                 removeGlobal(fName);
             }
 
+            // Require table
+            lua_newtable(_state);
+            lua_setfield(_state, LUA_REGISTRYINDEX, "loaded");
+
             // RE API
             setGlobal("print", apiPrint);
+            setGlobal("require", apiRequire);
             setGlobal("re.subscribe", apiSubscribe);
             setGlobal("re.getFlag", apiGetFlag);
             setGlobal("re.setFlag", apiSetFlag);
@@ -425,7 +468,20 @@ namespace openre::lua
                 case LUA_TBOOLEAN: // Boolean
                     printf("boolean: %s", lua_toboolean(_state, i) ? "true" : "false");
                     break;
-                case LUA_TTABLE: printf("table"); break;
+                case LUA_TTABLE:
+                    printf("table: [");
+                    lua_pushnil(_state);
+                    while (lua_next(_state, i) != 0)
+                    {
+                        if (lua_isstring(_state, -2))
+                        {
+                            printf("%s = ", lua_tostring(_state, -2));
+                        }
+                        printf("%s", lua_tostring(_state, -1));
+                        lua_pop(_state, 1);
+                    }
+                    printf("]");
+                    break;
                 case LUA_TFUNCTION: printf("function"); break;
                 case LUA_TUSERDATA: printf("userdata"); break;
                 case LUA_TTHREAD: printf("thread"); break;
@@ -451,6 +507,15 @@ namespace openre::lua
             auto s = luaL_checkstring(L, 1);
             ptr->log(s);
             return 0;
+        }
+
+        static int apiRequire(lua_State* L)
+        {
+            auto ptr = static_cast<LuaVmImpl*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+            auto s = luaL_checkstring(L, 1);
+            ptr->loadScript(L, s);
+            return 1;
         }
 
         static int apiSubscribe(lua_State* L)

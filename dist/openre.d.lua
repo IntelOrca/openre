@@ -92,7 +92,7 @@ function gfx.loadTexture(path, width, height) end
 ---@return TextureRect
 function gfx.getTextureRect(texture, left, top, right, bottom) end
 
----@param texture Texture | TextureRect | nil
+---@param texture Texture | TextureRect | Movie | nil
 ---@param left integer
 ---@param top integer
 ---@param depth integer

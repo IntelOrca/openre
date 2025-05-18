@@ -1,7 +1,9 @@
 #pragma once
 
-#include <filesystem>
 #include <functional>
+#include <memory>
+#include <string>
+#include <string_view>
 
 namespace openre
 {
@@ -20,8 +22,7 @@ namespace openre::lua
     {
     public:
         virtual ~LuaVm() {}
-        virtual void run(const std::filesystem::path& path) = 0;
-        virtual void reloadIfChanged() = 0;
+        virtual void run(std::string_view path) = 0;
         virtual void callHooks(HookKind kind) = 0;
         virtual void gc() = 0;
 

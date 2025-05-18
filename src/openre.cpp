@@ -943,12 +943,9 @@ void openreMain(int argc, const char** argv)
         if (!initialized)
         {
             initialized = true;
-            luaVm->run("M:\\git\\openre\\games\\re2\\script\\main.lua");
+            luaVm->run("main");
         }
         luaVm->gc();
-#if DEBUG
-        luaVm->reloadIfChanged();
-#endif
         luaVm->callHooks(openre::lua::HookKind::tick);
     });
     shell->run();
