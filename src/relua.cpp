@@ -216,7 +216,7 @@ namespace openre::lua
                 std::string chunk((const char*)loadResult.buffer.data(), loadResult.buffer.size());
                 if (luaL_loadbufferx(_state, chunk.c_str(), chunk.size(), std::string(path).c_str(), "t") == LUA_OK)
                 {
-                    if (lua_pcall(L, 0, LUA_MULTRET, 0) == LUA_OK)
+                    if (lua_pcall(L, 0, 1, 0) == LUA_OK)
                     {
                         setRequireResult(L, path);
                         pushRequireResult(L, path);
@@ -453,32 +453,32 @@ namespace openre::lua
             }
         }
 
-        void printStack()
+        static void printStack(lua_State* L)
         {
-            auto top = lua_gettop(_state);
+            auto top = lua_gettop(L);
             std::printf("Lua Stack (size: %d):\n", top);
             for (auto i = 1; i <= top; i++)
             {
-                auto type = lua_type(_state, i);
+                auto type = lua_type(L, i);
                 printf("%d: ", i);
                 switch (type)
                 {
-                case LUA_TSTRING: printf("string: %s", lua_tostring(_state, i)); break;
-                case LUA_TNUMBER: printf("number: %f", lua_tonumber(_state, i)); break;
+                case LUA_TSTRING: printf("string: %s", lua_tostring(L, i)); break;
+                case LUA_TNUMBER: printf("number: %f", lua_tonumber(L, i)); break;
                 case LUA_TBOOLEAN: // Boolean
-                    printf("boolean: %s", lua_toboolean(_state, i) ? "true" : "false");
+                    printf("boolean: %s", lua_toboolean(L, i) ? "true" : "false");
                     break;
                 case LUA_TTABLE:
                     printf("table: [");
-                    lua_pushnil(_state);
-                    while (lua_next(_state, i) != 0)
+                    lua_pushnil(L);
+                    while (lua_next(L, i) != 0)
                     {
-                        if (lua_isstring(_state, -2))
+                        if (lua_isstring(L, -2))
                         {
-                            printf("%s = ", lua_tostring(_state, -2));
+                            printf("%s = ", lua_tostring(L, -2));
                         }
-                        printf("%s", lua_tostring(_state, -1));
-                        lua_pop(_state, 1);
+                        printf("%s", lua_tostring(L, -1));
+                        lua_pop(L, 1);
                     }
                     printf("]");
                     break;
