@@ -466,23 +466,26 @@ namespace openre::movie
         MovieState state{};
 
     public:
-        ~DummyMoviePlayer() override {}
-
         void open(std::unique_ptr<Stream> stream) override
         {
             state = MovieState::unsupported;
         }
 
+        void close() override
+        {
+            state = MovieState::blank;
+        }
+
+        void play() override {}
+
+        void stop() override {}
+
+        void setPosition(float position) override {}
+
         MovieState getState() const override
         {
             return state;
         }
-
-        void play() override {}
-        void stop() override {}
-        void setPosition(float position) override {}
-        void queueFrames(uint32_t count) override {}
-        void dequeueNextFrame() override {}
 
         float getPosition() const override
         {
@@ -494,29 +497,24 @@ namespace openre::movie
             return 0;
         }
 
-        Size getResolution() const override
+        openre::audio::AudioFormat getAudioFormat() const override
         {
             return {};
         }
 
-        uint32_t getSampleRate() const override
+        openre::graphics::VideoFormat getVideoFormat() const override
         {
-            return 0;
+            return {};
         }
 
-        uint32_t getFrameRate() const override
+        MovieFrame dequeueAudioFrame() override
         {
-            return 0;
+            return {};
         }
 
-        const openre::audio::AudioBuffer* getAudioFrame() override
+        MovieFrame dequeueVideoFrame() override
         {
-            return nullptr;
-        }
-
-        const openre::graphics::TextureBuffer* getVideoFrame() override
-        {
-            return nullptr;
+            return {};
         }
     };
 
