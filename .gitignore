@@ -1,4 +1,6 @@
 build/
+games/
+lib
 out/
 
 .vcpkg
