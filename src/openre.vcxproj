@@ -39,6 +39,11 @@
     <LibraryPath Condition="'$(Configuration)'=='Debug'">$(ProjectDir)..\lib\debug\lib;$(LibraryPath)</LibraryPath>
     <LibraryPath Condition="'$(Configuration)'!='Debug'">$(ProjectDir)..\lib\debug\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgInstalledDir>$(SolutionDir)\.vcpkg\</VcpkgInstalledDir>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -51,8 +56,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>lua.lib;sdl3-static.lib;opengl32.lib;ddraw.lib;dxguid.lib;winmm.lib;setupapi.lib;imm32.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies>avcodec.lib;avdevice.lib;avfilter.lib;avformat.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;bcrypt.lib;ws2_32.lib;secur32.lib;mfuuid.lib;strmiids.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>bcrypt.lib;ddraw.lib;dxguid.lib;imm32.lib;mfuuid.lib;opengl32.lib;secur32.lib;setupapi.lib;strmiids.lib;version.lib;winmm.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
