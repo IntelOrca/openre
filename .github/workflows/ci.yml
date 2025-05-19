@@ -8,14 +8,14 @@ jobs:
     - name: Install dependencies
       run: |
           sudo apt update
-          sudo apt install -y g++-mingw-w64
+          sudo apt install -y autoconf g++-mingw-w64 nasm pkg-config python3 zip
     - name: Build
       run: |
-          cmake -B out
+          env
+          cmake -B out -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x86-mingw-static
           cmake --build out
     - name: Package
       run: |
-          cp lib/bin/*.dll dist
           cp out/*.dll dist
           cp LICENSE README.md dist
           chmod 664 dist/*.dll

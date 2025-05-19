@@ -13,9 +13,18 @@ file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-target_include_directories(openre PRIVATE "lib/include")
-target_link_directories(openre PRIVATE "lib/lib")
+find_package(FFMPEG REQUIRED)
+target_include_directories(openre PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_directories(openre PRIVATE ${FFMPEG_LIBRARY_DIRS})
+target_link_libraries(openre PRIVATE ${FFMPEG_LIBRARIES})
 
-target_link_libraries(openre PRIVATE ddraw dxguid gdi32 lua54 ole32 winmm)
+find_package(Lua REQUIRED)
+target_include_directories(openre PRIVATE ${LUA_INCLUDE_DIR})
+target_link_libraries(openre PRIVATE ${LUA_LIBRARIES})
+
+# find_package(SDL3 CONFIG REQUIRED)
+# target_link_libraries(openre PRIVATE SDL3::SDL3)
+
+target_link_libraries(openre PRIVATE "ddraw" "dxguid" "opengl32" "SDL3" "imm32" "winmm" "gdi32" "ole32" "oleaut32" "setupapi" "version" "uuid")
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
