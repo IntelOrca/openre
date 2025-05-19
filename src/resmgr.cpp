@@ -1,6 +1,8 @@
 #include "resmgr.h"
 #include "logger.h"
 
+#include <algorithm>
+
 using namespace openre::logging;
 
 namespace openre

@@ -2,6 +2,7 @@
 #include "shell.h"
 
 #include <chrono>
+#include <cstring>
 #include <queue>
 #include <stdexcept>
 

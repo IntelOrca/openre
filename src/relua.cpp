@@ -8,7 +8,9 @@
 #include "resmgr.h"
 #include "sce.h"
 #include "shell.h"
+
 #include <cstdio>
+#include <cstring>
 #include <lua.hpp>
 #include <memory>
 #include <string>

@@ -1,6 +1,7 @@
 #include "gfx.h"
 #include "interop.hpp"
 
+#include <cstring>
 #include <filesystem>
 
 namespace openre::graphics
