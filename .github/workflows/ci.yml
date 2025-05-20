@@ -1,7 +1,28 @@
 name: CI
 on: [push, pull_request]
 jobs:
-  build:
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      shell: cmd
+      run: |
+          export PATH=%VCPKG_INSTALLATION_ROOT%;%PATH%
+          vcpkg integrate install
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+          msbuild openre.sln /p:Configuration=Release /p:EnableMovie=false
+    - name: Package
+      run: |
+          cp bin/Release/*.dll dist
+          cp LICENSE dist
+          cp README.md dist
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openre-windows
+        path: dist/**/*
+  mingw:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -11,7 +32,6 @@ jobs:
           sudo apt install -y autoconf g++-mingw-w64 nasm pkg-config python3 zip
     - name: Build
       run: |
-          env
           cmake -B out -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x86-mingw-static
           cmake --build out
     - name: Package
@@ -22,5 +42,5 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: openre
+        name: openre-mingw
         path: dist/**/*

@@ -6,7 +6,6 @@
 #include <queue>
 #include <stdexcept>
 
-#define ENABLE_MOVIE_FFMPEG
 #ifdef ENABLE_MOVIE_FFMPEG
 
 extern "C" {

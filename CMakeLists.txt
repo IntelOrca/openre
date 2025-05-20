@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 
+option(ENABLE_MOVIE "Enable movie support" OFF)
+if(ENABLE_MOVIE)
+  list(APPEND VCPKG_MANIFEST_FEATURES "movie")
+endif()
+
 project(openre)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -13,18 +18,25 @@ file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-find_package(FFMPEG REQUIRED)
-target_include_directories(openre PRIVATE ${FFMPEG_INCLUDE_DIRS})
-target_link_directories(openre PRIVATE ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(openre PRIVATE ${FFMPEG_LIBRARIES})
-
 find_package(Lua REQUIRED)
 target_include_directories(openre PRIVATE ${LUA_INCLUDE_DIR})
 target_link_libraries(openre PRIVATE ${LUA_LIBRARIES})
 
+# For some reason this doesn't work for vcpkg
 # find_package(SDL3 CONFIG REQUIRED)
 # target_link_libraries(openre PRIVATE SDL3::SDL3)
+target_link_libraries(openre PRIVATE "${VCPKG_INSTALLED_DIR}/x86-mingw-static/lib/libSDL3.a")
 
-target_link_libraries(openre PRIVATE "ddraw" "dxguid" "opengl32" "SDL3" "imm32" "winmm" "gdi32" "ole32" "oleaut32" "setupapi" "version" "uuid")
+# Other Windows related libraries to dynamically link (some are transitive from SDL3, FFMPEG)
+target_link_libraries(openre PRIVATE "ddraw" "dxguid" "opengl32" "imm32" "winmm" "gdi32" "ole32" "oleaut32" "setupapi" "version" "uuid")
+
+if(ENABLE_MOVIE)
+    target_compile_definitions(ENABLE_MOVIE_FFMPEG PRIVATE ENABLE_MOVIE)
+
+    find_package(FFMPEG REQUIRED)
+    target_include_directories(openre PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_directories(openre PRIVATE ${FFMPEG_LIBRARY_DIRS})
+    target_link_libraries(openre PRIVATE ${FFMPEG_LIBRARIES})
+endif()
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")

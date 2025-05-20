@@ -1,7 +1,15 @@
 {
+    "name": "openre",
     "dependencies": [
-        "ffmpeg",
         "lua",
         "sdl3"
-    ]
+    ],
+    "features": {
+        "movie": {
+            "description": "Support for playing movies.",
+            "dependencies": [
+                "ffmpeg"
+            ]
+        }
+    }
 }
