@@ -30,6 +30,7 @@ namespace openre::graphics
     TextureBuffer adt2TextureBuffer(std::vector<uint8_t> input, uint32_t width, uint32_t height);
     TextureBuffer bmp2TextureBuffer(DataBlock input);
     TextureBuffer rgb555toTextureBuffer(std::vector<uint8_t> input, uint32_t width, uint32_t height);
+    TextureBuffer webp2TextureBuffer(DataBlock input);
 
     // Legacy functions
     int load_adt(const char* path, uint32_t* bufferSize, int mode);

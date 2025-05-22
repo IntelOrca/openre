@@ -1,5 +1,6 @@
 #include "openre.h"
 #include "audio.h"
+#include "bios.h"
 #include "camera.h"
 #include "door.h"
 #include "enemy.h"
@@ -941,21 +942,7 @@ int openreMain(int argc, const char** argv)
     }
 
     auto shell = createShell();
-    auto luaVm = openre::lua::createLuaVm();
-    luaVm->setShell(shell.get());
-    luaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
-
-    auto initialized = false;
-    shell->setUpdate([&luaVm, &initialized, &shell]() {
-        if (!initialized)
-        {
-            initialized = true;
-            luaVm->run("main");
-        }
-        luaVm->gc();
-        luaVm->callHooks(openre::lua::HookKind::tick);
-    });
-    shell->run();
+    initBios(*shell);
     return 0;
 }
 

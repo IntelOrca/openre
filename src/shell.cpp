@@ -147,6 +147,7 @@ namespace openre
         std::unique_ptr<Logger> logger;
         std::unique_ptr<ResourceManager> resourceManager;
 
+        bool shouldExit{};
         SDL_Window* window{};
 
         SDL_GLContext glContext{};
@@ -224,6 +225,11 @@ namespace openre
                 }
             }
             return result;
+        }
+
+        void exit() override
+        {
+            this->shouldExit = true;
         }
 
         Size getRenderSize() override
@@ -351,8 +357,7 @@ namespace openre
             auto tickRate = 60;
             auto msPerTick = 1000 / tickRate;
             auto lastTick = SDL_GetTicks();
-            auto done = false;
-            while (!done)
+            while (!this->shouldExit)
             {
                 auto now = SDL_GetTicks();
                 auto duration = now - lastTick;
@@ -372,7 +377,9 @@ namespace openre
                 while (SDL_PollEvent(&event))
                 {
                     if (event.type == SDL_EVENT_QUIT)
-                        done = true;
+                    {
+                        exit();
+                    }
                 }
 
                 update();

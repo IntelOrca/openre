@@ -82,6 +82,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="bios.cpp" />
     <ClCompile Include="font.cpp" />
     <ClCompile Include="fontbuiltin.cpp" />
     <ClCompile Include="gfxadt.cpp" />
@@ -95,6 +96,7 @@
     <ClCompile Include="file.cpp" />
     <ClCompile Include="fswatch.cpp" />
     <ClCompile Include="gfxbmp.cpp" />
+    <ClCompile Include="gfxwebp.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -124,6 +126,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
+    <ClInclude Include="bios.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="data.hpp" />
     <ClInclude Include="door.h" />

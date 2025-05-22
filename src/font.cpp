@@ -1,6 +1,7 @@
 #include "font.h"
 #include "shell.h"
 
+#include <algorithm>
 #include <optional>
 #include <stack>
 #include <string>
@@ -30,7 +31,7 @@ namespace openre::graphics
             c.top = *src++;
             c.right = *src++;
             c.bottom = *src++;
-            src++; // reserved
+            c.advanceX = *src++;
             src++; // reserved
             src++; // reserved
 
@@ -60,7 +61,7 @@ namespace openre::graphics
     {
         auto builtInFont = getBuiltInFont();
         auto fontData = FontData::fromBuffer(builtInFont.data);
-        auto fontTexture = bmp2TextureBuffer(builtInFont.texture);
+        auto fontTexture = webp2TextureBuffer(builtInFont.texture);
 
         auto& resourceManager = shell.getResourceManager();
         auto fontCookie = resourceManager.addFirstRef<FontResource>("", std::make_unique<FontResource>());
@@ -94,21 +95,6 @@ namespace openre::graphics
 
         return FontData::fromBuffer(loadResult.buffer);
     }
-
-    constexpr uint8_t HALIGN_LEFT = 0;
-    constexpr uint8_t HALIGN_CENTER = 1;
-    constexpr uint8_t HALIGN_RIGHT = 2;
-    constexpr uint8_t VALIGN_TOP = 0;
-    constexpr uint8_t VALIGN_CENTER = 1;
-    constexpr uint8_t VALIGN_BOTTOM = 2;
-
-    struct TextFormatting
-    {
-        Color4f color = { 1, 1, 1, 1 };
-        float scale = 1;
-        uint8_t halign = HALIGN_LEFT;
-        uint8_t valign = VALIGN_TOP;
-    };
 
     class TextParser
     {
@@ -444,6 +430,7 @@ namespace openre::graphics
             auto s = std::string(parser.getNextSpan());
             for (auto& ch : s)
             {
+                auto advanceX = defaultCharWidth * fmt.scale;
                 auto chWidth = defaultCharWidth * fmt.scale;
                 auto chHeight = lineHeight * fmt.scale;
                 if (ch == '\n')
@@ -456,6 +443,7 @@ namespace openre::graphics
                 {
                     if (c.codepoint == ch)
                     {
+                        advanceX = c.advanceX * fmt.scale;
                         chWidth = c.getWidth() * fmt.scale;
                         chHeight = c.getHeight() * fmt.scale;
                         auto chRight = chLeft + chWidth;
@@ -469,7 +457,7 @@ namespace openre::graphics
                         break;
                     }
                 }
-                chLeft += chWidth;
+                chLeft += advanceX;
             }
         }
 
@@ -513,5 +501,25 @@ namespace openre::graphics
             }
             shell.pushPrimitive(p);
         }
+    }
+
+    void drawTextLine(
+        OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, TextFormatting& formatting)
+    {
+        // TODO make this far more efficient
+        char buffer[256];
+        std::sprintf(
+            buffer,
+            "<span color=\"rgba(%d, %d, %d, %f)\" scale=\"%f\">",
+            static_cast<uint8_t>(std::clamp<float>(formatting.color.r * 255.0f, 0, 255)),
+            static_cast<uint8_t>(std::clamp<float>(formatting.color.g * 255.0f, 0, 255)),
+            static_cast<uint8_t>(std::clamp<float>(formatting.color.b * 255.0f, 0, 255)),
+            formatting.color.a,
+            formatting.scale);
+
+        std::string fullText = buffer;
+        fullText.append(text);
+        fullText.append("</span>");
+        drawText(shell, font, fullText, x, y, z, 10000, 10000);
     }
 }

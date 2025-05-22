@@ -112,6 +112,7 @@ namespace openre
         virtual openre::logging::Logger& getLogger() = 0;
         virtual ResourceManager& getResourceManager() = 0;
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
+        virtual void exit() = 0;
 
         // Graphics
         virtual openre::graphics::Size getRenderSize() = 0;
