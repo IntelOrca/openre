@@ -216,4 +216,4 @@ namespace openre
     }
 }
 
-void openreMain(int argc, const char** argv);
+int openreMain(int argc, const char** argv);

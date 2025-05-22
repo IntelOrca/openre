@@ -1,8 +1,9 @@
-.vcpkg/
-build/
-games/
+.vcpkg
+build
+games
 lib
-out/
+mods
+out
 
 .vcpkg
 

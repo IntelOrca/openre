@@ -12,6 +12,7 @@
 #include "itembox.h"
 #include "marni.h"
 #include "math.h"
+#include "pkg.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
@@ -20,6 +21,7 @@
 #include "sce.h"
 #include "scheduler.h"
 #include "shell.h"
+#include "str.h"
 #include "tim.h"
 #include "title.h"
 
@@ -931,8 +933,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-void openreMain(int argc, const char** argv)
+int openreMain(int argc, const char** argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "pkgconv") == 0)
+    {
+        return pkgconv(argc, argv);
+    }
+
     auto shell = createShell();
     auto luaVm = openre::lua::createLuaVm();
     luaVm->setShell(shell.get());
@@ -949,11 +956,32 @@ void openreMain(int argc, const char** argv)
         luaVm->callHooks(openre::lua::HookKind::tick);
     });
     shell->run();
+    return 0;
 }
 
 static void winmain()
 {
-    openreMain(0, nullptr);
+    int exitCode;
+    {
+        auto cmdline = GetCommandLineW();
+        int argc;
+        auto argv16 = CommandLineToArgvW(cmdline, &argc);
+
+        std::vector<std::string> argv8;
+        for (int i = 0; i < argc; i++)
+        {
+            argv8.push_back(toUTF8(argv16[i]));
+        }
+        LocalFree(argv16);
+
+        std::vector<const char*> argv8sz;
+        for (const auto& s : argv8)
+        {
+            argv8sz.push_back(s.c_str());
+        }
+        exitCode = openreMain(argc, argv8sz.data());
+    }
+    exit(exitCode);
 }
 
 void onAttach()

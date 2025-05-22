@@ -123,6 +123,12 @@
     <ClCompile Include="resmgr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="pkgconv.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="str.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interop.hpp">
@@ -225,6 +231,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resmgr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pkg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="str.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

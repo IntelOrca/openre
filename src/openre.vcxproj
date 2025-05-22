@@ -106,6 +106,7 @@
     <ClCompile Include="model.cpp" />
     <ClCompile Include="movie.cpp" />
     <ClCompile Include="openre.cpp" />
+    <ClCompile Include="pkgconv.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="relua.cpp" />
@@ -116,6 +117,7 @@
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="shell.cpp" />
     <ClCompile Include="shellext.cpp" />
+    <ClCompile Include="str.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
   </ItemGroup>
@@ -141,6 +143,7 @@
     <ClInclude Include="model.h" />
     <ClInclude Include="movie.h" />
     <ClInclude Include="openre.h" />
+    <ClInclude Include="pkg.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
@@ -152,6 +155,7 @@
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="sfx.h" />
     <ClInclude Include="shell.h" />
+    <ClInclude Include="str.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
   </ItemGroup>
