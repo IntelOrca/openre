@@ -60,7 +60,7 @@ namespace openre::shellextensions
         }
         else
         {
-            return bmp2TextureBuffer(std::move(result.buffer));
+            return bmp2TextureBuffer(result.buffer);
         }
     }
 

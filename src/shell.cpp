@@ -231,6 +231,17 @@ namespace openre
             return { this->renderWidth, this->renderHeight };
         }
 
+        ResourceCookie loadTexture(const TextureBuffer& textureBuffer) override
+        {
+            auto& resourceManager = *this->resourceManager;
+            auto cookie = resourceManager.addFirstRef("", std::make_unique<TextureResource>(*this));
+            auto textureResource = resourceManager.fromCookie<TextureResource>(cookie);
+            textureResource->glHandle = allocateTexture(textureBuffer);
+            textureResource->size.width = textureBuffer.width;
+            textureResource->size.height = textureBuffer.height;
+            return cookie;
+        }
+
         ResourceCookie loadTexture(std::string_view path, uint32_t width, uint32_t height) override
         {
             auto& resourceManager = *this->resourceManager;

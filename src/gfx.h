@@ -1,5 +1,7 @@
 #pragma once
 
+#include "data.hpp"
+
 #include <cstdint>
 #include <vector>
 
@@ -26,7 +28,7 @@ namespace openre::graphics
     };
 
     TextureBuffer adt2TextureBuffer(std::vector<uint8_t> input, uint32_t width, uint32_t height);
-    TextureBuffer bmp2TextureBuffer(const std::vector<uint8_t>& input);
+    TextureBuffer bmp2TextureBuffer(DataBlock input);
     TextureBuffer rgb555toTextureBuffer(std::vector<uint8_t> input, uint32_t width, uint32_t height);
 
     // Legacy functions

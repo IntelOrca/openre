@@ -83,6 +83,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="font.cpp" />
+    <ClCompile Include="fontbuiltin.cpp" />
     <ClCompile Include="gfxadt.cpp" />
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
@@ -124,6 +125,7 @@
   <ItemGroup>
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
+    <ClInclude Include="data.hpp" />
     <ClInclude Include="door.h" />
     <ClInclude Include="enemy.h" />
     <ClInclude Include="entity.h" />

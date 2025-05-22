@@ -1,5 +1,6 @@
 #pragma once
 
+#include "data.hpp"
 #include "resmgr.h"
 #include "shell.h"
 
@@ -47,8 +48,19 @@ namespace openre::graphics
         {
             return this->chars[0].getHeight();
         }
+
+        static FontData fromBuffer(DataBlock input);
     };
 
+    struct BuiltInFont
+    {
+        DataBlock data;
+        DataBlock texture;
+    };
+
+    ResourceCookie loadBuiltInFont(OpenREShell& shell);
     ResourceCookie loadFont(OpenREShell& shell, std::string_view path);
     void drawText(OpenREShell& shell, ResourceCookie font, std::string_view text, float x, float y, float z, float w, float h);
+
+    BuiltInFont getBuiltInFont();
 }

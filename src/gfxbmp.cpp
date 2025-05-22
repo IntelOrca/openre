@@ -22,18 +22,18 @@ namespace openre::graphics
     };
 #pragma pack(pop)
 
-    template<typename T>
-    static T align(T value, uint32_t powerof2)
+    template<typename T> static T align(T value, uint32_t powerof2)
     {
         auto mask = powerof2 - 1;
         return (value + mask) & ~mask;
     }
 
-    TextureBuffer bmp2TextureBuffer(const std::vector<uint8_t>& input)
+    TextureBuffer bmp2TextureBuffer(DataBlock input)
     {
-        auto header1 = (BitmapFileHeader*)input.data();
-        auto header2 = (BitmapHeader*)(input.data() + 14);
-        auto pixelData = input.data() + header1->pixelOffset;
+        auto input8 = static_cast<const uint8_t*>(input.data);
+        auto header1 = (BitmapFileHeader*)input8;
+        auto header2 = (BitmapHeader*)(input8 + 14);
+        auto pixelData = input8 + header1->pixelOffset;
         auto bytesPerPixel = header2->bpp / 8;
 
         TextureBuffer result;

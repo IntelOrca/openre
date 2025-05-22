@@ -115,6 +115,7 @@ namespace openre
 
         // Graphics
         virtual openre::graphics::Size getRenderSize() = 0;
+        virtual ResourceCookie loadTexture(const openre::graphics::TextureBuffer& textureBuffer) = 0;
         virtual ResourceCookie loadTexture(std::string_view path, uint32_t width, uint32_t height) = 0;
         virtual void pushPrimitive(const OpenREPrim& prim) = 0;
 

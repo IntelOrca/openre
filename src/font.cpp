@@ -10,43 +10,10 @@ using namespace openre::shellextensions;
 
 namespace openre::graphics
 {
-    class FontResource : public Resource
+    FontData FontData::fromBuffer(DataBlock input)
     {
-    public:
-        ResourceCookie textureCookie{};
-        FontData fontData;
-
-        const char* getName() const override
-        {
-            return "font";
-        }
-    };
-
-    static FontData loadFontData(OpenREShell& shell, std::string_view path);
-
-    ResourceCookie loadFont(OpenREShell& shell, std::string_view path)
-    {
-        auto& resourceManager = shell.getResourceManager();
-        auto fontCookie = resourceManager.addRef<FontResource>(path);
-        if (fontCookie)
-            return fontCookie;
-
-        fontCookie = resourceManager.addFirstRef(path, std::make_unique<FontResource>());
-
-        auto fontResource = resourceManager.fromCookie<FontResource>(fontCookie);
-        fontResource->textureCookie = shell.loadTexture(path, 256, 256);
-        fontResource->fontData = loadFontData(shell, path);
-        return fontCookie;
-    }
-
-    static FontData loadFontData(OpenREShell& shell, std::string_view path)
-    {
-        auto loadResult = loadFile(shell, path, { ".dat" });
-        if (!loadResult.success)
-            return {};
-
         FontData font;
-        auto src = reinterpret_cast<uint32_t*>(loadResult.buffer.data());
+        auto src = static_cast<const uint32_t*>(input.data);
         src++; // magic
         src++; // version
         font.width = *src++;
@@ -73,6 +40,59 @@ namespace openre::graphics
             c.t1 = c.bottom / (float)font.height;
         }
         return font;
+    }
+
+    class FontResource : public Resource
+    {
+    public:
+        ResourceCookie textureCookie{};
+        FontData fontData;
+
+        const char* getName() const override
+        {
+            return "font";
+        }
+    };
+
+    static FontData loadFontData(OpenREShell& shell, std::string_view path);
+
+    ResourceCookie loadBuiltInFont(OpenREShell& shell)
+    {
+        auto builtInFont = getBuiltInFont();
+        auto fontData = FontData::fromBuffer(builtInFont.data);
+        auto fontTexture = bmp2TextureBuffer(builtInFont.texture);
+
+        auto& resourceManager = shell.getResourceManager();
+        auto fontCookie = resourceManager.addFirstRef<FontResource>("", std::make_unique<FontResource>());
+
+        auto fontResource = resourceManager.fromCookie<FontResource>(fontCookie);
+        fontResource->textureCookie = shell.loadTexture(fontTexture);
+        fontResource->fontData = fontData;
+        return fontCookie;
+    }
+
+    ResourceCookie loadFont(OpenREShell& shell, std::string_view path)
+    {
+        auto& resourceManager = shell.getResourceManager();
+        auto fontCookie = resourceManager.addRef<FontResource>(path);
+        if (fontCookie)
+            return fontCookie;
+
+        fontCookie = resourceManager.addFirstRef(path, std::make_unique<FontResource>());
+
+        auto fontResource = resourceManager.fromCookie<FontResource>(fontCookie);
+        fontResource->textureCookie = shell.loadTexture(path, 256, 256);
+        fontResource->fontData = loadFontData(shell, path);
+        return fontCookie;
+    }
+
+    static FontData loadFontData(OpenREShell& shell, std::string_view path)
+    {
+        auto loadResult = loadFile(shell, path, { ".dat" });
+        if (!loadResult.success)
+            return {};
+
+        return FontData::fromBuffer(loadResult.buffer);
     }
 
     constexpr uint8_t HALIGN_LEFT = 0;
