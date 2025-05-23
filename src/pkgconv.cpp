@@ -111,7 +111,7 @@ namespace openre
         c.importSound("sound/biohazard.wav", "common/sound/core/core16.sap", 0);
         c.importSound("sound/residentevil.wav", "common/sound/core/core17.sap", 0);
         c.importSound("sound/select.wav", "common/sound/core/core22.sap", 0);
-        c.import("video/intro.mpg", "pl0/zmovie/title_l.bin");
+        c.import("movie/intro.mpg", "pl0/zmovie/title_l.bin");
     }
 
     static void convertPackageRe2hd(PackageConverter& c)

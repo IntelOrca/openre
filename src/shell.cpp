@@ -227,6 +227,11 @@ namespace openre
             return result;
         }
 
+        void setBasePaths(std::vector<std::filesystem::path> paths) override
+        {
+            this->basePaths = paths;
+        }
+
         void exit() override
         {
             this->shouldExit = true;
@@ -395,8 +400,6 @@ namespace openre
     private:
         void init()
         {
-            basePaths = { "M:\\git\\openre\\games\\re2hd", "M:\\git\\openre\\games\\re2" };
-
             this->logger->log(LogVerbosity::info, "Initialize SDL");
             SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
 
@@ -713,6 +716,7 @@ namespace openre
             addBinding(InputCommand::menuCancel, InputBindingKind::Keyboard, SDL_SCANCODE_ESCAPE);
             addBinding(InputCommand::menuApply, InputBindingKind::Keyboard, SDL_SCANCODE_RETURN);
             addBinding(InputCommand::menuStart, InputBindingKind::Keyboard, SDL_SCANCODE_SPACE);
+            addBinding(InputCommand::debugBios, InputBindingKind::Keyboard, SDL_SCANCODE_GRAVE);
 
             addBinding(InputCommand::up, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
             addBinding(InputCommand::left, InputBindingKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);

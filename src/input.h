@@ -25,6 +25,7 @@ namespace openre::input
         run,
         menu,
         quickTurn,
+        debugBios,
     };
 
     enum InputKey

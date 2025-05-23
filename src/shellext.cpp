@@ -53,6 +53,9 @@ namespace openre::shellextensions
     TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
     {
         auto result = loadFile(shell, path, { ".adt", ".bmp" });
+        if (!result.success)
+            return {};
+
         TextureBuffer textureBuffer;
         if (result.extensionIndex == 0)
         {

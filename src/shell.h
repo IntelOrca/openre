@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -112,6 +113,7 @@ namespace openre
         virtual openre::logging::Logger& getLogger() = 0;
         virtual ResourceManager& getResourceManager() = 0;
         virtual StreamResult getStream(std::string_view path, const std::vector<std::string_view>& extensions) = 0;
+        virtual void setBasePaths(std::vector<std::filesystem::path> paths) = 0;
         virtual void exit() = 0;
 
         // Graphics
@@ -146,7 +148,8 @@ namespace openre::shellextensions
 
     LoadFileResult loadFile(OpenREShell& shell, std::string_view path, std::vector<std::string_view> extensions);
     OpenREPrim createQuad(float x, float y, float z, float w, float h, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 1);
-    openre::graphics::TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
+    openre::graphics::TextureBuffer
+    loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height);
     void drawTexture(OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h);
     void drawTexture(
         OpenREShell& shell, TextureHandle texture, float x, float y, float z, float w, float h, float s0, float t0, float s1,

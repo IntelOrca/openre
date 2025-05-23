@@ -3,7 +3,10 @@
 #include "relua.h"
 #include "shell.h"
 
+#include <filesystem>
 #include <functional>
+
+namespace fs = std::filesystem;
 
 using namespace openre::graphics;
 using namespace openre::input;
@@ -24,6 +27,7 @@ namespace openre
         ResourceCookie defaultFont{};
         std::unique_ptr<LuaVm> gameLuaVm;
 
+        bool gameSuspended{};
         std::vector<MenuItem> menuItems;
         int32_t selectedIndex{};
 
@@ -37,16 +41,17 @@ namespace openre
         {
             this->defaultFont = loadBuiltInFont(this->shell);
             this->showMenu();
-
-            // this->gameLuaVm = openre::lua::createLuaVm();
-            // this->gameLuaVm->setShell(&shell);
-            // this->gameLuaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
-            // this->gameLuaVm->run("main");
         }
 
         void update()
         {
-            if (this->gameLuaVm == nullptr)
+            auto& input = this->shell.getInputState();
+            if (input.commandsPressed[static_cast<int32_t>(InputCommand::debugBios)])
+            {
+                gameSuspended = !gameSuspended;
+            }
+
+            if (gameSuspended || this->gameLuaVm == nullptr)
             {
                 updateMenu();
                 drawMenu();
@@ -75,12 +80,7 @@ namespace openre
         void showMenu()
         {
             this->clearList();
-            this->addListItem("SELECT GAME", [this]() {
-                this->clearList();
-                this->addListItem("  RESIDENT EVIL 1");
-                this->addListItem("  RESIDENT EVIL 2");
-                this->addListItem("  RESIDENT EVIL 3");
-            });
+            this->addListItem("SELECT GAME", [this]() { showGameMenu(); });
             this->addListItem("MODS", [this]() {
                 this->clearList();
                 this->addListItem("* RESIDENT EVIL 2 HD");
@@ -88,6 +88,21 @@ namespace openre
             this->addListItem("OPTIONS");
             this->addListItem("DEBUG");
             this->addListItem("EXIT", [this]() { this->shell.exit(); });
+        }
+
+        void showGameMenu()
+        {
+            this->clearList();
+
+            auto gamesDir = getGamesDirectory();
+            for (const auto& gameDir : fs::directory_iterator(gamesDir))
+            {
+                if (!gameDir.is_directory())
+                    continue;
+
+                const auto& gamePath = gameDir.path();
+                addListItem(gamePath.filename().u8string(), [this, gamePath]() { startGame(gamePath); });
+            }
         }
 
         void menuBack()
@@ -154,6 +169,34 @@ namespace openre
                 drawTextLine(this->shell, this->defaultFont, menuItem.text, 20, y, 0, formatting);
                 y += 42;
             }
+        }
+
+        void startGame(const fs::path& gamePath)
+        {
+            showMenu();
+
+            this->shell.setBasePaths({ gamePath });
+
+            this->gameLuaVm = openre::lua::createLuaVm();
+            this->gameLuaVm->setShell(&shell);
+            this->gameLuaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
+            this->gameLuaVm->run("main");
+
+            this->gameSuspended = false;
+        }
+
+        std::filesystem::path getGamesDirectory() const
+        {
+            auto appdata = std::getenv("APPDATA");
+            if (appdata == nullptr)
+                return {};
+
+            auto openrePath = fs::u8path(appdata) / "openre";
+            auto gamesPath = openrePath / "games";
+            if (!fs::is_directory(gamesPath))
+                return {};
+
+            return gamesPath;
         }
     };
 
