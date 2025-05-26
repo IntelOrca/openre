@@ -1,5 +1,6 @@
 #include "gfx.h"
 
+#include <cstring>
 #include <webp/decode.h>
 
 namespace openre::graphics

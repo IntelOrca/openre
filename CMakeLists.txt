@@ -23,6 +23,13 @@ target_include_directories(openre PRIVATE ${LUA_INCLUDE_DIR})
 target_link_libraries(openre PRIVATE ${LUA_LIBRARIES})
 
 # For some reason this doesn't work for vcpkg
+# find_package(WebP CONFIG REQUIRED)
+# target_link_libraries(openre PRIVATE WebP::webp WebP::webpdecoder)
+target_link_libraries(openre PRIVATE
+    "${VCPKG_INSTALLED_DIR}/x86-mingw-static/lib/libwebp.a"
+    "${VCPKG_INSTALLED_DIR}/x86-mingw-static/lib/libwebpdecoder.a")
+
+# For some reason this doesn't work for vcpkg
 # find_package(SDL3 CONFIG REQUIRED)
 # target_link_libraries(openre PRIVATE SDL3::SDL3)
 target_link_libraries(openre PRIVATE "${VCPKG_INSTALLED_DIR}/x86-mingw-static/lib/libSDL3.a")

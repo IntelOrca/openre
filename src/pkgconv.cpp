@@ -1,8 +1,10 @@
 #include "pkg.h"
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <vector>
 
 namespace fs = std::filesystem;
 
