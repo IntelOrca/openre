@@ -96,6 +96,7 @@
     <ClCompile Include="file.cpp" />
     <ClCompile Include="fswatch.cpp" />
     <ClCompile Include="gfxbmp.cpp" />
+    <ClCompile Include="gfxtim.cpp" />
     <ClCompile Include="gfxwebp.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />

@@ -71,12 +71,10 @@ namespace openre::graphics
         for (uint32_t i = 0; i < numPixels; i++)
         {
             auto c16 = src[0] | (src[1] << 8);
-            auto r = ((c16 >> 0) & 0b11111) * 8;
-            auto g = ((c16 >> 5) & 0b11111) * 8;
-            auto b = ((c16 >> 10) & 0b11111) * 8;
-            *dst++ = r;
-            *dst++ = g;
-            *dst++ = b;
+            auto c32 = rgb555to8888(c16);
+            *dst++ = c32 & 0xFF;
+            *dst++ = (c32 >> 8) & 0xFF;
+            *dst++ = (c32 >> 16) & 0xFF;
             src += 2;
         }
 
