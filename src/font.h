@@ -42,11 +42,15 @@ namespace openre::graphics
 
         inline uint32_t getDefaultCharWidth() const
         {
+            if (this->chars.empty())
+                return 0;
             return this->chars[0].getWidth();
         }
 
         inline uint32_t getLineHeight() const
         {
+            if (this->chars.empty())
+                return 0;
             return this->chars[0].getHeight();
         }
 

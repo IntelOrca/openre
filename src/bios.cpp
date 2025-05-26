@@ -50,11 +50,18 @@ namespace openre
             {
                 gameSuspended = !gameSuspended;
             }
+            if (this->gameLuaVm == nullptr)
+            {
+                gameSuspended = true;
+            }
 
-            if (gameSuspended || this->gameLuaVm == nullptr)
+            if (gameSuspended)
             {
                 updateMenu();
-                drawMenu();
+                if (gameSuspended)
+                {
+                    drawMenu();
+                }
             }
             else
             {
@@ -100,8 +107,11 @@ namespace openre
                 if (!gameDir.is_directory())
                     continue;
 
-                const auto& gamePath = gameDir.path();
-                addListItem(gamePath.filename().u8string(), [this, gamePath]() { startGame(gamePath); });
+                auto gamePath = gameDir.path();
+                addListItem(gamePath.filename().u8string(), [this, gamePath]() {
+                    // Intentional copy of path so it remains valid after lambda is destroyed
+                    startGame(fs::path(gamePath));
+                });
             }
         }
 

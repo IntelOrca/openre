@@ -102,8 +102,6 @@ namespace openre
         c.import("font/font1.tim", "common/data/font0.tim");
         c.import("font/font2.tim", "common/data/font0.tim");
         c.import("texture/splashbg.adt", "common/data/gw2.adt");
-        c.import("texture/logo1.adt", "common/data/title_o.adt");
-        c.import("texture/logo2.adt", "common/data/title_o2.adt");
         c.import("texture/savebg.adt", "common/data/type00.adt");
         c.import("texture/titlebg.adt", "common/data/title_bg.adt");
         c.importSound("sound/apply.wav", "common/sound/core/core22.sap", 2);

@@ -52,7 +52,7 @@ namespace openre::shellextensions
 
     TextureBuffer loadTextureBuffer(OpenREShell& shell, std::string_view path, uint32_t width, uint32_t height)
     {
-        auto result = loadFile(shell, path, { ".adt", ".bmp" });
+        auto result = loadFile(shell, path, { ".adt", ".bmp", ".webp" });
         if (!result.success)
             return {};
 
@@ -61,9 +61,13 @@ namespace openre::shellextensions
         {
             return adt2TextureBuffer(std::move(result.buffer), width, height);
         }
-        else
+        else if (result.extensionIndex == 1)
         {
             return bmp2TextureBuffer(result.buffer);
+        }
+        else
+        {
+            return webp2TextureBuffer(result.buffer);
         }
     }
 
