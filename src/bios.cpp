@@ -76,6 +76,12 @@ namespace openre
             }
         }
 
+        void launchGame(const char* path)
+        {
+            auto gamePath = fs::u8path(path);
+            startGame(gamePath);
+        }
+
     private:
         void clearList()
         {
@@ -277,15 +283,16 @@ namespace openre
         }
     };
 
-    void initBios(OpenREShell& shell)
+    void initBios(OpenREShell& shell, const char* gamePath)
     {
         Bios bios(shell);
         auto initialized = false;
-        shell.setUpdate([&initialized, &bios]() {
+        shell.setUpdate([&initialized, &bios, gamePath]() {
             if (!initialized)
             {
                 initialized = true;
                 bios.initialize();
+                bios.launchGame(gamePath);
             }
             bios.update();
         });

@@ -941,8 +941,17 @@ int openreMain(int argc, const char** argv)
         return pkgconv(argc, argv);
     }
 
+    const char* gamePath = nullptr;
+    for (int i = 1; i < argc; i++)
+    {
+        if (argv[i][0] != '-')
+        {
+            gamePath = argv[i];
+        }
+    }
+
     auto shell = createShell();
-    initBios(*shell);
+    initBios(*shell, gamePath);
     return 0;
 }
 
