@@ -26,6 +26,7 @@ namespace openre
         OpenREShell& shell;
         ResourceCookie defaultFont{};
         std::unique_ptr<LuaVm> gameLuaVm;
+        std::vector<std::unique_ptr<LuaVm>> modsLuaVm;
 
         bool gameSuspended{};
         std::vector<MenuItem> menuItems;
@@ -65,6 +66,11 @@ namespace openre
             }
             else
             {
+                for (const auto& vm : this->modsLuaVm)
+                {
+                    vm->gc();
+                    vm->callHooks(openre::lua::HookKind::tick);
+                }
                 this->gameLuaVm->gc();
                 this->gameLuaVm->callHooks(openre::lua::HookKind::tick);
             }
@@ -87,11 +93,8 @@ namespace openre
         void showMenu()
         {
             this->clearList();
-            this->addListItem("SELECT GAME", [this]() { showGameMenu(); });
-            this->addListItem("MODS", [this]() {
-                this->clearList();
-                this->addListItem("* RESIDENT EVIL 2 HD");
-            });
+            this->addListItem("SELECT GAME", [this]() { this->showGameMenu(); });
+            this->addListItem("MODS", [this]() { this->showModsMenu(); });
             this->addListItem("OPTIONS");
             this->addListItem("DEBUG");
             this->addListItem("EXIT", [this]() { this->shell.exit(); });
@@ -101,16 +104,34 @@ namespace openre
         {
             this->clearList();
 
-            auto gamesDir = getGamesDirectory();
+            auto gamesDir = this->getGamesDirectory();
             for (const auto& gameDir : fs::directory_iterator(gamesDir))
             {
                 if (!gameDir.is_directory())
                     continue;
 
                 auto gamePath = gameDir.path();
-                addListItem(gamePath.filename().u8string(), [this, gamePath]() {
+                this->addListItem(gamePath.filename().u8string(), [this, gamePath]() {
                     // Intentional copy of path so it remains valid after lambda is destroyed
-                    startGame(fs::path(gamePath));
+                    this->startGame(fs::path(gamePath));
+                });
+            }
+        }
+
+        void showModsMenu()
+        {
+            this->clearList();
+
+            auto modsDir = this->getModsDirectory();
+            for (const auto& modDir : fs::directory_iterator(modsDir))
+            {
+                if (!modDir.is_directory())
+                    continue;
+
+                auto modPath = modDir.path();
+                auto menuItemText = "* " + modPath.filename().u8string();
+                this->addListItem(menuItemText, [this, modPath]() {
+                    // TODO
                 });
             }
         }
@@ -185,14 +206,46 @@ namespace openre
         {
             showMenu();
 
-            this->shell.setBasePaths({ gamePath });
+            auto basePaths = getActiveMods();
+            basePaths.push_back(gamePath);
+            this->shell.setBasePaths(basePaths);
 
-            this->gameLuaVm = openre::lua::createLuaVm();
-            this->gameLuaVm->setShell(&shell);
-            this->gameLuaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
+            this->modsLuaVm.clear();
+            for (size_t i = 0; i < basePaths.size() - 1; i++)
+            {
+                const auto& modPath = basePaths[i];
+                auto modName = modPath.stem().u8string();
+                auto modLuaVm = createLuaVm();
+                modLuaVm->run(modName);
+                this->modsLuaVm.push_back(std::move(modLuaVm));
+            }
+
+            this->gameLuaVm = createLuaVm();
             this->gameLuaVm->run("main");
 
             this->gameSuspended = false;
+        }
+
+        std::unique_ptr<LuaVm> createLuaVm()
+        {
+            auto luaVm = openre::lua::createLuaVm();
+            luaVm->setShell(&shell);
+            luaVm->setLogCallback([](const std::string& s) { std::printf("%s\n", s.c_str()); });
+            return luaVm;
+        }
+
+        std::vector<std::filesystem::path> getActiveMods() const
+        {
+            std::vector<fs::path> result;
+            auto modsDir = this->getModsDirectory();
+            for (const auto& modDir : fs::directory_iterator(modsDir))
+            {
+                if (!modDir.is_directory())
+                    continue;
+
+                result.push_back(modDir.path());
+            }
+            return result;
         }
 
         std::filesystem::path getGamesDirectory() const
@@ -207,6 +260,20 @@ namespace openre
                 return {};
 
             return gamesPath;
+        }
+
+        std::filesystem::path getModsDirectory() const
+        {
+            auto appdata = std::getenv("APPDATA");
+            if (appdata == nullptr)
+                return {};
+
+            auto openrePath = fs::u8path(appdata) / "openre";
+            auto modsPath = openrePath / "mods";
+            if (!fs::is_directory(modsPath))
+                return {};
+
+            return modsPath;
         }
     };
 
