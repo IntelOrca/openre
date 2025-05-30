@@ -66,6 +66,12 @@ namespace openre::marni
         }
     }
 
+    // 0x0043FF40
+    void tim_buffer_to_surface(uint32_t* buffer, uint32_t page, int mode)
+    {
+        interop::call<void, uint32_t*, uint32_t, int>(0x0043FF40, buffer, page, mode);
+    }
+
     // 0x00406450
     static void move(Marni* marni)
     {

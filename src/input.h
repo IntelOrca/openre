@@ -30,6 +30,7 @@ namespace openre::input
         KEY_TYPE_AIM = 256,
         KEY_TYPE_RUN_AND_CANCEL = 512,
         KEY_TYPE_4096 = 4096,
+        KEY_TYPE_16384 = 16384,
     };
 
     [[nodiscard]] int GetGamepadState();

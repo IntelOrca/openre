@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 struct Md1;
 
 namespace openre::marni
@@ -13,6 +15,7 @@ namespace openre::marni
     void door_disp1(int doorId);
     void result_unload_textures();
     void flush_surfaces();
+    void tim_buffer_to_surface(uint32_t* buffer, uint32_t page, int mode);
 
     void init_hooks();
 }
