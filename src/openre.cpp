@@ -958,9 +958,8 @@ void onAttach()
 }
 
 extern "C" {
-__declspec(dllexport) BOOL WINAPI openre_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+__declspec(dllexport) BOOL /* WINAPI */ openre_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
-#pragma comment(linker, "/EXPORT:" __FUNCTION__ "=" __FUNCDNAME__)
     return 0;
 }
 
