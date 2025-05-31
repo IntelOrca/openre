@@ -3,6 +3,7 @@
 #include "marni.h"
 #include "openre.h"
 #include <array>
+#include <cstring>
 
 namespace openre::tim
 {

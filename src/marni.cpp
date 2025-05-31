@@ -4,6 +4,7 @@
 #include "re2.h"
 
 #include <algorithm>
+#include <cstring>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
