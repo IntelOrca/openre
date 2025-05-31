@@ -501,6 +501,26 @@ declare     var_18                  u32
 declare     var_1C                  u32
 declare     var_20                  u32                     0x20
 
+struct      MapData
+declare     u                       u8
+declare     v                       u8
+declare     w                       u8
+declare     h                       u8
+declare     c_pos_x                 s16
+declare     c_pos_y                 s16
+declare     b_pos_x                 s16
+declare     b_pos_y                 s16
+declare     flg                     u8
+declare     change_flg              u8
+declare     pl0_flg                 u8
+declare     pl1_flg                 u8
+
+struct      MapStageInfo
+declare     data                    MapData*
+declare     room_num                u8
+declare     map                     u8
+declare     file_no                 s16
+
 struct      GameTable
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
@@ -518,10 +538,13 @@ declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
 declare     byte_53C78F             u8[70]                  0x0053C78F
+declare     common_file_map_a       char[21]                0x0053DA58
 declare     byte_53DB74             u8*                     0x0053DB74
 declare     item_def_tbl            ItemTypeDefinition[64]  0x0053DE28
 declare     word_53E1AC             u16                     0x0053E1AC
 declare     word_53E1B0             u16                     0x0053E1B0
+declare     map_info0               MapStageInfo[20]        0x0053EAF8
+declare     map_info1               MapStageInfo[20]        0x0053EB98
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_66D394            u32                     0x0066D394
 declare     vk_press                u8                      0x0067C9F8
@@ -603,6 +626,7 @@ declare     byte_691F6F             u8                      0x00691F6F
 declare     byte_691F70             u8                      0x00691F70
 declare     byte_691F74             u8                      0x00691F74
 declare     byte_691F76             u8                      0x00691F76
+declare     byte_691F7A             u8                      0x00691F7A
 declare     byte_691F7B             u8                      0x00691F7B
 declare     byte_691F7C             u8                      0x00691F7C
 declare     byte_691F7D             u8                      0x00691F7D
@@ -616,9 +640,16 @@ declare     itembox_slot_id         u8                      0x00691F84
 declare     byte_691F85             u8                      0x00691F85
 declare     byte_691F86             u8                      0x00691F86
 declare     byte_691F87             u8                      0x00691F87
+declare     dword_691F88            u32                     0x00691F88
+declare     word_691F94             u16                     0x00691F94
+declare     word_691F9A             u16                     0x00691F9A
+declare     dword_691F9C            u32                     0x00691F9C
+declare     word_691FA6             u16                     0x00691FA6
 declare     word_691FA8             s16                     0x00691FA8
 declare     word_691FB0             u16                     0x00691FB0
 declare     word_691FB2             u16                     0x00691FB2
+declare     word_691FB8             u16                     0x00691FB8
+declare     word_691FBA             u16                     0x00691FBA
 declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
@@ -769,6 +800,7 @@ declare     fg_enemy_0              u32[8]                  0x0098EB74
 declare     fg_enemy_1              u32[8]                  0x0098EB94
 declare     fg_item                 u32[7]                  0x0098EBB4
 declare     dword_98EBD0            u32                     0x0098EBD0
+declare     dword_98EC00            u32                     0x0098EC00
 declare     fg_map                  u32[5]                  0x0098EC04
 declare     pri_be_flg              u32[64]                 0x0098EC20
 declare     door_locks              u32                     0x0098ED2C

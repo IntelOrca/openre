@@ -5,8 +5,10 @@
 #include "interop.hpp"
 #include "item.h"
 #include "itembox.h"
+#include "marni.h"
 #include "openre.h"
 #include "player.h"
+#include "sce.h"
 #include "scheduler.h"
 
 using namespace openre::audio;
@@ -14,6 +16,7 @@ using namespace openre::file;
 using namespace openre::itembox;
 using namespace openre::player;
 using namespace openre::input;
+using namespace openre::sce;
 
 namespace openre::hud
 {
@@ -58,6 +61,15 @@ namespace openre::hud
         INVENTORY_MIX_ITEM_9,
         INVENTORY_MIX_ITEM_10,
         INVENTORY_MIX_ITEM_CONFIRM_MESSAGE,
+    };
+
+    enum
+    {
+        HUD_MENU0_MAP_LOAD_MAP_TEXTURE,
+        HUD_MENU0_MAP_OPENING_MAP,
+        HUD_MENU0_MAP_CLOSING_MAP,
+        HUD_MENU0_MAP_SHOW_MAP,
+        HUD_MENU0_MAP_LOAD_MAP_NEXT_FLOOR_TEXTURE,
     };
 
     constexpr uint8_t INVENTORY_SPECIAL_ITEM_SLOT = 10;
@@ -1654,13 +1666,193 @@ namespace openre::hud
         }
     }
 
+    // 0x004FF970
+    static void st_disp_wall()
+    {
+        interop::call(0x004FF970);
+    }
+
+    // 0x004FA7D0
+    static void st_init_disp_map()
+    {
+        interop::call(0x004FA7D0);
+    }
+
+    // 0x004FA990
+    static void st_disp_map()
+    {
+        interop::call(0x004FA990);
+    }
+
+    static uint8_t map_up_floor[24] = { 0, 0, 3, 4, 0, 2, 0, 0, 7, 0, 0, 0, 0, 0, 13, 14, 15, 16, 0, 0, 0, 0, 0, 0 };
+    static uint8_t map_down_floor[24] = { 0, 0, 5, 2, 3, 0, 0, 8, 0, 0, 0, 0, 0, 14, 15, 16, 17, 0, 0, 0, 0, 0, 0, 0 };
+
+    // 0x004FA240
+    static void hud_menu0_map()
+    {
+        MapStageInfo* mapInfo = gGameTable.map_info0;
+        if (check_flag(FlagGroup::Status, FG_STATUS_PLAYER))
+        {
+            mapInfo = gGameTable.map_info1;
+        }
+
+        gGameTable.byte_691F76 = 0;
+
+        switch (gGameTable.itembox_state)
+        {
+        case HUD_MENU0_MAP_LOAD_MAP_TEXTURE:
+        {
+            gGameTable.byte_691F7A = check_room_no(gGameTable.current_stage, gGameTable.current_room);
+            auto fileNo = mapInfo[gGameTable.byte_691F7A].file_no;
+            gGameTable.common_file_map_a[15] = fileNo / 10 + 48;
+            gGameTable.common_file_map_a[16] = fileNo % 10 + 48;
+            uint32_t* mapTimBuffer = (uint32_t*)file_alloc(0x199E0);
+
+            if (!load_adt(gGameTable.common_file_map_a, mapTimBuffer, 4))
+            {
+                file_alloc(0);
+                file_error();
+                return;
+            }
+
+            marni::tim_buffer_to_surface(mapTimBuffer, 0x1D, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 8208, 0x21, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 16416, 0x20, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 24648, 0x1E, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 25688, 0x1F, 0);
+            file_alloc(0);
+            gGameTable.itembox_state = HUD_MENU0_MAP_OPENING_MAP;
+            gGameTable.byte_691F63 = 0;
+            gGameTable.word_691FB8 = 0;
+            gGameTable.word_691FBA = 0;
+            st_init_disp_map();
+            st_disp_wall();
+            break;
+        }
+        case HUD_MENU0_MAP_OPENING_MAP:
+        {
+            if ((gGameTable.byte_691F63++ <= 0xC) == 0)
+            {
+                gGameTable.itembox_state = HUD_MENU0_MAP_SHOW_MAP;
+                gGameTable.byte_691F63 = 0;
+                snd_se_on(0x4090000);
+            }
+
+            gGameTable.dword_691F9C -= 22;
+            gGameTable.word_691FA6 -= 19;
+            gGameTable.word_691F94 += 21;
+            gGameTable.word_691F9A += 21;
+            st_disp_wall();
+            break;
+        }
+        case HUD_MENU0_MAP_CLOSING_MAP:
+        {
+            if ((gGameTable.byte_691F63++ <= 0xC) == 0)
+            {
+                gGameTable._st = 2;
+                gGameTable.itembox_state = HUD_MENU0_MAP_LOAD_MAP_TEXTURE;
+                gGameTable.byte_691F63 = 0;
+            }
+
+            gGameTable.dword_691F9C += 22;
+            gGameTable.word_691FA6 += 19;
+            gGameTable.word_691F94 -= 21;
+            gGameTable.word_691F9A -= 21;
+            st_disp_wall();
+            break;
+        }
+        case HUD_MENU0_MAP_SHOW_MAP:
+        {
+            if ((gGameTable.dword_691F88 >> 8) & 0xFF)
+            {
+                if (gGameTable.dword_691F88 < 10)
+                {
+                    gGameTable.dword_691F88 &= 0xFFFF00FF;
+                }
+                gGameTable.dword_691F88 -= 2;
+            }
+            else
+            {
+                gGameTable.dword_691F88 &= 0xFFFF00FF;
+                gGameTable.dword_691F88 |= (gGameTable.dword_691F88 > 0x50) << 8 | (gGameTable.dword_691F88 & 0xFF);
+                gGameTable.dword_691F88 -= 2;
+            }
+
+            auto oldByte_691F7A = gGameTable.byte_691F7A;
+
+            if ((int32_t)gGameTable.fg_system < 0 && gGameTable.byte_691F7A > 1)
+            {
+                if (gGameTable.word_9885FC & KEY_TYPE_4096 && map_up_floor[gGameTable.byte_691F7A] > 1)
+                {
+                    if (bitarray_get(&gGameTable.dword_98EC00, map_up_floor[gGameTable.byte_691F7A]))
+                    {
+                        gGameTable.byte_691F7A = map_up_floor[gGameTable.byte_691F7A];
+                    }
+                }
+
+                if (gGameTable.word_9885FC & KEY_TYPE_16384 && map_down_floor[gGameTable.byte_691F7A] > 1)
+                {
+                    if (bitarray_get(&gGameTable.dword_98EC00, map_down_floor[gGameTable.byte_691F7A]))
+                    {
+                        gGameTable.byte_691F7A = map_down_floor[gGameTable.byte_691F7A];
+                    }
+                }
+
+                if (oldByte_691F7A != gGameTable.byte_691F7A)
+                {
+                    gGameTable.itembox_state = HUD_MENU0_MAP_LOAD_MAP_NEXT_FLOOR_TEXTURE;
+                    snd_se_on(0x4040000);
+                }
+            }
+
+            if (gGameTable.key_trg & 0x2000)
+            {
+                gGameTable.itembox_state = HUD_MENU0_MAP_CLOSING_MAP;
+                snd_se_on(0x4050000);
+            }
+            if (gGameTable.itembox_state == HUD_MENU0_MAP_SHOW_MAP)
+            {
+                st_disp_map();
+            }
+            st_disp_wall();
+            break;
+        }
+        case HUD_MENU0_MAP_LOAD_MAP_NEXT_FLOOR_TEXTURE:
+        {
+            auto fileNo = mapInfo[gGameTable.byte_691F7A].file_no;
+            gGameTable.common_file_map_a[15] = fileNo / 10 + 48;
+            gGameTable.common_file_map_a[16] = fileNo % 10 + 48;
+            auto mapTimBuffer = (uint32_t*)file_alloc(0x199E0);
+
+            if (!load_adt(gGameTable.common_file_map_a, mapTimBuffer, 4))
+            {
+                file_alloc(0);
+                file_error();
+                return;
+            }
+
+            marni::tim_buffer_to_surface(mapTimBuffer, 0x1D, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 8208, 0x21, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 16416, 0x20, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 24648, 0x1E, 0);
+            marni::tim_buffer_to_surface(mapTimBuffer + 25688, 0x1F, 0);
+            file_alloc(0);
+            st_init_disp_map();
+            gGameTable.dword_691F88 &= 0xFFFF0000;
+            gGameTable.dword_691F88 |= 2;
+            gGameTable.itembox_state = HUD_MENU0_MAP_SHOW_MAP;
+            st_disp_wall();
+            break;
+        }
+        }
+    }
+
     static const Action _inventoryRender[6] = {
         (Action)0x00502130, // st_fade_out_set
         (Action)0x00502150, // st_fade_out_wait
         (Action)0x004F8050, // hud_inventory_topbar_hover
-        hud_inventory_item,
-        (Action)0x004FA240, // st_menu0_map
-        (Action)0x004F95B0  // st_menu0_file
+        hud_inventory_item, hud_menu0_map,
+        (Action)0x004F95B0 // st_menu0_file
     };
 
     // 0x004F8000
