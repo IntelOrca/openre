@@ -547,6 +547,7 @@ declare     map_info0               MapStageInfo[20]        0x0053EAF8
 declare     map_info1               MapStageInfo[20]        0x0053EB98
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_66D394            u32                     0x0066D394
+declare     file_buffer             void*                   0x0067C9D0
 declare     vk_press                u8                      0x0067C9F8
 declare     input                   Input                   0x0067CA30
 declare     error_no                u32                     0x00680580

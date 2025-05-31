@@ -705,7 +705,9 @@ struct GameTable
     uint8_t byte_540780[16];            // 0x540780
     uint8_t pad_540790[1231876];        // 0x540790
     uint32_t dword_66D394;              // 0x66D394
-    uint8_t pad_66D398[63072];          // 0x66D398
+    uint8_t pad_66D398[63032];          // 0x66D398
+    void* file_buffer;                  // 0x67C9D0
+    uint8_t pad_67C9D4[36];             // 0x67C9D4
     uint8_t vk_press;                   // 0x67C9F8
     uint8_t pad_67C9F9[55];             // 0x67C9F9
     Input input;                        // 0x67CA30

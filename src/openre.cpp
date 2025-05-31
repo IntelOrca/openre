@@ -731,6 +731,18 @@ namespace openre
     {
         return interop::call<int, int>(0x004428F0, a0);
     }
+
+    // 0x0050AA00
+    void* operator_new(const size_t size)
+    {
+        return interop::call<void*, size_t>(0x0050AA00, size);
+    }
+
+    // 0x0050AA10
+    void operator_delete(void* memoryBlock)
+    {
+        interop::call<void*>(0x0050AA10, memoryBlock);
+    }
 }
 
 static void load_init_table(void* tempBuffer, uint8_t index)
