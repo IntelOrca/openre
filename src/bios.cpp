@@ -292,7 +292,10 @@ namespace openre
             {
                 initialized = true;
                 bios.initialize();
-                bios.launchGame(gamePath);
+                if (gamePath != nullptr)
+                {
+                    bios.launchGame(gamePath);
+                }
             }
             bios.update();
         });
