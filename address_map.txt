@@ -499,7 +499,7 @@ declare     var_13                  u8
 declare     var_14                  u32
 declare     var_18                  u32
 declare     var_1C                  u32
-declare     var_20                  u32                     0x20
+declare     var_20                  u32
 
 struct      MapData
 declare     u                       u8
@@ -529,6 +529,329 @@ declare     var_0A                  u16                     0x0A
 declare     var_0C                  u8                      0x0C
 declare     var_0E                  u8                      0x0E
 
+struct      Prim
+declare     pNext                   Prim*
+declare     type                    s32
+
+struct      PrimLine
+base        Prim
+declare     x0                      s16
+declare     y0                      s16
+declare     x1                      s16
+declare     y1                      s16
+declare     color0                  u32
+
+struct      PrimLine2
+base        PrimLine
+declare     color1                  u32
+
+struct      PrimSprite
+base        Prim
+declare     texture                 u32
+declare     var_0C                  u32
+declare     x0                      s16
+declare     y0                      s16
+declare     x1                      s16
+declare     y1                      s16
+declare     u0                      u8
+declare     v0                      u8
+declare     u1                      u8
+declare     v1                      u8
+
+struct      MarniRes
+declare     width                   u32
+declare     height                  u32
+declare     depth                   u32
+declare     fullscreen              u32
+
+struct      MarniSurfaceDesc
+declare     r_shift                 u8
+declare     r_mask                  u8
+declare     r_bitcnt                u8
+declare     g_shift                 u8
+declare     g_mask                  u8
+declare     g_bitcnt                u8
+declare     b_shift                 u8
+declare     b_mask                  u8
+declare     b_bitcnt                u8
+declare     a_shift                 u8
+declare     a_mask                  u8
+declare     a_bitcnt                u8
+
+struct      MarniSurface2
+declare     vtbl                    void**
+declare     pBitmap                 void*
+declare     pPalette                void*
+declare     bLocked                 u8
+declare     bPalLocked              u8
+declare     desc                    MarniSurfaceDesc
+declare     width                   s16
+declare     height                  s16
+declare     pitch                   s16
+declare     pal_cnt                 s16
+declare     var_22                  s16
+declare     bpp                     u8
+declare     var_25                  u8
+declare     bOpen                   u8
+declare     var_27                  u8
+declare     var_28                  u8
+declare     var_29                  u8
+declare     var_2A                  u8
+declare     var_2B                  u8
+declare     var_2C                  u8
+declare     var_2D                  u8
+declare     var_2E                  s16
+
+struct      MarniSurface3
+base        MarniSurface2
+declare     pDDsurface              void*
+declare     pDDpalette              void**
+
+struct      MarniSurface
+base        MarniSurface3
+declare     is_vmem                 u32
+
+struct      MarniSurfaceX
+base        MarniSurface
+declare     texture_handle          u32
+declare     pDDtexture              void*
+
+struct      MarniSurfaceY
+base        MarniSurface
+declare     texture_handle          u32
+declare     pDDtexture              void*
+
+struct      MarniMovie
+declare     flag                    u32                     0x94
+declare     pos                     f64
+declare     var_A0                  s32
+declare     var_A4                  s32
+
+struct      MarniOt
+declare     zdepth                  s32
+declare     pHead                   Prim*
+declare     is_valid                s32
+declare     pCurrent                Prim*
+declare     var_10                  u8
+declare     var_11                  u8
+declare     var_12                  u8
+declare     var_13                  u8
+
+struct      MarniLineRecord
+declare     gourad                  void*
+declare     flat                    void*
+
+struct      WindowRect
+declare     left                    s32
+declare     top                     s32
+declare     right                   s32
+declare     bottom                  s32
+
+struct      MarniTextureNode
+declare     next                    u16
+declare     surface                 MarniSurfaceX*          0x08
+declare     var_14                  u32                     0x14
+
+struct      MarniTexture
+declare     var_00                  u32
+declare     surface                 MarniSurface2
+declare     head                    u16                     0x34
+declare     var_36                  u16                     0x36
+
+struct      MarniVertex
+declare     pad_00                  u8[32]
+
+struct      MarniDrawOp
+declare     vertices                MarniVertex[3]
+declare     average_z               f32                     0x60
+declare     filter                  u8                      0x64
+declare     var_68                  u32                     0x68
+declare     src_blend               u32                     0x6C
+declare     dst_blend               u32                     0x70
+declare     texture_handle          u32                     0x74
+declare     shade_mode              u32                     0x78
+declare     cull_mode               u32                     0x7C
+declare     z_func                  u32                     0x80
+declare     z_write_enable          u8                      0x84
+declare     specular_enable         u8                      0x85
+declare     pad_86                  u8[2]                   0x86
+
+struct      PolygonObject
+declare     vtbl                    void**
+declare     var_54                  u32                     0x54
+
+struct      Unknown8C76A0
+declare     surface                 MarniSurface3*          0x08
+
+struct      MarniLight
+declare     var_0C                  u32                     0x0C
+declare     var_10                  u32                     0x10
+declare     var_14                  f32                     0x14
+declare     var_18                  f32                     0x18
+declare     var_1C                  f32                     0x1C
+declare     var_20                  f32                     0x20
+declare     var_2C                  u32                     0x2C
+
+struct      Marni
+declare     texture_nodes           MarniTextureNode[256]
+declare     textures                MarniTexture[256]       0x1800
+declare     field_5000              u32                     0x5000
+declare     field_5004              u32                     0x5004
+declare     field_5008              u32                     0x5008
+declare     field_5010              MarniLineRecord[8]      0x5010
+declare     field_700C              s32                     0x700C
+declare     draw_ops                MarniDrawOp[65536]      0x7010
+declare     draw_op_ptrs            MarniDrawOp*[65536]     0x00887010
+declare     num_draw_ops            s32                     0x008C7010
+declare     cutscene_bars           u8                      0x008C7014
+declare     modes                   u32                     0x008C7018
+declare     field_8C701C            f32                     0x008C701C
+declare     field_8C7020            u32                     0x008C7020
+declare     otag                    MarniOt[5]              0x008C7024
+declare     field_8C7088            u8[252]                 0x008C7088
+declare     field_8C7184            u8[252]                 0x008C7184
+declare     dwVidMemTotal           u32                     0x008C7280
+declare     field_8C728C            u32[256]                0x008C728C
+declare     polygons                PolygonObject**         0x008C7698
+declare     polygons_count          u32                     0x008C769C
+declare     var_8C76A0              Unknown8C76A0*[128]     0x008C76A0
+declare     window_rect             WindowRect              0x008C7CDC
+declare     pClipper                void*                   0x008C7CEC
+declare     lights                  MarniLight[6]           0x008C7CF0
+declare     field_8C7E10            u32                     0x008C7E10
+declare     field_8C7E14            u32                     0x008C7E14
+declare     field_8C7E18            f32                     0x008C7E18
+declare     field_8C7E1C            u32                     0x008C7E1C
+declare     field_8C7E20            u32                     0x008C7E20
+declare     field_8C7E24            u32                     0x008C7E24
+declare     field_8C7E28            f32                     0x008C7E28
+declare     field_8C7E2C            u32                     0x008C7E2C
+declare     field_8C7E30            u32                     0x008C7E30
+declare     field_8C7E34            u32                     0x008C7E34
+declare     field_8C7E38            f32                     0x008C7E38
+declare     field_8C7E3C            u32                     0x008C7E3C
+declare     field_8C7E40            u32                     0x008C7E40
+declare     field_8C7E44            u32                     0x008C7E44
+declare     field_8C7E48            u32                     0x008C7E48
+declare     field_8C7E4C            u32                     0x008C7E4C
+declare     field_8C7E50            f32                     0x008C7E50
+declare     field_8C7E54            f32                     0x008C7E54
+declare     field_8C7E58            f32                     0x008C7E58
+declare     field_8C7E5C            u32                     0x008C7E5C
+declare     field_8C7E60            f32                     0x008C7E60
+declare     field_8C7E64            f32                     0x008C7E64
+declare     field_8C7E68            f32                     0x008C7E68
+declare     field_8C7E6C            u32                     0x008C7E6C
+declare     field_8C7E70            f32                     0x008C7E70
+declare     field_8C7E74            f32                     0x008C7E74
+declare     field_8C7E78            f32                     0x008C7E78
+declare     field_8C7E7C            u32                     0x008C7E7C
+declare     field_8C7E80            u32                     0x008C7E80
+declare     field_8C7E84            u32                     0x008C7E84
+declare     field_8C7E88            u32                     0x008C7E88
+declare     field_8C7E8C            u32                     0x008C7E8C
+declare     field_8C7E90            u32                     0x008C7E90
+declare     pMaterial               void*                   0x008C7E94
+declare     MaterialHandle          u32                     0x008C7E98
+declare     pDirect3D2              void*                   0x008C7E9C
+declare     pDirectDevice2          void*                   0x008C7EA0
+declare     pViewport               void*                   0x008C7EA4
+declare     hWnd                    void*                   0x008C7EA8
+declare     render_w                s32                     0x008C7EAC
+declare     render_h                s32                     0x008C7EB0
+declare     xsize_old               s32                     0x008C7EB4
+declare     ysize_old               s32                     0x008C7EB8
+declare     bpp_old                 s32                     0x008C7EBC
+declare     fullscreen_old          s32                     0x008C7EC0
+declare     field_8C7EC4            s32                     0x008C7EC4
+declare     field_8C7EC8            s32                     0x008C7EC8
+declare     aspect_x                f32                     0x008C7ED4
+declare     aspect_y                f32                     0x008C7ED8
+declare     field_8C7EDC            u32                     0x008C7EDC
+declare     var_8C7EE0              s32                     0x008C7EE0
+declare     var_8C7EE4              s32                     0x008C7EE4
+declare     is_gpu_busy             s32                     0x008C7EE8
+declare     desktop_w               s32                     0x008C7EEC
+declare     desktop_h               s32                     0x008C7EF0
+declare     desktop_bpp             s32                     0x008C7EF4
+declare     resolutions             MarniRes[64]            0x008C7EF8
+declare     res_count               s32                     0x008C82F8
+declare     field_8C82FC            s32                     0x008C82FC
+declare     field_8C8300            s32                     0x008C8300
+declare     var_8C8318              s32                     0x008C8318
+declare     ambient_b               u8                      0x008C831C
+declare     ambient_g               u8                      0x008C831D
+declare     ambient_r               u8                      0x008C831E
+declare     ambient_a               u8                      0x008C831F
+declare     pDirectDraw             void*                   0x008C8320
+declare     pDirectDraw2            void*                   0x008C8324
+declare     pMovie                  MarniMovie*             0x008C8328
+declare     xsize                   s32                     0x008C832C
+declare     ysize                   s32                     0x008C8330
+declare     bpp                     s32                     0x008C8334
+declare     is_gpu_active           s32                     0x008C8338
+declare     dwVidMemFree            s32                     0x008C833C
+declare     surface0                MarniSurface            0x008C8340
+declare     surfaceZ                MarniSurface            0x008C837C
+declare     surface2                MarniSurface            0x008C83B8
+declare     gpu_flag                u32                     0x008C83F4
+declare     vertices_processed      u32                     0x008C83F8
+declare     triangles_drawn         u32                     0x008C83FC
+declare     field_8C8410            u32                     0x008C8410
+declare     field_8C8414            u32                     0x008C8414
+declare     field_8C8418            u32                     0x008C8418
+declare     field_8C841C            u32                     0x008C841C
+declare     field_8C8420            u32                     0x008C8420
+declare     field_8C8424            f32                     0x008C8424
+declare     field_8C8428            u32                     0x008C8428
+declare     device_cnt              s32                     0x008C842C
+declare     field_8C8430            s32                     0x008C8430
+declare     surface3                MarniSurface            0x008C8434
+
+struct      OldStdString
+declare     data                    char*
+declare     length                  u32
+
+struct      MarniConfig
+declare     key                     u32
+declare     var_04                  u32
+declare     var_08                  u32
+declare     hKey                    u32
+declare     ex_flag                 u32
+declare     ex_time                 u32[3]
+declare     var_20                  u32
+declare     var_24                  u32
+declare     var_28                  u32
+declare     var_2C                  u32
+declare     var_30                  u32
+declare     var_34                  u32
+declare     data1                   u32
+declare     data2                   u32
+declare     data3                   u32
+declare     data4                   u32
+declare     perswrap                u8
+declare     bilinear                u8
+declare     fadeflag                u8
+declare     var_4B                  u8
+declare     device_name             OldStdString
+declare     display_mode            OldStdString
+declare     var_5C                  u8
+
+struct      D3DDeviceInfo
+declare     lpDeviceName            char[30]
+declare     lpDeviceDescription     char[50]
+declare     desc                    u8[252]
+declare     GUID                    u8[16]
+declare     hwAccelerated           u32
+declare     supportsFloat           u32
+declare     supportsZbuffer         u32
+declare     hwAccelerated2          u32
+
+struct      TexturePage
+declare     handle                  u32
+declare     var_04                  u32
+declare     var_08                  u32
+
 struct      GameTable
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
@@ -554,20 +877,38 @@ declare     word_53E1B0             u16                     0x0053E1B0
 declare     map_info0               MapStageInfo[20]        0x0053EAF8
 declare     map_info1               MapStageInfo[20]        0x0053EB98
 declare     byte_540780             u8[16]                  0x00540780
+declare     dword_543A14            void*                   0x00543A14
+declare     error                   u32                     0x00543A18
+declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
+declare     dword_54413C            s32                     0x0054413C
+declare     d3d_vertices_processed  u32                     0x00544140
+declare     d3d_triangles_drawn     u32                     0x00544144
+declare     unk_544148              u8[1050736]             0x00544148
+declare     d3d_device_count        s32                     0x006449B8
+declare     dword_6449BC            s32                     0x006449BC
+declare     hFont                   void*                   0x00669AF4
+declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
+declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     file_buffer             void*                   0x0067C9D0
 declare     vk_press                u8                      0x0067C9F8
 declare     input                   Input                   0x0067CA30
+declare     hwnd                    void*                   0x0068056C
+declare     hInstance               void*                   0x00680578
 declare     error_no                u32                     0x00680580
 declare     timer_r2                u8                      0x00680586
 declare     game_seconds            u32                     0x00680588
-declare     can_draw                u16                     0x0068058D
+declare     can_draw                u8                      0x0068058D
+declare     movie_r0                u8                      0x0068058E
 declare     reset_r0                u8                      0x0068058F
+declare     byte_680591             u8                      0x00680591
 declare     byte_680598             u8                      0x00680598
 declare     blood_censor            u8                      0x0068059A
+declare     byte_68059B             u8                      0x0068059B
 declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
+declare     pMarni                  Marni*                  0x006805B8
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
@@ -577,6 +918,7 @@ declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
+declare     byte_689ABC             u8                      0x00689ABC
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10
 declare     rdt_top_ptr             void*                   0x00689C14
@@ -597,6 +939,7 @@ declare     dword_689F20            u32                     0x00689F20
 declare     byte_689F24             u8                      0x00689F24
 declare     task_disable            u32                     0x00689F2C
 declare     task_no                 u32                     0x00689F30
+declare     marni_config            MarniConfig             0x00689F50
 declare     ctcb                    Task*                   0x0068A204
 declare     tasks                   Task[8]                 0x0068A220
 declare     title_mv_state          u8                      0x00691B80
@@ -707,7 +1050,8 @@ declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
 declare     door_info               DoorInfo                0x008E2880
 declare     door_data               DoorEntity[10]          0x008E2ACC
-declare     work_buffer             u32                     0x008FF8A0
+declare     work_buffer             u8[163840]              0x008FF8A0
+declare     work_buffer_2           u8[329712]              0x009278A0
 declare     cc_work                 CCWork                  0x00980B00
 declare     door_trans_mv           u8                      0x0098149E
 declare     byte_981FB7             u8                      0x00981FB7
@@ -870,16 +1214,3 @@ declare     var_01                  u8
 declare     var_0C                  u8
 declare     var_24                  u8
 declare     var_25                  u8
-
-struct      MarniRes
-declare     width                   u32
-declare     height                  u32
-declare     depth                   u32
-declare     fullscreen              u32
-
-struct      Marni
-declare     modes                   u32                    0x008C7018
-declare     window_rect             u32[4]                 0x008C7CDC
-declare     hWnd                    void*                  0x008C7EA8
-declare     resolutions             MarniRes[64]           0x008C7EF8
-declare     var_8C846C              u32                    0x008C846C

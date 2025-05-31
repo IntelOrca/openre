@@ -670,6 +670,420 @@ struct Unknown6949F8
 };
 static_assert(sizeof(Unknown6949F8) == 0x0F);
 
+struct Prim
+{
+    Prim* pNext;                        // 0x0000
+    int32_t type;                       // 0x0004
+};
+static_assert(sizeof(Prim) == 0x08);
+
+struct PrimLine : Prim
+{
+    int16_t x0;                         // 0x0008
+    int16_t y0;                         // 0x000A
+    int16_t x1;                         // 0x000C
+    int16_t y1;                         // 0x000E
+    uint32_t color0;                    // 0x0010
+};
+static_assert(sizeof(PrimLine) == 0x14);
+
+struct PrimLine2 : PrimLine
+{
+    uint32_t color1;                    // 0x0014
+};
+static_assert(sizeof(PrimLine2) == 0x18);
+
+struct PrimSprite : Prim
+{
+    uint32_t texture;                   // 0x0008
+    uint32_t var_0C;                    // 0x000C
+    int16_t x0;                         // 0x0010
+    int16_t y0;                         // 0x0012
+    int16_t x1;                         // 0x0014
+    int16_t y1;                         // 0x0016
+    uint8_t u0;                         // 0x0018
+    uint8_t v0;                         // 0x0019
+    uint8_t u1;                         // 0x001A
+    uint8_t v1;                         // 0x001B
+};
+static_assert(sizeof(PrimSprite) == 0x1C);
+
+struct MarniRes
+{
+    uint32_t width;                     // 0x0000
+    uint32_t height;                    // 0x0004
+    uint32_t depth;                     // 0x0008
+    uint32_t fullscreen;                // 0x000C
+};
+static_assert(sizeof(MarniRes) == 0x10);
+
+struct MarniSurfaceDesc
+{
+    uint8_t r_shift;                    // 0x0000
+    uint8_t r_mask;                     // 0x0001
+    uint8_t r_bitcnt;                   // 0x0002
+    uint8_t g_shift;                    // 0x0003
+    uint8_t g_mask;                     // 0x0004
+    uint8_t g_bitcnt;                   // 0x0005
+    uint8_t b_shift;                    // 0x0006
+    uint8_t b_mask;                     // 0x0007
+    uint8_t b_bitcnt;                   // 0x0008
+    uint8_t a_shift;                    // 0x0009
+    uint8_t a_mask;                     // 0x000A
+    uint8_t a_bitcnt;                   // 0x000B
+};
+static_assert(sizeof(MarniSurfaceDesc) == 0x0C);
+
+struct MarniSurface2
+{
+    void** vtbl;                        // 0x0000
+    void* pBitmap;                      // 0x0004
+    void* pPalette;                     // 0x0008
+    uint8_t bLocked;                    // 0x000C
+    uint8_t bPalLocked;                 // 0x000D
+    MarniSurfaceDesc desc;              // 0x000E
+    int16_t width;                      // 0x001A
+    int16_t height;                     // 0x001C
+    int16_t pitch;                      // 0x001E
+    int16_t pal_cnt;                    // 0x0020
+    int16_t var_22;                     // 0x0022
+    uint8_t bpp;                        // 0x0024
+    uint8_t var_25;                     // 0x0025
+    uint8_t bOpen;                      // 0x0026
+    uint8_t var_27;                     // 0x0027
+    uint8_t var_28;                     // 0x0028
+    uint8_t var_29;                     // 0x0029
+    uint8_t var_2A;                     // 0x002A
+    uint8_t var_2B;                     // 0x002B
+    uint8_t var_2C;                     // 0x002C
+    uint8_t var_2D;                     // 0x002D
+    int16_t var_2E;                     // 0x002E
+};
+static_assert(sizeof(MarniSurface2) == 0x30);
+
+struct MarniSurface3 : MarniSurface2
+{
+    void* pDDsurface;                   // 0x0030
+    void** pDDpalette;                  // 0x0034
+};
+static_assert(sizeof(MarniSurface3) == 0x38);
+
+struct MarniSurface : MarniSurface3
+{
+    uint32_t is_vmem;                   // 0x0038
+};
+static_assert(sizeof(MarniSurface) == 0x3C);
+
+struct MarniSurfaceX : MarniSurface
+{
+    uint32_t texture_handle;            // 0x003C
+    void* pDDtexture;                   // 0x0040
+};
+static_assert(sizeof(MarniSurfaceX) == 0x44);
+
+struct MarniSurfaceY : MarniSurface
+{
+    uint32_t texture_handle;            // 0x003C
+    void* pDDtexture;                   // 0x0040
+};
+static_assert(sizeof(MarniSurfaceY) == 0x44);
+
+struct MarniMovie
+{
+    uint8_t pad_0000[148];              // 0x0000
+    uint32_t flag;                      // 0x0094
+    double pos;                         // 0x0098
+    int32_t var_A0;                     // 0x00A0
+    int32_t var_A4;                     // 0x00A4
+};
+static_assert(sizeof(MarniMovie) == 0xA8);
+
+struct MarniOt
+{
+    int32_t zdepth;                     // 0x0000
+    Prim* pHead;                        // 0x0004
+    int32_t is_valid;                   // 0x0008
+    Prim* pCurrent;                     // 0x000C
+    uint8_t var_10;                     // 0x0010
+    uint8_t var_11;                     // 0x0011
+    uint8_t var_12;                     // 0x0012
+    uint8_t var_13;                     // 0x0013
+};
+static_assert(sizeof(MarniOt) == 0x14);
+
+struct MarniLineRecord
+{
+    void* gourad;                       // 0x0000
+    void* flat;                         // 0x0004
+};
+static_assert(sizeof(MarniLineRecord) == 0x08);
+
+struct WindowRect
+{
+    int32_t left;                       // 0x0000
+    int32_t top;                        // 0x0004
+    int32_t right;                      // 0x0008
+    int32_t bottom;                     // 0x000C
+};
+static_assert(sizeof(WindowRect) == 0x10);
+
+struct MarniTextureNode
+{
+    uint16_t next;                      // 0x0000
+    uint8_t pad_0002[6];                // 0x0002
+    MarniSurfaceX* surface;             // 0x0008
+    uint8_t pad_000C[8];                // 0x000C
+    uint32_t var_14;                    // 0x0014
+};
+static_assert(sizeof(MarniTextureNode) == 0x18);
+
+struct MarniTexture
+{
+    uint32_t var_00;                    // 0x0000
+    MarniSurface2 surface;              // 0x0004
+    uint16_t head;                      // 0x0034
+    uint16_t var_36;                    // 0x0036
+};
+static_assert(sizeof(MarniTexture) == 0x38);
+
+struct MarniVertex
+{
+    uint8_t pad_00[32];                 // 0x0000
+};
+static_assert(sizeof(MarniVertex) == 0x20);
+
+struct MarniDrawOp
+{
+    MarniVertex vertices[3];            // 0x0000
+    float average_z;                    // 0x0060
+    uint8_t filter;                     // 0x0064
+    uint8_t pad_0065[3];                // 0x0065
+    uint32_t var_68;                    // 0x0068
+    uint32_t src_blend;                 // 0x006C
+    uint32_t dst_blend;                 // 0x0070
+    uint32_t texture_handle;            // 0x0074
+    uint32_t shade_mode;                // 0x0078
+    uint32_t cull_mode;                 // 0x007C
+    uint32_t z_func;                    // 0x0080
+    uint8_t z_write_enable;             // 0x0084
+    uint8_t specular_enable;            // 0x0085
+    uint8_t pad_86[2];                  // 0x0086
+};
+static_assert(sizeof(MarniDrawOp) == 0x88);
+
+struct PolygonObject
+{
+    void** vtbl;                        // 0x0000
+    uint8_t pad_0004[80];               // 0x0004
+    uint32_t var_54;                    // 0x0054
+};
+static_assert(sizeof(PolygonObject) == 0x58);
+
+struct Unknown8C76A0
+{
+    uint8_t pad_0000[8];                // 0x0000
+    MarniSurface3* surface;             // 0x0008
+};
+static_assert(sizeof(Unknown8C76A0) == 0x0C);
+
+struct MarniLight
+{
+    uint8_t pad_0000[12];               // 0x0000
+    uint32_t var_0C;                    // 0x000C
+    uint32_t var_10;                    // 0x0010
+    float var_14;                       // 0x0014
+    float var_18;                       // 0x0018
+    float var_1C;                       // 0x001C
+    float var_20;                       // 0x0020
+    uint8_t pad_0024[8];                // 0x0024
+    uint32_t var_2C;                    // 0x002C
+};
+static_assert(sizeof(MarniLight) == 0x30);
+
+struct Marni
+{
+    MarniTextureNode texture_nodes[256];// 0x0000
+    MarniTexture textures[256];         // 0x1800
+    uint32_t field_5000;                // 0x5000
+    uint32_t field_5004;                // 0x5004
+    uint32_t field_5008;                // 0x5008
+    uint8_t pad_500C[4];                // 0x500C
+    MarniLineRecord field_5010[8];      // 0x5010
+    uint8_t pad_5050[8124];             // 0x5050
+    int32_t field_700C;                 // 0x700C
+    MarniDrawOp draw_ops[65536];        // 0x7010
+    MarniDrawOp* draw_op_ptrs[65536];   // 0x887010
+    int32_t num_draw_ops;               // 0x8C7010
+    uint8_t cutscene_bars;              // 0x8C7014
+    uint8_t pad_8C7015[3];              // 0x8C7015
+    uint32_t modes;                     // 0x8C7018
+    float field_8C701C;                 // 0x8C701C
+    uint32_t field_8C7020;              // 0x8C7020
+    MarniOt otag[5];                    // 0x8C7024
+    uint8_t field_8C7088[252];          // 0x8C7088
+    uint8_t field_8C7184[252];          // 0x8C7184
+    uint32_t dwVidMemTotal;             // 0x8C7280
+    uint8_t pad_8C7284[8];              // 0x8C7284
+    uint32_t field_8C728C[256];         // 0x8C728C
+    uint8_t pad_8C768C[12];             // 0x8C768C
+    PolygonObject** polygons;           // 0x8C7698
+    uint32_t polygons_count;            // 0x8C769C
+    Unknown8C76A0* var_8C76A0[128];     // 0x8C76A0
+    uint8_t pad_8C78A0[1084];           // 0x8C78A0
+    WindowRect window_rect;             // 0x8C7CDC
+    void* pClipper;                     // 0x8C7CEC
+    MarniLight lights[6];               // 0x8C7CF0
+    uint32_t field_8C7E10;              // 0x8C7E10
+    uint32_t field_8C7E14;              // 0x8C7E14
+    float field_8C7E18;                 // 0x8C7E18
+    uint32_t field_8C7E1C;              // 0x8C7E1C
+    uint32_t field_8C7E20;              // 0x8C7E20
+    uint32_t field_8C7E24;              // 0x8C7E24
+    float field_8C7E28;                 // 0x8C7E28
+    uint32_t field_8C7E2C;              // 0x8C7E2C
+    uint32_t field_8C7E30;              // 0x8C7E30
+    uint32_t field_8C7E34;              // 0x8C7E34
+    float field_8C7E38;                 // 0x8C7E38
+    uint32_t field_8C7E3C;              // 0x8C7E3C
+    uint32_t field_8C7E40;              // 0x8C7E40
+    uint32_t field_8C7E44;              // 0x8C7E44
+    uint32_t field_8C7E48;              // 0x8C7E48
+    uint32_t field_8C7E4C;              // 0x8C7E4C
+    float field_8C7E50;                 // 0x8C7E50
+    float field_8C7E54;                 // 0x8C7E54
+    float field_8C7E58;                 // 0x8C7E58
+    uint32_t field_8C7E5C;              // 0x8C7E5C
+    float field_8C7E60;                 // 0x8C7E60
+    float field_8C7E64;                 // 0x8C7E64
+    float field_8C7E68;                 // 0x8C7E68
+    uint32_t field_8C7E6C;              // 0x8C7E6C
+    float field_8C7E70;                 // 0x8C7E70
+    float field_8C7E74;                 // 0x8C7E74
+    float field_8C7E78;                 // 0x8C7E78
+    uint32_t field_8C7E7C;              // 0x8C7E7C
+    uint32_t field_8C7E80;              // 0x8C7E80
+    uint32_t field_8C7E84;              // 0x8C7E84
+    uint32_t field_8C7E88;              // 0x8C7E88
+    uint32_t field_8C7E8C;              // 0x8C7E8C
+    uint32_t field_8C7E90;              // 0x8C7E90
+    void* pMaterial;                    // 0x8C7E94
+    uint32_t MaterialHandle;            // 0x8C7E98
+    void* pDirect3D2;                   // 0x8C7E9C
+    void* pDirectDevice2;               // 0x8C7EA0
+    void* pViewport;                    // 0x8C7EA4
+    void* hWnd;                         // 0x8C7EA8
+    int32_t render_w;                   // 0x8C7EAC
+    int32_t render_h;                   // 0x8C7EB0
+    int32_t xsize_old;                  // 0x8C7EB4
+    int32_t ysize_old;                  // 0x8C7EB8
+    int32_t bpp_old;                    // 0x8C7EBC
+    int32_t fullscreen_old;             // 0x8C7EC0
+    int32_t field_8C7EC4;               // 0x8C7EC4
+    int32_t field_8C7EC8;               // 0x8C7EC8
+    uint8_t pad_8C7ECC[8];              // 0x8C7ECC
+    float aspect_x;                     // 0x8C7ED4
+    float aspect_y;                     // 0x8C7ED8
+    uint32_t field_8C7EDC;              // 0x8C7EDC
+    int32_t var_8C7EE0;                 // 0x8C7EE0
+    int32_t var_8C7EE4;                 // 0x8C7EE4
+    int32_t is_gpu_busy;                // 0x8C7EE8
+    int32_t desktop_w;                  // 0x8C7EEC
+    int32_t desktop_h;                  // 0x8C7EF0
+    int32_t desktop_bpp;                // 0x8C7EF4
+    MarniRes resolutions[64];           // 0x8C7EF8
+    int32_t res_count;                  // 0x8C82F8
+    int32_t field_8C82FC;               // 0x8C82FC
+    int32_t field_8C8300;               // 0x8C8300
+    uint8_t pad_8C8304[20];             // 0x8C8304
+    int32_t var_8C8318;                 // 0x8C8318
+    uint8_t ambient_b;                  // 0x8C831C
+    uint8_t ambient_g;                  // 0x8C831D
+    uint8_t ambient_r;                  // 0x8C831E
+    uint8_t ambient_a;                  // 0x8C831F
+    void* pDirectDraw;                  // 0x8C8320
+    void* pDirectDraw2;                 // 0x8C8324
+    MarniMovie* pMovie;                 // 0x8C8328
+    int32_t xsize;                      // 0x8C832C
+    int32_t ysize;                      // 0x8C8330
+    int32_t bpp;                        // 0x8C8334
+    int32_t is_gpu_active;              // 0x8C8338
+    int32_t dwVidMemFree;               // 0x8C833C
+    MarniSurface surface0;              // 0x8C8340
+    MarniSurface surfaceZ;              // 0x8C837C
+    MarniSurface surface2;              // 0x8C83B8
+    uint32_t gpu_flag;                  // 0x8C83F4
+    uint32_t vertices_processed;        // 0x8C83F8
+    uint32_t triangles_drawn;           // 0x8C83FC
+    uint8_t pad_8C8400[16];             // 0x8C8400
+    uint32_t field_8C8410;              // 0x8C8410
+    uint32_t field_8C8414;              // 0x8C8414
+    uint32_t field_8C8418;              // 0x8C8418
+    uint32_t field_8C841C;              // 0x8C841C
+    uint32_t field_8C8420;              // 0x8C8420
+    float field_8C8424;                 // 0x8C8424
+    uint32_t field_8C8428;              // 0x8C8428
+    int32_t device_cnt;                 // 0x8C842C
+    int32_t field_8C8430;               // 0x8C8430
+    MarniSurface surface3;              // 0x8C8434
+};
+static_assert(sizeof(Marni) == 0x8C8470);
+
+struct OldStdString
+{
+    char* data;                         // 0x0000
+    uint32_t length;                    // 0x0004
+};
+static_assert(sizeof(OldStdString) == 0x08);
+
+struct MarniConfig
+{
+    uint32_t key;                       // 0x0000
+    uint32_t var_04;                    // 0x0004
+    uint32_t var_08;                    // 0x0008
+    uint32_t hKey;                      // 0x000C
+    uint32_t ex_flag;                   // 0x0010
+    uint32_t ex_time[3];                // 0x0014
+    uint32_t var_20;                    // 0x0020
+    uint32_t var_24;                    // 0x0024
+    uint32_t var_28;                    // 0x0028
+    uint32_t var_2C;                    // 0x002C
+    uint32_t var_30;                    // 0x0030
+    uint32_t var_34;                    // 0x0034
+    uint32_t data1;                     // 0x0038
+    uint32_t data2;                     // 0x003C
+    uint32_t data3;                     // 0x0040
+    uint32_t data4;                     // 0x0044
+    uint8_t perswrap;                   // 0x0048
+    uint8_t bilinear;                   // 0x0049
+    uint8_t fadeflag;                   // 0x004A
+    uint8_t var_4B;                     // 0x004B
+    OldStdString device_name;           // 0x004C
+    OldStdString display_mode;          // 0x0054
+    uint8_t var_5C;                     // 0x005C
+};
+static_assert(sizeof(MarniConfig) == 0x5D);
+
+struct D3DDeviceInfo
+{
+    char lpDeviceName[30];              // 0x0000
+    char lpDeviceDescription[50];       // 0x001E
+    uint8_t desc[252];                  // 0x0050
+    uint8_t GUID[16];                   // 0x014C
+    uint32_t hwAccelerated;             // 0x015C
+    uint32_t supportsFloat;             // 0x0160
+    uint32_t supportsZbuffer;           // 0x0164
+    uint32_t hwAccelerated2;            // 0x0168
+};
+static_assert(sizeof(D3DDeviceInfo) == 0x16C);
+
+struct TexturePage
+{
+    uint32_t handle;                    // 0x0000
+    uint32_t var_04;                    // 0x0004
+    uint32_t var_08;                    // 0x0008
+};
+static_assert(sizeof(TexturePage) == 0x0C);
+
 struct GameTable
 {
     uint8_t pad_0000[5394100];          // 0x0000
@@ -716,33 +1130,60 @@ struct GameTable
     MapStageInfo map_info1[20];         // 0x53EB98
     uint8_t pad_53EC38[6984];           // 0x53EC38
     uint8_t byte_540780[16];            // 0x540780
-    uint8_t pad_540790[1231876];        // 0x540790
+    uint8_t pad_540790[12932];          // 0x540790
+    void* dword_543A14;                 // 0x543A14
+    uint32_t error;                     // 0x543A18
+    uint8_t pad_543A1C[4];              // 0x543A1C
+    D3DDeviceInfo d3d_devices[5];       // 0x543A20
+    int32_t dword_54413C;               // 0x54413C
+    uint32_t d3d_vertices_processed;    // 0x544140
+    uint32_t d3d_triangles_drawn;       // 0x544144
+    uint8_t unk_544148[1050736];        // 0x544148
+    int32_t d3d_device_count;           // 0x6449B8
+    int32_t dword_6449BC;               // 0x6449BC
+    uint8_t pad_6449C0[151860];         // 0x6449C0
+    void* hFont;                        // 0x669AF4
+    uint8_t pad_669AF8[4];              // 0x669AF8
+    uint8_t is_480p;                    // 0x669AFC
+    uint8_t pad_669AFD[14487];          // 0x669AFD
     uint32_t dword_66D394;              // 0x66D394
-    uint8_t pad_66D398[63032];          // 0x66D398
+    uint8_t pad_66D398[62528];          // 0x66D398
+    TexturePage texture_pages[41];      // 0x67C7D8
+    uint8_t pad_67C9C4[12];             // 0x67C9C4
     void* file_buffer;                  // 0x67C9D0
     uint8_t pad_67C9D4[36];             // 0x67C9D4
     uint8_t vk_press;                   // 0x67C9F8
     uint8_t pad_67C9F9[55];             // 0x67C9F9
     Input input;                        // 0x67CA30
-    uint8_t pad_68055C[36];             // 0x68055C
+    uint8_t pad_68055C[16];             // 0x68055C
+    void* hwnd;                         // 0x68056C
+    uint8_t pad_680570[8];              // 0x680570
+    void* hInstance;                    // 0x680578
+    uint8_t pad_68057C[4];              // 0x68057C
     uint32_t error_no;                  // 0x680580
     uint8_t pad_680584[2];              // 0x680584
     uint8_t timer_r2;                   // 0x680586
     uint8_t pad_680587[1];              // 0x680587
     uint32_t game_seconds;              // 0x680588
     uint8_t pad_68058C[1];              // 0x68058C
-    uint16_t can_draw;                  // 0x68058D
+    uint8_t can_draw;                   // 0x68058D
+    uint8_t movie_r0;                   // 0x68058E
     uint8_t reset_r0;                   // 0x68058F
-    uint8_t pad_680590[8];              // 0x680590
+    uint8_t pad_680590[1];              // 0x680590
+    uint8_t byte_680591;                // 0x680591
+    uint8_t pad_680592[6];              // 0x680592
     uint8_t byte_680598;                // 0x680598
     uint8_t pad_680599[1];              // 0x680599
     uint8_t blood_censor;               // 0x68059A
-    uint8_t pad_68059B[21];             // 0x68059B
+    uint8_t byte_68059B;                // 0x68059B
+    uint8_t pad_68059C[20];             // 0x68059C
     uint8_t super_hard_switch;          // 0x6805B0
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
-    uint8_t pad_6805B4[36412];          // 0x6805B4
+    uint8_t pad_6805B4[4];              // 0x6805B4
+    Marni* pMarni;                      // 0x6805B8
+    uint8_t pad_6805BC[36404];          // 0x6805BC
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
@@ -756,7 +1197,9 @@ struct GameTable
     uint8_t pad_689794[181];            // 0x689794
     uint8_t stage_bk;                   // 0x689849
     uint8_t byte_68984A;                // 0x68984A
-    uint8_t pad_68984B[913];            // 0x68984B
+    uint8_t pad_68984B[625];            // 0x68984B
+    uint8_t byte_689ABC;                // 0x689ABC
+    uint8_t pad_689ABD[287];            // 0x689ABD
     uint32_t dword_689BDC;              // 0x689BDC
     uint8_t pad_689BE0[48];             // 0x689BE0
     uint32_t rdt_count;                 // 0x689C10
@@ -786,7 +1229,9 @@ struct GameTable
     uint8_t pad_689F25[7];              // 0x689F25
     uint32_t task_disable;              // 0x689F2C
     uint32_t task_no;                   // 0x689F30
-    uint8_t pad_689F34[720];            // 0x689F34
+    uint8_t pad_689F34[28];             // 0x689F34
+    MarniConfig marni_config;           // 0x689F50
+    uint8_t pad_689FAD[599];            // 0x689FAD
     Task* ctcb;                         // 0x68A204
     uint8_t pad_68A208[24];             // 0x68A208
     Task tasks[8];                      // 0x68A220
@@ -942,8 +1387,9 @@ struct GameTable
     DoorInfo door_info;                 // 0x8E2880
     DoorEntity door_data[10];           // 0x8E2ACC
     uint8_t pad_8E37C4[114908];         // 0x8E37C4
-    uint32_t work_buffer;               // 0x8FF8A0
-    uint8_t pad_8FF8A4[528988];         // 0x8FF8A4
+    uint8_t work_buffer[163840];        // 0x8FF8A0
+    uint8_t work_buffer_2[329712];      // 0x9278A0
+    uint8_t pad_978090[35440];          // 0x978090
     CCWork cc_work;                     // 0x980B00
     uint8_t pad_9813EC[178];            // 0x9813EC
     uint8_t door_trans_mv;              // 0x98149E
@@ -1167,30 +1613,6 @@ struct HudInfo
     uint8_t var_25;                     // 0x0004
 };
 static_assert(sizeof(HudInfo) == 0x05);
-
-struct MarniRes
-{
-    uint32_t width;                     // 0x0000
-    uint32_t height;                    // 0x0004
-    uint32_t depth;                     // 0x0008
-    uint32_t fullscreen;                // 0x000C
-};
-static_assert(sizeof(MarniRes) == 0x10);
-
-struct Marni
-{
-    uint8_t pad_0000[9203736];          // 0x0000
-    uint32_t modes;                     // 0x8C7018
-    uint8_t pad_8C701C[3264];           // 0x8C701C
-    uint32_t window_rect[4];            // 0x8C7CDC
-    uint8_t pad_8C7CEC[444];            // 0x8C7CEC
-    void* hWnd;                         // 0x8C7EA8
-    uint8_t pad_8C7EAC[76];             // 0x8C7EAC
-    MarniRes resolutions[64];           // 0x8C7EF8
-    uint8_t pad_8C82F8[372];            // 0x8C82F8
-    uint32_t var_8C846C;                // 0x8C846C
-};
-static_assert(sizeof(Marni) == 0x8C8470);
 
 #pragma pack(pop)
 

@@ -25,11 +25,11 @@ namespace openre::interop
 
     // This macro writes a little-endian 4-byte long value into *data
     // It is used to avoid type punning.
-#define WRITE_ADDRESS_STRICTALIAS(data, addr) \
-    *(data + 0) = ((addr)&0x000000ff) >> 0;   \
-    *(data + 1) = ((addr)&0x0000ff00) >> 8;   \
-    *(data + 2) = ((addr)&0x00ff0000) >> 16;  \
-    *(data + 3) = ((addr)&0xff000000) >> 24;
+#define WRITE_ADDRESS_STRICTALIAS(data, addr)                                                                                  \
+    *(data + 0) = ((addr) & 0x000000ff) >> 0;                                                                                  \
+    *(data + 1) = ((addr) & 0x0000ff00) >> 8;                                                                                  \
+    *(data + 2) = ((addr) & 0x00ff0000) >> 16;                                                                                 \
+    *(data + 3) = ((addr) & 0xff000000) >> 24;
 
     static bool hookFunc(uintptr_t address, uintptr_t hookAddress, [[maybe_unused]] int32_t stacksize)
     {
@@ -156,7 +156,12 @@ namespace openre::interop
         if (!done)
         {
             const auto errCode = static_cast<uint32_t>(GetLastError());
-            fprintf(stderr, "WriteProcessMemory failed! address = 0x%08x, size = %d, GetLastError() = 0x%08x\n", address, i, errCode);
+            fprintf(
+                stderr,
+                "WriteProcessMemory failed! address = 0x%08x, size = %d, GetLastError() = 0x%08x\n",
+                address,
+                i,
+                errCode);
         }
 #else
         done = true;
@@ -203,13 +208,20 @@ namespace openre::interop
             uint8_t data[12];
             int32_t i = 0;
             // If hook straddles page boundary, extend it with nop sled until entire hook fits in next page.
-            // Hook installation takes 6 bytes, if those 6 bytes straddle page boundary, then we need at most 6 bytes of nops to align
+            // Hook installation takes 6 bytes, if those 6 bytes straddle page boundary, then we need at most 6 bytes of nops to
+            // align
             uintptr_t page0Address = address & 0xFFFF'F000;
             uintptr_t page1Address = (address + 6) & 0xFFFF'F000;
             if (page0Address != page1Address)
             {
                 uint8_t nopCount = 4096 - (address & 0xFFF);
-                fprintf(stdout, "Address 0x%08x straddles page boundary (page0 = 0x%08x, page1 = 0x%08x), injecting %u nops\n", address, page0Address, page1Address, nopCount);
+                fprintf(
+                    stdout,
+                    "Address 0x%08x straddles page boundary (page0 = 0x%08x, page1 = 0x%08x), injecting %u nops\n",
+                    address,
+                    page0Address,
+                    page1Address,
+                    nopCount);
                 for (; nopCount > 0; nopCount--)
                 {
                     data[i++] = 0x90; // nop
@@ -230,7 +242,12 @@ namespace openre::interop
                 if (!protectResult)
                 {
                     const auto errCode = static_cast<uint32_t>(GetLastError());
-                    fprintf(stderr, "VirtualProtect(rw) for registerHook failed! address = 0x%08x, size = %lu, GetLastError() = 0x%08x\n", address, protectSize, errCode);
+                    fprintf(
+                        stderr,
+                        "VirtualProtect(rw) for registerHook failed! address = 0x%08x, size = %lu, GetLastError() = 0x%08x\n",
+                        address,
+                        protectSize,
+                        errCode);
                 }
             }
 #endif
@@ -243,7 +260,12 @@ namespace openre::interop
                 if (!protectResult)
                 {
                     const auto errCode = static_cast<uint32_t>(GetLastError());
-                    fprintf(stderr, "VirtualProtect(x) for registerHook failed! address = 0x%08x, size = %lu, GetLastError() = 0x%08x\n", address, protectSize, errCode);
+                    fprintf(
+                        stderr,
+                        "VirtualProtect(x) for registerHook failed! address = 0x%08x, size = %lu, GetLastError() = 0x%08x\n",
+                        address,
+                        protectSize,
+                        errCode);
                 }
             }
 #endif
@@ -319,7 +341,12 @@ namespace openre::interop
             if (!protectResult)
             {
                 const auto errCode = static_cast<uint32_t>(GetLastError());
-                fprintf(stderr, "VirtualProtect(rw) for makeJump failed! _offset = %p, size = %lu, GetLastError() = 0x%08x\n", static_cast<void*>(_offset), protectSize, errCode);
+                fprintf(
+                    stderr,
+                    "VirtualProtect(rw) for makeJump failed! _offset = %p, size = %lu, GetLastError() = 0x%08x\n",
+                    static_cast<void*>(_offset),
+                    protectSize,
+                    errCode);
             }
         }
 #endif
@@ -352,7 +379,12 @@ namespace openre::interop
             if (!protectResult)
             {
                 const auto errCode = static_cast<uint32_t>(GetLastError());
-                fprintf(stderr, "VirtualProtect(x) for makeJump failed! _offset = %p, size = %lu, GetLastError() = 0x%08x\n", static_cast<void*>(_offset), protectSize, errCode);
+                fprintf(
+                    stderr,
+                    "VirtualProtect(x) for makeJump failed! _offset = %p, size = %lu, GetLastError() = 0x%08x\n",
+                    static_cast<void*>(_offset),
+                    protectSize,
+                    errCode);
             }
         }
 #endif
@@ -389,25 +421,80 @@ namespace openre::interop
         writeMemory(address, buffer.data(), buffer.size());
     }
 
-    static uint32_t _thisCallReturnAddress;
     void hookThisCall(uint32_t address, void* fn)
     {
         uint8_t data[] = {
-            0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, // pop [addr]
-            0x51,                               // push ecx
-            0xE8, 0x00, 0x00, 0x00, 0x00,       // call addr
-            0x59,                               // pop ecx
-            0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, // push [addr]
-            0xC3,                               // ret
+            0x87, 0x0C, 0x24,            // xchg [esp],ecx
+            0x51,                        // push ecx
+            0xE9, 0x00, 0x00, 0x00, 0x00 // jmp
         };
 
-        auto varAddress = reinterpret_cast<uintptr_t>(&_thisCallReturnAddress);
-        WRITE_ADDRESS_STRICTALIAS(&data[2], varAddress);
-        WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
-
         auto addr = reinterpret_cast<uintptr_t>(fn);
-        WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
-
+        WRITE_ADDRESS_STRICTALIAS(&data[5], addr - address - 9);
         writeMemory(address, data, sizeof(data));
+
+        // uint8_t data[] = {
+        //     0x8F, 0x05, 0x00, 0x00, 0x00, 0x00, // pop [addr]
+        //     0x51,                               // push ecx
+        //     0xE8, 0x00, 0x00, 0x00, 0x00,       // call addr
+        //     0x59,                               // pop ecx
+        //     0xFF, 0x35, 0x00, 0x00, 0x00, 0x00, // push [addr]
+        //     0xC3,                               // ret
+        // };
+        //
+        // auto varAddress = reinterpret_cast<uintptr_t>(malloc(4));
+        // WRITE_ADDRESS_STRICTALIAS(&data[2], varAddress);
+        // WRITE_ADDRESS_STRICTALIAS(&data[15], varAddress);
+        //
+        // auto addr = reinterpret_cast<uintptr_t>(fn);
+        // WRITE_ADDRESS_STRICTALIAS(&data[8], addr - address - 5 - 7);
+        //
+        // writeMemory(address, data, sizeof(data));
+    }
+
+    void* createThiscallThunk(uint32_t address, uint32_t* retStore)
+    {
+        auto mem = VirtualAlloc(NULL, 20, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        if (mem == NULL)
+        {
+            throw std::runtime_error("Failed to allocate memory for thiscall");
+        }
+
+        auto bytes = static_cast<uint8_t*>(mem);
+        auto dst = bytes;
+        *dst++ = 0x8F; // pop [addr]
+        *dst++ = 0x05;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x59; // pop ecx
+        *dst++ = 0xE8; // call
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        // *dst++ = 0x51; // push ecx
+        *dst++ = 0xFF; // push [addr]
+        *dst++ = 0x35;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0xC3; // ret
+
+        auto varAddress = reinterpret_cast<uintptr_t>(retStore);
+        WRITE_ADDRESS_STRICTALIAS(&bytes[2], varAddress);
+        WRITE_ADDRESS_STRICTALIAS(&bytes[14], varAddress);
+
+        auto addr = reinterpret_cast<uintptr_t>(mem);
+        WRITE_ADDRESS_STRICTALIAS(&bytes[8], address - addr - 5 - 7);
+
+        return mem;
+    }
+
+    void deleteThiscallThunk(void* mem)
+    {
+        VirtualFree(mem, 0, MEM_RELEASE);
     }
 }

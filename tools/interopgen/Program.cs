@@ -98,8 +98,30 @@ namespace interopgen
             {
                 ProcessStruct(s);
             }
+            foreach (var s in _structs)
+            {
+                ValidateStruct(s);
+            }
             var header = GenerateHeader();
             Console.WriteLine(header);
+        }
+
+        private void ValidateStruct(InteropStruct s)
+        {
+            var offset = 0;
+            if (s.Base is string baseName)
+            {
+                var baseStruct = ExpectProcessedStruct(baseName);
+                offset = baseStruct.Size ?? 0;
+            }
+            foreach (var m in s.Members)
+            {
+                if (offset != m.Address)
+                {
+                    m.Comment = $"ADDRESS ACTUALLY 0x{offset:X2}";
+                }
+                offset += m.Size ?? 0;
+            }
         }
 
         private string GenerateHeader()
@@ -162,6 +184,11 @@ namespace interopgen
                         while (sb2.Length < 40)
                             sb2.Append(' ');
                         sb2.AppendFormat("// 0x{0:X4}", m.Address);
+                        if (m.Comment is string comment)
+                        {
+                            sb2.Append("    ");
+                            sb2.Append(comment);
+                        }
                         sb.AppendLine(sb2.ToString());
                     }
                     sb.AppendLine("};");
@@ -192,6 +219,10 @@ namespace interopgen
                 "u16" => "uint16_t",
                 "s32" => "int32_t",
                 "u32" => "uint32_t",
+                "s64" => "int64_t",
+                "u64" => "uint64_t",
+                "f32" => "float",
+                "f64" => "double",
                 _ => name,
             };
         }
@@ -297,7 +328,8 @@ namespace interopgen
                 "char" => 1,
                 "u8" or "s8" => 1,
                 "u16" or "s16" => 2,
-                "u32" or "s32" => 4,
+                "u32" or "s32" or "f32" => 4,
+                "u64" or "s64" or "f64" => 8,
                 _ => ExpectProcessedStruct(type).Size!.Value,
             };
         }
@@ -329,5 +361,6 @@ namespace interopgen
         public int? ArrayLength { get; set; } = arrayLength;
         public int? Address { get; set; } = address;
         public int? Size { get; set; }
+        public string? Comment { get; set; }
     }
 }

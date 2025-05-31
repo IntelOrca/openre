@@ -10,6 +10,7 @@
 #include "player.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "tim.h"
 
 using namespace openre::audio;
 using namespace openre::file;
@@ -17,6 +18,7 @@ using namespace openre::itembox;
 using namespace openre::player;
 using namespace openre::input;
 using namespace openre::sce;
+using namespace openre::tim;
 
 namespace openre::hud
 {
@@ -1715,11 +1717,11 @@ namespace openre::hud
                 return;
             }
 
-            marni::tim_buffer_to_surface(mapTimBuffer, 0x1D, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 8208, 0x21, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 16416, 0x20, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 24648, 0x1E, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 25688, 0x1F, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer), 0x1D, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 8208), 0x21, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 16416), 0x20, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 24648), 0x1E, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 25688), 0x1F, 0);
             file_alloc(0);
             gGameTable.itembox_state = HUD_MENU0_MAP_OPENING_MAP;
             gGameTable.byte_691F63 = 0;
@@ -1831,11 +1833,11 @@ namespace openre::hud
                 return;
             }
 
-            marni::tim_buffer_to_surface(mapTimBuffer, 0x1D, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 8208, 0x21, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 16416, 0x20, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 24648, 0x1E, 0);
-            marni::tim_buffer_to_surface(mapTimBuffer + 25688, 0x1F, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer), 0x1D, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 8208), 0x21, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 16416), 0x20, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 24648), 0x1E, 0);
+            tim_buffer_to_surface((Tim*)(mapTimBuffer + 25688), 0x1F, 0);
             file_alloc(0);
             st_init_disp_map();
             gGameTable.dword_691F88 &= 0xFFFF0000;

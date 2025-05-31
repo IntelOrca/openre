@@ -199,6 +199,7 @@ namespace openre
     uint32_t check_room_no(uint32_t stage, uint32_t room);
     void* operator_new(const size_t size);
     void operator_delete(void* memoryBlock);
+    bool cutscene_active();
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()

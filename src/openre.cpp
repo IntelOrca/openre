@@ -1,5 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include "openre.h"
 #include "audio.h"
 #include "camera.h"
@@ -20,6 +18,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "tim.h"
 #include "title.h"
 
 #include <cstring>
@@ -98,6 +97,12 @@ namespace openre
     uint32_t check_room_no(uint32_t stage, uint32_t room)
     {
         return interop::call<uint32_t, uint32_t, uint32_t>(0x004FAF80, stage, room);
+    }
+
+    // 0x00509CE0
+    bool cutscene_active()
+    {
+        return check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE);
     }
 
     // 0x004DD360
@@ -778,12 +783,162 @@ static void load_init_table_3()
 
 void snd_se_walk(int, int, PlayerEntity* pEm) {}
 
+// 0x00509CF0
+bool ck_installkey()
+{
+    return true;
+}
+
+// 0x00432080
+static void rsrc_release()
+{
+    interop::call(0x00432080);
+}
+
+// 0x00433830
+static void ssclose()
+{
+    interop::call(0x00433830);
+}
+
+// 0x00431000
+static void font_create()
+{
+    interop::call(0x00431000);
+}
+
+// 0x004310A0
+static void font_delete()
+{
+    DeleteObject(gGameTable.hFont);
+}
+
+// 0x00441DA0
+static void wnd_activate()
+{
+    interop::call(0x00441DA0);
+}
+
+// 0x00441D60
+static void wnd_deactivate()
+{
+    interop::call(0x00441D60);
+}
+
+// 0x00442800
+static INT_PTR CALLBACK about_dialog(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    return interop::stdcall<INT_PTR, HWND, UINT, WPARAM, LPARAM>(0x00442800, hWnd, msg, wParam, lParam);
+}
+
+// 0x00442750
+static void screenshot()
+{
+    interop::call(0x00442750);
+}
+
+// 0x00442C60
+static void cursor_op()
+{
+    interop::call(0x00442C60);
+}
+
+// 0x00441A00
+LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+    auto marni = gGameTable.pMarni;
+    if (marni != nullptr)
+    {
+        auto result = marni::message(marni, hWnd, Msg, (void*)wParam, (void*)lParam);
+        if (result == 0)
+        {
+            return 0;
+        }
+    }
+    gGameTable.vk_press &= 0x1F;
+    switch (Msg)
+    {
+    case WM_CREATE: input_init(&gGameTable.input); break;
+    case WM_DESTROY:
+        gGameTable.hwnd = nullptr;
+        rsrc_release();
+        ssclose();
+        font_delete();
+        PostQuitMessage(0);
+        return 0;
+    case WM_ACTIVATE: wnd_activate(); break;
+    case WM_ACTIVATEAPP:
+        if (wParam)
+            wnd_activate();
+        else
+            wnd_deactivate();
+        break;
+    case WM_KILLFOCUS: input_pause(&gGameTable.input); break;
+    case WM_CLOSE: marni::kill(); return DefWindowProc(hWnd, Msg, wParam, lParam);
+    case WM_KEYUP: input_wmkeyup(&gGameTable.input, wParam); break;
+    case WM_KEYDOWN:
+        if (lParam & 0x40000000) // last key state?
+            break;
+        gGameTable.byte_689ABC = 1;
+        gGameTable.vk_press |= 0x80;
+        switch (wParam)
+        {
+        case VK_SNAPSHOT:
+            screenshot();
+            SetFocus(hWnd);
+            break;
+        case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
+        case VK_F4:
+            gGameTable.vk_press |= 1; // inventory
+            SetFocus(hWnd);
+            break;
+        case VK_F5:
+            gGameTable.vk_press |= 2; // options
+            SetFocus(hWnd);
+            break;
+        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
+        case VK_F8:
+            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
+            {
+                if (marni::change_resolution(gGameTable.pMarni))
+                {
+                    gGameTable.byte_680591 = 120;
+                    cursor_op();
+                    gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+                    font_create();
+                }
+                else
+                {
+                    marni::out("???", "winmain.cpp");
+                }
+            }
+            break;
+        case VK_F9:
+            gGameTable.vk_press |= 0x40; // exit to menu
+            break;
+        default:
+            input_wmkeydown(&gGameTable.input, wParam);
+            SetFocus(hWnd);
+            break;
+        }
+        break;
+    default: return DefWindowProc(hWnd, Msg, wParam, lParam);
+    }
+    return 0;
+}
+
 void onAttach()
 {
-    interop::writeJmp(0x004B7860, &load_init_table_1);
-    interop::writeJmp(0x004DE650, &load_init_table_2);
-    interop::writeJmp(0x00505B20, &load_init_table_3);
-    interop::writeJmp(0x004B2A90, &rnd);
+    // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
+    // interop::writeJmp(0x004EDF40, &snd_se_walk);
+    // interop::writeJmp(0x00502D40, &read_file_into_buffer);
+    // interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
+    interop::writeJmp(0x004B7860, load_init_table_1);
+    interop::writeJmp(0x004DE650, load_init_table_2);
+    interop::writeJmp(0x00505B20, load_init_table_3);
+    interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x00509CF0, ck_installkey);
+    interop::writeJmp(0x00441A00, WndProc);
 
     scheduler_init_hooks();
     title_init_hooks();
@@ -798,6 +953,7 @@ void onAttach()
     enemy_init_hooks();
     file_init_hooks();
     math_init_hooks();
+    tim::tim_init_hooks();
     marni::init_hooks();
 }
 

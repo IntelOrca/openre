@@ -47,10 +47,24 @@ namespace openre::title
         interop::call(0x0050AA80);
     }
 
+    // 0x0043F5A0
+    static void bg_to_surface(uint8_t* data)
+    {
+        interop::call<uint8_t*>(0x0043F5A0, data);
+    }
+
     // 0x00503880
     static void title_bg_reload()
     {
-        interop::call(0x00503880);
+        auto dst = gGameTable.work_buffer_2 + 0x640;
+        if (load_adt("common\\data\\title_bg.adt", (uint32_t*)dst, 4))
+        {
+            bg_to_surface(dst);
+        }
+        else
+        {
+            file_error();
+        }
     }
 
     // 0x00505B80

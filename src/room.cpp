@@ -1,5 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include "room.h"
 #include "audio.h"
 #include "camera.h"
