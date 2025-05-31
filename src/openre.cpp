@@ -42,6 +42,8 @@ using namespace openre::itembox;
 
 namespace openre
 {
+    bool gClassicRebirthEnabled;
+
     GameTable& gGameTable = *((GameTable*)0x00000000);
     uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
     uint16_t& gCurrentStage = *((uint16_t*)0x98EB14);
@@ -929,6 +931,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 void onAttach()
 {
+    uint8_t b{};
+    interop::readMemory(0x401E40, &b, sizeof(b));
+    gClassicRebirthEnabled = (b == 0xE9);
+
     // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
     // interop::writeJmp(0x004EDF40, &snd_se_walk);
     // interop::writeJmp(0x00502D40, &read_file_into_buffer);
@@ -948,13 +954,16 @@ void onAttach()
     player_init_hooks();
     bgm_init_hooks();
     hud_init_hooks();
-    input_init_hooks();
     camera_init_hooks();
     enemy_init_hooks();
     file_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
-    marni::init_hooks();
+    if (!gClassicRebirthEnabled)
+    {
+        input_init_hooks();
+        marni::init_hooks();
+    }
 }
 
 extern "C" {
