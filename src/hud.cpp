@@ -1,6 +1,7 @@
 #include "hud.h"
 #include "audio.h"
 #include "file.h"
+#include "gfx.h"
 #include "input.h"
 #include "interop.hpp"
 #include "item.h"
@@ -14,6 +15,7 @@
 
 using namespace openre::audio;
 using namespace openre::file;
+using namespace openre::graphics;
 using namespace openre::itembox;
 using namespace openre::player;
 using namespace openre::input;
