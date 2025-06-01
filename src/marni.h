@@ -8,6 +8,7 @@ struct Md1;
 
 namespace openre::marni
 {
+    Marni* __stdcall init(Marni* self, void* hWnd, int width, int height);
     long __stdcall message(Marni* self, void* hWnd, uint32_t msg, void* wParam, void* lParam);
     bool __stdcall change_resolution(Marni* self);
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
@@ -20,6 +21,8 @@ namespace openre::marni
     void __stdcall surface2_vrelease(MarniSurface2* self);
 
     void config_flip_filter(MarniConfig* self);
+    void config_read_all(MarniConfig* self);
+    void config_flush_all(MarniConfig* self);
 
     void mapping_tmd(int workNo, Md1* pTmd, int id);
     void out();

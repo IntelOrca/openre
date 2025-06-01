@@ -1163,7 +1163,7 @@ namespace openre::marni
     }
 
     // 0x00405320
-    static Marni* __stdcall init(Marni* self, HWND hWnd, int width, int height)
+    Marni* __stdcall init(Marni* self, void* hWnd, int width, int height)
     {
         cstd_vector_ctor(self->textures, sizeof(MarniTexture), 256, (void*)0x405DC0, (void*)0x405310);
         auto exception = 0;
@@ -2808,6 +2808,18 @@ namespace openre::marni
     void config_flip_filter(MarniConfig* self)
     {
         self->bilinear ^= 1;
+    }
+
+    // 0x0050ACB0
+    void config_read_all(MarniConfig* self)
+    {
+        interop::thiscall<void*, MarniConfig*>(0x0050ACB0, self);
+    }
+
+    // 0x0050B020
+    void config_flush_all(MarniConfig* self)
+    {
+        interop::thiscall<void*, MarniConfig*>(0x0050B020, self);
     }
 
     // 0x0050BC60

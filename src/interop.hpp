@@ -157,7 +157,7 @@ namespace openre::interop
 
     template<typename TReturn, typename... TArgs> TReturn stdcall(uintptr_t addr, TArgs... args)
     {
-        using func_t = TReturn (__stdcall *)(TArgs...);
+        using func_t = TReturn(__stdcall*)(TArgs...);
         func_t func = (func_t)addr;
         return func(args...);
     }
@@ -173,6 +173,16 @@ namespace openre::interop
         auto result = ((func_t)thunk)(args...);
         deleteThiscallThunk(thunk);
         return result;
+    }
+
+    template<typename TReturn = void, typename... TArgs>
+    std::enable_if_t<std::is_void_v<TReturn>, void> thiscall(uintptr_t addr, TArgs... args)
+    {
+        using func_t = void(__stdcall*)(TArgs...);
+        uint32_t retStore;
+        auto thunk = createThiscallThunk(addr, &retStore);
+        ((func_t)thunk)(args...);
+        deleteThiscallThunk(thunk);
     }
 
     template<typename T, uintptr_t TAddress> struct loco_global

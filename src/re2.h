@@ -1092,7 +1092,9 @@ struct GameTable
     bool enable_dsound;                 // 0x524EB6
     uint8_t pad_524EB7[2];              // 0x524EB7
     uint8_t graphics_ptr_data;          // 0x524EB9
-    uint8_t pad_524EBA[4258];           // 0x524EBA
+    uint8_t pad_524EBA[638];            // 0x524EBA
+    char* mutex_name;                   // 0x525138
+    uint8_t pad_52513C[3616];           // 0x52513C
     Mat16 door_ll;                      // 0x525F5C
     Mat16 door_lc;                      // 0x525F7C
     uint8_t pad_525F9C[716];            // 0x525F9C
@@ -1169,11 +1171,11 @@ struct GameTable
     uint8_t can_draw;                   // 0x68058D
     uint8_t movie_r0;                   // 0x68058E
     uint8_t reset_r0;                   // 0x68058F
-    uint8_t pad_680590[1];              // 0x680590
+    uint8_t byte_680590;                // 0x680590
     uint8_t byte_680591;                // 0x680591
     uint8_t pad_680592[6];              // 0x680592
     uint8_t byte_680598;                // 0x680598
-    uint8_t pad_680599[1];              // 0x680599
+    uint8_t ushinabe;                   // 0x680599
     uint8_t blood_censor;               // 0x68059A
     uint8_t byte_68059B;                // 0x68059B
     uint8_t pad_68059C[20];             // 0x68059C
@@ -1183,7 +1185,9 @@ struct GameTable
     uint8_t censorship_off;             // 0x6805B3
     uint8_t pad_6805B4[4];              // 0x6805B4
     Marni* pMarni;                      // 0x6805B8
-    uint8_t pad_6805BC[36404];          // 0x6805BC
+    uint8_t pad_6805BC[12];             // 0x6805BC
+    void* hMutex;                       // 0x6805C8
+    uint8_t pad_6805CC[36388];          // 0x6805CC
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8

@@ -857,6 +857,7 @@ declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
 declare     enable_dsound           bool                    0x00524EB6
 declare     graphics_ptr_data       u8                      0x00524EB9
+declare     mutex_name              char*                   0x00525138
 declare     door_ll                 Mat16                   0x00525F5C
 declare     door_lc                 Mat16                   0x00525F7C
 declare     global_prj              s32                     0x00526268
@@ -901,14 +902,17 @@ declare     game_seconds            u32                     0x00680588
 declare     can_draw                u8                      0x0068058D
 declare     movie_r0                u8                      0x0068058E
 declare     reset_r0                u8                      0x0068058F
+declare     byte_680590             u8                      0x00680590
 declare     byte_680591             u8                      0x00680591
 declare     byte_680598             u8                      0x00680598
+declare     ushinabe                u8                      0x00680599
 declare     blood_censor            u8                      0x0068059A
 declare     byte_68059B             u8                      0x0068059B
 declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
 declare     pMarni                  Marni*                  0x006805B8
+declare     hMutex                  void*                   0x006805C8
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400
