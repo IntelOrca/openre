@@ -4,6 +4,7 @@ games
 lib
 mods
 out
+vcpkg_installed
 
 .vcpkg
 

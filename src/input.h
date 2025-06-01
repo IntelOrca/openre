@@ -64,6 +64,8 @@ namespace openre::input
         return gGameTable.key_trg & key;
     }
 
+    constexpr int GamepadStickDeadzone = 8000;
+
     void input_init(Input* self);
     void input_pause(Input* self);
     void input_wmkeyup(Input* self, int vk);

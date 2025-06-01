@@ -385,6 +385,15 @@ namespace openre
                     {
                         exit();
                     }
+
+                    if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                    {
+                        int width;
+                        int height;
+                        SDL_GetWindowSize(window, &width, &height);
+                        this->windowWidth = (uint32_t)width;
+                        this->windowHeight = (uint32_t)height;
+                    }
                 }
 
                 update();
@@ -404,7 +413,7 @@ namespace openre
             SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
 
             this->logger->log(LogVerbosity::info, "Create window (%dx%d)", windowWidth, windowHeight);
-            this->window = SDL_CreateWindow("OpenRE", windowWidth, windowHeight, SDL_WINDOW_OPENGL);
+            this->window = SDL_CreateWindow("OpenRE", windowWidth, windowHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
             this->logger->log(LogVerbosity::info, "Create OpenGL context");
             this->glContext = SDL_GL_CreateContext(window);
@@ -787,6 +796,22 @@ namespace openre
             }
         }
 
+        float normalizeGamepadStickValue(Sint16 stickValue)
+        {
+            auto result = 0.0f;
+
+            if (stickValue < -input::GamepadStickDeadzone)
+            {
+                result = (float)stickValue / SDL_MAX_SINT16;
+            }
+            else if (stickValue > -input::GamepadStickDeadzone)
+            {
+                result = (float)stickValue / SDL_MAX_SINT16;
+            }
+
+            return result;
+        }
+
         bool checkBinding(InputBinding b)
         {
             if (b.kind == InputBindingKind::Keyboard)
@@ -808,6 +833,45 @@ namespace openre
                     if (SDL_GetGamepadButton(gamePad, (SDL_GamepadButton)b.code))
                     {
                         return true;
+                    }
+
+                    if (b.code == SDL_GAMEPAD_BUTTON_DPAD_UP || b.code == SDL_GAMEPAD_BUTTON_DPAD_LEFT
+                        || b.code == SDL_GAMEPAD_BUTTON_DPAD_RIGHT || b.code == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                    {
+                        auto leftStickX = SDL_GetGamepadAxis(gamePad, SDL_GAMEPAD_AXIS_LEFTX);
+                        auto leftStickY = SDL_GetGamepadAxis(gamePad, SDL_GAMEPAD_AXIS_LEFTY);
+
+                        auto normLeftStickY = normalizeGamepadStickValue(leftStickY) * -1;
+                        auto normLeftStickX = normalizeGamepadStickValue(leftStickX);
+
+                        if (normLeftStickY > 0.5)
+                        {
+                            if (b.code == SDL_GAMEPAD_BUTTON_DPAD_UP)
+                            {
+                                return true;
+                            }
+                        }
+                        if (normLeftStickY < -0.5)
+                        {
+                            if (b.code == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                            {
+                                return true;
+                            }
+                        }
+                        if (normLeftStickX < -0.5)
+                        {
+                            if (b.code == SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+                            {
+                                return true;
+                            }
+                        }
+                        if (normLeftStickX > 0.5)
+                        {
+                            if (b.code == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
