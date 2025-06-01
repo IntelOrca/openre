@@ -32,6 +32,7 @@ namespace openre::marni
     void result_unload_textures();
     void flush_surfaces();
     void kill();
+    void add_tile(void* primPtr, int z, int is_back);
 
     void init_hooks();
 }

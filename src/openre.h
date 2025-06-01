@@ -2,6 +2,7 @@
 
 #include "re2.h"
 #include <cstdint>
+#include <vector>
 
 struct Md1;
 
@@ -82,8 +83,8 @@ namespace openre
     enum
     {
         FG_SYSTEM_0 = 0,
-        FG_SYSTEM_2 = 2,
         FG_SYSTEM_1 = 1,
+        FG_SYSTEM_2 = 2,
         FG_SYSTEM_4 = 4,
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_EX_BATTLE = 7,
@@ -190,6 +191,7 @@ namespace openre
     void bg_set_mode(int mode, int rgb);
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
+    bool check_flags(FlagGroup group, std::vector<uint32_t> indexes);
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
     void stage_init_item();
@@ -200,6 +202,7 @@ namespace openre
     void* operator_new(const size_t size);
     void operator_delete(void* memoryBlock);
     bool cutscene_active();
+    void vsync();
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()

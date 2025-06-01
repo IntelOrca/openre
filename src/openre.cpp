@@ -169,6 +169,18 @@ namespace openre
         return bitarray_get(addr, index) != 0;
     }
 
+    bool check_flags(FlagGroup group, std::vector<uint32_t> indexes)
+    {
+        for (auto index : indexes)
+        {
+            if (!check_flag(group, index))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void set_flag(FlagGroup group, uint32_t index, bool value)
     {
         auto addr = gGameTable.flag_groups[static_cast<uint32_t>(group)];
@@ -750,6 +762,160 @@ namespace openre
     {
         interop::call<void*>(0x0050AA10, memoryBlock);
     }
+
+    // 0x004E97C0
+    void vsync() {}
+
+    // 0x004C3F10
+    static void init_system()
+    {
+        interop::call(0x004C3F10);
+    }
+
+    // 0x004D0F30
+    static void pad_set()
+    {
+        interop::call(0x004D0F30);
+    }
+
+    // 0x00441870
+    static void movie_set(int id)
+    {
+        interop::call(0x00441870);
+    }
+
+    // 0x00507C60
+    static void trans_pointer_set()
+    {
+        interop::call(0x00507C60);
+    }
+
+    // 0x004CAE34
+    static void moji_mode_init()
+    {
+        interop::call(0x004CAE34);
+    }
+
+    // 0x004C8CCA
+    static void moji_trans_main()
+    {
+        interop::call(0x004C8CCA);
+    }
+
+    // 0x004C4AF0
+    static void system_trans()
+    {
+        interop::call(0x004C4AF0);
+    }
+
+    // 0x004C4460
+    static void swap_cbuff()
+    {
+        interop::call(0x004C4460);
+    }
+
+    // 0x004EEDF0
+    static void cd_system_control()
+    {
+        interop::call(0x004EEDF0);
+    }
+
+    // 0x004C3C70
+    static void psx_main()
+    {
+        if (!gGameTable.dword_68984C)
+        {
+            init_system();
+            gGameTable.dword_68984C = 1;
+        }
+
+        gGameTable.byte_98F1B8 = 0;
+
+        auto idx = *reinterpret_cast<uint32_t*>(&gGameTable.byte_9888D8) & 0xFF;
+
+        gGameTable.dword_986520 = (uint32_t)&gGameTable.g_table + (idx << 5);
+        gGameTable.dword_988524 = (uint32_t)&gGameTable.byte_986524 + (idx << 12);
+        gGameTable.dword_9885A8 = (uint32_t)&gGameTable.byte_988528 + (idx << 6);
+        auto mainOffset = (((idx * 8) + idx) * 2 + idx) * 8;
+        gGameTable.dword_98F070 = (uint32_t)&gGameTable.main + mainOffset;
+
+        pad_set();
+
+        if (
+            // clang-format off
+        gGameTable.censorship_off
+        && check_flag(FlagGroup::System, FG_SYSTEM_1)
+        && !gGameTable.byte_98F07B
+        && !gGameTable.byte_991F80
+        && !check_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT)
+        && check_flags(FlagGroup::System, { FG_SYSTEM_DOOR_TRANSITION, FG_SYSTEM_10, FG_SYSTEM_BGM_DISABLED, FG_SYSTEM_22 })
+        && check_flags(FlagGroup::Status, { FG_STATUS_11, FG_STATUS_CUTSCENE })
+            // clang-format on
+        )
+        {
+            if (gGameTable.pause)
+            {
+                movie_set(1);
+                if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+                {
+                    marni::out();
+                    gGameTable.pause = 0;
+                    set_game_seconds(gGameTable.dword_689800);
+                }
+                vsync();
+                return;
+            }
+
+            if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+            {
+                gGameTable.pause = 1;
+                update_timer();
+                gGameTable.dword_689800 = set_game_seconds(1);
+                auto v0 = 16 * gGameTable.byte_9888D8;
+                gGameTable.byte_52D8E7[v0] = 2;
+                marni::add_tile(&gGameTable.curtain2[v0], 5, 0);
+                // marni::prim14
+                interop::call<void, int, int, int, int, int>(0x004C8603, 135, 107, 0, 0x4000, gGameTable.pause);
+                marni::out();
+            }
+        }
+
+        trans_pointer_set();
+        moji_mode_init();
+        scheduler();
+        gGameTable.fg_status &= 0xFFCFFFFF;
+        if (check_flag(FlagGroup::System, FG_SYSTEM_15))
+        {
+            if (hud_fade_status(0))
+            {
+                hud_fade_adjust(0, 31, 526344, 0);
+            }
+
+            auto tileIdx = gGameTable.byte_9888D8;
+            auto& tile = gGameTable.fade_table->tiles[tileIdx];
+            tile.code = 2;
+            tile.tag = gGameTable.fade_table->hrate & 3;
+            marni::add_tile(&tile, 0, 0);
+
+            if (--gGameTable.fade_table->kido < 0)
+            {
+                set_flag(FlagGroup::System, FG_SYSTEM_15, false);
+                return;
+            }
+        }
+        else
+        {
+            if (!gGameTable.can_draw)
+            {
+                moji_trans_main();
+            }
+
+            system_trans();
+            swap_cbuff();
+            cd_system_control();
+            gGameTable.vsync_rate = gGameTable.byte_98F07A;
+        }
+    }
 }
 
 static void load_init_table(void* tempBuffer, uint8_t index)
@@ -935,16 +1101,13 @@ void onAttach()
     interop::readMemory(0x401E40, &b, sizeof(b));
     gClassicRebirthEnabled = (b == 0xE9);
 
-    // interop::writeJmp(0x004DE7B0, &sub_4DE7B0);
-    // interop::writeJmp(0x004EDF40, &snd_se_walk);
-    // interop::writeJmp(0x00502D40, &read_file_into_buffer);
-    // interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
     interop::writeJmp(0x004B7860, load_init_table_1);
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
     interop::writeJmp(0x00509CF0, ck_installkey);
     interop::writeJmp(0x00441A00, WndProc);
+    interop::writeJmp(0x004C3C70, psx_main);
 
     scheduler_init_hooks();
     title_init_hooks();
