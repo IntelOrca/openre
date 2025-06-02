@@ -79,8 +79,9 @@ namespace openre::graphics
     void dumpTextureBuffer(const std::filesystem::path& path, const TextureBuffer& textureBuffer)
     {
         auto bytesPerPixel = textureBuffer.bpp / 8;
-        auto pitch = textureBuffer.width * 4;
-        auto padding = pitch - textureBuffer.width * bytesPerPixel;
+        auto rowSize = textureBuffer.width * bytesPerPixel;
+        auto pitch = align(rowSize, 4);
+        auto padding = pitch - rowSize;
         auto pixelDataLen = pitch * textureBuffer.height;
 
         BitmapFileHeader header1{};
