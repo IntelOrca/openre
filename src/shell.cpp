@@ -796,15 +796,17 @@ namespace openre
             }
         }
 
-        float normalizeGamepadStickValue(Sint16 stickValue)
+        static float normalizeGamepadStickValue(int16_t stickValue)
         {
+            constexpr int16_t deadzone = 8000;
+
             auto result = 0.0f;
 
-            if (stickValue < -input::GamepadStickDeadzone)
+            if (stickValue < -deadzone)
             {
                 result = (float)stickValue / SDL_MAX_SINT16;
             }
-            else if (stickValue > -input::GamepadStickDeadzone)
+            else if (stickValue > deadzone)
             {
                 result = (float)stickValue / SDL_MAX_SINT16;
             }
@@ -835,37 +837,41 @@ namespace openre
                         return true;
                     }
 
-                    if (b.code == SDL_GAMEPAD_BUTTON_DPAD_UP || b.code == SDL_GAMEPAD_BUTTON_DPAD_LEFT
-                        || b.code == SDL_GAMEPAD_BUTTON_DPAD_RIGHT || b.code == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                    constexpr float axisThreshold = 0.5;
+
+                    if (b.code == SDL_GAMEPAD_BUTTON_DPAD_UP || b.code == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
                     {
-                        auto leftStickX = SDL_GetGamepadAxis(gamePad, SDL_GAMEPAD_AXIS_LEFTX);
                         auto leftStickY = SDL_GetGamepadAxis(gamePad, SDL_GAMEPAD_AXIS_LEFTY);
-
                         auto normLeftStickY = normalizeGamepadStickValue(leftStickY) * -1;
-                        auto normLeftStickX = normalizeGamepadStickValue(leftStickX);
 
-                        if (normLeftStickY > 0.5)
+                        if (normLeftStickY > axisThreshold)
                         {
                             if (b.code == SDL_GAMEPAD_BUTTON_DPAD_UP)
                             {
                                 return true;
                             }
                         }
-                        if (normLeftStickY < -0.5)
+                        if (normLeftStickY < -axisThreshold)
                         {
                             if (b.code == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
                             {
                                 return true;
                             }
                         }
-                        if (normLeftStickX < -0.5)
+                    }
+                    if (b.code == SDL_GAMEPAD_BUTTON_DPAD_LEFT || b.code == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                    {
+                        auto leftStickX = SDL_GetGamepadAxis(gamePad, SDL_GAMEPAD_AXIS_LEFTX);
+                        auto normLeftStickX = normalizeGamepadStickValue(leftStickX);
+
+                        if (normLeftStickX < -axisThreshold)
                         {
                             if (b.code == SDL_GAMEPAD_BUTTON_DPAD_LEFT)
                             {
                                 return true;
                             }
                         }
-                        if (normLeftStickX > 0.5)
+                        if (normLeftStickX > axisThreshold)
                         {
                             if (b.code == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
                             {
