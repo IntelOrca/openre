@@ -3,7 +3,12 @@
 #include "file.h"
 #include "interop.hpp"
 #include "openre.h"
+
+#include <filesystem>
+#include <fstream>
 #include <windows.h>
+
+namespace fs = std::filesystem;
 
 namespace openre::file
 {
@@ -148,6 +153,28 @@ namespace openre::file
     int tim_buffer_to_surface(int* timPtr, int page, int mode)
     {
         return interop::call<int, int*, int, int>(0x0043FF40, timPtr, page, mode);
+    }
+
+    static std::vector<uint8_t> readAllBytes(const fs::path& path)
+    {
+        std::ifstream file(path, std::ios::binary);
+        if (!file)
+            throw std::runtime_error("Could not open file: " + path.string());
+
+        file.seekg(0, std::ios::end);
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        std::vector<uint8_t> buffer(static_cast<size_t>(size));
+        if (!file.read((char*)buffer.data(), size))
+            throw std::runtime_error("Error reading file: " + path.string());
+
+        return buffer;
+    }
+
+    std::vector<uint8_t> readAllBytes(const char* path)
+    {
+        return readAllBytes(fs::u8path(path));
     }
 
     void file_init_hooks()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace openre::file
 {
@@ -11,6 +12,8 @@ namespace openre::file
     void* file_alloc(const size_t size);
     int osp_read();
     int tim_buffer_to_surface(int* timPtr, int page, int mode);
+
+    std::vector<uint8_t> readAllBytes(const char* path);
 
     void file_init_hooks();
 }
