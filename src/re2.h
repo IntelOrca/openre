@@ -1204,7 +1204,7 @@ struct GameTable
     uint8_t stage_bk;                   // 0x689849
     uint8_t byte_68984A;                // 0x68984A
     uint8_t pad_68984B[1];              // 0x68984B
-    uint32_t dword_68984C;              // 0x68984C
+    uint32_t systemInitialized;         // 0x68984C
     uint8_t pad_689850[620];            // 0x689850
     uint8_t byte_689ABC;                // 0x689ABC
     uint8_t pad_689ABD[287];            // 0x689ABD

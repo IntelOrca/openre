@@ -922,7 +922,7 @@ declare     idd                     u32                     0x00689790
 declare     dword_689800            u32                     0x00689800
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
-declare     dword_68984C            u32                     0x0068984C
+declare     systemInitialized       u32                     0x0068984C
 declare     byte_689ABC             u8                      0x00689ABC
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10

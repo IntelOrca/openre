@@ -823,10 +823,10 @@ namespace openre
     // 0x004C3C70
     static void psx_main()
     {
-        if (!gGameTable.dword_68984C)
+        if (!gGameTable.systemInitialized)
         {
             init_system();
-            gGameTable.dword_68984C = 1;
+            gGameTable.systemInitialized = 1;
         }
 
         gGameTable.byte_98F1B8 = 0;
@@ -883,7 +883,9 @@ namespace openre
         trans_pointer_set();
         moji_mode_init();
         scheduler();
-        gGameTable.fg_status &= 0xFFCFFFFF;
+        set_flag(FlagGroup::Status, FG_STATUS_INTERACT, false);
+        set_flag(FlagGroup::Status, FG_STATUS_11, false);
+
         if (check_flag(FlagGroup::System, FG_SYSTEM_15))
         {
             if (hud_fade_status(0))
