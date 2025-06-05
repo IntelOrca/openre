@@ -2773,6 +2773,12 @@ namespace openre::marni
         interop::call(0x004419A0);
     }
 
+    // 0x00441270
+    void add_tile(void* primPtr, int z, int is_back)
+    {
+        interop::call<void, void*, int, int>(0x00441270, primPtr, z, is_back);
+    }
+
     // 0x00442E40
     bool sub_442E40()
     {

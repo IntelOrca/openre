@@ -1,6 +1,6 @@
 build/
 out/
-
+vcpkg_installed
 .vcpkg
 
 ## Ignore Visual Studio temporary files, build results, and

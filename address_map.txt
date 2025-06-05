@@ -865,6 +865,8 @@ declare     byte_5286F4             u8[8]                   0x005286F4
 declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
+declare     curtain2                u8[7]                   0x0052D8E0
+declare     byte_52D8E7             u8[25]                  0x0052D8E7
 declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -896,6 +898,7 @@ declare     input                   Input                   0x0067CA30
 declare     hwnd                    void*                   0x0068056C
 declare     hInstance               void*                   0x00680578
 declare     error_no                u32                     0x00680580
+declare     vsync_rate              u8                      0x00680584
 declare     timer_r2                u8                      0x00680586
 declare     game_seconds            u32                     0x00680588
 declare     can_draw                u8                      0x0068058D
@@ -916,8 +919,10 @@ declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
+declare     dword_689800            u32                     0x00689800
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
+declare     systemInitialized       u32                     0x0068984C
 declare     byte_689ABC             u8                      0x00689ABC
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10
@@ -1058,6 +1063,12 @@ declare     byte_981FB7             u8                      0x00981FB7
 declare     byte_981FBB             u8                      0x00981FBB
 declare     fg_message              s8                      0x0098504C
 declare     pickup_item_type        u8                      0x0098504F
+declare     g_table                 u8*                     0x009864E0
+declare     dword_986520            u32                     0x00986520
+declare     byte_986524             u8*                     0x00986524
+declare     dword_988524            u32                     0x00988524
+declare     byte_988528             u8*                     0x00988528
+declare     dword_9885A8            u32                     0x009885A8
 declare     dword_9885F8            u32                     0x009885F8
 declare     word_9885FC             u16                     0x009885FC
 declare     dword_9885FE            u32                     0x009885FE
@@ -1181,6 +1192,8 @@ declare     word_98EE7E             u16                     0x0098EE7E
 declare     dword_98EEF0            u32                     0x0098EEF0
 declare     byte_98EF2C             u8                      0x0098EF2C
 declare     byte_98EF2D             u8                      0x0098EF2D
+declare     main                    u8*                     0x0098EF40
+declare     dword_98F070            u32                     0x0098F070
 declare     dword_98F074            u32                     0x0098F074
 declare     word_98F078             u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
@@ -1188,7 +1201,9 @@ declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
 declare     byte_98F1B6             u8                      0x0098F1B6
 declare     byte_98F1B7             u8                      0x0098F1B7
+declare     byte_98F1B8             u8                      0x0098F1B8
 declare     byte_98F1B9             u8                      0x0098F1B9
+declare     pause                   u8                      0x0098F1BA
 declare     byte_98F1BB             u8                      0x0098F1BB
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     byte_991F80             u8                      0x00991F80
