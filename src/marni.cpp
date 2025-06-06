@@ -14,23 +14,6 @@
 
 namespace openre::marni
 {
-    namespace GpuFlags
-    {
-        constexpr uint32_t GPU_0 = 0x1;
-        constexpr uint32_t GPU_1 = 0x2;
-        constexpr uint32_t INCLUDE_2X = 0x4;
-        constexpr uint32_t GPU_3 = 0x8;
-        constexpr uint32_t GPU_4 = 0x10;
-        constexpr uint32_t ENUM_DEVICES = 0x40;
-        constexpr uint32_t GPU_7 = 0x80;
-        constexpr uint32_t GPU_9 = 0x200;
-        constexpr uint32_t GPU_FULLSCREEN = 0x400;
-        constexpr uint32_t GPU_11 = 0x800;
-        constexpr uint32_t GPU_13 = 0x2000;
-        constexpr uint32_t GPU_18 = 0x40000;
-        constexpr uint32_t GPU_19 = 0x80000;
-    }
-
     struct DrawInfo
     {
         int zWriteEnable;
@@ -309,7 +292,7 @@ namespace openre::marni
     }
 
     // 0x00402210
-    static int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z)
+    int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -335,7 +318,7 @@ namespace openre::marni
     }
 
     // 0x00402290
-    static void __stdcall clear_otags(Marni* self)
+    void __stdcall clear_otags(Marni* self)
     {
         for (auto i = 0; i < 5; i++)
         {
@@ -488,7 +471,7 @@ namespace openre::marni
     }
 
     // 0x00402BC0
-    static void __stdcall draw(Marni* self)
+    void __stdcall draw(Marni* self)
     {
         if (self->var_8C7EE0 || !(self->gpu_flag & GpuFlags::GPU_9))
             return;
@@ -627,7 +610,7 @@ namespace openre::marni
     }
 
     // 0x00404D20
-    static int __stdcall clear(Marni* self)
+    int __stdcall clear(Marni* self)
     {
         if (!(self->gpu_flag & GpuFlags::GPU_9) || !self->is_gpu_active || self->var_8C7EE0
             || !(self->gpu_flag & GpuFlags::GPU_13) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
@@ -2813,13 +2796,20 @@ namespace openre::marni
     // 0x0050ACB0
     void config_read_all(MarniConfig* self)
     {
-        interop::thiscall<void*, MarniConfig*>(0x0050ACB0, self);
+        interop::thiscall<void, MarniConfig*>(0x0050ACB0, self);
     }
 
     // 0x0050B020
     void config_flush_all(MarniConfig* self)
     {
-        interop::thiscall<void*, MarniConfig*>(0x0050B020, self);
+        interop::thiscall<void, MarniConfig*>(0x0050B020, self);
+    }
+
+    // 0x0050B900
+    void config_shutdown()
+    {
+        interop::call(0x00509C70);
+        interop::thiscall<void, MarniConfig*>(0x0050ACA0, &gGameTable.marni_config);
     }
 
     // 0x0050BC60
@@ -2841,6 +2831,37 @@ namespace openre::marni
         if (self->length - 1 != s.size())
             return false;
         return std::memcmp(self->data, s.c_str(), s.size()) == 0;
+    }
+
+    // 0x00442CB0
+    void set_gpu_flag()
+    {
+        switch (gGameTable.byte_680592)
+        {
+        case 0:
+        {
+            gGameTable.pMarni->gpu_flag &= 0xFFFDFFFF;
+            gGameTable.pMarni->gpu_flag &= ~0x40000;
+            break;
+        }
+        case 1:
+        {
+            gGameTable.pMarni->gpu_flag |= 0x20000;
+            gGameTable.pMarni->gpu_flag &= ~0x40000;
+            break;
+        }
+        case 2:
+        {
+            gGameTable.pMarni->gpu_flag &= ~0x20000;
+            gGameTable.pMarni->gpu_flag |= 0x40000;
+            break;
+        }
+        case 3:
+        {
+            gGameTable.pMarni->gpu_flag |= 0x60000;
+            break;
+        }
+        }
     }
 
     void init_hooks()

@@ -64,6 +64,8 @@ namespace openre
     static uint32_t& _timer10 = *((uint32_t*)0x68055C);
     static uint8_t& byte_989E7E = *((uint8_t*)0x989E7E);
 
+    static const char* windowTitle = "BIOHAZARD(R) 2 PC";
+
     // 0x00509C90
     static uint8_t get_player_num()
     {
@@ -947,14 +949,42 @@ namespace openre
         marni::config_flush_all(&gGameTable.marni_config);
     }
 
+    // 0x0050AA80
+    static void config_write()
+    {
+        marni::config_flush_all(&gGameTable.marni_config);
+    }
+
+    // 0x00441880
+    static void make_font()
+    {
+        interop::call(0x00441880);
+    }
+
+    // 0x00442920
+    static void draw_monitor_effect(int a0)
+    {
+        interop::call(0x00442920);
+    }
+
+    // 0x004DD3B0
+    static void psp_trans()
+    {
+        interop::call(0x004DD3B0);
+    }
+
+    // 0x004CD090
+    static void om_trans()
+    {
+        interop::call(0x004CD090);
+    }
+
     // 0x00441DC0
     bool init_instance(HINSTANCE hInstance, HINSTANCE hPrevInstance)
     {
         // Is gGameTable.hwnd a pointer ?
         // reserve window styles
         // Value of CW_USEDEFAULT
-
-        const char* windowTile = "BIOHAZARD(R) 2 PC";
 
         gGameTable.hInstance = hInstance;
         if (!hPrevInstance)
@@ -968,7 +998,7 @@ namespace openre
             wndClass.hCursor = LoadCursorA(0, (LPCSTR)0x7F00);
             wndClass.hbrBackground = (HBRUSH)GetStockObject(4);
             wndClass.lpszMenuName = 0;
-            wndClass.lpszClassName = "BIOHAZARD(R) 2 PC";
+            wndClass.lpszClassName = windowTitle;
             RegisterClassA(&wndClass);
         }
 
@@ -988,8 +1018,8 @@ namespace openre
 
         gGameTable.hwnd = (void*)CreateWindowExA(
             0,
-            windowTile,
-            windowTile,
+            windowTitle,
+            windowTitle,
             windowStyleFlags,
             windowXPos,
             windowYPos,
@@ -1009,9 +1039,14 @@ namespace openre
         return true;
     }
 
+    static const char* aHighColor16bit = (const char*)0x00525098;
+    static const char* aInNIN = (const char*)0x0052506C;
+
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
         const char* mutexName = "bio2.658b45ea117473d4.game";
+
+        int timeTable[4] = {};
 
         gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
         if (gGameTable.hMutex)
@@ -1044,11 +1079,173 @@ namespace openre
             auto marniPtr = (Marni*)operator_new(sizeof(Marni));
             if (marniPtr)
             {
-                marni::init(marniPtr, window, 320, 240);
+                gGameTable.pMarni = marni::init(marniPtr, window, 320, 240);
+            }
+            if (!gGameTable.pMarni->is_gpu_active)
+            {
+                gGameTable.error_no = 13;
+                DestroyWindow(window);
+                window = 0;
+            }
+            cursor_op();
+            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            marni::set_gpu_flag();
+            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_13)
+            {
+                gGameTable.graphics_ptr_data = 1;
+            }
+            else
+            {
+                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_3) ? 0 : 2;
+            }
+            update_timer();
+
+            gGameTable.timer_r2 = 0;
+
+            while (true)
+            {
+                MSG msg;
+                while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+                {
+                    if (msg.message == WM_QUIT)
+                    {
+                        break;
+                    }
+
+                    TranslateMessage(&msg);
+                    DispatchMessageA(&msg);
+                }
+
+                timeTable[0] = 166;
+                timeTable[1] = 333;
+                timeTable[2] = 666;
+                timeTable[3] = 166;
+                lpCmdLine = (LPSTR)0x1040201;
+
+                auto currentFrameTime = 0;
+
+                if (!gGameTable.timer_r0)
+                {
+                    break;
+                }
+                if (!gGameTable.timer_r0 == 1)
+                {
+                    currentFrameTime = gGameTable.timer_current;
+                    goto LABEL_64;
+                }
+
+            LABEL_64:
+                gGameTable.timer_frame = 0;
+                gGameTable.timer_last = currentFrameTime;
+                make_font();
+                if (gGameTable.pMarni)
+                {
+                    if (gGameTable.movie_idx)
+                    {
+                        gGameTable.movie_idx--;
+                    }
+                    else
+                    {
+                        if (!gGameTable.byte_6805B4 && !gGameTable.byte_680598)
+                        {
+                            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+                        }
+                        // 0x004BF760: gallery function
+                        if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
+                        {
+                            gGameTable.byte_680593 = gGameTable.byte_680592;
+                            gGameTable.byte_680592 |= 1;
+                            marni::set_gpu_flag();
+                            gGameTable.byte_680592 = gGameTable.byte_680593;
+                        }
+                        else
+                        {
+                            marni::set_gpu_flag();
+                            gGameTable.dword_67CA00 = 15872;
+                            if (gGameTable.pMarni->xsize == 640)
+                            {
+                                gGameTable.dword_67CA1C = 0x40000000;
+                                gGameTable.dword_67CA18 = 0x40000000;
+                            }
+                            else
+                            {
+                                gGameTable.dword_67CA1C = 0x3F800000;
+                                gGameTable.dword_67CA18 = 0x3F800000;
+                            }
+                            gGameTable.dword_67CA04 = gGameTable.global_prj;
+                            gGameTable.dword_67CA08 = gGameTable.global_rgb;
+                            gGameTable.dword_67CA10 = gGameTable.global_cx + 160;
+                            gGameTable.dword_67CA14 = gGameTable.global_cy + 120;
+                            marni::add_primitive_scaler(gGameTable.pMarni, gGameTable.scaler, 4095);
+                        }
+
+                        marni::clear(gGameTable.pMarni);
+                        marni::draw(gGameTable.pMarni);
+                        if (gGameTable.can_draw)
+                        {
+                            draw_monitor_effect(gGameTable.can_draw);
+                            marni::clear_otags(gGameTable.pMarni);
+                            psp_trans();
+                            om_trans();
+                        }
+                    }
+                }
             }
         }
 
-        return 0;
+        marni::kill();
+        config_write();
+        if (gGameTable.byte_680592 == 1)
+        {
+            gGameTable.byte_680592 = 0;
+            ShowCursor(true);
+        }
+        // TODO
+        SystemParametersInfoA(0x11, gGameTable.byte_680592, 0, 2);
+
+        switch (gGameTable.error_no)
+        {
+        case 0: [[fallthrough]];
+        case 1: [[fallthrough]];
+        case 2: [[fallthrough]];
+        case 11: [[fallthrough]];
+        case 18: [[fallthrough]];
+        case 255: break;
+
+        case 13:
+        {
+            MessageBoxA(0, "Failed to initialize DIRECTX(R).", windowTitle, MB_ICONEXCLAMATION);
+            break;
+        }
+        case 16:
+        {
+            MessageBoxA(0, "Please insert BIOHAZARD(R) 2 PC DISC", windowTitle, MB_ICONEXCLAMATION);
+            break;
+        }
+        case 17:
+        {
+            MessageBoxA(0, aHighColor16bit, windowTitle, MB_ICONEXCLAMATION);
+            break;
+        }
+        case 19:
+        {
+            MessageBoxA(0, aInNIN, windowTitle, MB_ICONEXCLAMATION);
+            break;
+        }
+        default:
+        {
+            MessageBoxA(0, "Fatal error.", windowTitle, MB_ICONEXCLAMATION);
+            break;
+        }
+        }
+
+        marni::config_shutdown();
+        if (gGameTable.hMutex)
+        {
+            CloseHandle((HANDLE)gGameTable.hMutex);
+        }
+
+        return gGameTable.error_no;
     }
 }
 
@@ -1064,7 +1261,7 @@ void onAttach()
     interop::writeJmp(0x004B2A90, rnd);
     interop::writeJmp(0x00509CF0, ck_installkey);
     interop::writeJmp(0x00441A00, WndProc);
-    interop::writeJmp(0x00441ED0, win_main);
+    // interop::writeJmp(0x00441ED0, win_main);
 
     scheduler_init_hooks();
     title_init_hooks();

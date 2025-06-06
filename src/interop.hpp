@@ -165,7 +165,8 @@ namespace openre::interop
     void* createThiscallThunk(uint32_t address, uint32_t* retStore);
     void deleteThiscallThunk(void* mem);
 
-    template<typename TReturn, typename... TArgs> TReturn thiscall(uintptr_t addr, TArgs... args)
+    template<typename TReturn, typename... TArgs> 
+    std::enable_if_t<!std::is_void_v<TReturn>, TReturn> thiscall(uintptr_t addr, TArgs... args)
     {
         using func_t = TReturn(__stdcall*)(TArgs...);
         uint32_t retStore;

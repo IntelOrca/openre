@@ -1151,21 +1151,37 @@ struct GameTable
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[62528];          // 0x66D398
     TexturePage texture_pages[41];      // 0x67C7D8
-    uint8_t pad_67C9C4[12];             // 0x67C9C4
+    uint32_t global_cx;                 // 0x67C9C4
+    uint32_t global_cy;                 // 0x67C9C8
+    uint8_t pad_67C9CC[4];              // 0x67C9CC
     void* file_buffer;                  // 0x67C9D0
-    uint8_t pad_67C9D4[36];             // 0x67C9D4
+    uint8_t pad_67C9D4[16];             // 0x67C9D4
+    uint8_t timer_r0;                   // 0x67C9E4
+    uint8_t pad_67C9E5[15];             // 0x67C9E5
+    uint32_t timer_last;                // 0x67C9F4
     uint8_t vk_press;                   // 0x67C9F8
-    uint8_t pad_67C9F9[55];             // 0x67C9F9
+    uint8_t pad_67C9F9[3];              // 0x67C9F9
+    Prim* scaler;                       // 0x67C9FC
+    uint32_t dword_67CA00;              // 0x67CA00
+    uint32_t dword_67CA04;              // 0x67CA04
+    uint32_t dword_67CA08;              // 0x67CA08
+    uint8_t pad_67CA0C[4];              // 0x67CA0C
+    uint32_t dword_67CA10;              // 0x67CA10
+    uint32_t dword_67CA14;              // 0x67CA14
+    uint32_t dword_67CA18;              // 0x67CA18
+    uint32_t dword_67CA1C;              // 0x67CA1C
+    uint8_t pad_67CA20[16];             // 0x67CA20
     Input input;                        // 0x67CA30
     uint8_t pad_68055C[16];             // 0x68055C
     void* hwnd;                         // 0x68056C
-    uint8_t pad_680570[8];              // 0x680570
+    uint32_t timer_current;             // 0x680570
+    uint8_t pad_680574[4];              // 0x680574
     void* hInstance;                    // 0x680578
     uint8_t pad_68057C[4];              // 0x68057C
     uint32_t error_no;                  // 0x680580
     uint8_t pad_680584[2];              // 0x680584
     uint8_t timer_r2;                   // 0x680586
-    uint8_t pad_680587[1];              // 0x680587
+    uint8_t timer_frame;                // 0x680587
     uint32_t game_seconds;              // 0x680588
     uint8_t pad_68058C[1];              // 0x68058C
     uint8_t can_draw;                   // 0x68058D
@@ -1173,7 +1189,9 @@ struct GameTable
     uint8_t reset_r0;                   // 0x68058F
     uint8_t byte_680590;                // 0x680590
     uint8_t byte_680591;                // 0x680591
-    uint8_t pad_680592[6];              // 0x680592
+    uint8_t byte_680592;                // 0x680592
+    uint8_t byte_680593;                // 0x680593
+    uint8_t pad_680594[4];              // 0x680594
     uint8_t byte_680598;                // 0x680598
     uint8_t ushinabe;                   // 0x680599
     uint8_t blood_censor;               // 0x68059A
@@ -1183,9 +1201,13 @@ struct GameTable
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
-    uint8_t pad_6805B4[4];              // 0x6805B4
+    uint8_t byte_6805B4;                // 0x6805B4
+    uint8_t exit_game;                  // 0x6805B5
+    uint8_t pad_6805B6[2];              // 0x6805B6
     Marni* pMarni;                      // 0x6805B8
-    uint8_t pad_6805BC[12];             // 0x6805BC
+    uint32_t global_rgb;                // 0x6805BC
+    uint32_t movie_idx;                 // 0x6805C0
+    uint8_t pad_6805C4[4];              // 0x6805C4
     void* hMutex;                       // 0x6805C8
     uint8_t pad_6805CC[36388];          // 0x6805CC
     uint32_t dword_6893F0;              // 0x6893F0
