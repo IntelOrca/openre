@@ -1,7 +1,6 @@
 build/
 out/
 vcpkg_installed
-
 .vcpkg
 games/
 mods/

@@ -34,6 +34,8 @@ namespace openre::marni
     void __stdcall draw(Marni* self);
     int __stdcall clear(Marni* self);
     void __stdcall clear_otags(Marni* self);
+    void __stdcall flip(Marni* self);
+    void __stdcall marni_movie_update(Marni* self);
 
     MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self);
     void __stdcall surfacey_dtor(MarniSurface2* self);
@@ -46,6 +48,8 @@ namespace openre::marni
     void config_flush_all(MarniConfig* self);
     void config_shutdown();
 
+    void font_trans(MarniFont* self, MarniSurface* surface);
+
     void mapping_tmd(int workNo, Md1* pTmd, int id);
     void out();
     void out(const char* message, const char* location);
@@ -57,6 +61,7 @@ namespace openre::marni
     void result_unload_textures();
     void flush_surfaces();
     void kill();
+    void add_tile(void* primPtr, int z, int is_back);
     void set_gpu_flag();
 
     void init_hooks();
