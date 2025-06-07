@@ -40,7 +40,6 @@ namespace openre::marni
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
     static int __stdcall init_all(Marni* self);
     static int __stdcall clear_buffers(Marni* self);
-    static void __stdcall flip(Marni* self);
     static void __stdcall move(Marni* marni);
     static int __stdcall movie_open(
         MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
@@ -340,7 +339,7 @@ namespace openre::marni
     }
 
     // 0x00402530
-    static int __stdcall request_display_mode_count(Marni* self)
+    int __stdcall request_display_mode_count(Marni* self)
     {
         if (self->is_gpu_active)
             return self->res_count;
@@ -2871,13 +2870,15 @@ namespace openre::marni
     }
 
     // 0x00401F70
-    void __stdcall marni_movie_update(Marni* self)
+    int __stdcall marni_movie_update(Marni* self)
     {
         if (self->pMovie->flag && !movie_update(self->pMovie) && self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
             auto windowStyles = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
             SetWindowLongA((HWND)self->hWnd, GWL_STYLE, windowStyles & 0x7F30FFFF | 0xCF0000);
         }
+
+        return 1;
     }
 
     // 0x00411360
@@ -2920,6 +2921,5 @@ namespace openre::marni
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
-        interop::writeJmp(0x00401F70, &movie_update);
     }
 }

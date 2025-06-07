@@ -103,6 +103,7 @@
     <ClInclude Include="door.h" />
     <ClInclude Include="enemy.h" />
     <ClInclude Include="entity.h" />
+    <ClInclude Include="error.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
