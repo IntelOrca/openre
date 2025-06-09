@@ -2845,7 +2845,7 @@ namespace openre::marni
         {
         case 0:
         {
-            gGameTable.pMarni->gpu_flag &= 0xFFFDFFFF;
+            gGameTable.pMarni->gpu_flag &= ~0x20000;
             gGameTable.pMarni->gpu_flag &= ~0x40000;
             break;
         }
