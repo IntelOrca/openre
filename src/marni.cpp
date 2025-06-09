@@ -2845,25 +2845,25 @@ namespace openre::marni
         {
         case 0:
         {
-            gGameTable.pMarni->gpu_flag &= ~0x20000;
-            gGameTable.pMarni->gpu_flag &= ~0x40000;
+            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_17;
+            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_18;
             break;
         }
         case 1:
         {
-            gGameTable.pMarni->gpu_flag |= 0x20000;
-            gGameTable.pMarni->gpu_flag &= ~0x40000;
+            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_17;
+            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_18;
             break;
         }
         case 2:
         {
-            gGameTable.pMarni->gpu_flag &= ~0x20000;
-            gGameTable.pMarni->gpu_flag |= 0x40000;
+            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_17;
+            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_18;
             break;
         }
         case 3:
         {
-            gGameTable.pMarni->gpu_flag |= 0x60000;
+            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_17 | GpuFlags::GPU_18;
             break;
         }
         }

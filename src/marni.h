@@ -21,6 +21,7 @@ namespace openre::marni
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
         constexpr uint32_t GPU_11 = 0x800;
         constexpr uint32_t GPU_13 = 0x2000;
+        constexpr uint32_t GPU_17 = 0x20000;
         constexpr uint32_t GPU_18 = 0x40000;
         constexpr uint32_t GPU_19 = 0x80000;
     }
