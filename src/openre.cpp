@@ -1247,7 +1247,7 @@ namespace openre
         }
 
         // TODO: figure out window styles
-        DWORD windowStyleFlags = 0x2CA0000u;
+        DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
 
         RECT windowRect;
         windowRect.left = 0;
