@@ -1243,7 +1243,6 @@ namespace openre
             wndClass.lpszMenuName = 0;
             wndClass.lpszClassName = windowTitle;
             auto success = RegisterClassA(&wndClass);
-            ASSERT(success);
         }
 
         DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -1268,7 +1267,6 @@ namespace openre
             NULL,
             hInstance,
             NULL);
-        ASSERT(gGameTable.hwnd);
 
         auto window = (HWND)gGameTable.hwnd;
 
@@ -1318,7 +1316,6 @@ namespace openre
 
             auto marniPtr = (Marni*)operator_new(sizeof(Marni));
             gGameTable.pMarni = marni::init(marniPtr, window, 320, 240);
-            ASSERT(gGameTable.pMarni);
             if (!gGameTable.pMarni->is_gpu_active || !marni::request_display_mode_count(gGameTable.pMarni))
             {
                 win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);

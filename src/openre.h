@@ -4,16 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-#if _DEBUG
-#define ASSERT(expression)                                                                                                     \
-    if (!expression)                                                                                                           \
-    {                                                                                                                          \
-        __debugbreak();                                                                                                        \
-    }
-#else
-#define ASSERT(expression)
-#endif
-
 struct Md1;
 
 namespace openre
