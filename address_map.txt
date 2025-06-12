@@ -558,6 +558,25 @@ declare     v0                      u8
 declare     u1                      u8
 declare     v1                      u8
 
+struct      PrimScaler
+base        Prim
+declare     prj                     u32
+declare     rgb0                    u32
+declare     rgb1                    u32
+declare     c_x                     u32
+declare     c_y                     u32
+declare     rate_x                  f32
+declare     rate_y                  f32
+declare     var_24                  u32
+declare     var_28                  u32
+declare     var_2C                  u32
+declare     var_30                  u32
+
+struct      MarniFont
+declare     bitmap                  u32
+declare     width                   u32
+declare     height                  u32
+
 struct      MarniRes
 declare     width                   u32
 declare     height                  u32
@@ -857,6 +876,7 @@ declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
 declare     enable_dsound           bool                    0x00524EB6
 declare     graphics_ptr_data       u8                      0x00524EB9
+declare     mutex_name              char*                   0x00525138
 declare     door_ll                 Mat16                   0x00525F5C
 declare     door_lc                 Mat16                   0x00525F7C
 declare     global_prj              s32                     0x00526268
@@ -892,26 +912,47 @@ declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
 declare     texture_pages           TexturePage[41]         0x0067C7D8
+declare     global_cx               u32                     0x0067C9C4
+declare     global_cy               u32                     0x0067C9C8
 declare     file_buffer             void*                   0x0067C9D0
+declare     timer_r0                u8                      0x0067C9E4
+declare     timer_last              u32                     0x0067C9F4
 declare     vk_press                u8                      0x0067C9F8
+declare     scaler                  PrimScaler              0x0067C9FC
 declare     input                   Input                   0x0067CA30
+declare     timer_10                u32                     0x0068055C
+declare     marni_font              MarniFont               0x00680560
 declare     hwnd                    void*                   0x0068056C
+declare     timer_current           u32                     0x00680570
 declare     hInstance               void*                   0x00680578
 declare     error_no                u32                     0x00680580
 declare     vsync_rate              u8                      0x00680584
+declare     timer_r1                u8                      0x00680585
 declare     timer_r2                u8                      0x00680586
+declare     timer_frame             u8                      0x00680587
 declare     game_seconds            u32                     0x00680588
+declare     frame_current           u8                      0x0068058C
 declare     can_draw                u8                      0x0068058D
 declare     movie_r0                u8                      0x0068058E
 declare     reset_r0                u8                      0x0068058F
+declare     byte_680590             u8                      0x00680590
 declare     byte_680591             u8                      0x00680591
+declare     byte_680592             u8                      0x00680592
+declare     byte_680593             u8                      0x00680593
+declare     byte_680597             u8                      0x00680597
 declare     byte_680598             u8                      0x00680598
+declare     ushinabe                u8                      0x00680599
 declare     blood_censor            u8                      0x0068059A
 declare     byte_68059B             u8                      0x0068059B
 declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
+declare     byte_6805B4             u8                      0x006805B4
+declare     exit_game               u8                      0x006805B5
 declare     pMarni                  Marni*                  0x006805B8
+declare     global_rgb              u32                     0x006805BC
+declare     movie_idx               u32                     0x006805C0
+declare     hMutex                  void*                   0x006805C8
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
 declare     door                    DoorInfo*               0x00689400

@@ -708,6 +708,30 @@ struct PrimSprite : Prim
 };
 static_assert(sizeof(PrimSprite) == 0x1C);
 
+struct PrimScaler : Prim
+{
+    uint32_t prj;                       // 0x0008
+    uint32_t rgb0;                      // 0x000C
+    uint32_t rgb1;                      // 0x0010
+    uint32_t c_x;                       // 0x0014
+    uint32_t c_y;                       // 0x0018
+    float rate_x;                       // 0x001C
+    float rate_y;                       // 0x0020
+    uint32_t var_24;                    // 0x0024
+    uint32_t var_28;                    // 0x0028
+    uint32_t var_2C;                    // 0x002C
+    uint32_t var_30;                    // 0x0030
+};
+static_assert(sizeof(PrimScaler) == 0x34);
+
+struct MarniFont
+{
+    uint32_t bitmap;                    // 0x0000
+    uint32_t width;                     // 0x0004
+    uint32_t height;                    // 0x0008
+};
+static_assert(sizeof(MarniFont) == 0x0C);
+
 struct MarniRes
 {
     uint32_t width;                     // 0x0000
@@ -1092,7 +1116,9 @@ struct GameTable
     bool enable_dsound;                 // 0x524EB6
     uint8_t pad_524EB7[2];              // 0x524EB7
     uint8_t graphics_ptr_data;          // 0x524EB9
-    uint8_t pad_524EBA[4258];           // 0x524EBA
+    uint8_t pad_524EBA[638];            // 0x524EBA
+    char* mutex_name;                   // 0x525138
+    uint8_t pad_52513C[3616];           // 0x52513C
     Mat16 door_ll;                      // 0x525F5C
     Mat16 door_lc;                      // 0x525F7C
     uint8_t pad_525F9C[716];            // 0x525F9C
@@ -1152,32 +1178,43 @@ struct GameTable
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[62528];          // 0x66D398
     TexturePage texture_pages[41];      // 0x67C7D8
-    uint8_t pad_67C9C4[12];             // 0x67C9C4
+    uint32_t global_cx;                 // 0x67C9C4
+    uint32_t global_cy;                 // 0x67C9C8
+    uint8_t pad_67C9CC[4];              // 0x67C9CC
     void* file_buffer;                  // 0x67C9D0
-    uint8_t pad_67C9D4[36];             // 0x67C9D4
+    uint8_t pad_67C9D4[16];             // 0x67C9D4
+    uint8_t timer_r0;                   // 0x67C9E4
+    uint8_t pad_67C9E5[15];             // 0x67C9E5
+    uint32_t timer_last;                // 0x67C9F4
     uint8_t vk_press;                   // 0x67C9F8
-    uint8_t pad_67C9F9[55];             // 0x67C9F9
+    uint8_t pad_67C9F9[3];              // 0x67C9F9
+    PrimScaler scaler;                  // 0x67C9FC
     Input input;                        // 0x67CA30
-    uint8_t pad_68055C[16];             // 0x68055C
+    uint32_t timer_10;                  // 0x68055C
+    MarniFont marni_font;               // 0x680560
     void* hwnd;                         // 0x68056C
-    uint8_t pad_680570[8];              // 0x680570
+    uint32_t timer_current;             // 0x680570
+    uint8_t pad_680574[4];              // 0x680574
     void* hInstance;                    // 0x680578
     uint8_t pad_68057C[4];              // 0x68057C
     uint32_t error_no;                  // 0x680580
     uint8_t vsync_rate;                 // 0x680584
-    uint8_t pad_680585[1];              // 0x680585
+    uint8_t timer_r1;                   // 0x680585
     uint8_t timer_r2;                   // 0x680586
-    uint8_t pad_680587[1];              // 0x680587
+    uint8_t timer_frame;                // 0x680587
     uint32_t game_seconds;              // 0x680588
-    uint8_t pad_68058C[1];              // 0x68058C
+    uint8_t frame_current;              // 0x68058C
     uint8_t can_draw;                   // 0x68058D
     uint8_t movie_r0;                   // 0x68058E
     uint8_t reset_r0;                   // 0x68058F
-    uint8_t pad_680590[1];              // 0x680590
+    uint8_t byte_680590;                // 0x680590
     uint8_t byte_680591;                // 0x680591
-    uint8_t pad_680592[6];              // 0x680592
+    uint8_t byte_680592;                // 0x680592
+    uint8_t byte_680593;                // 0x680593
+    uint8_t pad_680594[3];              // 0x680594
+    uint8_t byte_680597;                // 0x680597
     uint8_t byte_680598;                // 0x680598
-    uint8_t pad_680599[1];              // 0x680599
+    uint8_t ushinabe;                   // 0x680599
     uint8_t blood_censor;               // 0x68059A
     uint8_t byte_68059B;                // 0x68059B
     uint8_t pad_68059C[20];             // 0x68059C
@@ -1185,9 +1222,15 @@ struct GameTable
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
-    uint8_t pad_6805B4[4];              // 0x6805B4
+    uint8_t byte_6805B4;                // 0x6805B4
+    uint8_t exit_game;                  // 0x6805B5
+    uint8_t pad_6805B6[2];              // 0x6805B6
     Marni* pMarni;                      // 0x6805B8
-    uint8_t pad_6805BC[36404];          // 0x6805BC
+    uint32_t global_rgb;                // 0x6805BC
+    uint32_t movie_idx;                 // 0x6805C0
+    uint8_t pad_6805C4[4];              // 0x6805C4
+    void* hMutex;                       // 0x6805C8
+    uint8_t pad_6805CC[36388];          // 0x6805CC
     uint32_t dword_6893F0;              // 0x6893F0
     uint32_t door_state;                // 0x6893F4
     uint8_t pad_6893F8[8];              // 0x6893F8
