@@ -1182,7 +1182,9 @@ struct GameTable
     uint32_t global_cy;                 // 0x67C9C8
     uint8_t pad_67C9CC[4];              // 0x67C9CC
     void* file_buffer;                  // 0x67C9D0
-    uint8_t pad_67C9D4[16];             // 0x67C9D4
+    uint8_t pad_67C9D4[8];              // 0x67C9D4
+    uint8_t movie_playing;              // 0x67C9DC
+    uint8_t pad_67C9DD[7];              // 0x67C9DD
     uint8_t timer_r0;                   // 0x67C9E4
     uint8_t pad_67C9E5[15];             // 0x67C9E5
     uint32_t timer_last;                // 0x67C9F4
@@ -1228,7 +1230,7 @@ struct GameTable
     Marni* pMarni;                      // 0x6805B8
     uint32_t global_rgb;                // 0x6805BC
     uint32_t movie_idx;                 // 0x6805C0
-    uint8_t pad_6805C4[4];              // 0x6805C4
+    uint32_t dword_6805C4;              // 0x6805C4
     void* hMutex;                       // 0x6805C8
     uint8_t pad_6805CC[36388];          // 0x6805CC
     uint32_t dword_6893F0;              // 0x6893F0
