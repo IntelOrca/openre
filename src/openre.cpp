@@ -1242,7 +1242,7 @@ namespace openre
             wndClass.hbrBackground = (HBRUSH)GetStockObject(4);
             wndClass.lpszMenuName = 0;
             wndClass.lpszClassName = windowTitle;
-            auto success = RegisterClassA(&wndClass);
+            RegisterClassA(&wndClass);
         }
 
         DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -1277,6 +1277,7 @@ namespace openre
         return true;
     }
 
+    // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
         const char* mutexName = "bio2.658b45ea117473d4.game";
@@ -1382,6 +1383,12 @@ namespace openre
                             gGameTable.timer_r0 = 1;
                         }
                     }
+                }
+
+                // Window is not active, pause the game
+                if (!gGameTable.exit_game)
+                {
+                    continue;
                 }
 
                 // Playing movie
