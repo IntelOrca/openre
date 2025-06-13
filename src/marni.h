@@ -38,6 +38,8 @@ namespace openre::marni
     void __stdcall flip(Marni* self);
     int __stdcall marni_movie_update(Marni* self);
     int __stdcall request_display_mode_count(Marni* self);
+    void __stdcall syskeydown(Marni* self);
+    void __stdcall movie_kill(Marni* self);
 
     MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self);
     void __stdcall surfacey_dtor(MarniSurface2* self);

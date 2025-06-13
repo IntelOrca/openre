@@ -983,16 +983,36 @@ namespace openre
         DeleteObject(gGameTable.hFont);
     }
 
+    // 0x00441780
+    static void movie_kill()
+    {
+        if (gGameTable.movie_playing)
+        {
+            marni::movie_kill(gGameTable.pMarni);
+            marni::syskeydown(gGameTable.pMarni);
+            gGameTable.movie_playing = 0;
+        }
+    }
+
     // 0x00441DA0
     static void wnd_activate()
     {
-        interop::call(0x00441DA0);
+        gGameTable.pause_game = 1;
+        set_game_seconds(gGameTable.dword_6805C4);
+        marni::out();
     }
 
     // 0x00441D60
     static void wnd_deactivate()
     {
-        interop::call(0x00441D60);
+        gGameTable.pause_game = 0;
+        if (gGameTable.movie_r0 >= 2)
+        {
+            movie_kill();
+            gGameTable.movie_r0 = 5;
+        }
+        gGameTable.dword_6805C4 = set_game_seconds(1);
+        marni::out();
     }
 
     // 0x00442800
@@ -1242,7 +1262,7 @@ namespace openre
             wndClass.hbrBackground = (HBRUSH)GetStockObject(4);
             wndClass.lpszMenuName = 0;
             wndClass.lpszClassName = windowTitle;
-            auto success = RegisterClassA(&wndClass);
+            RegisterClassA(&wndClass);
         }
 
         DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -1277,6 +1297,7 @@ namespace openre
         return true;
     }
 
+    // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
         const char* mutexName = "bio2.658b45ea117473d4.game";
@@ -1382,6 +1403,12 @@ namespace openre
                             gGameTable.timer_r0 = 1;
                         }
                     }
+                }
+
+                // Window is not active
+                if (!gGameTable.pause_game)
+                {
+                    continue;
                 }
 
                 // Playing movie
