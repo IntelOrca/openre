@@ -915,6 +915,7 @@ declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     global_cx               u32                     0x0067C9C4
 declare     global_cy               u32                     0x0067C9C8
 declare     file_buffer             void*                   0x0067C9D0
+declare     movie_playing           u8                      0x0067C9DC
 declare     timer_r0                u8                      0x0067C9E4
 declare     timer_last              u32                     0x0067C9F4
 declare     vk_press                u8                      0x0067C9F8
@@ -952,6 +953,7 @@ declare     exit_game               u8                      0x006805B5
 declare     pMarni                  Marni*                  0x006805B8
 declare     global_rgb              u32                     0x006805BC
 declare     movie_idx               u32                     0x006805C0
+declare     dword_6805C4            u32                     0x006805C4
 declare     hMutex                  void*                   0x006805C8
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
