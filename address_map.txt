@@ -949,7 +949,7 @@ declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     censorship_off          u8                      0x006805B3
 declare     byte_6805B4             u8                      0x006805B4
-declare     exit_game               u8                      0x006805B5
+declare     pause_game              u8                      0x006805B5
 declare     pMarni                  Marni*                  0x006805B8
 declare     global_rgb              u32                     0x006805BC
 declare     movie_idx               u32                     0x006805C0

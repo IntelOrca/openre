@@ -1225,7 +1225,7 @@ struct GameTable
     uint8_t pad_6805B2[1];              // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
     uint8_t byte_6805B4;                // 0x6805B4
-    uint8_t exit_game;                  // 0x6805B5
+    uint8_t pause_game;                 // 0x6805B5
     uint8_t pad_6805B6[2];              // 0x6805B6
     Marni* pMarni;                      // 0x6805B8
     uint32_t global_rgb;                // 0x6805BC

@@ -997,13 +997,15 @@ namespace openre
     // 0x00441DA0
     static void wnd_activate()
     {
-        interop::call(0x00441DA0);
+        gGameTable.pause_game = 1;
+        set_game_seconds(gGameTable.dword_6805C4);
+        marni::out();
     }
 
     // 0x00441D60
     static void wnd_deactivate()
     {
-        gGameTable.exit_game = 0;
+        gGameTable.pause_game = 0;
         if (gGameTable.movie_r0 >= 2)
         {
             movie_kill();
@@ -1403,8 +1405,8 @@ namespace openre
                     }
                 }
 
-                // Window is not active, pause the game
-                if (!gGameTable.exit_game)
+                // Window is not active
+                if (!gGameTable.pause_game)
                 {
                     continue;
                 }
