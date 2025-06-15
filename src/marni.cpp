@@ -189,7 +189,7 @@ namespace openre::marni
     }
 
     // 0x00401F10
-    static void __stdcall syskeydown(Marni* self)
+    void __stdcall syskeydown(Marni* self)
     {
         auto movie = self->pMovie;
         if (movie->flag == 0)
@@ -2525,6 +2525,12 @@ namespace openre::marni
     static void __stdcall movie_release(MarniMovie* self)
     {
         interop::thiscall<int, MarniMovie*>(0x00414FD0, self);
+    }
+
+    // 0x00401EF0
+    void __stdcall movie_kill(Marni* self)
+    {
+        interop::thiscall<void, Marni*>(0x00401EF0, self);
     }
 
     // 0x004164C0

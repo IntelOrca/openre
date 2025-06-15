@@ -983,16 +983,36 @@ namespace openre
         DeleteObject(gGameTable.hFont);
     }
 
+    // 0x00441780
+    static void movie_kill()
+    {
+        if (gGameTable.movie_playing)
+        {
+            marni::movie_kill(gGameTable.pMarni);
+            marni::syskeydown(gGameTable.pMarni);
+            gGameTable.movie_playing = 0;
+        }
+    }
+
     // 0x00441DA0
     static void wnd_activate()
     {
-        interop::call(0x00441DA0);
+        gGameTable.pause_game = 1;
+        set_game_seconds(gGameTable.dword_6805C4);
+        marni::out();
     }
 
     // 0x00441D60
     static void wnd_deactivate()
     {
-        interop::call(0x00441D60);
+        gGameTable.pause_game = 0;
+        if (gGameTable.movie_r0 >= 2)
+        {
+            movie_kill();
+            gGameTable.movie_r0 = 5;
+        }
+        gGameTable.dword_6805C4 = set_game_seconds(1);
+        marni::out();
     }
 
     // 0x00442800
@@ -1385,8 +1405,8 @@ namespace openre
                     }
                 }
 
-                // Window is not active, pause the game
-                if (!gGameTable.exit_game)
+                // Window is not active
+                if (!gGameTable.pause_game)
                 {
                     continue;
                 }
