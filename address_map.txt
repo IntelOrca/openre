@@ -872,6 +872,7 @@ declare     var_04                  u32
 declare     var_08                  u32
 
 struct      GameTable
+declare     byte_524E07             u8                      0x00524E07
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
 declare     enable_dsound           bool                    0x00524EB6
@@ -1057,6 +1058,7 @@ declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
 declare     vab_id                  u8[16]                  0x00692FF5
+declare     bgm_vol                 u8                      0x00693471
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
 declare     seq_ctr                 s8[3]                   0x00693800
@@ -1065,6 +1067,7 @@ declare     byte_693808             u8                      0x00693808
 declare     byte_69380A             s8                      0x0069380A
 declare     byte_693810             u8                      0x00693810
 declare     byte_693812             u8                      0x00693812
+declare     sfx_vol                 u8                      0x00693C48
 declare     dword_693C4C            u32                     0x00693C4C
 declare     current_bgm_address     u8*                     0x00693E84
 declare     cd_vol_0                u32                     0x00693E88
@@ -1112,6 +1115,8 @@ declare     byte_986524             u8*                     0x00986524
 declare     dword_988524            u32                     0x00988524
 declare     byte_988528             u8*                     0x00988528
 declare     dword_9885A8            u32                     0x009885A8
+declare     dword_9885AC            u32                     0x009885AC
+declare     dword_9885D0            u32                     0x009885D0
 declare     dword_9885F8            u32                     0x009885F8
 declare     word_9885FC             u16                     0x009885FC
 declare     dword_9885FE            u32                     0x009885FE
@@ -1242,6 +1247,8 @@ declare     word_98F078             u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
+declare     dword_98F1AC            u32                     0x0098F1AC
+declare     dword_98F1B0            u32                     0x0098F1B0
 declare     byte_98F1B6             u8                      0x0098F1B6
 declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F1B8             u8                      0x0098F1B8
@@ -1249,6 +1256,8 @@ declare     byte_98F1B9             u8                      0x0098F1B9
 declare     pause                   u8                      0x0098F1BA
 declare     byte_98F1BB             u8                      0x0098F1BB
 declare     byte_98F98F             u8[4]                   0x0098F98F
+declare     dword_991F70            u32                     0x00991F70
+declare     dword_991F74            u32                     0x00991F74
 declare     byte_991F80             u8                      0x00991F80
 declare     dword_991FC4            u32                     0x00991FC4
 declare     pdemo                   DemoPlayer              0x00991FC8

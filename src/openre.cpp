@@ -767,10 +767,97 @@ namespace openre
     // 0x004E97C0
     void vsync() {}
 
+    // 0x004C4000
+    static void init_main()
+    {
+        interop::call(0x004C4000);
+    }
+
+    // 0x004CAD29
+    static void moji_init()
+    {
+        interop::call(0x004CAD29);
+    }
+
+    // 0x00508B20
+    static void trans_work_init()
+    {
+        interop::call(0x00508B20);
+    }
+
+    // 0x004C3C60
+    static void line_work_init()
+    {
+        gGameTable.dword_991F70 = 0;
+        gGameTable.dword_991F74 = 0;
+    }
+
+    // 0x00502D70
+    static void memclr(uint32_t* address, int count)
+    {
+        do
+        {
+            *address++ = 0;
+            --count;
+        } while (count > 0);
+    }
+
+    // 0x00508B50
+    static void task_null()
+    {
+        task_exit();
+    }
+
+    // 0x004C4D70
+    static void init_global()
+    {
+        memclr(&gGameTable.fg_status, 0x1419);
+        gGameTable.fg_message = 0;
+        gGameTable.fg_system &= 0x1000899;
+        gGameTable.fade_table[0].kido = -1;
+        gGameTable.fade_table[0].kido = -1;
+        gGameTable.fade_table[1].kido = -1;
+        gGameTable.fade_table[2].kido = -1;
+        gGameTable.fade_table[3].kido = -1;
+        gGameTable.last_cut = -1;
+        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        gGameTable.dword_9885AC = 0xFFFF0000;
+        gGameTable.dword_9885D0 = 0xFFFF0000;
+    }
+
+    static uint8_t input_mapping[32]
+        = { 0x68, 0x62, 0x64, 0x66, 0, 0x56, 0, 0x41, 0, 0,    0x58, 0x43, 0x11, 0x5A, 0,    0,
+            0,    0,    0,    0,    0, 0,    0, 0,    0, 0x26, 0x28, 0x25, 0x27, 0x0D, 0x20, 0x1B };
+
+    // 0x0043B950
+    static void init_input()
+    {
+        for (uint32_t i = 0; i < 32; i++)
+        {
+            gGameTable.input.mapping[i] = input_mapping[i];
+        }
+    }
+
     // 0x004C3F10
     static void init_system()
     {
-        interop::call(0x004C3F10);
+        init_input();
+        scheduler_init();
+        set_flag(FlagGroup::System, FG_SYSTEM_20, true);
+        init_global();
+        gGameTable.byte_9888D8 = 0;
+        gGameTable.sfx_vol = 100;
+        gGameTable.bgm_vol = 100;
+        gGameTable.byte_9888D9 = 0;
+        gGameTable.byte_98F1B6 = 0;
+        gGameTable.dword_98F1AC = 0;
+        gGameTable.dword_98F1B0 = 15728960;
+        moji_init();
+        trans_work_init();
+        line_work_init();
+        task_execute(0, init_main);
+        task_execute(1, task_null);
+        task_execute(2, task_null);
     }
 
     // 0x004D0F30

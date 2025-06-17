@@ -1110,7 +1110,9 @@ static_assert(sizeof(TexturePage) == 0x0C);
 
 struct GameTable
 {
-    uint8_t pad_0000[5394100];          // 0x0000
+    uint8_t pad_0000[5393927];          // 0x0000
+    uint8_t byte_524E07;                // 0x524E07
+    uint8_t pad_524E08[172];            // 0x524E08
     uint8_t cheat0;                     // 0x524EB4
     uint8_t cheat1;                     // 0x524EB5
     bool enable_dsound;                 // 0x524EB6
@@ -1377,7 +1379,9 @@ struct GameTable
     uint16_t word_692FC0;               // 0x692FC0
     uint8_t pad_692FC2[51];             // 0x692FC2
     uint8_t vab_id[16];                 // 0x692FF5
-    uint8_t pad_693005[1199];           // 0x693005
+    uint8_t pad_693005[1132];           // 0x693005
+    uint8_t bgm_vol;                    // 0x693471
+    uint8_t pad_693472[66];             // 0x693472
     uint8_t* dword_6934B4;              // 0x6934B4
     uint8_t pad_6934B8[40];             // 0x6934B8
     char ss_name_bgm[260];              // 0x6934E0
@@ -1392,7 +1396,9 @@ struct GameTable
     uint8_t byte_693810;                // 0x693810
     uint8_t pad_693811[1];              // 0x693811
     uint8_t byte_693812;                // 0x693812
-    uint8_t pad_693813[1081];           // 0x693813
+    uint8_t pad_693813[1077];           // 0x693813
+    uint8_t sfx_vol;                    // 0x693C48
+    uint8_t pad_693C49[3];              // 0x693C49
     uint32_t dword_693C4C;              // 0x693C4C
     uint8_t pad_693C50[564];            // 0x693C50
     uint8_t* current_bgm_address;       // 0x693E84
@@ -1464,7 +1470,10 @@ struct GameTable
     uint8_t* byte_988528;               // 0x988528
     uint8_t pad_98852C[124];            // 0x98852C
     uint32_t dword_9885A8;              // 0x9885A8
-    uint8_t pad_9885AC[76];             // 0x9885AC
+    uint32_t dword_9885AC;              // 0x9885AC
+    uint8_t pad_9885B0[32];             // 0x9885B0
+    uint32_t dword_9885D0;              // 0x9885D0
+    uint8_t pad_9885D4[36];             // 0x9885D4
     uint32_t dword_9885F8;              // 0x9885F8
     uint16_t word_9885FC;               // 0x9885FC
     uint32_t dword_9885FE;              // 0x9885FE
@@ -1633,7 +1642,9 @@ struct GameTable
     uint8_t byte_98F07A;                // 0x98F07A
     uint8_t byte_98F07B;                // 0x98F07B
     Fade fade_table[4];                 // 0x98F07C
-    uint8_t pad_98F1AC[10];             // 0x98F1AC
+    uint32_t dword_98F1AC;              // 0x98F1AC
+    uint32_t dword_98F1B0;              // 0x98F1B0
+    uint8_t pad_98F1B4[2];              // 0x98F1B4
     uint8_t byte_98F1B6;                // 0x98F1B6
     uint8_t byte_98F1B7;                // 0x98F1B7
     uint8_t byte_98F1B8;                // 0x98F1B8
@@ -1642,7 +1653,10 @@ struct GameTable
     uint8_t byte_98F1BB;                // 0x98F1BB
     uint8_t pad_98F1BC[2003];           // 0x98F1BC
     uint8_t byte_98F98F[4];             // 0x98F98F
-    uint8_t pad_98F993[9709];           // 0x98F993
+    uint8_t pad_98F993[9693];           // 0x98F993
+    uint32_t dword_991F70;              // 0x991F70
+    uint32_t dword_991F74;              // 0x991F74
+    uint8_t pad_991F78[8];              // 0x991F78
     uint8_t byte_991F80;                // 0x991F80
     uint8_t pad_991F81[67];             // 0x991F81
     uint32_t dword_991FC4;              // 0x991FC4
