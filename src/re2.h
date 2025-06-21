@@ -758,9 +758,23 @@ struct MarniSurfaceDesc
 };
 static_assert(sizeof(MarniSurfaceDesc) == 0x0C);
 
+struct MarniSurfaceVTBL
+{
+    uint32_t fill;                      // 0x0000
+    uint32_t blt;                       // 0x0004
+    uint32_t null_;                     // 0x0008
+    uint32_t pal_blt;                   // 0x000C
+    void* lock_fn;                      // 0x0010
+    void* unlock_fn;                    // 0x0014
+    uint32_t pal_lock;                  // 0x0018
+    uint32_t pal_unlock;                // 0x001C
+    void* release_fn;                   // 0x0020
+};
+static_assert(sizeof(MarniSurfaceVTBL) == 0x24);
+
 struct MarniSurface2
 {
-    void** vtbl;                        // 0x0000
+    MarniSurfaceVTBL* vtbl;             // 0x0000
     void* pBitmap;                      // 0x0004
     void* pPalette;                     // 0x0008
     uint8_t bLocked;                    // 0x000C

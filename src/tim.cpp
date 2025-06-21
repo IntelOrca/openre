@@ -50,7 +50,7 @@ namespace openre::tim
     {
         std::memset(self, 0, sizeof(*self));
         marni::surface2_ctor(self);
-        self->vtbl = (void**)0x005173FC;
+        self->vtbl = (MarniSurfaceVTBL*)0x005173FC;
         if (path != nullptr)
         {
         }
@@ -58,7 +58,7 @@ namespace openre::tim
 
     static void timobject_dtor(TimObject* self)
     {
-        self->vtbl = (void**)0x005173FC;
+        self->vtbl = (MarniSurfaceVTBL*)0x005173FC;
         marni::surface2_vrelease(self);
         marni::surface2_release(self);
     }
