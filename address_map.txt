@@ -597,8 +597,19 @@ declare     a_shift                 u8
 declare     a_mask                  u8
 declare     a_bitcnt                u8
 
+struct      MarniSurfaceVTBL
+declare     fill                    u32
+declare     blt                     u32
+declare     null_                   u32
+declare     pal_blt                 u32
+declare     lock_fn                 void*
+declare     unlock_fn               void*
+declare     pal_lock                u32
+declare     pal_unlock              u32
+declare     release_fn              void*
+
 struct      MarniSurface2
-declare     vtbl                    void**
+declare     vtbl                    MarniSurfaceVTBL*
 declare     pBitmap                 void*
 declare     pPalette                void*
 declare     bLocked                 u8

@@ -113,22 +113,22 @@ namespace openre::marni
 
     static void surface_release(MarniSurface2* self)
     {
-        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl[8], self);
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl->release_fn, self);
     }
 
     static void surface_fill(MarniSurface* self, int r, int g, int b)
     {
-        interop::thiscall<int, MarniSurface*, int, int, int>((uintptr_t)self->vtbl[0], self, r, g, b);
+        interop::thiscall<int, MarniSurface*, int, int, int>((uintptr_t)self->vtbl->fill, self, r, g, b);
     }
 
     static int surface_lock(MarniSurface2* self, int a2, int a3)
     {
-        return interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)self->vtbl[4], self, a2, a3);
+        return interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)self->vtbl->lock_fn, self, a2, a3);
     }
 
     static void surface_unlock(MarniSurface2* self)
     {
-        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl[5], self);
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl->unlock_fn, self);
     }
 
     static int __stdcall com_nop(LPUNKNOWN obj)
@@ -701,8 +701,6 @@ namespace openre::marni
     // 0x00403F30
     static int __stdcall init_all(Marni* self)
     {
-        // return interop::thiscall<int, Marni*>(0x00403F30, self);
-
         const auto& r = self->resolutions[self->modes];
         if (r.fullscreen <= 0)
             self->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
@@ -1668,16 +1666,83 @@ namespace openre::marni
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C470, self, pPrim, drawInfo);
     }
 
-    // 0x0040C6E0
-    static void __stdcall draw_line_flat(Marni* self, PrimLine2* pPrim)
+    // 0x004C2C30
+    static void draw_line(
+        MarniSurface* surface, int x0, int y0, int x1, int y1, int a5, int a6, int width, int height, int color0, int color1,
+        int flg)
     {
-        interop::thiscall<int, Marni*, PrimLine2*>(0x0040C6E0, self, pPrim);
+        interop::call<void, MarniSurface*, int, int, int, int, int, int, int, int, int, int, int>(
+            0x004C2C30, surface, x0, y0, x1, y1, a5, a6, width, height, color0, color1, flg);
+    }
+
+    // 0x0040C6E0
+    static void __stdcall draw_line_flat(Marni* self, PrimLine2* line)
+    {
+        auto type = 1;
+        if (self->xsize != 640)
+        {
+            type = (int)line->pNext;
+        }
+        if (line->type & 0x200000)
+        {
+            type |= 2;
+        }
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            surface_lock(&self->surface0, 0, 0);
+        }
+        draw_line(
+            &self->surface0,
+            line->x0,
+            line->y0,
+            line->x1,
+            line->y1,
+            0,
+            0,
+            self->xsize,
+            self->ysize,
+            line->color0,
+            line->color0,
+            type);
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            surface_unlock(&self->surface0);
+        }
     }
 
     // 0x0040C790
-    static void __stdcall draw_line_gourad(Marni* self, PrimLine2* pPrim)
+    static void __stdcall draw_line_gourad(Marni* self, PrimLine2* line)
     {
-        interop::thiscall<int, Marni*, PrimLine2*>(0x0040C790, self, pPrim);
+        auto type = 1;
+        if (self->xsize != 640)
+        {
+            type = (int)line->pNext;
+        }
+        if (line->type & 0x200000)
+        {
+            type |= 2;
+        }
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            surface_lock(&self->surface0, 0, 0);
+        }
+        draw_line(
+            &self->surface0,
+            line->x0,
+            line->y0,
+            line->x1,
+            line->y1,
+            0,
+            0,
+            self->xsize,
+            self->ysize,
+            line->color0,
+            line->color1,
+            type);
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            surface_unlock(&self->surface0);
+        }
     }
 
     // 0x0040C840
@@ -2420,7 +2485,7 @@ namespace openre::marni
     // 0x0040FF20
     void __stdcall surfacey_dtor(MarniSurface2* self)
     {
-        self->vtbl = (void**)0x0051737C;
+        self->vtbl = (MarniSurfaceVTBL*)0x0051737C;
         surfacey_vrelease(self);
         surface2_release(self);
     }
@@ -2442,13 +2507,13 @@ namespace openre::marni
     void __stdcall surface2_ctor(MarniSurface2* self)
     {
         std::memset(self, 0, sizeof(*self));
-        self->vtbl = (void**)0x005173B0;
+        self->vtbl = (MarniSurfaceVTBL*)0x005173B0;
     }
 
     // 0x00414A30
     void __stdcall surface2_release(MarniSurface2* self)
     {
-        self->vtbl = (void**)0x005173B0;
+        self->vtbl = (MarniSurfaceVTBL*)0x005173B0;
         surface2_vrelease(self);
     }
 
@@ -2468,7 +2533,7 @@ namespace openre::marni
     // 0x00414AE0
     static void __stdcall surface3_dtor(MarniSurface3* self)
     {
-        self->vtbl = (void**)0x005173D4;
+        self->vtbl = (MarniSurfaceVTBL*)0x005173D4;
         surface3_vrelease(self);
         surface2_release(self);
     }
@@ -2922,6 +2987,8 @@ namespace openre::marni
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
+        interop::hookThisCall(0x0040C6E0, &draw_line_flat);
+        interop::hookThisCall(0x0040C790, &draw_line_gourad);
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
