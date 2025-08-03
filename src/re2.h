@@ -49,6 +49,13 @@ struct ItemboxItem
 };
 static_assert(sizeof(ItemboxItem) == 0x04);
 
+struct Vec216
+{
+    int16_t x;                          // 0x0000
+    int16_t y;                          // 0x0002
+};
+static_assert(sizeof(Vec216) == 0x04);
+
 struct Vec16
 {
     int16_t x;                          // 0x0000
@@ -103,7 +110,10 @@ struct VCut
     uint8_t nFloor;                     // 0x0001
     uint8_t fCut;                       // 0x0002
     uint8_t tCut;                       // 0x0003
-    int16_t xz[8];                      // 0x0004
+    Vec216 a;                           // 0x0004
+    Vec216 b;                           // 0x0008
+    Vec216 c;                           // 0x000C
+    Vec216 d;                           // 0x0010
 };
 static_assert(sizeof(VCut) == 0x14);
 
