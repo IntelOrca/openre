@@ -32,6 +32,10 @@ declare     Quantity                u8
 declare     Part                    u8
 declare     var_04                  u8
 
+struct      Vec216
+declare     x                       s16
+declare     y                       s16
+
 struct      Vec16
 declare     x                       s16
 declare     y                       s16
@@ -68,7 +72,10 @@ declare     be_flg                  u8
 declare     nFloor                  u8
 declare     fCut                    u8
 declare     tCut                    u8
-declare     xz                      s16[8]
+declare     a                       Vec216
+declare     b                       Vec216
+declare     c                       Vec216
+declare     d                       Vec216
 
 struct      TmdEntry
 struct      Edd

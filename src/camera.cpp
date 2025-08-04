@@ -28,9 +28,42 @@ namespace openre::camera
     }
 
     // 0x004C4EC0
-    bool hit_ck_point4(int32_t* pos, VCut* camSwitch)
+    bool hit_camera_switch(Vec32* pos, VCut* camSwitch)
     {
-        return interop::call<bool, int32_t*, VCut*>(0x004C4EC0, pos, camSwitch);
+        auto ax = camSwitch->a.x;
+        auto az = camSwitch->a.y;
+        auto bx = camSwitch->b.x;
+        auto bz = camSwitch->b.y;
+        auto cx = camSwitch->c.x;
+        auto cz = camSwitch->c.y;
+        auto dx = camSwitch->d.x;
+        auto dz = camSwitch->d.y;
+
+        // ABD
+        auto px = pos->x - ax;
+        auto py = pos->z - az;
+        if ((bz - az) * px < (bx - ax) * py)
+        {
+            return false;
+        }
+        if ((dx - ax) * py < (dz - az) * px)
+        {
+            return false;
+        }
+
+        // CDB
+        px = pos->x - cx;
+        py = pos->z - cz;
+        if ((bx - cx) * py < (bz - cz) * px)
+        {
+            return false;
+        }
+        if ((dz - cz) * px < (dx - cx) * py)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     // 0x004C4DE0
@@ -48,7 +81,7 @@ namespace openre::camera
                 {
                     if (camSwitch->nFloor == 0xFF || camSwitch->nFloor == gGameTable.pl.nFloor)
                     {
-                        if (hit_ck_point4(&gGameTable.pl.m.pos.x, camSwitch))
+                        if (hit_camera_switch(&gGameTable.pl.m.pos, camSwitch))
                         {
                             cut_change(camSwitch->tCut);
                             return;
