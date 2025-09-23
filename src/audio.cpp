@@ -21,12 +21,14 @@ namespace openre::audio
         return 0;
     }
 
-    // 0x004347B0
-    static int ss_get_status(int type, int sub)
+    // 0x00433f10
+
+    // 0x00434140
+    static int ss_unload_bgm(int type, int index)
     {
         using sig = int (*)(int, int);
-        auto p = (sig)0x004347B0;
-        return p(type, sub);
+        auto p = (sig)0x00434140;
+        return p(type, index);
     }
 
     // 0x004341E0
@@ -37,13 +39,23 @@ namespace openre::audio
         return p(type, id);
     }
 
-    // 0x00434140
-    static int ss_unload_bgm(int type, int index)
+    // 0x004344A0
+    static uint8_t ss_load_banks(int type, int id, int bank, int player)
+    {
+        using sig = int (*)(int, int, int, int);
+        auto p = (sig)0x004344A0;
+        return p(type, id, bank, player);
+    }
+
+    // 0x004347B0
+    static int ss_get_status(int type, int sub)
     {
         using sig = int (*)(int, int);
-        auto p = (sig)0x00434140;
-        return p(type, index);
+        auto p = (sig)0x004347B0;
+        return p(type, sub);
     }
+
+    // 0x004348f0
 
     // 0x00434AB0
     static int ss_set_vol(int type, int index, int vol)
@@ -53,12 +65,64 @@ namespace openre::audio
         return p(type, index, vol);
     }
 
-    // 0x004344A0
-    static uint8_t ss_load_banks(int type, int id, int bank, int player)
+    // START SND
+
+    // 0x004ec220
+
+    // 0x004EC250
+    void snd_sys_init2()
     {
-        using sig = int (*)(int, int, int, int);
-        auto p = (sig)0x004344A0;
-        return p(type, id, bank, player);
+        interop::call(0x004EC250);
+    }
+
+    // 0x004ec340
+
+    // 0x004ec350
+
+    // 0x004EC410
+    void snd_sys_init_sub2()
+    {
+        interop::call(0x004EC410);
+    }
+
+    // 0x004EC450
+    void snd_load_core(uint8_t a0, uint8_t a1)
+    {
+        interop::call<void, uint8_t, uint8_t>(0x004EC450, a0, a1);
+    }
+
+    // 0x004ec6d0
+
+    // 0x004EC7D0
+    void snd_room_load()
+    {
+        interop::call(0x004EC7D0);
+    }
+
+    // 0x004EC8A0
+    void snd_load_enemy()
+    {
+        interop::call(0x004EC8A0);
+    }
+
+    // 0x004ec990
+
+    // 0x004EC9C0
+    void snd_bgm_set()
+    {
+        interop::call(0x004EC9C0);
+    }
+
+    // 0x004ECBE0
+    void snd_bgm_ck()
+    {
+        interop::call(0x004ECBE0);
+    }
+
+    // 0x004ECCE0
+    void snd_bgm_play_ck()
+    {
+        interop::call(0x004ECCE0);
     }
 
     // 0x004ECDA0
@@ -179,6 +243,18 @@ namespace openre::audio
         return 0xff;
     }
 
+    // 0x004ed050
+
+    // 0x004ed260
+
+    // 0x004ED2F0
+    void bgm_set_control(uint32_t arg0)
+    {
+        using sig = void (*)(uint32_t);
+        auto p = (sig)0x004ED2F0;
+        p(arg0);
+    }
+
     // 0x004ED920
     void bgm_set_entry(uint32_t arg0)
     {
@@ -189,14 +265,6 @@ namespace openre::audio
         auto room = (arg0 >> 16) & 0xFF;
         auto tableIndex = gGameTable.byte_53C78F[stage] + room;
         gGameTable.bgm_table[tableIndex] = arg0 & 0xFFFF;
-    }
-
-    // 0x004ED2F0
-    void bgm_set_control(uint32_t arg0)
-    {
-        using sig = void (*)(uint32_t);
-        auto p = (sig)0x004ED2F0;
-        p(arg0);
     }
 
     // 0x004ED950
@@ -215,54 +283,6 @@ namespace openre::audio
     void snd_se_on(int a0)
     {
         snd_se_on(a0, nullptr);
-    }
-
-    // 0x004EC450
-    void snd_load_core(uint8_t a0, uint8_t a1)
-    {
-        interop::call<void, uint8_t, uint8_t>(0x004EC450, a0, a1);
-    }
-
-    // 0x004EC410
-    void snd_sys_init_sub2()
-    {
-        interop::call(0x004EC410);
-    }
-
-    // 0x004ECBE0
-    void snd_bgm_ck()
-    {
-        interop::call(0x004ECBE0);
-    }
-
-    // 0x004EC7D0
-    void snd_room_load()
-    {
-        interop::call(0x004EC7D0);
-    }
-
-    // 0x004EC250
-    void snd_sys_init2()
-    {
-        interop::call(0x004EC250);
-    }
-
-    // 0x004EC9C0
-    void snd_bgm_set()
-    {
-        interop::call(0x004EC9C0);
-    }
-
-    // 0x004ECCE0
-    void snd_bgm_play_ck()
-    {
-        interop::call(0x004ECCE0);
-    }
-
-    // 0x004EC8A0
-    void snd_load_enemy()
-    {
-        interop::call(0x004EC8A0);
     }
 
     void bgm_init_hooks()

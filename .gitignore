@@ -403,3 +403,7 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Claude AI files
+/CLAUDE.md
+/.cursor/rules/byterover-rules.mdc
