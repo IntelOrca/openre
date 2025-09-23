@@ -272,6 +272,8 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x004021B0
+
     // 0x004021C0
     static int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z)
     {
@@ -347,6 +349,8 @@ namespace openre::marni
         out("", "Direct3D::RequestDisplayModeCount");
         return 0;
     }
+
+    // 0x00402560
 
     // 0x00402940
     static int __stdcall restore_surfaces(Marni* self)
@@ -594,109 +598,7 @@ namespace openre::marni
         return interop::thiscall<int, Marni*, int>(0x004033F0, self, texture);
     }
 
-    // 0x00404CE0
-    void __stdcall unload_texture(Marni* self, int handle)
-    {
-        if (handle == 0)
-            return;
-
-        auto& texture = self->textures[handle];
-        if (texture.var_00 != 0)
-        {
-            texture_surface_release(self, handle);
-            request_video_memory(self);
-        }
-    }
-
-    // 0x00404D20
-    int __stdcall clear(Marni* self)
-    {
-        if (!(self->gpu_flag & GpuFlags::GPU_9) || !self->is_gpu_active || self->var_8C7EE0
-            || !(self->gpu_flag & GpuFlags::GPU_13) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
-        {
-            return 0;
-        }
-
-        if ((self->pMovie->flag & 2) != 0)
-            return 1;
-
-        auto pViewport = (LPDIRECT3DVIEWPORT)self->pViewport;
-
-        D3DRECT rect;
-        rect.x1 = 0;
-        rect.y1 = 0;
-        rect.x2 = self->xsize;
-        rect.y2 = self->ysize;
-
-        restore_surfaces(self);
-        if ((self->gpu_flag & GpuFlags::GPU_3) == 0)
-        {
-            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
-            {
-                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER);
-            }
-        }
-        else
-        {
-            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
-            {
-                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
-            }
-            else
-            {
-                surface_fill(&self->surface0, 0, self->ambient_b, 0);
-            }
-        }
-        if (gGameTable.error == 0)
-            return 1;
-        out();
-        return 0;
-    }
-
-    // 0x00404E40
-    static void __stdcall do_render(Marni* self, MarniOt* pOt)
-    {
-        if (self->gpu_flag & GpuFlags::GPU_13)
-            return;
-
-        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        if (pD3D2 == nullptr || self->pViewport == nullptr)
-        {
-            out("tried to render regardless of not initializint to viewport or device", "Direct3D::do_render");
-            return;
-        }
-
-        gGameTable.error = pD3D2->BeginScene();
-        sub_40E800(self, sub_416670(pOt));
-        pD3D2->SetRenderState(D3DRENDERSTATE_ANISOTROPY, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_EDGEANTIALIAS, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_ANTIALIAS, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_SUBPIXEL, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_LASTPIXEL, 1);
-        if (FAILED(gGameTable.error))
-        {
-            d3d_error_routine(gGameTable.error);
-            return;
-        }
-
-        trans_priority_list(self, pOt);
-        sub_40EC10(self);
-        gGameTable.error = pD3D2->EndScene();
-        if (FAILED(gGameTable.error))
-        {
-            d3d_error_routine(gGameTable.error);
-            return;
-        }
-
-        D3DSTATS stats;
-        ZeroMemory(&stats, sizeof(D3DSTATS));
-        stats.dwSize = sizeof(D3DSTATS);
-        pD3D2->GetStats(&stats);
-        self->triangles_drawn = stats.dwTrianglesDrawn - gGameTable.d3d_triangles_drawn;
-        self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
-        gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
-        gGameTable.d3d_vertices_processed = stats.dwVerticesProcessed;
-    }
+    // 0x00403ec0
 
     // 0x00403F30
     static int __stdcall init_all(Marni* self)
@@ -1056,6 +958,114 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x00404bb0
+
+    // 0x00404ca0
+
+    // 0x00404CE0
+    void __stdcall unload_texture(Marni* self, int handle)
+    {
+        if (handle == 0)
+            return;
+
+        auto& texture = self->textures[handle];
+        if (texture.var_00 != 0)
+        {
+            texture_surface_release(self, handle);
+            request_video_memory(self);
+        }
+    }
+
+    // 0x00404D20
+    int __stdcall clear(Marni* self)
+    {
+        if (!(self->gpu_flag & GpuFlags::GPU_9) || !self->is_gpu_active || self->var_8C7EE0
+            || !(self->gpu_flag & GpuFlags::GPU_13) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
+        {
+            return 0;
+        }
+
+        if ((self->pMovie->flag & 2) != 0)
+            return 1;
+
+        auto pViewport = (LPDIRECT3DVIEWPORT)self->pViewport;
+
+        D3DRECT rect;
+        rect.x1 = 0;
+        rect.y1 = 0;
+        rect.x2 = self->xsize;
+        rect.y2 = self->ysize;
+
+        restore_surfaces(self);
+        if ((self->gpu_flag & GpuFlags::GPU_3) == 0)
+        {
+            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            {
+                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER);
+            }
+        }
+        else
+        {
+            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            {
+                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
+            }
+            else
+            {
+                surface_fill(&self->surface0, 0, self->ambient_b, 0);
+            }
+        }
+        if (gGameTable.error == 0)
+            return 1;
+        out();
+        return 0;
+    }
+
+    // 0x00404E40
+    static void __stdcall do_render(Marni* self, MarniOt* pOt)
+    {
+        if (self->gpu_flag & GpuFlags::GPU_13)
+            return;
+
+        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        if (pD3D2 == nullptr || self->pViewport == nullptr)
+        {
+            out("tried to render regardless of not initializint to viewport or device", "Direct3D::do_render");
+            return;
+        }
+
+        gGameTable.error = pD3D2->BeginScene();
+        sub_40E800(self, sub_416670(pOt));
+        pD3D2->SetRenderState(D3DRENDERSTATE_ANISOTROPY, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_EDGEANTIALIAS, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_ANTIALIAS, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_SUBPIXEL, 0);
+        pD3D2->SetRenderState(D3DRENDERSTATE_LASTPIXEL, 1);
+        if (FAILED(gGameTable.error))
+        {
+            d3d_error_routine(gGameTable.error);
+            return;
+        }
+
+        trans_priority_list(self, pOt);
+        sub_40EC10(self);
+        gGameTable.error = pD3D2->EndScene();
+        if (FAILED(gGameTable.error))
+        {
+            d3d_error_routine(gGameTable.error);
+            return;
+        }
+
+        D3DSTATS stats;
+        ZeroMemory(&stats, sizeof(D3DSTATS));
+        stats.dwSize = sizeof(D3DSTATS);
+        pD3D2->GetStats(&stats);
+        self->triangles_drawn = stats.dwTrianglesDrawn - gGameTable.d3d_triangles_drawn;
+        self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
+        gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
+        gGameTable.d3d_vertices_processed = stats.dwVerticesProcessed;
+    }
+
     // 0x00404FA0
     static int __stdcall clear_buffers(Marni* self)
     {
@@ -1141,6 +1151,8 @@ namespace openre::marni
 
         cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
     }
+
+    // 0x00405310
 
     // 0x00405320
     Marni* __stdcall init(Marni* self, void* hWnd, int width, int height)
@@ -1441,6 +1453,8 @@ namespace openre::marni
         return self;
     }
 
+    // 0x00405dc0
+
     // 0x00405DD0
     static int __stdcall get_z_buffer_caps(Marni* self)
     {
@@ -1496,17 +1510,15 @@ namespace openre::marni
         interop::thiscall<int, Marni*, HWND, UINT, WPARAM, LPARAM>(0x004065C0, marni, hWnd, msg, wParam, lParam);
     }
 
-    // 0x00406A10
-    static void d3d_error_routine(int errorCode)
-    {
-        interop::call<void, int>(0x00406A10, errorCode);
-    }
-
     // 0x00406860
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2)
     {
         return pDD->QueryInterface(IID_IDirectDraw2, (LPVOID*)lpDD2);
     }
+
+    // 0x00406880
+
+    // 0x00406920
 
     // 0x00406970
     static int D3DIBPPToDDBD(int bpp)
@@ -1522,6 +1534,12 @@ namespace openre::marni
         case 32: return DDBD_32;
         default: out("", "D3DIBPPToDDBD"); return 0;
         }
+    }
+
+    // 0x00406A10
+    static void d3d_error_routine(int errorCode)
+    {
+        interop::call<void, int>(0x00406A10, errorCode);
     }
 
     // 0x00406D90
@@ -1622,51 +1640,89 @@ namespace openre::marni
         interop::thiscall<int, Marni*, Prim*>(0x004074C0, self, pPrim);
     }
 
+    // 0x00407690
+
     // 0x00408140
     static void __stdcall trans_object(Marni* self, MarniOt* pOt, Prim* pPrim)
     {
         interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x00408140, self, pOt, pPrim);
     }
 
+    // 0x004082c0
+
+    // 0x00408e80
+
+    // 0x00409000
+
+    // 0x00409540
+
+    // 0x00409740
+
+    // 0x00409830
+
+    // 0x00409a10
+
+    // 0x00409c00
+
+    // 0x00409ee0
+
+    // 0x0040a1d0
+
+    // 0x0040a4b0
     static int __stdcall sub_40A4B0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A4B0, self, pPrim, drawInfo);
     }
+
+    // 0x0040a830
     static int __stdcall sub_40A830(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A830, self, pPrim, drawInfo);
     }
+
+    // 0x0040ab60
     static int __stdcall sub_40AB60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040AB60, self, pPrim, drawInfo);
     }
+
     // 0x0040B260
     static int __stdcall sub_40B260(Marni* self, Prim* pPrim, void* a3)
     {
         return interop::thiscall<int, Marni*, Prim*, void*>(0x0040B260, self, pPrim, a3);
     }
+
+    // 0x0040b560
     static int __stdcall sub_40B560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B560, self, pPrim, drawInfo);
     }
+
+    // 0x0040b8d0
     static int __stdcall sub_40B8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B8D0, self, pPrim, drawInfo);
     }
+
+    // 0x0040bcf0
     static int __stdcall sub_40BCF0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040BCF0, self, pPrim, drawInfo);
     }
+
+    // 0x0040c100
     static int __stdcall sub_40C100(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C100, self, pPrim, drawInfo);
     }
+
+    // 0x0040c470
     static int __stdcall sub_40C470(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C470, self, pPrim, drawInfo);
     }
 
-    // 0x004C2C30
+    // 0x004C2C30 WHY DO WE JUMP HERE IN THIS FILE?!?!?
     static void draw_line(
         MarniSurface* surface, int x0, int y0, int x1, int y1, int a5, int a6, int width, int height, int color0, int color1,
         int flg)
@@ -1802,31 +1858,49 @@ namespace openre::marni
         }
     }
 
+    // 0x0040cbd0
+
+    // 0x0040ccd0
+
+    // 0x0040ce50
+
+    // 0x0040CFD0
     static int __stdcall sub_40CFD0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040CFD0, self, pPrim, drawInfo);
     }
+
+    // 0x0040D300
     static int __stdcall sub_40D300(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D300, self, pPrim, drawInfo);
     }
+
+    // 0x0040D560
     static int __stdcall sub_40D560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D560, self, pPrim, drawInfo);
     }
+
+    // 0x40D8D0
     static int __stdcall sub_40D8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D8D0, self, pPrim, drawInfo);
     }
+
     // 0x0040DBA0
     static int __stdcall MarniDrawPolyFT4(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DBA0, self, pPrim, drawInfo);
     }
+
+    // 0x0040DD90
     static int __stdcall sub_40DD90(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DD90, self, pPrim, drawInfo);
     }
+
+    // 0x0040DF60
     static int __stdcall sub_40DF60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DF60, self, pPrim, drawInfo);
@@ -2143,6 +2217,8 @@ namespace openre::marni
         return 0;
     }
 
+    // 0x0040e6e0
+
     // 0x0040E770
     static void set_filtering(Marni* self, uint8_t a2)
     {
@@ -2231,6 +2307,8 @@ namespace openre::marni
         }
     }
 
+    // 0x0040e9d0
+
     // 0x0040EA60
     static void __stdcall tessellate_insert_draw_op(
         Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
@@ -2285,12 +2363,6 @@ namespace openre::marni
         return dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
     }
 
-    // 0x0040EE60
-    static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect)
-    {
-        return interop::call<int, HWND, int, int, int, LPRECT>(0x0040EE60, hWnd, width, height, fullscreen, lpResRect);
-    }
-
     // 0x0040EC10
     static void __stdcall sub_40EC10(Marni* self)
     {
@@ -2310,6 +2382,8 @@ namespace openre::marni
                 draw_line_flat(self, (PrimLine2*)record.flat);
         }
     }
+
+    // 0x0040ec90
 
     // 0x0040ECA0
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self)
@@ -2339,6 +2413,22 @@ namespace openre::marni
 
         self->pDDtexture = pDDtexture;
         return 1;
+    }
+
+    // 0x0040ed20
+
+    // 0x0040ed90
+
+    // 0x0040edb0
+
+    // 0x0040ee00
+
+    // 0x0040ee30
+
+    // 0x0040EE60
+    static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect)
+    {
+        return interop::call<int, HWND, int, int, int, LPRECT>(0x0040EE60, hWnd, width, height, fullscreen, lpResRect);
     }
 
     // 0x0040EF50
@@ -2470,11 +2560,25 @@ namespace openre::marni
         return S_OK;
     }
 
+    // 0x0040f370
+
+    // 0x0040f380
+
+    // 0x0040f520
+
     // 0x0040F580
     static void __stdcall surfacey_vrelease(MarniSurface2* self)
     {
         interop::thiscall<int, MarniSurface2*>(0x0040F580, self);
     }
+
+    // 0x0040f600
+
+    // 0x0040f9c0
+
+    // 0x0040fad0
+
+    // 0x0040fbe0
 
     // 0x0040FEF0
     MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self)
@@ -2490,11 +2594,16 @@ namespace openre::marni
         surface2_release(self);
     }
 
+    // I guess we are just jumping to 0x00412000+ then?
+
     // 0x00412BD0
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
     {
         return interop::thiscall<int, MarniSurface2*, LPRECT, uint32_t, int>(0x00412BD0, self, pSrcRect, color, mode);
     }
+
+    // Skipping a lot until we talk about what the heck is going on.
+    // 0x00412d20
 
     // 0x00414750
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt)
@@ -2940,6 +3049,7 @@ namespace openre::marni
         }
     }
 
+    // Jumping around more...
     // 0x00401F70
     int __stdcall marni_movie_update(Marni* self)
     {
