@@ -35,7 +35,8 @@ namespace openre::interop
     volatile int32_t _originalAddress = 0;
 
 #ifdef _ENABLE_CALL_BYVALUE_
-    static int32_t DISABLE_OPT callByVal(int32_t address, int32_t _eax, int32_t _ebx, int32_t _ecx, int32_t _edx, int32_t _esi, int32_t _edi, int32_t _ebp)
+    static int32_t DISABLE_OPT
+    callByVal(int32_t address, int32_t _eax, int32_t _ebx, int32_t _ecx, int32_t _edx, int32_t _esi, int32_t _edi, int32_t _ebp)
     {
         int32_t result = 0;
         _originalAddress = address;
@@ -94,7 +95,9 @@ namespace openre::interop
     }
 #endif
 
-    static int32_t DISABLE_OPT callByRef(int32_t address, int32_t* _eax, int32_t* _ebx, int32_t* _ecx, int32_t* _edx, int32_t* _esi, int32_t* _edi, int32_t* _ebp)
+    static int32_t DISABLE_OPT callByRef(
+        int32_t address, int32_t* _eax, int32_t* _ebx, int32_t* _ecx, int32_t* _edx, int32_t* _esi, int32_t* _edi,
+        int32_t* _ebp)
     {
 #ifdef _LOG_INTEROP_CALLS_
         logging::logDebug("0x{:x}", address);
@@ -261,14 +264,7 @@ namespace openre::interop
     static int32_t callByVal(int32_t address, const registers& registers)
     {
         return callByVal(
-            address,
-            registers.eax,
-            registers.ebx,
-            registers.ecx,
-            registers.edx,
-            registers.esi,
-            registers.edi,
-            registers.ebp);
+            address, registers.eax, registers.ebx, registers.ecx, registers.edx, registers.esi, registers.edi, registers.ebp);
     }
 #endif
 
@@ -297,7 +293,12 @@ namespace openre::interop
         if (!ReadProcessMemory(GetCurrentProcess(), (LPVOID)address, data, size, nullptr))
         {
             const auto errCode = static_cast<uint32_t>(GetLastError());
-            fprintf(stderr, "ReadProcessMemory failed! address = 0x%08x, size = %zu, GetLastError() = 0x%08x\n", address, size, errCode);
+            fprintf(
+                stderr,
+                "ReadProcessMemory failed! address = 0x%08x, size = %zu, GetLastError() = 0x%08x\n",
+                address,
+                size,
+                errCode);
             throw std::runtime_error("ReadProcessMemory failed");
         }
 #else
@@ -309,17 +310,31 @@ namespace openre::interop
     void writeMemory(uint32_t address, const void* data, size_t size)
     {
 #ifdef _WIN32
-        // Split writing memory into page-bound chunks. Assume page size is 4k. On some systems (e.g. Apple ARM) it can be larger, but still a multiple of 4k.
-        // This addresses issue where writing across page boundary fails.
+        // Split writing memory into page-bound chunks. Assume page size is 4k. On some systems (e.g. Apple ARM) it can be
+        // larger, but still a multiple of 4k. This addresses issue where writing across page boundary fails.
         size_t bytesWritten = 0;
         while (bytesWritten != size)
         {
             uint32_t addressLocal = address + bytesWritten;
             size_t sizeLocal = std::min<size_t>(size - bytesWritten, 4096 - (addressLocal & 0xFFF));
-            if (!WriteProcessMemory(GetCurrentProcess(), (LPVOID)addressLocal, reinterpret_cast<const uint8_t*>(data) + bytesWritten, sizeLocal, nullptr))
+            if (!WriteProcessMemory(
+                    GetCurrentProcess(),
+                    (LPVOID)addressLocal,
+                    reinterpret_cast<const uint8_t*>(data) + bytesWritten,
+                    sizeLocal,
+                    nullptr))
             {
                 const auto errCode = static_cast<uint32_t>(GetLastError());
-                fprintf(stderr, "WriteProcessMemory failed! address = 0x%08x, size = %zu, bytesWritten = %zu, addressLocal = 0x%08x, sizeLocal = %zu, GetLastError() = 0x%08x\n", address, size, bytesWritten, addressLocal, sizeLocal, errCode);
+                fprintf(
+                    stderr,
+                    "WriteProcessMemory failed! address = 0x%08x, size = %zu, bytesWritten = %zu, addressLocal = 0x%08x, "
+                    "sizeLocal = %zu, GetLastError() = 0x%08x\n",
+                    address,
+                    size,
+                    bytesWritten,
+                    addressLocal,
+                    sizeLocal,
+                    errCode);
                 throw std::runtime_error("WriteProcessMemory failed");
             }
             bytesWritten += sizeLocal;

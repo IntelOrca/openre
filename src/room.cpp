@@ -247,7 +247,7 @@ namespace openre::room
                 }
                 for (int i = 0; i < 23; i++)
                 {
-                    auto baseRdt = (uint32_t) & (*gGameTable.rdt);
+                    auto baseRdt = (uint32_t)&(*gGameTable.rdt);
 
                     if (gGameTable.rdt->offsets[i])
                     {
@@ -259,7 +259,7 @@ namespace openre::room
                 gGameTable.rdt_count = 0;
                 if (gGameTable.rdt->header.num_cuts)
                 {
-                    auto baseRdt = (uint32_t) & (*gGameTable.rdt);
+                    auto baseRdt = (uint32_t)&(*gGameTable.rdt);
                     auto cameras = rdt_get_offset<RdtCamera>(RdtOffsetKind::RID);
                     for (int i = 0; i < gGameTable.rdt->header.num_cuts; i++)
                     {
@@ -272,7 +272,7 @@ namespace openre::room
                 gGameTable.rdt_count = 0;
                 if (gGameTable.rdt->header.num_models)
                 {
-                    auto baseRdt = (uint32_t) & (*gGameTable.rdt);
+                    auto baseRdt = (uint32_t)&(*gGameTable.rdt);
                     auto models = rdt_get_offset<RdtModel>(RdtOffsetKind::MODELS);
                     for (int i = 0; i < gGameTable.rdt->header.num_models; i++)
                     {

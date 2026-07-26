@@ -127,6 +127,7 @@ namespace interopgen
         private string GenerateHeader()
         {
             var sb = new StringBuilder();
+            sb.AppendLine("// clang-format off");
             sb.AppendLine("#pragma once");
             sb.AppendLine();
             sb.AppendLine("#include <cstdint>");

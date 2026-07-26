@@ -3,9 +3,9 @@
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
-#include <windows.h>
-#include <string>
 #include <cstdlib>
+#include <string>
+#include <windows.h>
 
 namespace openre::file
 {
@@ -41,7 +41,8 @@ namespace openre::file
 
     // --- File I/O wrapper with error dialog suppression and logging ---
 
-    static HANDLE file_open_internal(const char* path, DWORD access, DWORD shareMode, DWORD creationDisposition, bool suppressErrors)
+    static HANDLE
+    file_open_internal(const char* path, DWORD access, DWORD shareMode, DWORD creationDisposition, bool suppressErrors)
     {
         UINT oldMode = 0;
         if (suppressErrors)
@@ -80,7 +81,8 @@ namespace openre::file
         // If OPENRE_RE2_DATA is set, bypass OG path resolution entirely
         {
             const char* re2Data = std::getenv("OPENRE_RE2_DATA");
-            if (re2Data && re2Data[0]) {
+            if (re2Data && re2Data[0])
+            {
                 std::string fullPath = std::string(re2Data) + "\\" + path;
                 og_string_assign(0x689F3C, fullPath.c_str());
                 return file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
@@ -88,18 +90,23 @@ namespace openre::file
         }
 
         HANDLE hFile = INVALID_HANDLE_VALUE;
-        for (;;) {
+        for (;;)
+        {
             // Mode loop: 0=Class prefix, 1=Module directory, 2=CD path
-            for (int currentMode = 0; currentMode < 3 && hFile == INVALID_HANDLE_VALUE; currentMode++) {
+            for (int currentMode = 0; currentMode < 3 && hFile == INVALID_HANDLE_VALUE; currentMode++)
+            {
                 std::string basePath;
-                switch (currentMode) {
+                switch (currentMode)
+                {
                 case 0:
                     if (const char* s = og_string_data(0x669F4C))
                         basePath = s;
                     break;
-                case 1: {
+                case 1:
+                {
                     char buf[MAX_PATH];
-                    if (GetModuleFileNameA(NULL, buf, MAX_PATH)) {
+                    if (GetModuleFileNameA(NULL, buf, MAX_PATH))
+                    {
                         std::string ms(buf);
                         auto p = ms.find_last_of('\\');
                         if (p != std::string::npos)
@@ -113,7 +120,8 @@ namespace openre::file
                     break;
                 }
                 // Sub-mode loop: 0=direct, 1=append "data\"
-                for (int sub = 0; sub < 2 && hFile == INVALID_HANDLE_VALUE; sub++) {
+                for (int sub = 0; sub < 2 && hFile == INVALID_HANDLE_VALUE; sub++)
+                {
                     std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
                     // Store resolved path in OG global dword_689F3C
                     og_string_assign(0x689F3C, fullPath.c_str());
@@ -121,13 +129,16 @@ namespace openre::file
                 }
             }
             // If all modes failed, check for a valid disc
-            if (hFile == INVALID_HANDLE_VALUE) {
+            if (hFile == INVALID_HANDLE_VALUE)
+            {
                 if (check_disk_id())
                     continue; // disc found — retry all modes
             }
             // In silent mode with a known CD path, exit without dialog
-            if (silent) {
-                if (const char* s = og_string_data(0x689F34)) {
+            if (silent)
+            {
+                if (const char* s = og_string_data(0x689F34))
+                {
                     if (s[0])
                         break;
                 }
@@ -245,7 +256,8 @@ namespace openre::file
     static int file_exists(const char* path, int mode)
     {
         auto hFile = open_file_impl(path, mode, true);
-        if (hFile != INVALID_HANDLE_VALUE) {
+        if (hFile != INVALID_HANDLE_VALUE)
+        {
             CloseHandle(hFile);
             return 1;
         }

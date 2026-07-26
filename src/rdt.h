@@ -31,12 +31,10 @@ namespace openre::rdt
         RBJ,
     };
 
-    template<typename T>
-    T* rdt_get_offset(RdtOffsetKind kind)
+    template<typename T> T* rdt_get_offset(RdtOffsetKind kind)
     {
         return static_cast<T*>(rdt_get_offset<void>(kind));
     }
 
-    template<>
-    void* rdt_get_offset(RdtOffsetKind kind);
+    template<> void* rdt_get_offset(RdtOffsetKind kind);
 }

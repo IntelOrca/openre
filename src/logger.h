@@ -44,8 +44,7 @@ namespace openre::logging
             }
         }
 
-        template<typename... Args>
-        std::string formatArgs(const char* format, const Args&... args)
+        template<typename... Args> std::string formatArgs(const char* format, const Args&... args)
         {
             std::string result;
             const char* f = format;

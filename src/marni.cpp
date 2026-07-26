@@ -41,8 +41,8 @@ namespace openre::marni
     static int __stdcall init_all(Marni* self);
     static int __stdcall clear_buffers(Marni* self);
     static void __stdcall move(Marni* marni);
-    static int __stdcall movie_open(
-        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
+    static int __stdcall
+    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
     static MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode);
     static void __stdcall movie_dtor(MarniMovie* self);
     static void __stdcall movie_release(MarniMovie* self);
@@ -2675,8 +2675,8 @@ namespace openre::marni
     }
 
     // 0x00414CF0
-    static int __stdcall movie_open(
-        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
+    static int __stdcall
+    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
     {
         return interop::thiscall<int, MarniMovie*, LPCSTR, HWND, LPRECT, LPDIRECTDRAW2, LPDIRECTDRAWSURFACE>(
             0x00414CF0, self, path, hWnd, pRect, pDD2, pSurface);
