@@ -5,10 +5,10 @@ Open source clone of the original Resident Evil 2.
 
 ### Windows
 #### Dependencies
-* Visual Studio 2022
+* Visual Studio 2026
   * Desktop development with C++ workload
 
-Using a Visual Studio 2022 development prompt:
+Using a Visual Studio 2026 development prompt:
 ```
 msbuild openre.sln
 ```

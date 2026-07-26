@@ -36,7 +36,7 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * When adding new source files, update `src\openre.vcxproj`.
 
 ## Building
-* Under a VS2022 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
+* Under a VS2026 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
   * E.g. `cmd /c "call "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" && msbuild"` in repo root
 
 ## Running
