@@ -37,8 +37,8 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * Avoid labels as much as possible, extract small sections of code to functions if that helps avoid them. Use [[fallthrough]] in switch blocks.
 
 ## Building
-* Under a VS2026 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
-  * E.g. `cmd /c "call "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" && msbuild"` in repo root
+* Run `format.bat` to format all code in the repo
+* Run `build.bat`
 
 ## Running
-* Run `F:\games\openre\openre.exe` with working directory: `F:\games\openre`
+* Run `run.bat`
