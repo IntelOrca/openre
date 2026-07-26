@@ -20,6 +20,18 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * The exception is constant/immutable data which can be added directly to the source file or best suited place.
 * Helpers are often used to get certain things rather than directly accessing GameTable, look for one, potentially add one.
 
+## RE2 hooks
+* It is possible to force original code to call our new implementation using hooks.
+  Typically each module defines its hooks at the bottom of the source file like:
+    void file_init_hooks()
+    {
+        interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x00509780, &file_read_save);
+        interop::writeJmp(0x005097E0, &file_write_save);
+    }
+  And this is called from openre.cpp onAttach.
+* Once we know all callers are also implemented (check IDA), we can remove the hook.
+
 ## New files
 * When adding new source files, update `src\openre.vcxproj`.
 

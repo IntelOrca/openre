@@ -1,6 +1,6 @@
 ---
 name: decompile
-description: 'Decompile an RE2 binary function at a given address into hand-written C++ code, replacing its interop::call wrapper'
+description: 'Decompile / implement an RE2 binary function at a given address into hand-written C++ code, replacing its interop::call wrapper'
 argument-hint: 'ADDRESS (e.g., 0x00431000)'
 ---
 
