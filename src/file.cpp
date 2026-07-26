@@ -5,6 +5,8 @@
 #include "interop.hpp"
 #include "openre.h"
 #include <windows.h>
+#include <string>
+#include <cstdlib>
 
 namespace openre::file
 {
@@ -22,12 +24,111 @@ namespace openre::file
         p();
     }
 
-    // 0x00509020
-    static HANDLE file_open_handle(const char* path, int a1)
+    // --- Helpers to access OG std::string globals ---
+
+    static const char* og_string_data(uint32_t addr)
     {
-        using sig = HANDLE (*)(const char*, int);
-        auto p = (sig)0x00509020;
-        return p(path, a1);
+        return interop::thiscall<const char*, void*>(0x50C3F0, (void*)(uintptr_t)addr);
+    }
+
+    static void og_string_assign(uint32_t addr, const char* str)
+    {
+        interop::thiscall<void, void*, const char*>(0x50C420, (void*)(uintptr_t)addr, str);
+    }
+
+    // 0x005092A0
+    static bool check_disk_id()
+    {
+        return interop::call<bool>(0x5092A0);
+    }
+
+    // 0x00508F30
+    static bool dlg_disk_retry()
+    {
+        // Shows CD swap dialog. Returns true if user wants to retry, false if cancelled.
+        return interop::call<INT_PTR, LPCSTR>(0x508F30, (LPCSTR)0xA4) != 1019;
+    }
+
+    // --- Internal: matches OpenFile at 0x509040 ---
+    // Tries all mode/sub-approach combos, retries with disk checks, and
+    // shows the CD swap dialog when silent==0.
+    static HANDLE open_file_impl(const char* path, int mode, bool silent)
+    {
+        // If OPENRE_RE2_DATA is set, bypass OG path resolution entirely
+        {
+            const char* re2Data = std::getenv("OPENRE_RE2_DATA");
+            if (re2Data && re2Data[0]) {
+                std::string fullPath = std::string(re2Data) + "\\" + path;
+                og_string_assign(0x689F3C, fullPath.c_str());
+                UINT oldMode = SetErrorMode(0x8001);
+                HANDLE hFile = CreateFileA(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+                SetErrorMode(oldMode);
+                return hFile;
+            }
+        }
+
+        HANDLE hFile = INVALID_HANDLE_VALUE;
+        for (;;) {
+            // Mode loop: 0=Class prefix, 1=Module directory, 2=CD path
+            for (int currentMode = 0; currentMode < 3 && hFile == INVALID_HANDLE_VALUE; currentMode++) {
+                std::string basePath;
+                switch (currentMode) {
+                case 0:
+                    if (const char* s = og_string_data(0x669F4C))
+                        basePath = s;
+                    break;
+                case 1: {
+                    char buf[MAX_PATH];
+                    if (GetModuleFileNameA(NULL, buf, MAX_PATH)) {
+                        std::string ms(buf);
+                        auto p = ms.find_last_of('\\');
+                        if (p != std::string::npos)
+                            basePath = ms.substr(0, p + 1);
+                    }
+                    break;
+                }
+                case 2:
+                    if (const char* s = og_string_data(0x689F34))
+                        basePath = s;
+                    break;
+                }
+                // Sub-mode loop: 0=direct, 1=append "data\"
+                for (int sub = 0; sub < 2 && hFile == INVALID_HANDLE_VALUE; sub++) {
+                    std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
+                    // Store resolved path in OG global dword_689F3C
+                    og_string_assign(0x689F3C, fullPath.c_str());
+                    // Suppress OS error dialogs (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX)
+                    UINT oldMode = SetErrorMode(0x8001);
+                    hFile = CreateFileA(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+                    SetErrorMode(oldMode);
+                }
+            }
+            // If all modes failed, check for a valid disc
+            if (hFile == INVALID_HANDLE_VALUE) {
+                if (check_disk_id())
+                    continue; // disc found — retry all modes
+            }
+            // In silent mode with a known CD path, exit without dialog
+            if (silent) {
+                if (const char* s = og_string_data(0x689F34)) {
+                    if (s[0])
+                        break;
+                }
+            }
+            if (hFile != INVALID_HANDLE_VALUE)
+                break;
+            // Show CD swap dialog
+            if (!dlg_disk_retry())
+                break;
+            // Otherwise retry all modes
+        }
+        return hFile;
+    }
+
+    // 0x00509020
+    HANDLE file_open_handle(const char* path, int mode)
+    {
+        return open_file_impl(path, mode, false);
     }
 
     // 0x00502D40
@@ -100,12 +201,13 @@ namespace openre::file
         }
 
         DWORD bytesRead;
-        if (!ReadFile(file, buffer, size, &bytesRead, 0) || bytesRead != size)
+        int result = READ_SAVE_FILE_ERROR;
+        if (ReadFile(file, buffer, size, &bytesRead, 0) && bytesRead == size)
         {
-            return READ_SAVE_FILE_ERROR;
+            result = READ_SAVE_FILE_SUCCESS;
         }
         CloseHandle(file);
-        return READ_SAVE_FILE_SUCCESS;
+        return result;
     }
 
     // 0x005097E0
@@ -118,13 +220,25 @@ namespace openre::file
         }
 
         DWORD bytesWritten;
-        if (!WriteFile(file, buffer, size, &bytesWritten, 0))
+        size_t result = 0;
+        if (WriteFile(file, buffer, size, &bytesWritten, 0))
         {
-            return 0;
+            update_timer();
+            result = bytesWritten;
         }
-        update_timer();
         CloseHandle(file);
-        return bytesWritten;
+        return result;
+    }
+
+    // 0x005095D0
+    static int file_exists(const char* path, int mode)
+    {
+        auto hFile = open_file_impl(path, mode, true);
+        if (hFile != INVALID_HANDLE_VALUE) {
+            CloseHandle(hFile);
+            return 1;
+        }
+        return 0;
     }
 
     // 0x00441630
@@ -206,6 +320,8 @@ namespace openre::file
     void file_init_hooks()
     {
         interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x00509020, &file_open_handle);
+        interop::writeJmp(0x005095D0, &file_exists);
         interop::writeJmp(0x00509780, &file_read_save);
         interop::writeJmp(0x005097E0, &file_write_save);
     }
