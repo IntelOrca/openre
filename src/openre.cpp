@@ -843,9 +843,9 @@ namespace openre
     // Graphics rendering mode for font/texture loading
     enum GraphicsMode : uint8_t
     {
-        kGfxSoft16bit = 0,  // ADT fonts + espcore.bin textures (software 16-bit)
-        kGfxHardware = 1,   // Raw TIM files (hardware acceleration)
-        kGfxSoft8bit = 2,   // ADT fonts + ADT textures (software 8-bit)
+        kGfxSoft16bit = 0, // ADT fonts + espcore.bin textures (software 16-bit)
+        kGfxHardware = 1,  // Raw TIM files (hardware acceleration)
+        kGfxSoft8bit = 2,  // ADT fonts + ADT textures (software 8-bit)
     };
 
     // 0x004C4000
@@ -1417,10 +1417,16 @@ namespace openre
         case WM_ACTIVATEAPP:
             if (wParam)
                 wnd_activate();
+#ifndef DEBUG
             else
                 wnd_deactivate();
+#endif
             break;
-        case WM_KILLFOCUS: input_pause(&gGameTable.input); break;
+        case WM_KILLFOCUS:
+#ifndef DEBUG
+            input_pause(&gGameTable.input);
+#endif
+            break;
         case WM_CLOSE: marni::kill(); return DefWindowProc(hWnd, Msg, wParam, lParam);
         case WM_KEYUP: input_wmkeyup(&gGameTable.input, wParam); break;
         case WM_KEYDOWN:
