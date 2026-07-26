@@ -34,6 +34,8 @@ Start by analyzing the function in IDA Pro:
    - If not in GameTable, note them as standalone globals
 4. **Find string references**: Use `ida-pro-mcp-find` with type `"data_ref"` to find strings the function references. Strings at `0x52XXXX` addresses are typically inline string literals
 5. **Check callers/callees**: Use `ida-pro-mcp-xrefs_to` to understand how the function is called and what values the caller passes
+6. **Name any unknown functions or labels**: Assist future readers by giving meaningful names to any functions or labels that are not already named in the diassembly and decompiled pseudocode.
+7. **Add comments to disassembly**: Document any non-obvious behavior and anything else you think will be useful.
 
 ## Implementation Phase
 

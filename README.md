@@ -24,3 +24,8 @@ cmake --build out
 ```
 
 Copy `out/openre.dll` and `dist/openre.exe` to your RE 2 directory and run `openre.exe`.
+
+## Running
+
+Set `OPENRE_LOG_VERBOSITY` to `debug`, `warning`, `error`, or `info`.
+Set `OPENRE_RE2_DATA` to the data directory containing `common`, `gallery`, `movie`, etc.
