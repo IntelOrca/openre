@@ -48,7 +48,7 @@ namespace openre::title
     }
 
     // 0x0043F5A0
-    static void bg_to_surface(uint8_t* data)
+    void bg_to_surface(uint8_t* data)
     {
         interop::call<uint8_t*>(0x0043F5A0, data);
     }
@@ -320,7 +320,7 @@ namespace openre::title
     }
 
     // 0x005035B0
-    static void title()
+    void title()
     {
         gGameTable.timer_r2 = 1;
         if (!(gGameTable.vk_press & 0x40))

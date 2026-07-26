@@ -18,9 +18,13 @@ namespace openre::file
     // 0x00508DC0
     void file_error()
     {
-        using sig = void (*)();
-        auto p = (sig)0x00508DC0;
-        p();
+        for (auto& task : gGameTable.tasks)
+        {
+            task.sleep = 0;
+            task.var_13 = 1;
+        }
+        if (gGameTable.error_no == 0)
+            gGameTable.error_no = 12;
     }
 
     // --- Helpers to access OG std::string globals ---

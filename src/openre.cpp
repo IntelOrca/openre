@@ -2,7 +2,6 @@
 #include "audio.h"
 #include "camera.h"
 #include "door.h"
-#include "logger.h"
 #include "enemy.h"
 #include "entity.h"
 #include "error.h"
@@ -12,6 +11,7 @@
 #include "interop.hpp"
 #include "item.h"
 #include "itembox.h"
+#include "logger.h"
 #include "marni.h"
 #include "math.h"
 #include "player.h"
@@ -56,6 +56,20 @@ namespace openre
     static uint8_t get_player_num()
     {
         return check_flag(FlagGroup::Status, FG_STATUS_PLAYER) ? 1 : 0;
+    }
+
+    /// ADT palette data offset within work_buffer (after header + CLUT offsets)
+    constexpr int kAdtPaletteOffset = 0x20014;
+    /// Size of high-color palette data in bytes
+    constexpr int kPaletteSize = 0x5C;
+
+    /// Tile display code flag: enable textured drawing
+    constexpr uint8_t kTileCodeDraw = 2;
+
+    // 0x005007B0
+    static void pc_credits()
+    {
+        interop::call(0x005007B0);
     }
 
     // 0x0043DF40
@@ -754,10 +768,238 @@ namespace openre
     // 0x004E97C0
     void vsync() {}
 
+    // 0x004DBFD0
+    static void marni_out() {}
+
+    // 0x004C4FF0
+    static void load_disclaimer()
+    {
+        enum
+        {
+            kLoadAdt = 0,
+            kWaitFadeIn = 4,
+            kWaitInput = 5,
+            kFadeOut = 6,
+        };
+
+        auto& task = *gGameTable.ctcb;
+        switch (task.var_08)
+        {
+        case kLoadAdt:
+            gGameTable.byte_98F1B7 = 1;
+            bg_set_mode(0, 0);
+            if (!load_adt("common\\data\\gw2.adt", gGameTable.bg_buffer, 4))
+            {
+                file_error();
+                return;
+            }
+            title::bg_to_surface(gGameTable.bg_buffer);
+            hud_fade_set(512, -1024, 7, 0);
+            task.var_08 = kWaitFadeIn;
+            [[fallthrough]];
+
+        case kWaitFadeIn:
+            if (!hud_fade_status(0))
+            {
+                task_sleep(1);
+                return;
+            }
+            gGameTable.byte_98F1B9 = 1;
+            task.var_08 = kWaitInput;
+            [[fallthrough]];
+
+        case kWaitInput:
+            if (gGameTable.byte_98F1B9 != 2)
+            {
+                task_sleep(1);
+                return;
+            }
+            hud_fade_set(512, 1024, 7, 0);
+            task.var_08 = kFadeOut;
+            [[fallthrough]];
+
+        case kFadeOut:
+            if (hud_fade_status(0))
+            {
+                gGameTable.byte_98F1B7 = 0;
+                bg_set_mode(2, 0);
+                gGameTable.byte_98F1B9 = 0;
+                if (gGameTable.ushinabe)
+                {
+                    pc_credits();
+                }
+                task_exit();
+            }
+            else
+            {
+                task_sleep(1);
+            }
+            return;
+
+        default: return;
+        }
+    }
+
+    // Graphics rendering mode for font/texture loading
+    enum GraphicsMode : uint8_t
+    {
+        kGfxSoft16bit = 0,  // ADT fonts + espcore.bin textures (software 16-bit)
+        kGfxHardware = 1,   // Raw TIM files (hardware acceleration)
+        kGfxSoft8bit = 2,   // ADT fonts + ADT textures (software 8-bit)
+    };
+
     // 0x004C4000
     static void init_main()
     {
-        interop::call(0x004C4000);
+        enum
+        {
+            kInitAudio = 0,
+            kInitDisclaimer = 1,
+            kInitFontsAndTex = 2,
+        };
+
+        auto& task = *gGameTable.ctcb;
+        switch (task.var_08)
+        {
+        case kInitAudio:
+            snd_sys_init();
+            marni_out();
+            bg_set_mode(2, 0);
+            for (int row = 0; row < 4; row++)
+            {
+                for (int col = 0; col < 2; col++)
+                {
+                    auto& tile = gGameTable.fade_table[row].tiles[col];
+                    tile.psxRect.x = 0;
+                    tile.psxRect.y = 0;
+                    tile.psxRect.w = 320;
+                    tile.psxRect.h = 240;
+                    tile.code |= kTileCodeDraw;
+                    tile.r = 0;
+                    tile.g = 0;
+                    tile.b = 0;
+                }
+            }
+            task.var_08 = kInitDisclaimer;
+            task_sleep(1);
+            break;
+
+        case kInitDisclaimer:
+            gGameTable.byte_98F1B9 = 0;
+            task_execute(1, load_disclaimer);
+            task.var_08 = kInitFontsAndTex;
+            [[fallthrough]];
+
+        case kInitFontsAndTex:
+            if (!gGameTable.byte_98F1B9)
+            {
+                task_sleep(1);
+                return;
+            }
+            marni_out();
+            // Initialize display list tiles
+            {
+                auto* v1 = gGameTable.byte_52D8A7;
+                auto* v0 = gGameTable.byte_52D8E7;
+                do
+                {
+                    for (int i = 0; i < 2; i++)
+                    {
+                        *v1 |= kTileCodeDraw;
+                        v1 += 16;
+                    }
+                    auto v3 = *v0;
+                    *v0 = v3 | kTileCodeDraw;
+                    v0 += 16;
+                } while (v1 < gGameTable.byte_52D8E7);
+            }
+            // Load fonts depending on graphics mode
+            if (gGameTable.graphics_ptr_data == kGfxSoft16bit)
+            {
+                if (!load_adt("common\\data\\font0.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                std::memcpy(gGameTable.font_rgb, &gGameTable.work_buffer[kAdtPaletteOffset], 15);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 8, 1);
+                if (!load_adt("common\\data\\font1.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 9, 1);
+            }
+            else if (gGameTable.graphics_ptr_data == kGfxHardware)
+            {
+                if (!read_file_into_buffer("common\\data\\font0.tim", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 8, 1);
+                if (!read_file_into_buffer("common\\data\\font1.tim", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 9, 1);
+            }
+            else if (gGameTable.graphics_ptr_data == kGfxSoft8bit)
+            {
+                if (!load_adt("common\\data\\font0.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                std::memcpy(gGameTable.font_rgb, &gGameTable.work_buffer[kAdtPaletteOffset], 15);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 8, 1);
+                if (!load_adt("common\\data\\font1.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 9, 1);
+            }
+
+            gGameTable.stage_bk = 0;
+
+            // Load textures depending on graphics mode
+            if (gGameTable.graphics_ptr_data == kGfxSoft16bit)
+            {
+                // TIM sub-image offsets within espcore.bin loaded into work_buffer
+                constexpr int kTimOffset0 = 0;
+                constexpr int kTimOffset1 = 5416;
+                constexpr int kTimOffset2 = 8016;
+                constexpr int kTimOffset3 = 10872;
+                constexpr int kTimOffset4 = 13480;
+                constexpr int kTimOffset5 = 14776;
+                if (!read_file_into_buffer("common\\data\\espcore.bin", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset0), 10, 0);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset1), 11, 0);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset2), 12, 0);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset3), 13, 0);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset4), 14, 0);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer + kTimOffset5), 15, 0);
+            }
+            else if (gGameTable.graphics_ptr_data == kGfxHardware)
+            {
+                if (!read_file_into_buffer("common\\data\\tex2p.tim", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 10, 0);
+                if (!read_file_into_buffer("common\\data\\tex3p.tim", gGameTable.work_buffer, 4))
+                    goto error;
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 11, 0);
+            }
+            else if (gGameTable.graphics_ptr_data == kGfxSoft8bit)
+            {
+                if (!load_adt("common\\data\\tex216.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                std::memcpy(gGameTable.byte_992BE0, &gGameTable.work_buffer[kAdtPaletteOffset], kPaletteSize);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 10, 0);
+                if (!load_adt("common\\data\\tex316.adt", gGameTable.work_buffer, 4))
+                    goto error;
+                std::memcpy(gGameTable.byte_992C40, &gGameTable.work_buffer[kAdtPaletteOffset], kPaletteSize);
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.work_buffer), 11, 0);
+            }
+
+            gGameTable.byte_989E7D = 0;
+            gGameTable.byte_9888D9 = 0;
+            marni_out();
+            gGameTable.dword_988610 = 0xD20FF024;
+            audio::snd_sys_stereo();
+            gGameTable.fg_system |= 2;
+            task_chain(title::title);
+            return;
+
+        error:
+            // 0x00508DC0
+            file_error();
+            return;
+        }
     }
 
     // 0x004CAD29
@@ -1052,17 +1294,41 @@ namespace openre
             DeleteObject((HFONT)gGameTable.hFont);
         if (gGameTable.is_480p)
         {
-            gGameTable.hFont = CreateFontA(24, 12, 0, 0, 500, 0, 0, 0,
-                SHIFTJIS_CHARSET, OUT_CHARACTER_PRECIS, CLIP_DEFAULT_PRECIS,
-                DRAFT_QUALITY, DEFAULT_PITCH, fontFaceName);
+            gGameTable.hFont = CreateFontA(
+                24,
+                12,
+                0,
+                0,
+                500,
+                0,
+                0,
+                0,
+                SHIFTJIS_CHARSET,
+                OUT_CHARACTER_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                DRAFT_QUALITY,
+                DEFAULT_PITCH,
+                fontFaceName);
             gGameTable.byte_6634F8 = 30;
             gGameTable.FontH = 24;
         }
         else
         {
-            gGameTable.hFont = CreateFontA(12, 6, 0, 0, 400, 0, 0, 0,
-                SHIFTJIS_CHARSET, OUT_CHARACTER_PRECIS, CLIP_DEFAULT_PRECIS,
-                DRAFT_QUALITY, DEFAULT_PITCH, fontFaceName);
+            gGameTable.hFont = CreateFontA(
+                12,
+                6,
+                0,
+                0,
+                400,
+                0,
+                0,
+                0,
+                SHIFTJIS_CHARSET,
+                OUT_CHARACTER_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                DRAFT_QUALITY,
+                DEFAULT_PITCH,
+                fontFaceName);
             gGameTable.byte_6634F8 = 15;
             gGameTable.FontH = 12;
         }

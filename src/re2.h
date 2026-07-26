@@ -1161,7 +1161,8 @@ struct GameTable
     void* pGG;                          // 0x52C4B0
     uint8_t pad_52C4B4[5068];           // 0x52C4B4
     Mat16 g_identity_mat;               // 0x52D880
-    uint8_t pad_52D8A0[64];             // 0x52D8A0
+    uint8_t pad_52D8A0[7];              // 0x52D8A0
+    uint8_t byte_52D8A7[57];            // 0x52D8A7
     uint8_t curtain2[7];                // 0x52D8E0
     uint8_t byte_52D8E7[25];            // 0x52D8E7
     uint8_t pad_52D900[51717];          // 0x52D900
@@ -1473,9 +1474,9 @@ struct GameTable
     uint8_t osp_mask_flag;              // 0x6998C0
     uint8_t pad_6998C1[252491];         // 0x6998C1
     uint8_t byte_6D730C[24592];         // 0x6D730C
-    uint8_t pad_6DD31C[1983844];        // 0x6DD31C
-    uint8_t* bg_buffer;                 // 0x8C1880
-    uint8_t pad_8C1884[20476];          // 0x8C1884
+    uint8_t pad_6DD31C[1967460];        // 0x6DD31C
+    uint8_t bg_buffer[32768];           // 0x8BD880
+    uint8_t pad_8C5880[4096];           // 0x8C5880
     TmdEntry* tmd;                      // 0x8C6880
     void* door_tim;                     // 0x8C6884
     uint8_t byte_8C6888[1928];          // 0x8C6888
@@ -1497,7 +1498,9 @@ struct GameTable
     int8_t fg_message;                  // 0x98504C
     uint8_t pad_98504D[2];              // 0x98504D
     uint8_t pickup_item_type;           // 0x98504F
-    uint8_t pad_985050[5264];           // 0x985050
+    uint8_t pad_985050[48];             // 0x985050
+    uint8_t font_rgb[16];               // 0x985080
+    uint8_t pad_985090[5200];           // 0x985090
     uint8_t* g_table;                   // 0x9864E0
     uint8_t pad_9864E4[60];             // 0x9864E4
     uint32_t dword_986520;              // 0x986520
@@ -1700,7 +1703,11 @@ struct GameTable
     DemoPlayer pdemo;                   // 0x991FC8
     uint8_t byte_99270E;                // 0x99270E
     uint8_t byte_99270F;                // 0x99270F
-    uint8_t pad_992710[42800];          // 0x992710
+    uint8_t pad_992710[1232];           // 0x992710
+    uint8_t byte_992BE0[92];            // 0x992BE0
+    uint8_t pad_992C3C[4];              // 0x992C3C
+    uint8_t byte_992C40[92];            // 0x992C40
+    uint8_t pad_992C9C[41380];          // 0x992C9C
     Mat16 ll_matrix;                    // 0x99CE40
     Mat16 lc_matrix;                    // 0x99CE60
     Mat16 rc_matrix;                    // 0x99CE80

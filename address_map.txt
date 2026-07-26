@@ -906,6 +906,7 @@ declare     byte_5286F4             u8[8]                   0x005286F4
 declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
 declare     g_identity_mat          Mat16                   0x0052D880
+declare     byte_52D8A7             u8[57]                  0x0052D8A7
 declare     curtain2                u8[7]                   0x0052D8E0
 declare     byte_52D8E7             u8[25]                  0x0052D8E7
 declare     byte_53A305             u8[63]                  0x0053A305
@@ -1123,7 +1124,7 @@ declare     dword_695E7C            u32                     0x00695E7C
 declare     psp_lookup              u8*                     0x00698840
 declare     osp_mask_flag           u8                      0x006998C0
 declare     byte_6D730C             u8[24592]               0x006D730C
-declare     bg_buffer               u8*                     0x008C1880
+declare     bg_buffer               u8[32768]               0x008BD880
 declare     tmd                     TmdEntry*               0x008C6880
 declare     door_tim                void*                   0x008C6884
 declare     byte_8C6888             u8[1928]                0x008C6888
@@ -1137,6 +1138,7 @@ declare     byte_981FB7             u8                      0x00981FB7
 declare     byte_981FBB             u8                      0x00981FBB
 declare     fg_message              s8                      0x0098504C
 declare     pickup_item_type        u8                      0x0098504F
+declare     font_rgb                u8[16]                  0x00985080
 declare     g_table                 u8*                     0x009864E0
 declare     dword_986520            u32                     0x00986520
 declare     byte_986524             u8*                     0x00986524
@@ -1291,6 +1293,8 @@ declare     dword_991FC4            u32                     0x00991FC4
 declare     pdemo                   DemoPlayer              0x00991FC8
 declare     byte_99270E             u8                      0x0099270E
 declare     byte_99270F             u8                      0x0099270F
+declare     byte_992BE0             u8[0x5C]                0x00992BE0
+declare     byte_992C40             u8[0x5C]                0x00992C40
 declare     ll_matrix               Mat16                   0x0099CE40
 declare     lc_matrix               Mat16                   0x0099CE60
 declare     rc_matrix               Mat16                   0x0099CE80

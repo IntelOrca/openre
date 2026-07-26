@@ -32,8 +32,9 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
   And this is called from openre.cpp onAttach.
 * Once we know all callers are also implemented (check IDA), we can remove the hook.
 
-## New files
+## Other instructions
 * When adding new source files, update `src\openre.vcxproj`.
+* Avoid labels as much as possible, extract small sections of code to functions if that helps avoid them. Use [[fallthrough]] in switch blocks.
 
 ## Building
 * Under a VS2026 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
