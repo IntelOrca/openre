@@ -1196,7 +1196,11 @@ struct GameTable
     uint8_t unk_544148[1050736];        // 0x544148
     int32_t d3d_device_count;           // 0x6449B8
     int32_t dword_6449BC;               // 0x6449BC
-    uint8_t pad_6449C0[151860];         // 0x6449C0
+    uint8_t pad_6449C0[124056];         // 0x6449C0
+    uint32_t FontH;                     // 0x662E58
+    uint8_t pad_662E5C[1692];           // 0x662E5C
+    uint8_t byte_6634F8;                // 0x6634F8
+    uint8_t pad_6634F9[26107];          // 0x6634F9
     void* hFont;                        // 0x669AF4
     uint8_t pad_669AF8[4];              // 0x669AF8
     uint8_t is_480p;                    // 0x669AFC

@@ -64,6 +64,7 @@ namespace openre
     static uint8_t& byte_989E7E = *((uint8_t*)0x989E7E);
 
     static const char* windowTitle = "BIOHAZARD(R) 2 PC";
+    static const char* fontFaceName = "ＭＳ ゴシック";
 
     // 0x00509C90
     static uint8_t get_player_num()
@@ -1061,7 +1062,24 @@ namespace openre
     // 0x00431000
     static void font_create()
     {
-        interop::call(0x00431000);
+        if (gGameTable.hFont)
+            DeleteObject((HFONT)gGameTable.hFont);
+        if (gGameTable.is_480p)
+        {
+            gGameTable.hFont = CreateFontA(24, 12, 0, 0, 500, 0, 0, 0,
+                SHIFTJIS_CHARSET, OUT_CHARACTER_PRECIS, CLIP_DEFAULT_PRECIS,
+                DRAFT_QUALITY, DEFAULT_PITCH, fontFaceName);
+            gGameTable.byte_6634F8 = 30;
+            gGameTable.FontH = 24;
+        }
+        else
+        {
+            gGameTable.hFont = CreateFontA(12, 6, 0, 0, 400, 0, 0, 0,
+                SHIFTJIS_CHARSET, OUT_CHARACTER_PRECIS, CLIP_DEFAULT_PRECIS,
+                DRAFT_QUALITY, DEFAULT_PITCH, fontFaceName);
+            gGameTable.byte_6634F8 = 15;
+            gGameTable.FontH = 12;
+        }
     }
 
     // 0x004310A0

@@ -927,6 +927,8 @@ declare     d3d_triangles_drawn     u32                     0x00544144
 declare     unk_544148              u8[1050736]             0x00544148
 declare     d3d_device_count        s32                     0x006449B8
 declare     dword_6449BC            s32                     0x006449BC
+declare     FontH                   u32                     0x00662E58
+declare     byte_6634F8             u8                      0x006634F8
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
