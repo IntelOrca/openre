@@ -274,14 +274,100 @@ namespace openre::title
         }
     }
 
+    // 0x00503A70
+    static void title_main_wait()
+    {
+        interop::call(0x00503A70);
+    }
+
+    // 0x00503B80
+    static void title_main_select()
+    {
+        interop::call(0x00503B80);
+    }
+
+    // 0x00505320
+    static void title_main_load()
+    {
+        interop::call(0x00505320);
+    }
+
+    // 0x004BF810
+    static void game_loop()
+    {
+        interop::call(0x004BF810);
+    }
+
+    // 0x00503A30
+    static void title_main_game()
+    {
+        marni::unload_texture_page(18);
+        marni::unload_texture_page(19);
+        marni::unload_texture_page(20);
+        marni::unload_texture_page(21);
+        marni::unload_texture_page(22);
+        task_chain(game_loop);
+    }
+
+    // 0x00505400
+    static void title_main_option()
+    {
+        interop::call(0x00505400);
+    }
+
+    // 0x00503B20
+    static void sub_503B20()
+    {
+        interop::call(0x00503B20);
+    }
+
+    // 0x00503A20
+    static void title_main()
+    {
+        static Action Title_main_mv[] = {
+            title_main_wait,   // Ti_Disp_add = 0
+            title_main_select, // Ti_Disp_add = 1
+            title_main_load,   // Ti_Disp_add = 2
+            title_main_game,   // Ti_Disp_add = 3
+            title_main_option, // Ti_Disp_add = 4
+            sub_503B20,        // Ti_Disp_add = 5
+        };
+        Title_main_mv[gGameTable.title_disp_add]();
+    }
+
+    // 0x00505460
+    static void title_survivor_load()
+    {
+        interop::call(0x00505460);
+    }
+
+    // 0x00505670
+    static void title_survivor_main()
+    {
+        interop::call(0x00505670);
+    }
+
+    // 0x00506F90
+    static void title_extreme_load()
+    {
+        interop::call(0x00506F90);
+    }
+
+    // 0x00507100
+    static void title_extreme_main()
+    {
+        interop::call(0x00507100);
+    }
+
+    // 0x00507AB0
+    static void title_state_7()
+    {
+        interop::call(0x00507AB0);
+    }
+
     static Action title_mv[] = {
-        capcom_logo,        title_init,
-        (Action)0x00503A20, // title_main
-        (Action)0x00505460, // title_survivor_load
-        (Action)0x00505670, // title_survivor_main
-        (Action)0x00506F90, // title_extreme_load
-        (Action)0x00507100, // title_extreme_main
-        (Action)0x00507AB0  // ?
+        capcom_logo,         title_init,         title_main,         title_survivor_load,
+        title_survivor_main, title_extreme_load, title_extreme_main, title_state_7,
     };
 
     // 0x004D1150
