@@ -115,7 +115,7 @@ For globals not in GameTable, consider adding them unless they map to immutable/
 3. **Struct offsets**: If accessing struct fields via offsets, verify the offset matches the GameTable layout in re2.h
 4. **Return types**: Ensure return values match what the caller expects (especially for HRESULT, HANDLE, and pointer returns)
 5. **Build check**: Compile with `msbuild` under a VS2026 prompt to catch type errors
-6. **Independent review**: Spin off a `deepseek-v4-pro` sub agent via the `task` tool with `agent_type: "general-purpose"` and `model: "deepseek-v4-pro"` to review the implementation.
+6. **Independent review**: Spin off a `deepseek-v4-pro` sub agent via the `task` tool with `agent_type: "Code Reviewer"` and `model: "deepseek-v4-pro"` to review the implementation.
                            Provide it with both the original IDA Pro pseudocode and the new C++ code, and instruct it to verify correctness independently with a fresh perspective.
                            This catches subtle bugs, calling convention mismatches, and parameter ordering issues that the original author may have overlooked.
 

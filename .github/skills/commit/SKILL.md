@@ -17,4 +17,5 @@ This includes:
 And added ... to the GameTable.
 ```
 
-DO NOT ADD A co-author trailer!
+- DO NOT ADD A co-author trailer!
+- DO NOT mention "code reviewer" or the incremental changes, just mention the final changes as if they were done in one shot.
