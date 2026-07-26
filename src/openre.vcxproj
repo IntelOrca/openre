@@ -85,6 +85,7 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
+    <ClCompile Include="logger.cpp" />
     <ClCompile Include="marni.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />
@@ -113,6 +114,7 @@
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
+    <ClInclude Include="logger.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
@@ -128,4 +130,7 @@
     <ClInclude Include="title.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-</Project>
+  <Target Name="CopyLauncher" AfterTargets="Build">
+    <Copy SourceFiles="$(SolutionDir)dist\openre.exe" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+ </Project>

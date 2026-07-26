@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "camera.h"
 #include "door.h"
+#include "logger.h"
 #include "enemy.h"
 #include "entity.h"
 #include "error.h"
@@ -1667,6 +1668,9 @@ namespace openre
 
 void onAttach()
 {
+    logging::initConsoleLogger(logging::LogVerbosity::info);
+    logging::logInfo("OpenRE v{} Initializing...", OPENRE_VERSION);
+
     uint8_t b{};
     interop::readMemory(0x401E40, &b, sizeof(b));
     gClassicRebirthEnabled = (b == 0xE9);

@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#define OPENRE_VERSION "0.1.0"
+
 struct Md1;
 
 namespace openre

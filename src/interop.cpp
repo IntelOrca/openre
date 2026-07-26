@@ -3,6 +3,8 @@
 #include <cstring>
 #include <stdexcept>
 
+#include "logger.h"
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -95,8 +97,7 @@ namespace openre::interop
     static int32_t DISABLE_OPT callByRef(int32_t address, int32_t* _eax, int32_t* _ebx, int32_t* _ecx, int32_t* _edx, int32_t* _esi, int32_t* _edi, int32_t* _ebp)
     {
 #ifdef _LOG_INTEROP_CALLS_
-        Logging::info("0x{:x}", address);
-        Logging::incrementIntend();
+        logging::logDebug("0x{:x}", address);
 #endif
         int32_t result = 0;
         _originalAddress = address;
@@ -252,9 +253,6 @@ namespace openre::interop
 #endif // PLATFORM_X86
         _originalAddress = 0;
 
-#ifdef _LOG_INTEROP_CALLS_
-        Logging::decrementIntend();
-#endif
         // lahf only modifies ah, zero out the rest
         return (result >> 8) & 0xFF;
     }
