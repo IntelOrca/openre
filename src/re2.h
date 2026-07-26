@@ -1136,7 +1136,9 @@ struct GameTable
 {
     uint8_t pad_0000[5393927];          // 0x0000
     uint8_t byte_524E07;                // 0x524E07
-    uint8_t pad_524E08[172];            // 0x524E08
+    uint32_t dword_524E08;              // 0x524E08
+    uint32_t dword_524E0C;              // 0x524E0C
+    uint8_t pad_524E10[164];            // 0x524E10
     uint8_t cheat0;                     // 0x524EB4
     uint8_t cheat1;                     // 0x524EB5
     bool enable_dsound;                 // 0x524EB6
@@ -1206,7 +1208,14 @@ struct GameTable
     uint8_t is_480p;                    // 0x669AFC
     uint8_t pad_669AFD[14487];          // 0x669AFD
     uint32_t dword_66D394;              // 0x66D394
-    uint8_t pad_66D398[62528];          // 0x66D398
+    uint8_t pad_66D398[16492];          // 0x66D398
+    uint32_t dword_671404;              // 0x671404
+    uint32_t dword_671408;              // 0x671408
+    uint32_t dword_67140C;              // 0x67140C
+    uint32_t dword_671410;              // 0x671410
+    uint32_t dword_671414;              // 0x671414
+    uint32_t dword_671418;              // 0x671418
+    uint8_t pad_67141C[46012];          // 0x67141C
     TexturePage texture_pages[41];      // 0x67C7D8
     uint32_t global_cx;                 // 0x67C9C4
     uint32_t global_cy;                 // 0x67C9C8
@@ -1702,8 +1711,19 @@ struct GameTable
     uint8_t pad_99CF68[4];              // 0x99CF68
     uint32_t dword_99CF6C;              // 0x99CF6C
     uint32_t dword_99CF70;              // 0x99CF70
+    uint8_t pad_99CF74[2864];           // 0x99CF74
+    void* adt_buffer_in;                // 0x99DAA4
+    uint32_t adt_out_ptr;               // 0x99DAA8
+    void* adt_file_handle;              // 0x99DAAC
+    uint32_t dword_99DAB0;              // 0x99DAB0
+    uint32_t adt_out_offset;            // 0x99DAB4
+    uint32_t dword_99DAB8;              // 0x99DAB8
+    uint32_t adt_buffer_out;            // 0x99DABC
+    uint32_t adt_bytes_read;            // 0x99DAC0
+    uint8_t pad_99DAC4[4];              // 0x99DAC4
+    uint32_t dword_99DAC8;              // 0x99DAC8
 };
-static_assert(sizeof(GameTable) == 0x99CF74);
+static_assert(sizeof(GameTable) == 0x99DACC);
 
 struct Unknown988628
 {

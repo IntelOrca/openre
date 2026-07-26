@@ -39,6 +39,9 @@
     <ClCompile Include="file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="gfxadt.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="hud.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -135,6 +138,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gfx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="data.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="camera.h">

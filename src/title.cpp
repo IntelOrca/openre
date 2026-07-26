@@ -57,7 +57,7 @@ namespace openre::title
     static void title_bg_reload()
     {
         auto dst = gGameTable.work_buffer_2 + 0x640;
-        if (load_adt("common\\data\\title_bg.adt", (uint32_t*)dst, 4))
+        if (load_adt("common\\data\\title_bg.adt", dst, 4))
         {
             bg_to_surface(dst);
         }

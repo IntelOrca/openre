@@ -218,7 +218,7 @@ namespace openre::room
                 case 0:
                 case 2:
                 {
-                    if (!load_adt(gGameTable.stage_font_name, (uint32_t*)fBuff, 4))
+                    if (!load_adt(gGameTable.stage_font_name, fBuff, 4))
                     {
                         file_error();
                         return;

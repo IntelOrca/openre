@@ -891,6 +891,8 @@ declare     var_08                  u32
 
 struct      GameTable
 declare     byte_524E07             u8                      0x00524E07
+declare     dword_524E08            u32                     0x00524E08
+declare     dword_524E0C            u32                     0x00524E0C
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
 declare     enable_dsound           bool                    0x00524EB6
@@ -932,6 +934,12 @@ declare     byte_6634F8             u8                      0x006634F8
 declare     hFont                   void*                   0x00669AF4
 declare     is_480p                 u8                      0x00669AFC
 declare     dword_66D394            u32                     0x0066D394
+declare     dword_671404            u32                     0x00671404
+declare     dword_671408            u32                     0x00671408
+declare     dword_67140C            u32                     0x0067140C
+declare     dword_671410            u32                     0x00671410
+declare     dword_671414            u32                     0x00671414
+declare     dword_671418            u32                     0x00671418
 declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     global_cx               u32                     0x0067C9C4
 declare     global_cy               u32                     0x0067C9C8
@@ -1291,6 +1299,15 @@ declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
 declare     dword_99CF6C            u32                     0x0099CF6C
 declare     dword_99CF70            u32                     0x0099CF70
+declare     adt_buffer_in           void*                   0x0099DAA4
+declare     adt_out_ptr             u32                     0x0099DAA8
+declare     adt_file_handle         void*                   0x0099DAAC
+declare     dword_99DAB0            u32                     0x0099DAB0
+declare     adt_out_offset          u32                     0x0099DAB4
+declare     dword_99DAB8            u32                     0x0099DAB8
+declare     adt_buffer_out          u32                     0x0099DABC
+declare     adt_bytes_read          u32                     0x0099DAC0
+declare     dword_99DAC8            u32                     0x0099DAC8
 
 struct      Unknown988628
 declare     var_10C                 u16                     0x10C

@@ -1,6 +1,7 @@
 // #define USE_ORIGINAL_FILEIO
 
 #include "file.h"
+#include "gfx.h"
 #include "interop.hpp"
 #include "openre.h"
 #include <windows.h>
@@ -144,10 +145,56 @@ namespace openre::file
         return memoryBlock;
     }
 
-    // 0x0043C590
-    int load_adt(const char* path, uint32_t* bufferSize, int mode)
+    // 0x00509620
+    static void adt_store_last_filename(const char* filename)
     {
-        return interop::call<int, const char*, uint32_t*, int>(0x0043C590, path, bufferSize, mode);
+        using sig = void (*)(const char*);
+        auto p = (sig)0x00509620;
+        p(filename);
+    }
+
+    // 0x0043C590
+    int load_adt(const char* path, void* dst, int mode)
+    {
+        auto hFile = file_open_handle(path, mode);
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        auto fileSize = GetFileSize(hFile, NULL);
+        if (fileSize == INVALID_FILE_SIZE || fileSize == 0)
+        {
+            CloseHandle(hFile);
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        std::vector<uint8_t> compressed(fileSize);
+        DWORD bytesRead;
+        if (!ReadFile(hFile, compressed.data(), fileSize, &bytesRead, NULL) || bytesRead != fileSize)
+        {
+            CloseHandle(hFile);
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+        CloseHandle(hFile);
+
+        auto decompressed = openre::graphics::decodeAdt(compressed);
+        if (decompressed.empty())
+        {
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        std::memcpy(dst, decompressed.data(), decompressed.size());
+        adt_store_last_filename(path);
+        return static_cast<int>(decompressed.size());
     }
 
     // 0x0043FF40

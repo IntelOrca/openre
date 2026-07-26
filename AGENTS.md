@@ -20,6 +20,9 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * The exception is constant/immutable data which can be added directly to the source file or best suited place.
 * Helpers are often used to get certain things rather than directly accessing GameTable, look for one, potentially add one.
 
+## New files
+* When adding new source files, update `src\openre.vcxproj`.
+
 ## Building
 * Under a VS2022 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
   * E.g. `cmd /c "call "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" && msbuild"` in repo root
