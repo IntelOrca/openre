@@ -584,9 +584,9 @@ namespace openre::scd
     static int scd_heal(SceTask* sce)
     {
         sce->data++;
-        gPlayerEntity.life = gPlayerEntity.max_life;
-        gPoisonTimer = 0;
-        gPoisonStatus = 0;
+        gGameTable.pl.life = gGameTable.pl.max_life;
+        gGameTable.poison_timer = 0;
+        gGameTable.poison_status = 0;
         return SCD_RESULT_NEXT;
     }
 
@@ -594,16 +594,16 @@ namespace openre::scd
     static int scd_poison_ck(SceTask* sce)
     {
         sce->data++;
-        return gPoisonStatus != 0 ? SCD_RESULT_NEXT : SCD_RESULT_FALSE;
+        return gGameTable.poison_status != 0 ? SCD_RESULT_NEXT : SCD_RESULT_FALSE;
     }
 
     // 0x004E90E0
     static int scd_poison_clr(SceTask* sce)
     {
         sce->data++;
-        gPoisonTimer = 0;
-        gPoisonStatus = 0;
-        gPlayerEntity.routine_0 = 1;
+        gGameTable.poison_timer = 0;
+        gGameTable.poison_status = 0;
+        gGameTable.pl.routine_0 = 1;
         return SCD_RESULT_NEXT;
     }
 

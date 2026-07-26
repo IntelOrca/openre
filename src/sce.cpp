@@ -418,7 +418,7 @@ namespace openre::sce
     // 0x004E9460
     static int sce_door(SceAotDoorData* data)
     {
-        if (gPlayerEntity.pOn_om != 0)
+        if (gGameTable.pl.pOn_om != 0)
             return 0;
 
         auto isClaire = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);

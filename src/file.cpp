@@ -51,7 +51,7 @@ namespace openre::file
         }
         if (result == 0)
         {
-            gErrorCode = 11;
+            gGameTable.error_no = 11;
         }
         return result;
 #endif
@@ -83,7 +83,7 @@ namespace openre::file
         auto bytesRead = read_partial_file_into_buffer(ospFilepath, gGameTable.psp_lookup, offset, length, 4);
         if (bytesRead == 0)
         {
-            gErrorCode = 0;
+            gGameTable.error_no = 0;
             gGameTable.osp_mask_flag = 0;
         }
         return bytesRead;

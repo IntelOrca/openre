@@ -148,44 +148,44 @@ namespace openre::player
         switch (routine)
         {
         case Routine::IDLE:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 0;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 0;
             break;
         case Routine::FORWARD:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 1;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 1;
             break;
         case Routine::RUN_FORWARD:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 2;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 2;
             break;
         case Routine::BACKWARD:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 3;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 3;
             break;
         case Routine::ROTATE:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 4;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 4;
             break;
         case Routine::AIM:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 5;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 5;
             break;
         case Routine::QUICKTURN:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 0xC;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 0xC;
             break;
         case Routine::PUSH_OBJECT:
-            gPlayerEntity.routine_0 = 1;
-            gPlayerEntity.routine_1 = 0xA;
+            gGameTable.pl.routine_0 = 1;
+            gGameTable.pl.routine_1 = 0xA;
             break;
         case Routine::PICK_UP_ITEM:
-            gPlayerEntity.routine_1 = 6;
-            gPlayerEntity.routine_2 = 0;
+            gGameTable.pl.routine_1 = 6;
+            gGameTable.pl.routine_2 = 0;
             break;
         }
-        gPlayerEntity.routine_2 = 0;
-        gPlayerEntity.routine_3 = 0;
+        gGameTable.pl.routine_2 = 0;
+        gGameTable.pl.routine_3 = 0;
     }
 
     // 0x00502190
@@ -292,7 +292,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*, int, int);
         auto p = (sig)0x004DABC0;
-        return p(&gPlayerEntity, a1, a2);
+        return p(&gGameTable.pl, a1, a2);
     }
 
     // 0x004B3540
@@ -300,7 +300,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*, int);
         auto p = (sig)0x004B3540;
-        return p(&gPlayerEntity, a1);
+        return p(&gGameTable.pl, a1);
     }
 
     // 0x004D71C0
@@ -308,7 +308,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*);
         auto p = (sig)0x004D71C0;
-        return p(&gPlayerEntity);
+        return p(&gGameTable.pl);
     }
 
     // 0x004D4850
@@ -316,7 +316,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*);
         auto p = (sig)0x004D4850;
-        return p(&gPlayerEntity);
+        return p(&gGameTable.pl);
     }
 
     // 0x004D4910
@@ -324,7 +324,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*);
         auto p = (sig)0x004D4910;
-        return p(&gPlayerEntity);
+        return p(&gGameTable.pl);
     }
 
     // 0x004D46A0
@@ -332,7 +332,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*);
         auto p = (sig)0x004D46A0;
-        return p(&gPlayerEntity);
+        return p(&gGameTable.pl);
     }
 
     // 0x004E2680
@@ -340,7 +340,7 @@ namespace openre::player
     {
         using sig = int (*)(PlayerEntity*, int, int);
         auto p = (sig)0x004E2680;
-        return p(&gPlayerEntity, a1, a2);
+        return p(&gGameTable.pl, a1, a2);
     }
 
     // 0x004CDE00
@@ -397,7 +397,7 @@ namespace openre::player
                 {
                     player->d_life_u = 1;
                 }
-                if (gPoisonStatus)
+                if (gGameTable.poison_status)
                 {
                     player->d_life_u = 1;
                 }
@@ -485,7 +485,7 @@ namespace openre::player
             {
                 partsW->poly_rgb = 128;
             }
-            if (gPoisonStatus)
+            if (gGameTable.poison_status)
             {
                 if ((player->move_cnt & 1) == 0)
                 {
@@ -503,11 +503,11 @@ namespace openre::player
             partsW->poly_rgb += gGameTable.dword_689BDC << 16;
         }
 
-        if (gPoisonStatus)
+        if (gGameTable.poison_status)
         {
-            if (gPoisonTimer-- == 0)
+            if (gGameTable.poison_timer-- == 0)
             {
-                gPoisonTimer = 30;
+                gGameTable.poison_timer = 30;
                 if (player->life > 1)
                 {
                     player->life--;

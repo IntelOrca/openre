@@ -196,7 +196,7 @@ namespace openre::audio
         char path[260];
         std::sprintf(path, "common\\sound\\bgm\\main%02x.bgm", bgmIndex);
 
-        auto buffer = (uint8_t*)((_memTop + 16) & 0xFFFFFFF0);
+        auto buffer = (uint8_t*)(((uintptr_t)gGameTable.mem_top + 16) & 0xFFFFFFF0);
         auto numBytes = read_file_into_buffer(path, (char*)buffer, 1);
         if (numBytes == 0)
         {

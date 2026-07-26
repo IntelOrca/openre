@@ -47,21 +47,6 @@ namespace openre
     bool gClassicRebirthEnabled;
 
     GameTable& gGameTable = *((GameTable*)0x00000000);
-    uint32_t& gGameFlags = *((uint32_t*)0x989ED0);
-    uint16_t& gCurrentStage = *((uint16_t*)0x98EB14);
-    uint16_t& gCurrentRoom = *((uint16_t*)0x98EB16);
-    uint16_t& gCurrentCut = *((uint16_t*)0x98EB18);
-    uint16_t& gLastCut = *((uint16_t*)0x98EB1A);
-    uint32_t& gErrorCode = *((uint32_t*)0x680580);
-    PlayerEntity& gPlayerEntity = *((PlayerEntity*)0x00989EF0);
-    uint16_t& gPoisonStatus = *((uint16_t*)0x0098A108);
-    uint8_t& gPoisonTimer = *((uint8_t*)0x0098A10A);
-    uint32_t& _memTop = *((uint32_t*)0x988624);
-
-    static uint8_t* _ospBuffer = (uint8_t*)0x698840;
-    static uint8_t& _ospMaskFlag = *((uint8_t*)0x6998C0);
-    static PlayerEntity*& _em = *((PlayerEntity**)0x689C60);
-    static uint8_t& byte_989E7E = *((uint8_t*)0x989E7E);
 
     static const char* windowTitle = "BIOHAZARD(R) 2 PC";
     static const char* fontFaceName = "ＭＳ ゴシック";
@@ -112,14 +97,14 @@ namespace openre
     // 0x004DD360
     static void read_osp()
     {
-        _ospMaskFlag = 1;
-        auto eax = (gCurrentStage * 32) + gCurrentRoom;
+        gGameTable.osp_mask_flag = 1;
+        auto eax = (gGameTable.current_stage * 32) + gGameTable.current_room;
         auto edx = (eax * 33) * 128;
-        auto bytesRead = read_partial_file_into_buffer("common\\bin\\osp.bin", _ospBuffer, edx, 4224, 4);
+        auto bytesRead = read_partial_file_into_buffer("common\\bin\\osp.bin", gGameTable.psp_lookup, edx, 4224, 4);
         if (bytesRead == 0)
         {
-            gErrorCode = bytesRead;
-            _ospMaskFlag = 0;
+            gGameTable.error_no = bytesRead;
+            gGameTable.osp_mask_flag = 0;
         }
     }
 
@@ -1023,7 +1008,7 @@ namespace openre
     // 0x004B7860
     static void load_init_table_1()
     {
-        load_init_table((void*)0x00999AE0, byte_989E7E);
+        load_init_table((void*)0x00999AE0, gGameTable.byte_989E7E);
     }
 
     // 0x004DE650
@@ -1035,8 +1020,8 @@ namespace openre
     // 0x00505B20
     static void load_init_table_3()
     {
-        _memTop = 0x008FF8A0;
-        load_init_table((void*)0x008BD880, byte_989E7E);
+        gGameTable.mem_top = (void*)0x008FF8A0;
+        load_init_table((void*)0x008BD880, gGameTable.byte_989E7E);
     }
 
     void snd_se_walk(int, int, PlayerEntity* pEm) {}

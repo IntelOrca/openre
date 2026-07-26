@@ -175,12 +175,6 @@ namespace openre
     };
 
     extern GameTable& gGameTable;
-    extern uint32_t& gGameFlags;
-    extern uint32_t& gErrorCode;
-    extern uint32_t& _memTop;
-    extern PlayerEntity& gPlayerEntity;
-    extern uint16_t& gPoisonStatus;
-    extern uint8_t& gPoisonTimer;
 
     static const char* gStageSymbols = "123456789abcdefg";
 
