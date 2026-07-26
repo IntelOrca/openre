@@ -1,4 +1,4 @@
-#define USE_ORIGINAL_FILEIO
+// #define USE_ORIGINAL_FILEIO
 
 #include "file.h"
 #include "interop.hpp"
@@ -38,7 +38,7 @@ namespace openre::file
         return p(path, buffer, length);
 #else
         size_t result = 0;
-        auto hFile = sub_509020(path, length);
+        auto hFile = file_open_handle(path, length);
         if (hFile != INVALID_HANDLE_VALUE)
         {
             auto fileSize = GetFileSize(hFile, NULL);
