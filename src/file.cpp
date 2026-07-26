@@ -1,8 +1,7 @@
-// #define USE_ORIGINAL_FILEIO
-
 #include "file.h"
 #include "gfx.h"
 #include "interop.hpp"
+#include "logger.h"
 #include "openre.h"
 #include <windows.h>
 #include <string>
@@ -36,6 +35,26 @@ namespace openre::file
         interop::thiscall<void, void*, const char*>(0x50C420, (void*)(uintptr_t)addr, str);
     }
 
+    // --- File I/O wrapper with error dialog suppression and logging ---
+
+    static HANDLE file_open_internal(const char* path, DWORD access, DWORD shareMode, DWORD creationDisposition, bool suppressErrors)
+    {
+        UINT oldMode = 0;
+        if (suppressErrors)
+            oldMode = SetErrorMode(0x8001);
+        HANDLE hFile = CreateFileA(path, access, shareMode, NULL, creationDisposition, 0, NULL);
+        if (suppressErrors)
+            SetErrorMode(oldMode);
+
+        const char* type = (access & GENERIC_WRITE) ? "WRITE" : "READ";
+        if (hFile != INVALID_HANDLE_VALUE)
+            logging::logInfo("[{} SUCCESS] {}", type, path);
+        else
+            logging::logWarning("[{} FAIL] {}", type, path);
+
+        return hFile;
+    }
+
     // 0x005092A0
     static bool check_disk_id()
     {
@@ -60,10 +79,7 @@ namespace openre::file
             if (re2Data && re2Data[0]) {
                 std::string fullPath = std::string(re2Data) + "\\" + path;
                 og_string_assign(0x689F3C, fullPath.c_str());
-                UINT oldMode = SetErrorMode(0x8001);
-                HANDLE hFile = CreateFileA(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-                SetErrorMode(oldMode);
-                return hFile;
+                return file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
             }
         }
 
@@ -97,10 +113,7 @@ namespace openre::file
                     std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
                     // Store resolved path in OG global dword_689F3C
                     og_string_assign(0x689F3C, fullPath.c_str());
-                    // Suppress OS error dialogs (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX)
-                    UINT oldMode = SetErrorMode(0x8001);
-                    hFile = CreateFileA(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-                    SetErrorMode(oldMode);
+                    hFile = file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
                 }
             }
             // If all modes failed, check for a valid disc
@@ -134,11 +147,6 @@ namespace openre::file
     // 0x00502D40
     size_t read_file_into_buffer(const char* path, void* buffer, size_t length)
     {
-#ifdef USE_ORIGINAL_FILEIO
-        using sig = uint32_t (*)(const char*, void*, size_t);
-        auto p = (sig)0x00502D40;
-        return p(path, buffer, length);
-#else
         size_t result = 0;
         auto hFile = file_open_handle(path, length);
         if (hFile != INVALID_HANDLE_VALUE)
@@ -156,7 +164,6 @@ namespace openre::file
             gGameTable.error_no = 11;
         }
         return result;
-#endif
     }
 
     // 0x00509540
@@ -194,7 +201,7 @@ namespace openre::file
     // 0x00509780
     static int file_read_save(void* buffer, const char* filename, size_t size)
     {
-        auto file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+        auto file = file_open_internal(filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, false);
         if (file == INVALID_HANDLE_VALUE)
         {
             return READ_SAVE_FILE_ERROR;
@@ -213,7 +220,7 @@ namespace openre::file
     // 0x005097E0
     static size_t file_write_save(const char* filename, void* buffer, size_t size)
     {
-        auto file = CreateFileA(filename, GENERIC_WRITE, FILE_SHARE_WRITE, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+        auto file = file_open_internal(filename, GENERIC_WRITE, FILE_SHARE_WRITE, CREATE_ALWAYS, false);
         if (file == INVALID_HANDLE_VALUE)
         {
             return 0;
