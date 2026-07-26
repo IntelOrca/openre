@@ -22,7 +22,7 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 
 ## Building
 * Under a VS2022 prompt: "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
-  * `msbuild` in repo root
+  * E.g. `cmd /c "call "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" && msbuild"` in repo root
 
 ## Running
 * Run `F:\games\openre\openre.exe` with working directory: `F:\games\openre`
