@@ -101,5 +101,7 @@ namespace openre::sce
     void sce_work_clr_set();
     void sce_rnd_set();
     void sce_model_init();
+    void sce_scheduler();
     void sce_scheduler_set();
+    void sce_at();
 }

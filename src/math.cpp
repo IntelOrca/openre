@@ -404,6 +404,12 @@ namespace openre::math
         memcpy(&gGameTable.ll_matrix, &m, sizeof(Mat16));
     }
 
+    // 0x00451780
+    int square_root_0(int a0)
+    {
+        return interop::call<int, int>(0x00451780, a0);
+    }
+
     void math_init_hooks()
     {
         interop::writeJmp(0x00450F60, &rotate_matrix);

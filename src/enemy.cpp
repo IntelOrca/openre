@@ -395,10 +395,28 @@ namespace openre::enemy
         interop::call<void, EnemyEntity*>(0x004CC680, enemy);
     }
 
+    // 0x004CC6D0
+    void oba_ck_em2(ActorEntity* entity)
+    {
+        interop::call<void, ActorEntity*>(0x004CC6D0, entity);
+    }
+
     // 0x004CC730
     void sca_ck_em(EnemyEntity* enemy, int a1)
     {
         interop::call<void, EnemyEntity*, int>(0x004CC730, enemy, a1);
+    }
+
+    // 0x004E03B0
+    int sca_ck_info(Vec32* pos, int a1, int a2, int a3)
+    {
+        return interop::call<int, Vec32*, int, int, int>(0x004E03B0, pos, a1, a2, a3);
+    }
+
+    // 0x004E2AE0
+    int sca_ck_hit(Vec32* vec, int a1, int a2, int a3)
+    {
+        return interop::call<int, Vec32*, int, int, int>(0x004E2AE0, vec, a1, a2, a3);
     }
 
     // 0x00445840

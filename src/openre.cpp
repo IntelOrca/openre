@@ -1137,6 +1137,784 @@ namespace openre
         interop::call(0x004EEDF0);
     }
 
+    static void psp_trans();
+    static void om_trans();
+
+    // 0x00446D50
+    static void exbtl_opening()
+    {
+        interop::call(0x00446D50);
+    }
+
+    // 0x004B57C0
+    static void result()
+    {
+        interop::call(0x004B57C0);
+    }
+
+    // 0x0044DF10
+    static void die()
+    {
+        interop::call(0x0044DF10);
+    }
+
+    // 0x00449FD0
+    static void config()
+    {
+        interop::call(0x00449FD0);
+    }
+
+    // 0x00501BD0
+    static void status()
+    {
+        interop::call(0x00501BD0);
+    }
+
+    // 0x004C57E0
+    static void mem_card()
+    {
+        interop::call(0x004C57E0);
+    }
+
+    // 0x004D1F50
+    static void windows()
+    {
+        interop::call(0x004D1F50);
+    }
+
+    // 0x004C0820
+    static void sub_4C0820()
+    {
+        interop::call(0x004C0820);
+    }
+
+    // 0x004CCD70
+    static void om_move()
+    {
+        interop::call(0x004CCD70);
+    }
+
+    // 0x004C5720
+    static void mirror_matrix_set()
+    {
+        interop::call(0x004C5720);
+    }
+
+    // 0x004C5600
+    static void mirror_trans(ActorEntity* entity)
+    {
+        interop::call<void, ActorEntity*>(0x004C5600, entity);
+    }
+
+    // 0x004C0B70
+    static void gun_light_set()
+    {
+        interop::call(0x004C0B70);
+    }
+
+    // 0x004C0CA0
+    static void gun_light_reset()
+    {
+        interop::call(0x004C0CA0);
+    }
+
+    // 0x00446D30
+    static void set_clear_color(int r, int g, int b)
+    {
+        interop::call<void, int, int, int>(0x00446D30, r, g, b);
+    }
+
+    // 0x00503190
+    static void rot_vector(uint16_t rot_y, Vec16* in, Vec16* out)
+    {
+        interop::call<void, uint16_t, Vec16*, Vec16*>(0x00503190, rot_y, in, out);
+    }
+
+    // 0x004C0CE0
+    static void joint_trans2(ActorEntity* entity, PartsW* parts, int32_t be_flg, Vec32* vec)
+    {
+        interop::call<void, ActorEntity*, PartsW*, int32_t, Vec32*>(0x004C0CE0, entity, parts, be_flg, vec);
+    }
+
+    // 0x004B3050
+    static void mul_kage(Kage* kage, uint16_t ground, uint16_t cdir_y, int flg)
+    {
+        interop::call<void, Kage*, uint16_t, uint16_t, int>(0x004B3050, kage, ground, cdir_y, flg);
+    }
+
+    // 0x004B3110
+    static void kage_work_sort()
+    {
+        interop::call(0x004B3110);
+    }
+
+    // 0x004B32E0
+    static void kage_work9_sort()
+    {
+        interop::call(0x004B32E0);
+    }
+
+    // 0x004B93D0
+    static void esp_move()
+    {
+        interop::call(0x004B93D0);
+    }
+
+    // 0x00507C50
+    static void prim_trans()
+    {
+        interop::call(0x00507C50);
+    }
+
+    // 0x004C3BC0
+    static void scr_effect()
+    {
+        interop::call(0x004C3BC0);
+    }
+
+    // 0x00503350
+    static void set_front_pos(ActorEntity* entity)
+    {
+        interop::call<void, ActorEntity*>(0x00503350, entity);
+    }
+
+    // 0x004C8603
+    static void prim_14(int x, int y, uint32_t a3, uint32_t a4, const char* format)
+    {
+        interop::call<void, int, int, uint32_t, uint32_t, const char*>(0x004C8603, x, y, a3, a4, format);
+    }
+
+    // 0x004C8603
+    static void prim_14(int x, int y, uint32_t a3, uint32_t a4, const char* format, int a5, int a6, int a7, int a8, int a9)
+    {
+        interop::call<void, int, int, uint32_t, uint32_t, const char*, int, int, int, int, int>(
+            0x004C8603, x, y, a3, a4, format, a5, a6, a7, a8, a9);
+    }
+
+    // 0x0052D7E8
+    static const uint8_t timer_blink_tbl[9] = { 0, 3, 6, 1, 4, 7, 2, 5, 9 };
+
+    // 0x0052D800
+    static const char TIMER_FMT[] = "%2d^%d%d=%d%d";
+
+    // 99:59 in seconds
+    static constexpr auto GAME_TIMER_MAX = 5999;
+
+    static bool is_demo_timeout()
+    {
+        return check_flag(FlagGroup::System, FG_SYSTEM_DEMO) && gGameTable.word_98E52A > gGameTable.pdemo.frames;
+    }
+
+    static bool game_check_status_trigger()
+    {
+        if (task_status(1) || gGameTable.current_cut != gGameTable.byte_989EEA || gGameTable.byte_98F07B
+            || gGameTable.byte_991F80 != 0 || check_flag(FlagGroup::Status, FG_STATUS_26)
+            || check_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT) || gGameTable.pl.damage_cnt
+            || check_flag(FlagGroup::System, FG_SYSTEM_5) || check_flag(FlagGroup::System, FG_SYSTEM_22))
+        {
+            return false;
+        }
+        if ((gGameTable.dword_9885FE & 0x100) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_4, true);
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
+        }
+        if ((gGameTable.dword_9885FE & 0x800) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
+        {
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
+        }
+        if ((gGameTable.key_trg & 0x4000) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
+        {
+            gGameTable.hud_mode = HUD_MODE_MAP_1;
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
+        }
+        if (!check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
+        {
+            return false;
+        }
+        set_flag(FlagGroup::Status, FG_STATUS_26, true);
+        gGameTable.dword_991FC4 = gGameTable.fg_stop;
+        gGameTable.fg_stop |= 0xFF000000;
+        gGameTable.byte_991F80 = 1;
+        if (gGameTable.hud_mode != HUD_MODE_PICKUP_ITEM)
+        {
+            snd_se_on(0x4060000);
+        }
+        return true;
+    }
+
+    static void game_process_enemies()
+    {
+        for (auto slot = reinterpret_cast<ActorEntity**>(&gGameTable.splayer_work),
+                  slotEnd = reinterpret_cast<ActorEntity**>(gGameTable.dword_98862C);
+             slot != slotEnd;
+             slot++)
+        {
+            auto entity = *slot;
+            gGameTable.actor_entity = entity;
+            if ((entity->be_flg & 1) && !(entity->type & 0x8000))
+            {
+                auto dx = entity->m.pos.x - gGameTable.pl.m.pos.x;
+                auto dz = entity->m.pos.z - gGameTable.pl.m.pos.z;
+                entity->l_pl = square_root_0(dx * dx + dz * dz);
+                reinterpret_cast<void (*)(ActorEntity*)>(gGameTable.enemy_init_map[entity->id])(entity);
+            }
+        }
+    }
+
+    static void game_render_entities()
+    {
+        for (auto slot = reinterpret_cast<ActorEntity**>(&gGameTable.player_work),
+                  slotEnd = reinterpret_cast<ActorEntity**>(gGameTable.dword_98862C);
+             slot != slotEnd;
+             slot++)
+        {
+            auto entity = *slot;
+            gGameTable.actor_entity = entity;
+            if (!(entity->be_flg & 1))
+            {
+                continue;
+            }
+            auto kage = entity->pKage_work;
+            auto kagePos = *reinterpret_cast<Vec32**>(reinterpret_cast<uint8_t*>(kage) + 0x14);
+            int16_t ground;
+            if (entity == reinterpret_cast<ActorEntity*>(&gGameTable.pl))
+            {
+                gGameTable.vec_6897F4.z = 0;
+                gGameTable.vec_6897F4.x = entity->kage_ofs;
+                rot_vector(entity->cdir.y, &gGameTable.vec_6897F4, &gGameTable.vec_6897F4);
+                gGameTable.vec_6897E0.x = kagePos->x + gGameTable.vec_6897F4.x;
+                gGameTable.vec_6897E0.y = kagePos->y;
+                gGameTable.vec_6897E0.z = kagePos->z + gGameTable.vec_6897F4.z;
+                ground = (int16_t)sca_ck_hit(&gGameTable.vec_6897E0, 0, entity->sc_id << 8, 0);
+            }
+            else
+            {
+                ground = (int16_t)sca_ck_hit(kagePos, 0, entity->sc_id << 8, 0);
+            }
+            entity->ground = ground;
+            if (entity->pTbefore_func)
+            {
+                reinterpret_cast<void (*)(ActorEntity*)>(entity->pTbefore_func)(entity);
+            }
+            joint_trans2(entity, entity->pSin_parts_ptr, entity->be_flg, &entity->m.pos);
+            if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
+            {
+                mirror_trans(entity);
+            }
+            mul_kage(kage, entity->ground, entity->cdir.y, (entity->be_flg >> 9) & 2);
+            if (entity->pTafter_func)
+            {
+                reinterpret_cast<void (*)(ActorEntity*)>(entity->pTafter_func)(entity);
+            }
+            entity->old_pos.x = (int16_t)entity->m.pos.x;
+            entity->old_pos.y = (int16_t)entity->m.pos.y;
+            entity->old_pos.z = (int16_t)entity->m.pos.z;
+            entity->old_pos_2.x = (int16_t)entity->atd[0].pos.x;
+            entity->old_pos_2.y = (int16_t)entity->atd[0].pos.y;
+            entity->old_pos_2.z = (int16_t)entity->atd[0].pos.z;
+        }
+    }
+
+    // 0x004BF810
+    void game_loop()
+    {
+        auto& ctcb = *gGameTable.ctcb;
+
+        if (gGameTable.byte_680597 & 2)
+        {
+            gGameTable.pl.life = check_flag(FlagGroup::System, FG_SYSTEM_31) ? 400 : 200;
+            gGameTable.byte_680597 &= 1;
+        }
+
+        auto vk_press = gGameTable.vk_press;
+        if (vk_press & 1)
+        {
+            vk_press &= ~1u;
+            gGameTable.vk_press = vk_press;
+            if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            {
+                gGameTable.dword_9885FE |= 0x800;
+            }
+        }
+        if (vk_press & 2)
+        {
+            vk_press &= ~2u;
+            gGameTable.vk_press = vk_press;
+            if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            {
+                gGameTable.dword_9885FE |= 0x100;
+            }
+        }
+        if ((vk_press & 0x40) && !(vk_press & 4))
+        {
+            vk_press &= ~0x40u;
+            gGameTable.reset_r0 = 1;
+            gGameTable.vk_press = vk_press;
+        }
+        if (vk_press & 4)
+        {
+            gGameTable.vk_press = vk_press & ~4u;
+            gGameTable.word_9885FC = 0;
+            bg_set_mode(2, 0);
+            task_kill(0);
+            task_kill(1);
+            task_kill(2);
+            gGameTable.byte_98F1B5 = 0;
+            moji_mode_init();
+            trans_pointer_set();
+            snd_sys_init2();
+            init_global();
+            gGameTable.byte_680598 = 0;
+            gGameTable.word_98E78C = 0;
+            task_chain(title::title);
+            return;
+        }
+
+        if (ctcb.var_08 > 0x16)
+        {
+            return;
+        }
+
+        switch (ctcb.var_08)
+        {
+        case 0:
+            title_game_init();
+            if (!ctcb.var_13)
+            {
+                ctcb.var_08 = 1;
+                task_sleep(1);
+            }
+            return;
+        case 1:
+            gGameTable.word_6897C4 = 0;
+            gGameTable.word_6897DC = 8;
+            gGameTable.fg_stop = 0;
+            gGameTable.dword_6897C8 = 0;
+            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) && !check_flag(FlagGroup::Common, 0xFE))
+            {
+                task_execute(1, exbtl_opening);
+                set_flag(FlagGroup::Common, 0xFE, true);
+            }
+            goto LABEL_94;
+        case 2:
+            if (check_flag(FlagGroup::System, FG_SYSTEM_10))
+            {
+                task_chain(result);
+                return;
+            }
+            if (!check_flag(FlagGroup::System, FG_SYSTEM_1))
+            {
+                if (!check_flag(FlagGroup::System, FG_SYSTEM_24) && !check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR)
+                    && !check_flag(FlagGroup::Status, FG_STATUS_SCENARIO) && check_flag(FlagGroup::System, FG_SYSTEM_14)
+                    && !check_flag(FlagGroup::Common, 6) && gGameTable.word_98E9BC == 0)
+                {
+                    set_flag(FlagGroup::System, FG_SYSTEM_24, true);
+                }
+                goto LABEL_80;
+            }
+            gGameTable.dword_991FC0 = 0;
+            if (gGameTable.byte_98F1B8)
+            {
+                goto LABEL_159;
+            }
+            if (check_flag(FlagGroup::System, FG_SYSTEM_29))
+            {
+                if (++gGameTable.word_6897C4 == 16)
+                {
+                    task_execute(1, die);
+                    gGameTable.fg_message = 0;
+                    gGameTable.word_6897C4 = -30000;
+                }
+                goto LABEL_159;
+            }
+            if (gGameTable.byte_991F80 == 0 && is_demo_timeout())
+            {
+                gGameTable.byte_98E9AA = gGameTable.byte_99270E;
+                gGameTable.fg_stop |= 0xFF000000;
+                if (gGameTable.byte_98F1BB)
+                {
+                    hud_fade_set(512, 2048, 7, 1);
+                }
+                else
+                {
+                    hud_fade_set(512, 512, 7, 1);
+                }
+                gGameTable.byte_991F80 = 2;
+            }
+            switch ((int8_t)gGameTable.byte_991F80)
+            {
+            case 1:
+                if (gGameTable.fg_message < 0 || !hud_fade_status(0))
+                {
+                    break;
+                }
+                gGameTable.fg_stop |= 0xFF000000;
+                if (!check_flag(FlagGroup::Status, FG_STATUS_SCREEN) && !check_flag(FlagGroup::System, FG_SYSTEM_13))
+                {
+                    if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) && (uint8_t)gGameTable.dword_98EBD0 == 0xFF)
+                    {
+                        set_flag(FlagGroup::Zapping, 0x3F, true);
+                    }
+                    if (!check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) || !check_flag(FlagGroup::Zapping, 0x3F))
+                    {
+                        set_flag(FlagGroup::System, FG_SYSTEM_15, true);
+                        bg_set_mode(1, 0);
+                    }
+                    gGameTable.fg_stop = 0;
+                    set_flag(FlagGroup::System, FG_SYSTEM_17, true);
+                    gGameTable.dword_6897C8 = 0;
+                    ctcb.var_08 = 4;
+                    goto LABEL_53;
+                }
+                hud_fade_set(512, 12288, 7, 1);
+                gGameTable.byte_991F80 = 2;
+                goto LABEL_56;
+            case 2:
+            LABEL_56:
+                if (hud_fade_status(0))
+                {
+                    hud_fade_set(512, 0, 7, 1);
+                    hud_fade_adjust(0, 0x7FFF, 0xFFFFFF, nullptr);
+                    task_sleep(2);
+                    ctcb.var_08 = 5;
+                    return;
+                }
+                break;
+            case 3: goto LABEL_94;
+            case 4:
+                gGameTable.byte_991F80 = 5;
+                gGameTable.fg_stop |= 0xFF000000;
+                break;
+            case 5:
+                if (!hud_fade_status(0))
+                {
+                    gGameTable.fg_stop = gGameTable.dword_6897C8;
+                    gGameTable.byte_991F80 = 0;
+                }
+                break;
+            case 6: ctcb.var_08 = 12; goto LABEL_62;
+            case 7:
+                task_execute(1, windows);
+                gGameTable.byte_991F80 = 0;
+                goto LABEL_186;
+            default: break;
+            }
+        LABEL_63:
+            if (check_flag(FlagGroup::Status, FG_STATUS_7))
+            {
+                goto LABEL_153;
+            }
+            if (!check_flag(FlagGroup::Status, FG_STATUS_4))
+            {
+                goto LABEL_120;
+            }
+            if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
+            {
+                if (gGameTable.word_6897C4 > 29 || !(gGameTable.dword_6897F0 & 0x8000000))
+                {
+                    gGameTable.word_6897C4 = 0;
+                    gGameTable.word_6897DC = 0;
+                    gGameTable.word_98EB2A++;
+                }
+                auto timer = (int16_t)gGameTable.word_98EB2A;
+                prim_14(
+                    104,
+                    32,
+                    1,
+                    2,
+                    TIMER_FMT,
+                    timer / 60,
+                    timer % 60 / 10,
+                    timer % 60 % 10,
+                    gGameTable.word_6897C4 / 3,
+                    timer_blink_tbl[gGameTable.word_6897DC % 9]);
+                if (gGameTable.word_98EB2A == GAME_TIMER_MAX && gGameTable.word_6897C4 == 27)
+                {
+                    gGameTable.word_6897DC = 8;
+                    goto LABEL_120;
+                }
+                if (gGameTable.byte_991F80 == 0 && hud_fade_status(0)
+                    && (gGameTable.current_stage != 0 || gGameTable.current_room != 28))
+                {
+                    gGameTable.word_6897DC = ++gGameTable.word_6897C4;
+                }
+                goto LABEL_120;
+            }
+            else
+            {
+                if (gGameTable.word_6897C4 > 29 || !(gGameTable.dword_6897F0 & 0x8000000))
+                {
+                    gGameTable.word_6897C4 = 0;
+                    gGameTable.word_6897DC = 8;
+                    gGameTable.word_98EB2A--;
+                }
+                auto timer = (int16_t)gGameTable.word_98EB2A;
+                if (timer < 0)
+                {
+                    // 0x0052D7F4: " 0^00=00"
+                    prim_14(104, 32, 2, 0, " 0^00=00");
+                }
+                else
+                {
+                    prim_14(
+                        104,
+                        32,
+                        timer < 60 ? 2 : 1,
+                        2,
+                        TIMER_FMT,
+                        timer / 60,
+                        timer % 60 / 10,
+                        timer % 60 % 10,
+                        9 - gGameTable.word_6897C4 / 3,
+                        gGameTable.word_6897DC);
+                }
+                if (timer < 0)
+                {
+                    if (gGameTable.byte_991F80 == 0 && hud_fade_status(0) && !task_status(1))
+                    {
+                        set_flag(FlagGroup::System, FG_SYSTEM_29, true);
+                        set_flag(FlagGroup::Status, FG_STATUS_4, false);
+                        gGameTable.word_6897C4 = 0;
+                        gGameTable.word_6897DC = 0;
+                    }
+                    goto LABEL_159;
+                }
+                if (gGameTable.byte_991F80 != 0 || !hud_fade_status(0))
+                {
+                    goto LABEL_120;
+                }
+                gGameTable.word_6897C4++;
+                gGameTable.word_6897DC -= 3;
+                if (gGameTable.word_6897DC >= 1)
+                {
+                    goto LABEL_120;
+                }
+                gGameTable.word_6897DC = 8;
+                goto LABEL_120;
+            }
+        LABEL_120:
+            gGameTable.dword_6897F0 = gGameTable.fg_status;
+            if (gGameTable.dword_98E790)
+            {
+                reinterpret_cast<void (*)()>(gGameTable.dword_98E790)();
+            }
+            if (!check_flag(FlagGroup::Status, FG_STATUS_CAMERA_LOCKED))
+            {
+                cut_check(0);
+            }
+            sce_scheduler();
+            if (game_check_status_trigger())
+            {
+                goto LABEL_159;
+            }
+            gGameTable.dword_991FC0 |= 1;
+            gGameTable.fg_room_enemy &= 0x00FF;
+            game_process_enemies();
+            gGameTable.actor_entity = reinterpret_cast<ActorEntity*>(&gGameTable.pl);
+            if (!(gGameTable.pl.type & 0x8000))
+            {
+                player_move(&gGameTable.pl);
+                oba_ck_em2(reinterpret_cast<ActorEntity*>(&gGameTable.pl));
+                sca_ck_em(reinterpret_cast<EnemyEntity*>(&gGameTable.pl), 0x8000);
+                set_front_pos(reinterpret_cast<ActorEntity*>(&gGameTable.pl));
+                gGameTable.f_pos.x = gGameTable.pl.f_pos.x;
+                gGameTable.f_pos.z = gGameTable.pl.f_pos.z;
+                gGameTable.pl.Sca_info |= sca_ck_info(&gGameTable.f_pos, 0x1C2, 1 << gGameTable.pl.nFloor, 0x8000) << 16;
+            }
+            om_move();
+            sce_at();
+            if (gGameTable.action_fn)
+            {
+                reinterpret_cast<void (*)()>(gGameTable.action_fn)();
+            }
+        LABEL_153:
+            if (check_flag(FlagGroup::System, FG_SYSTEM_5) && !task_status(1) && !gGameTable.byte_98F07B
+                && gGameTable.current_cut == gGameTable.byte_989EEA)
+            {
+                task_execute(1, die);
+                set_flag(FlagGroup::System, FG_SYSTEM_5, false);
+            }
+        LABEL_159:
+            if (check_flag(FlagGroup::Status, FG_STATUS_MIRROR))
+            {
+                mirror_matrix_set();
+            }
+            if (!gGameTable.can_draw && !check_flag(FlagGroup::System, FG_SYSTEM_11))
+            {
+                psp_trans();
+            }
+            marni::out();
+            if (gGameTable.byte_991F81 & 1)
+            {
+                gun_light_set();
+            }
+            {
+                auto cutInfo = *reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(gGameTable.rdt) + 0x2C);
+                auto cut = (int16_t)gGameTable.current_cut;
+                set_clear_color(cutInfo[cut * 40 + 13], cutInfo[cut * 40 + 14], cutInfo[cut * 40 + 15]);
+            }
+            game_render_entities();
+            if (gGameTable.byte_991F81 != 0)
+            {
+                gun_light_reset();
+            }
+            kage_work_sort();
+            kage_work9_sort();
+            if (!gGameTable.can_draw)
+            {
+                om_trans();
+            }
+            if (gGameTable.dword_991FC0)
+            {
+                esp_move();
+            }
+            prim_trans();
+            scr_effect();
+            marni::out();
+        LABEL_186:
+            if (check_flag(FlagGroup::System, FG_SYSTEM_10))
+            {
+                bg_set_mode(2, 0);
+            }
+            ctcb.var_08 = 2;
+        LABEL_189:
+            task_sleep(1);
+            return;
+        case 3:
+        case 0xA:
+        case 0xD:
+        case 0xE:
+        case 0xF:
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15: return;
+        case 4:
+        LABEL_53:
+            door_set();
+            if (!ctcb.var_13)
+            {
+                goto LABEL_95;
+            }
+            return;
+        case 5:
+            if (is_demo_timeout())
+            {
+                marni::out();
+            LABEL_80:
+                bg_set_mode(2, 0);
+                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || gGameTable.byte_98F1BB)
+                {
+                    gGameTable.byte_98F1BB = 1;
+                    init_global();
+                    task_chain(title::title);
+                    ctcb.var_08 = 0;
+                }
+                else
+                {
+                    init_global();
+                    gGameTable.byte_98F1B9 = 0;
+                    set_flag(FlagGroup::System, FG_SYSTEM_30, true);
+                    task_execute(1, sub_4C0820);
+                    task_chain(title::title);
+                    ctcb.var_08 = 0;
+                }
+            }
+            else
+            {
+                gGameTable.fg_stop = 0;
+                set_flag(FlagGroup::System, FG_SYSTEM_17, true);
+                gGameTable.dword_6897C8 = 0;
+                if (check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
+                {
+                    if (check_flag(FlagGroup::System, FG_SYSTEM_4))
+                    {
+                        set_flag(FlagGroup::System, FG_SYSTEM_4, false);
+                        gGameTable.dword_99CF6C = 1;
+                        task_execute(1, config);
+                        task_sleep(1);
+                        ctcb.var_08 = 8;
+                    }
+                    else
+                    {
+                    LABEL_89:
+                        task_execute(1, status);
+                        ctcb.var_08 = 8;
+                        task_sleep(1);
+                    }
+                }
+                else if (check_flag(FlagGroup::System, FG_SYSTEM_13))
+                {
+                    set_flag(FlagGroup::System, FG_SYSTEM_13, false);
+                    task_execute(1, mem_card);
+                    gGameTable.dword_6897C8 = gGameTable.dword_991FC4;
+                    gGameTable.dword_991FC4 = 0;
+                    ctcb.var_08 = 9;
+                    task_sleep(1);
+                }
+                else
+                {
+                LABEL_91:
+                    ctcb.var_08 = 11;
+                    task_sleep(1);
+                }
+            }
+            return;
+        case 6:
+        case 8:
+            gGameTable.dword_6897C8 = gGameTable.dword_991FC4;
+            gGameTable.dword_991FC4 = 0;
+            set_flag(FlagGroup::Status, FG_STATUS_SCREEN, false);
+            set_flag(FlagGroup::Status, FG_STATUS_26, false);
+            goto LABEL_91;
+        case 7: goto LABEL_89;
+        case 9: set_flag(FlagGroup::System, FG_SYSTEM_20, false); goto LABEL_93;
+        case 0xB:
+        LABEL_93:
+            gGameTable.byte_991F80 = 3;
+        LABEL_94:
+            gGameTable.actor_entity = reinterpret_cast<ActorEntity*>(&gGameTable.pl);
+            gGameTable.pl.routine_0 = 0;
+            gGameTable.pl.routine_1 = 0;
+            gGameTable.pl.routine_2 = 0;
+            gGameTable.pl.routine_3 = 0;
+            player_move(&gGameTable.pl);
+            goto LABEL_95;
+        case 0xC:
+        LABEL_62:
+            if (gGameTable.byte_991F80 != 6)
+            {
+                goto LABEL_63;
+            }
+            goto LABEL_189;
+        case 0x16:
+        LABEL_95:
+            gGameTable.dword_6897C8 |= gGameTable.fg_stop;
+            set_flag(FlagGroup::System, FG_SYSTEM_17, false);
+            gGameTable.fg_stop |= 0xEF000000;
+            hud_fade_set(512, -6144, 7, 1);
+            if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR) && gGameTable.current_stage == 0
+                && gGameTable.current_room == 28)
+            {
+                if (gGameTable.word_6897C4 != 0)
+                {
+                    gGameTable.word_6897C4--;
+                }
+                else
+                {
+                    gGameTable.word_6897C4 = 29;
+                    gGameTable.word_98EB2A--;
+                }
+                gGameTable.word_6897DC = gGameTable.word_6897C4;
+            }
+            gGameTable.byte_991F80 = 5;
+            goto LABEL_63;
+        }
+    }
+
     // 0x004C3C70
     static void psx_main()
     {

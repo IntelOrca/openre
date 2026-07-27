@@ -254,7 +254,7 @@ namespace openre::sce
     }
 
     // 0x004E42D0
-    static void sce_scheduler()
+    void sce_scheduler()
     {
         if (!check_flag(FlagGroup::Stop, FG_STOP_06))
         {
@@ -605,6 +605,12 @@ namespace openre::sce
         }
 
         return 1;
+    }
+
+    // 0x004EA0D0
+    void sce_at()
+    {
+        interop::call(0x004EA0D0);
     }
 
     static void set_sce_hook(SceKind sce, SceImpl impl)

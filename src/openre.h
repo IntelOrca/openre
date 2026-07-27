@@ -88,21 +88,27 @@ namespace openre
         FG_SYSTEM_1 = 1,
         FG_SYSTEM_2 = 2,
         FG_SYSTEM_4 = 4,
+        FG_SYSTEM_5 = 5,
         FG_SYSTEM_DOOR_TRANSITION = 6,
         FG_SYSTEM_EX_BATTLE = 7,
         FG_SYSTEM_8 = 8,
         FG_SYSTEM_10 = 10,
+        FG_SYSTEM_11 = 11,
         FG_SYSTEM_12 = 12,
+        FG_SYSTEM_13 = 13,
         FG_SYSTEM_14 = 14,
         FG_SYSTEM_15 = 15,
+        FG_SYSTEM_17 = 17,
         FG_SYSTEM_DEMO = 18,
         FG_SYSTEM_BGM_DISABLED = 18,
         FG_SYSTEM_19 = 19,
         FG_SYSTEM_20 = 20,
         FG_SYSTEM_22 = 22,
+        FG_SYSTEM_24 = 24,
         FG_SYSTEM_ARRANGE = 25,
         FG_SYSTEM_EASY = 26,
         FG_SYSTEM_4TH_SURVIVOR = 28,
+        FG_SYSTEM_29 = 29,
         FG_SYSTEM_30 = 30,
         FG_SYSTEM_31 = 31,
     };
@@ -112,8 +118,10 @@ namespace openre
         FG_STATUS_PLAYER = 0,
         FG_STATUS_SCENARIO = 1,
         FG_STATUS_PARTNER = 3,
+        FG_STATUS_4 = 4,
         FG_STATUS_EASY = 5,
         FG_STATUS_BONUS = 6,
+        FG_STATUS_7 = 7,
         FG_STATUS_GAMEPLAY = 8,
         FG_STATUS_9 = 9,
         FG_STATUS_INTERACT = 10,
@@ -199,6 +207,9 @@ namespace openre
     void operator_delete(void* memoryBlock);
     bool cutscene_active();
     void vsync();
+
+    // 0x004BF810
+    void game_loop();
 
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()

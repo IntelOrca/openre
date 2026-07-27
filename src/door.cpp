@@ -380,7 +380,7 @@ namespace openre::door
     }
 
     // 0x004C0840
-    static void door_set()
+    void door_set()
     {
         auto& ctcb = *gGameTable.ctcb;
         auto& player = gGameTable.pl;

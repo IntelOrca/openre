@@ -103,7 +103,10 @@ namespace openre::enemy
     void* mirror_model_cp(Entity* entity, void* arg1);
     int* mem_ck_parts_work(int workNo, int id);
     void oba_ck_em(EnemyEntity* enemy);
+    void oba_ck_em2(ActorEntity* entity);
     void sca_ck_em(EnemyEntity* enemy, int a1);
+    int sca_ck_info(Vec32* pos, int a1, int a2, int a3);
+    int sca_ck_hit(Vec32* vec, int a1, int a2, int a3);
     int root_ck(Entity* entity, int a1, int a2, int a3);
     void goto00(Entity* entity, int x, int z, int t);
     void rot_neck_em(Entity* entity, int d);

@@ -14,5 +14,9 @@ namespace openre::title
     // 0x005035B0
     void title();
 
+    /// Initialises a new game or loads a save before entering game_loop (0x00506750)
+    // 0x00506750
+    void title_game_init();
+
     void title_init_hooks();
 }

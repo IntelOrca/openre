@@ -377,12 +377,6 @@ namespace openre::player
         return interop::call<int, PlayerEntity*, int, int>(0x004B2B00, player, a1, a2);
     }
 
-    // 0x004E2AE0
-    static int sca_ck_hit(Vec32* vec, int a1, int a2, int a3)
-    {
-        return interop::call<int, Vec32*, int, int, int>(0x004E2AE0, vec, a1, a2, a3);
-    }
-
     // 0x004D9D20
     static void pl_move(PlayerEntity* player, Emr* pKan, Edd* pSeq)
     {

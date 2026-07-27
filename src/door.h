@@ -2,5 +2,6 @@
 
 namespace openre::door
 {
+    void door_set();
     void door_init_hooks();
 }
