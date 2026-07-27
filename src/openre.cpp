@@ -49,6 +49,8 @@ namespace openre
 
     GameTable& gGameTable = *((GameTable*)0x00000000);
 
+    static int g_speed_multiplier = 1;
+
     static const char* windowTitle = "BIOHAZARD(R) 2 PC";
     static const char* fontFaceName = "ＭＳ ゴシック";
 
@@ -2132,7 +2134,7 @@ namespace openre
     // 0x00441DA0
     static void wnd_activate()
     {
-        gGameTable.pause_game = 1;
+        gGameTable.window_active = 1;
         set_game_seconds(gGameTable.dword_6805C4);
         marni::out();
     }
@@ -2140,7 +2142,7 @@ namespace openre
     // 0x00441D60
     static void wnd_deactivate()
     {
-        gGameTable.pause_game = 0;
+        gGameTable.window_active = 0;
         if (gGameTable.movie_r0 >= 2)
         {
             movie_kill();
@@ -2219,6 +2221,18 @@ namespace openre
                 SetFocus(hWnd);
                 break;
             case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
+            case VK_F2:
+                g_speed_multiplier -= 1;
+                if (g_speed_multiplier < 1)
+                    g_speed_multiplier = 1;
+                SetFocus(hWnd);
+                break;
+            case VK_F3:
+                g_speed_multiplier += 1;
+                if (g_speed_multiplier > 5)
+                    g_speed_multiplier = 5;
+                SetFocus(hWnd);
+                break;
             case VK_F4:
                 gGameTable.vk_press |= 1; // inventory
                 SetFocus(hWnd);
@@ -2438,16 +2452,165 @@ namespace openre
         return true;
     }
 
+    static void loopthing() {}
+
+    // ── Helper functions ──────────────────────────────────────────────────
+
+    // Returns false when WM_QUIT received (caller should exit immediately)
+    static bool process_messages()
+    {
+        MSG msg;
+        while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+        {
+            if (msg.message == WM_QUIT)
+            {
+                timeEndPeriod(1);
+                marni::kill();
+                config_write();
+                if (gGameTable.byte_680592 == 1)
+                {
+                    gGameTable.byte_680592 = 0;
+                    ShowCursor(true);
+                }
+                SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
+                return false;
+            }
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
+        return true;
+    }
+
+    // Returns true if a special state (movie / reset) consumed this frame
+    static bool handle_special_states()
+    {
+        if (gGameTable.movie_r0)
+        {
+            marni::clear_otags(gGameTable.pMarni);
+            reset_geom();
+            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+            movie();
+            marni::clear(gGameTable.pMarni);
+            marni::marni_movie_update(gGameTable.pMarni);
+            return true;
+        }
+        if (gGameTable.reset_r0)
+        {
+            marni::clear_otags(gGameTable.pMarni);
+            reset_geom();
+            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            reset_screen();
+            marni::clear(gGameTable.pMarni);
+            marni::draw(gGameTable.pMarni);
+            marni::flip(gGameTable.pMarni);
+            return true;
+        }
+        return false;
+    }
+
+    static void update_game()
+    {
+        // Sync catch-up flag from OG (System_trans may set timer_r2 during fades)
+        gGameTable.timer_r2 = 0;
+
+        // Speed multiplier: run game logic N times per frame
+        int iterations = g_speed_multiplier > 1 ? g_speed_multiplier : 1;
+        for (int i = 0; i < iterations; i++)
+        {
+            // Each psx_main() call must start with a clean ordering table
+            // and reset geometry state — psx_main populates draw commands
+            // via marni::add_tile/swap_cbuff and leaves state behind.
+            marni::clear_otags(gGameTable.pMarni);
+            reset_geom();
+            gGameTable.byte_6805B4 = 0;
+            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+
+            save_reset();
+            if (gGameTable.byte_680597 & 1)
+                gGameTable.byte_680597 |= 2;
+
+            psx_main();
+        }
+
+        // Frame and game time accounting
+        constexpr uint8_t tickMult[3] = { 1, 2, 4 };
+        gGameTable.frame_current += tickMult[gGameTable.vsync_rate / 2];
+        if (gGameTable.frame_current > 60)
+        {
+            gGameTable.frame_current = 0;
+            ++gGameTable.game_seconds;
+        }
+    }
+
+    static void render_frame()
+    {
+        make_font();
+        if (!gGameTable.pMarni)
+            return;
+
+        if (gGameTable.movie_idx)
+        {
+            gGameTable.movie_idx--;
+            return;
+        }
+
+        if (!gGameTable.byte_6805B4 && !gGameTable.byte_680598)
+            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+
+        // 0x004BF760: gallery function
+        if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
+        {
+            gGameTable.byte_680593 = gGameTable.byte_680592;
+            gGameTable.byte_680592 |= 1;
+            marni::set_gpu_flag();
+            gGameTable.byte_680592 = gGameTable.byte_680593;
+        }
+        else
+        {
+            marni::set_gpu_flag();
+            gGameTable.scaler.type = 15872;
+            if (gGameTable.pMarni->xsize == 640)
+            {
+                gGameTable.scaler.rate_x = 2.0f;
+                gGameTable.scaler.rate_y = 2.0f;
+            }
+            else
+            {
+                gGameTable.scaler.rate_x = 1.0f;
+                gGameTable.scaler.rate_y = 1.0f;
+            }
+            gGameTable.scaler.prj = gGameTable.global_prj;
+            gGameTable.scaler.rgb0 = gGameTable.global_rgb;
+            gGameTable.scaler.c_x = gGameTable.global_cx + 160;
+            gGameTable.scaler.c_y = gGameTable.global_cy + 120;
+            marni::add_primitive_scaler(gGameTable.pMarni, &gGameTable.scaler, 4095);
+        }
+
+        marni::clear(gGameTable.pMarni);
+        marni::draw(gGameTable.pMarni);
+
+        if (gGameTable.can_draw)
+        {
+            draw_monitor_effect(gGameTable.can_draw);
+            marni::clear_otags(gGameTable.pMarni);
+            psp_trans();
+            om_trans();
+            moji_trans_main();
+            marni::draw(gGameTable.pMarni);
+            gGameTable.can_draw = 0;
+        }
+
+        merge_surface_gdi();
+        marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
+        marni::flip(gGameTable.pMarni);
+    }
+
+    // ── WinMain ──────────────────────────────────────────────────────────
+
     // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
         const char* mutexName = "bio2.658b45ea117473d4.game";
-        constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
-
-        auto time = 0;
-        auto frameTime = 0;
-        auto targetFrameRate = 0;
-        uint32_t currentTime = 0;
 
         gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
         if (gGameTable.hMutex)
@@ -2498,217 +2661,53 @@ namespace openre
             }
             update_timer();
 
+            // Increase timer resolution for accurate Sleep(1)
+            constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
+            timeBeginPeriod(1);
+
+            uint32_t lastFrameTime = gGameTable.timer_last;
+
             while (true)
             {
-                while (true)
+                // 1. Process messages (quit → return)
+                if (!process_messages())
+                    return 0;
+
+                // 2. Window inactive → sleep until next message
+                if (!gGameTable.window_active)
                 {
-                    MSG msg;
-                    while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
-                    {
-                        if (msg.message == WM_QUIT)
-                        {
-                            marni::kill();
-                            config_write();
-                            if (gGameTable.byte_680592 == 1)
-                            {
-                                gGameTable.byte_680592 = 0;
-                                ShowCursor(true);
-                            }
-
-                            SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
-                            return 0;
-                        }
-
-                        TranslateMessage(&msg);
-                        DispatchMessageA(&msg);
-                    }
-
-                    lpCmdLine = (LPSTR)0x1040201;
-
-                    if (gGameTable.timer_r0 == 0)
-                    {
-                        break;
-                    }
-                    if (gGameTable.timer_r0 == 1)
-                    {
-                        currentTime = gGameTable.timer_current;
-                        goto LABEL_64;
-                    }
-
-                    if (gGameTable.timer_r0 == 2)
-                    {
-                        gGameTable.timer_current = timeGetTime();
-                        if (10 * (gGameTable.timer_current - gGameTable.timer_last)
-                            >= frameRateTable[gGameTable.vsync_rate / 2])
-                        {
-                            gGameTable.timer_r0 = 1;
-                        }
-                    }
-                }
-
-                // Window is not active
-                if (!gGameTable.pause_game)
-                {
+                    WaitMessage();
                     continue;
                 }
 
-                // Playing movie
-                if (gGameTable.movie_r0)
+                // 3. Frame rate throttle
+                auto now = timeGetTime();
+                auto budget = frameRateTable[gGameTable.vsync_rate / 2];
+                auto elapsed = 10 * (now - lastFrameTime);
+
+                if (elapsed < budget)
                 {
-                    marni::clear_otags(gGameTable.pMarni);
-                    reset_geom();
-                    gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
-                    movie();
-                    marni::clear(gGameTable.pMarni);
-                    marni::marni_movie_update(gGameTable.pMarni);
+                    if (budget - elapsed >= 30) // >= 3ms margin
+                        Sleep(1);
                     continue;
                 }
-                if (gGameTable.reset_r0)
-                {
-                    marni::clear_otags(gGameTable.pMarni);
-                    reset_geom();
-                    gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
-                    reset_screen();
-                    marni::clear(gGameTable.pMarni);
-                    marni::draw(gGameTable.pMarni);
-                    marni::flip(gGameTable.pMarni);
-                }
-                else
-                {
-                    marni::clear_otags(gGameTable.pMarni);
-                    reset_geom();
-                    gGameTable.byte_6805B4 = 0;
-                    gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
-                    gGameTable.timer_r2 = 0;
-                    save_reset();
-                    if (gGameTable.byte_680597 & 1)
-                    {
-                        gGameTable.byte_680597 |= 2;
-                    }
-                    psx_main();
-                    if (++gGameTable.timer_frame > 100)
-                    {
-                        gGameTable.timer_frame = 100;
-                    }
-                    gGameTable.frame_current += *((uint8_t*)&lpCmdLine + gGameTable.vsync_rate / 2);
-                    if (gGameTable.frame_current > 60)
-                    {
-                        gGameTable.frame_current = 0;
-                        ++gGameTable.game_seconds;
-                    }
-                    currentTime = gGameTable.timer_current;
-                    if ((gGameTable.timer_current & 0x80000000) < (gGameTable.timer_last & 0x80000000))
-                    {
-                        update_timer();
-                    }
-                    gGameTable.timer_10 += frameRateTable[gGameTable.vsync_rate / 2];
-                    if (gGameTable.timer_r1)
-                    {
-                        goto LABEL_54;
-                    }
 
-                    time = timeGetTime();
-                    currentTime = time;
-                    gGameTable.timer_current = time;
-                    frameTime = 10 * (time - gGameTable.timer_last);
-                    targetFrameRate = frameRateTable[gGameTable.vsync_rate / 2];
+                // 4. Special states (movie / reset)
+                if (handle_special_states())
+                    continue;
 
-                    if (frameTime >= targetFrameRate)
-                    {
-                        if (gGameTable.timer_r2 == 0 && frameTime > 3 * targetFrameRate)
-                        {
-                            gGameTable.timer_10 += targetFrameRate * (frameTime / targetFrameRate - 2);
-                        }
+                // 5. Update game logic
+                update_game();
 
-                    LABEL_54:
-                        gGameTable.timer_r1 = 0;
-                        if ((gGameTable.vsync_rate && gGameTable.timer_frame >= 15) || gGameTable.timer_frame >= 30)
-                        {
-                            if (gGameTable.timer_10 + 10000 < 10 * currentTime)
-                            {
-                                update_timer();
-                                currentTime = gGameTable.timer_current;
-                            }
-                        }
+                // 6. Render
+                render_frame();
 
-                        if (10 * currentTime > gGameTable.timer_10)
-                        {
-                            gGameTable.timer_r1 = 1;
-                            gGameTable.timer_r0 = 0;
-                            continue;
-                        }
+                // Keep OG-visible timer fields updated for other hooks
+                gGameTable.timer_last = now;
+                gGameTable.timer_current = now;
+                gGameTable.timer_10 = 10 * now;
 
-                    LABEL_64:
-                        gGameTable.timer_frame = 0;
-                        gGameTable.timer_last = currentTime;
-                        make_font();
-                        if (gGameTable.pMarni)
-                        {
-                            if (gGameTable.movie_idx)
-                            {
-                                gGameTable.movie_idx--;
-                            }
-                            else
-                            {
-                                if (!gGameTable.byte_6805B4 && !gGameTable.byte_680598)
-                                {
-                                    gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
-                                }
-                                // 0x004BF760: gallery function
-                                if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
-                                {
-                                    gGameTable.byte_680593 = gGameTable.byte_680592;
-                                    gGameTable.byte_680592 |= 1;
-                                    marni::set_gpu_flag();
-                                    gGameTable.byte_680592 = gGameTable.byte_680593;
-                                }
-                                else
-                                {
-                                    marni::set_gpu_flag();
-                                    gGameTable.scaler.type = 15872;
-                                    if (gGameTable.pMarni->xsize == 640)
-                                    {
-                                        gGameTable.scaler.rate_x = 2.0f;
-                                        gGameTable.scaler.rate_y = 2.0f;
-                                    }
-                                    else
-                                    {
-                                        gGameTable.scaler.rate_x = 1.0f;
-                                        gGameTable.scaler.rate_y = 1.0f;
-                                    }
-                                    gGameTable.scaler.prj = gGameTable.global_prj;
-                                    gGameTable.scaler.rgb0 = gGameTable.global_rgb;
-                                    gGameTable.scaler.c_x = gGameTable.global_cx + 160;
-                                    gGameTable.scaler.c_y = gGameTable.global_cy + 120;
-                                    marni::add_primitive_scaler(gGameTable.pMarni, &gGameTable.scaler, 4095);
-                                }
-
-                                marni::clear(gGameTable.pMarni);
-                                marni::draw(gGameTable.pMarni);
-
-                                if (gGameTable.can_draw)
-                                {
-                                    draw_monitor_effect(gGameTable.can_draw);
-                                    marni::clear_otags(gGameTable.pMarni);
-                                    psp_trans();
-                                    om_trans();
-                                    moji_trans_main();
-                                    marni::draw(gGameTable.pMarni);
-                                    gGameTable.can_draw = 0;
-                                }
-
-                                merge_surface_gdi();
-                                marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
-                                marni::flip(gGameTable.pMarni);
-                            }
-                        }
-
-                        gGameTable.timer_r0 = 0;
-                        continue;
-                    }
-
-                    gGameTable.timer_r0 = 2;
-                }
+                lastFrameTime = now;
             }
         }
 
