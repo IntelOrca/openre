@@ -14,7 +14,7 @@ namespace openre::math
     void set_trans_matrix(const uint32_t* a1);
     void apply_matrixsv(const Mat16& m, const Vec16& v1, Vec16& res);
 
-    int square_root_0(int a0);
+    unsigned int square_root_0(int a0);
 
     void math_init_hooks();
 }
