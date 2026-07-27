@@ -128,7 +128,35 @@ namespace openre::sce
     // 0x004E3DE0
     void sce_work_clr_at()
     {
-        interop::call(0x004E3DE0);
+        // Clear player's At_obj_no and At_sce_no (word at offset 0x0A)
+        *reinterpret_cast<uint16_t*>(&gGameTable.pl.at_obj_no) = 0xFFFF;
+
+        // Clear enemy At_obj_no and At_sce_no — iterate from enemy_work up to dword_98862C
+        auto** pEnemy = gGameTable.enemies;
+        while (reinterpret_cast<void*>(pEnemy) != gGameTable.dword_98862C)
+        {
+            if (*pEnemy && ((*pEnemy)->be_flg & 1))
+            {
+                (*pEnemy)->at_obj_no = 0xFF;
+                (*pEnemy)->at_sce_no = 0xFF;
+            }
+            pEnemy++;
+        }
+
+        // Clear object At_obj_no and At_sce_no — iterate only num_models objects
+        if (gGameTable.rdt)
+        {
+            auto count = gGameTable.rdt->header.num_models;
+            for (uint32_t i = 0; i < count; i++)
+            {
+                auto& obj = gGameTable.pOm[i];
+                if (obj.be_flg & 1)
+                {
+                    obj.at_obj_no = 0xFF;
+                    obj.at_sce_no = 0xFF;
+                }
+            }
+        }
     }
 
     // 0x004E3E50
@@ -164,7 +192,64 @@ namespace openre::sce
     // 0x004E3AE0
     static void sce_se_set()
     {
-        interop::call(0x004E3AE0);
+        // Se_tmp0 is a word formed from se_tmp0 + byte_695E71
+        const auto seTmp = static_cast<uint16_t>(gGameTable.se_tmp0) | (static_cast<uint16_t>(gGameTable.byte_695E71) << 8);
+        const auto seTmpLo = static_cast<uint8_t>(seTmp);
+        const auto seTmpHi = static_cast<uint8_t>(seTmp >> 8);
+
+        // SE table: byte at 0x53AD48, then pairs at 0x53AD49 terminated by 0xFF
+        const auto& seTableHead = *reinterpret_cast<const uint8_t*>(0x53AD48);
+
+        if (seTmp == 0 || seTableHead == 0xFF)
+        {
+            gGameTable.pad_98E543[0] = 0xFF;
+            return;
+        }
+
+        auto* pair = reinterpret_cast<const uint8_t*>(0x53AD49);
+        uint8_t secondByte = seTableHead;
+        uint8_t index = 0;
+        int reverseMatch = 0;
+
+        while (secondByte != seTmpLo || (seTmpHi && seTmpHi != *pair))
+        {
+            if (*pair == seTmpLo && (!seTmpHi || seTmpHi == secondByte))
+            {
+                reverseMatch = 1;
+                break;
+            }
+            secondByte = pair[1];
+            pair += 2;
+            ++index;
+            if (secondByte == 0xFF)
+            {
+                gGameTable.pad_98E543[0] = 0xFF;
+                return;
+            }
+        }
+
+        gGameTable.pad_98E543[0] = index;
+
+        // Walk through entity work pointers (partner + enemies) and set SE flags
+        auto** pWork = reinterpret_cast<void**>(&gGameTable.splayer_work);
+        while (reinterpret_cast<void*>(pWork) != gGameTable.dword_98862C)
+        {
+            auto* entity = static_cast<EnemyEntity*>(*pWork);
+            if (entity && (entity->be_flg & 1))
+            {
+                // Read sound_bank field at offset 0x1FA from entity base
+                auto fieldVal = static_cast<int8_t>(entity->sound_bank);
+                if (fieldVal == static_cast<uint8_t>(seTmpLo) && reverseMatch)
+                {
+                    entity->be_flg |= 0x2000;
+                }
+                else if (fieldVal == static_cast<uint8_t>(seTmpHi) && !reverseMatch)
+                {
+                    entity->be_flg |= 0x2000;
+                }
+            }
+            pWork++;
+        }
     }
 
     // 0x004E4180
