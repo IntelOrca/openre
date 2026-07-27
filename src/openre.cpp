@@ -22,6 +22,7 @@
 #include "scheduler.h"
 #include "tim.h"
 #include "title.h"
+#include <ddraw.h>
 
 #include <cstring>
 #include <windows.h>
@@ -732,9 +733,75 @@ namespace openre
     }
 
     // 0x004C89B2
-    void show_message(int a0, int a1, int a2, int a3)
+    void show_message(int pos_xy, int attr, int mess_no, int stop_data)
     {
-        interop::call<void, int, int, int, int>(0x004C89B2, a0, a1, a2, a3);
+        if (gGameTable.fg_message < 0)
+            return;
+        gGameTable.fg_message = static_cast<int8_t>(0x80);
+        {
+            auto v5 = gGameTable.fg_status;
+            v5 = (v5 & 0xFFFFFF00) | (static_cast<uint8_t>(v5) | 0x40);
+            gGameTable.fg_status = v5;
+        }
+        gGameTable.mess_fg_stop = gGameTable.fg_stop;
+        gGameTable.mess_stop = stop_data;
+        gGameTable.mess_buf_a = 0;
+        gGameTable.mess_attr = 3;
+
+        switch (attr & 0x300)
+        {
+        case 0x100:
+            gGameTable.mess_pos_x = 34;
+            gGameTable.mess_pos_y = 185;
+            gGameTable.mess_buf_b = 0x80;
+            gGameTable.mess_attr |= 0x2000;
+            gGameTable.mess_buf_ptr = reinterpret_cast<char*>(&gGameTable.misc_text_j[gGameTable.misc_ptr_j[mess_no]]);
+            break;
+        case 0x200:
+            gGameTable.mess_pos_x = 34;
+            gGameTable.mess_pos_y = 186;
+            gGameTable.mess_buf_b = 0x80;
+            gGameTable.mess_attr |= 0x400;
+            gGameTable.mess_buf_ptr = reinterpret_cast<char*>(&gGameTable.desc_txt_j[gGameTable.desc_ptr_j[mess_no]]);
+            break;
+        case 0x300:
+            gGameTable.mess_pos_x = 34;
+            gGameTable.mess_pos_y = 185;
+            gGameTable.mess_buf_b = 0x80;
+            gGameTable.mess_attr |= 0x800;
+            {
+                auto* base = reinterpret_cast<char*>(gGameTable.rdt->offsets[13]);
+                gGameTable.mess_buf_ptr = base + *(uint16_t*)(base + 2 * mess_no);
+            }
+            break;
+        default:
+            gGameTable.mess_pos_x = static_cast<int16_t>(pos_xy);
+            gGameTable.mess_pos_y = static_cast<int16_t>((pos_xy & 0xFFFF0000) >> 16);
+            gGameTable.mess_buf_b = static_cast<uint8_t>((attr & 0x8000) >> 8);
+            gGameTable.mess_attr = static_cast<uint16_t>(attr);
+
+            auto v6 = attr & 0xC00;
+            if (v6 > 0x800)
+            {
+                if (v6 == 0xC00)
+                    gGameTable.mess_buf_ptr = reinterpret_cast<char*>(static_cast<uintptr_t>(mess_no));
+            }
+            else if (v6 == 0x800)
+            {
+                auto* base = reinterpret_cast<char*>(gGameTable.rdt->offsets[13]);
+                gGameTable.mess_buf_ptr = base + *(uint16_t*)(base + 2 * mess_no);
+            }
+            else if ((attr & 0xC00) != 0)
+            {
+                if (v6 == 0x400)
+                    gGameTable.mess_buf_ptr = reinterpret_cast<char*>(&gGameTable.desc_txt_j[gGameTable.desc_ptr_j[mess_no]]);
+            }
+            else
+            {
+                gGameTable.mess_buf_ptr = reinterpret_cast<char*>(&gGameTable.misc_text_j[gGameTable.misc_ptr_j[mess_no]]);
+            }
+            break;
+        }
     }
 
     void* work_alloc(size_t len)
@@ -1100,7 +1167,7 @@ namespace openre
     // 0x00441870
     static void movie_set(int id)
     {
-        interop::call(0x00441870);
+        gGameTable.movie_idx = id;
     }
 
     // 0x00507C60
@@ -1112,7 +1179,19 @@ namespace openre
     // 0x004CAE34
     static void moji_mode_init()
     {
-        interop::call(0x004CAE34);
+        auto idx = gGameTable.byte_9888D8;
+        auto* v1 = gGameTable.moji_disp + 192 * idx;
+        auto* v2 = reinterpret_cast<int*>(gGameTable.g_table + 8 * idx);
+        int v3 = 8;
+        do
+        {
+            v1 += 24;
+            ++v2;
+            --v3;
+        } while (v3);
+        gGameTable.moji_work0 = reinterpret_cast<uint32_t>(gGameTable.moji_tbl1 + 5120 * idx);
+        auto* result = gGameTable.moji_tbl2 + 2048 * idx;
+        gGameTable.moji_work1 = reinterpret_cast<uint32_t>(result);
     }
 
     // 0x004C8CCA
@@ -1223,7 +1302,7 @@ namespace openre
     // 0x00446D30
     static void set_clear_color(int r, int g, int b)
     {
-        interop::call<void, int, int, int>(0x00446D30, r, g, b);
+        gGameTable.global_rgb = (static_cast<uint8_t>(r) << 16) | (static_cast<uint8_t>(g) << 8) | static_cast<uint8_t>(b);
     }
 
     // 0x00503190
@@ -2058,7 +2137,24 @@ namespace openre
     // 0x00432080
     static void rsrc_release()
     {
-        interop::call(0x00432080);
+        if (gGameTable.Cards)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.Cards));
+            GlobalFree(GlobalHandle(gGameTable.Cards));
+        }
+        if (gGameTable.Names)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.Names));
+            GlobalFree(GlobalHandle(gGameTable.Names));
+        }
+        if (gGameTable.pMem)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.pMem));
+            GlobalFree(GlobalHandle(gGameTable.pMem));
+        }
+        gGameTable.Cards = nullptr;
+        gGameTable.Names = nullptr;
+        gGameTable.pMem = nullptr;
     }
 
     // 0x00433830
@@ -2275,13 +2371,47 @@ namespace openre
     // 0x00441910
     static int cheat_line_cmd0(LPSTR lpCmdLine, int a1)
     {
-        return interop::call<int, LPSTR, int>(0x00441910, lpCmdLine, a1);
+        auto* v2 = strchr(lpCmdLine, '/');
+        if (!v2)
+        {
+            v2 = strchr(lpCmdLine, '-');
+            if (!v2)
+                return -1;
+        }
+        auto* v3 = _strlwr(v2);
+        auto* v4 = strstr(v3, gGameTable.cheat_cmds[a1]);
+        if (!v4)
+            return -1;
+        auto* v5 = &v4[strlen(gGameTable.cheat_cmds[a1])];
+        auto result = *v5 - '0';
+        if (result > 9)
+            return -1;
+        auto v7 = v5[1] - '0';
+        if (v7 <= 9)
+            return v7 + 10 * result;
+        return result;
     }
 
     // 0x00441890
     static int cheat_line_cmd1(LPSTR lpCmdLine, int a1, int a2)
     {
-        return interop::call<int, LPSTR, int, int>(0x00441890, lpCmdLine, a1, a2);
+        auto* v3 = strchr(lpCmdLine, '/');
+        if (v3 || (v3 = strchr(lpCmdLine, '-')) != nullptr)
+        {
+            auto* v4 = _strlwr(v3);
+            auto v5 = a1;
+            if (a1 < 13)
+            {
+                while (v5 < a1 + a2)
+                {
+                    if (strstr(v4, gGameTable.cheat_cmds[v5]))
+                        return v5 - a1;
+                    if (++v5 >= 13)
+                        return -1;
+                }
+            }
+        }
+        return -1;
     }
 
     // 0x0050AA60
@@ -2300,7 +2430,18 @@ namespace openre
     // 0x004310B0
     static void save_reset()
     {
-        interop::call(0x004310B0);
+        auto* v0 = &gGameTable.FontXY[1];
+        char* v1 = gGameTable.String;
+        memset(gGameTable.FontColor, 0, sizeof(gGameTable.FontColor));
+        do
+        {
+            *v1 = 0;
+            *(v0 - 1) = 0;
+            *v0 = 0;
+            v1 += 261;
+            v0 += 2;
+        } while (v1 < reinterpret_cast<char*>(&gGameTable.hFont));
+        gGameTable.FontIndex = 0;
     }
 
     // 0x00441880
@@ -2328,9 +2469,96 @@ namespace openre
     }
 
     // 0x004310F0
-    static void merge_surface_gdi()
+    static int merge_surface_gdi()
     {
-        interop::call(0x004310F0);
+        if (!gGameTable.FontIndex)
+            return 1;
+
+        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
+        HDC hdc;
+        if (pSurface->GetDC(&hdc) != DD_OK)
+            return 1;
+
+        auto oldFont = SelectObject(hdc, gGameTable.hFont);
+        if (!oldFont)
+            return 0;
+        auto oldMode = SetBkMode(hdc, TRANSPARENT);
+
+        for (int i = 0; i < gGameTable.FontIndex; i++)
+        {
+            auto* str = &gGameTable.String[261 * i];
+            if (!*str)
+                continue;
+
+            auto x = gGameTable.FontXY[2 * i];
+            auto y = gGameTable.FontXY[2 * i + 1];
+
+            if (x != 0)
+            {
+                // Centered text with shadow (offset by +1 pixel)
+                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowColor = RGB(shadowR, shadowG, shadowB);
+
+                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
+                    return 0;
+                TextOutA(hdc, gGameTable.is_480p + x + 1, y, str, (int)strlen(str));
+
+                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
+                    return 0;
+                if (!TextOutA(hdc, x, y, str, (int)strlen(str)))
+                    return 0;
+            }
+            else
+            {
+                // Left-aligned text with clipping rectangle and shadow
+                SIZE psizl;
+                GetTextExtentPoint32A(hdc, str, (int)strlen(str), &psizl);
+                auto cx = psizl.cx;
+
+                RECT rect;
+                int v6;
+                if (gGameTable.is_480p)
+                {
+                    if (cx > 576)
+                        cx = 576;
+                    rect.left = 32;
+                    rect.right = 608;
+                    v6 = (576 - cx) / 2 + 32;
+                    rect.bottom = y + gGameTable.byte_6634F8;
+                }
+                else
+                {
+                    if (cx > 288)
+                        cx = 288;
+                    rect.left = 16;
+                    rect.right = 304;
+                    v6 = (288 - cx) / 2 + 16;
+                    rect.bottom = y + gGameTable.byte_6634F8;
+                }
+                rect.top = y;
+
+                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowColor = RGB(shadowR, shadowG, shadowB);
+
+                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
+                    return 0;
+                ExtTextOutA(hdc, gGameTable.is_480p + v6 + 1, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr);
+
+                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
+                    return 0;
+                if (!ExtTextOutA(hdc, v6, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr))
+                    return 0;
+            }
+        }
+
+        SelectObject(hdc, oldFont);
+        SetBkMode(hdc, oldMode);
+        pSurface->ReleaseDC(hdc);
+        return 1;
     }
 
     // 0x004CAF90
