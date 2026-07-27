@@ -242,7 +242,7 @@ namespace openre::title
                 title_bg_reload();
             }
 
-            gGameTable.byte_981FB7 = 1;
+            gGameTable.moji_tbl1[0x977] = 1;
             gGameTable.title_mv_state = TITLE_STATE_TITLE_LOAD;
             if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
             {
@@ -457,9 +457,37 @@ namespace openre::title
     }
 
     // 0x004E3A20
-    static void sub_4E3A20()
+    static int8_t sub_4E3A20()
     {
-        interop::call(0x004E3A20);
+        uint8_t mask = 0;
+        int bits_set = 0;
+        int pos = 0;
+
+        while (true)
+        {
+            if (openre::rnd() & 1)
+            {
+                mask |= 1 << pos;
+                bits_set++;
+                if (bits_set == 4)
+                    break;
+            }
+            pos++;
+            if (pos - bits_set >= 4)
+            {
+                mask |= static_cast<uint8_t>(0xF0 << bits_set);
+                break;
+            }
+            if (pos >= 8)
+            {
+                gGameTable.dword_98EBD0 = mask;
+                gGameTable.pad_98EE80[28] = ~mask;
+                return mask;
+            }
+        }
+        gGameTable.dword_98EBD0 = mask;
+        gGameTable.pad_98EE80[28] = ~mask;
+        return mask;
     }
 
     // 0x005018B0
@@ -468,10 +496,17 @@ namespace openre::title
         interop::call(0x005018B0);
     }
 
+    // 0x004EF110
+    static int16_t Spl(PlayerEntity* pl)
+    {
+        return interop::call<int16_t, PlayerEntity*>(0x004EF110, pl);
+    }
+
     // 0x004F04B0
     static void spl_set()
     {
-        interop::call(0x004F04B0);
+        for (auto i = 64; i <= 91; i++)
+            gGameTable.enemy_init_map[i] = reinterpret_cast<void*>(&Spl);
     }
 
     // 0x004B7FF0

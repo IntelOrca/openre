@@ -358,9 +358,51 @@ namespace openre::player
     }
 
     // 0x004CEDE0
-    static void oma_ob_pull2(PlayerEntity* player, int a1, uint16_t a2, uint32_t a3)
+    static void oma_ob_pull2(PlayerEntity* player, int other_ptr, uint16_t /*a3*/, uint32_t max_pull)
     {
-        interop::call<void, PlayerEntity*, int, uint16_t, uint32_t>(0x004CEDE0, player, a1, a2, a3);
+        auto* other = reinterpret_cast<Entity*>(other_ptr);
+
+        if ((player->be_flg & 0x40) != 0)
+            return;
+        if ((other->be_flg & 2) != 0)
+            return;
+
+        int dx = other->atd[0].pos.x - player->atd[0].pos.x;
+        int dz = other->atd[0].pos.z - player->atd[0].pos.z;
+        int v7 = other->atd[0].w - (player->atd[0].w >> 1);
+        int v8 = other->atd[0].d - (player->atd[0].w >> 1);
+
+        bool need_x = static_cast<unsigned>(2 * v7) < static_cast<unsigned>(v7 + dx);
+        bool need_z = static_cast<unsigned>(2 * v8) < static_cast<unsigned>(v8 + dz);
+        int flags = (need_x ? 1 : 0) | (need_z ? 2 : 0);
+
+        if (flags == 0)
+            return;
+
+        int orig_x = player->atd[0].pos.x;
+        int orig_z = player->atd[0].pos.z;
+
+        if ((flags & 1) != 0)
+        {
+            int pull = (dx >= 0 ? dx : -dx) - v7;
+            if (pull > static_cast<int>(max_pull))
+                pull = static_cast<int>(max_pull);
+            if (dx >= 0)
+                pull = -pull;
+            player->m.pos.x -= pull;
+            player->atd[0].pos.x = orig_x - pull;
+        }
+
+        if ((flags & 2) != 0)
+        {
+            int pull = (dz >= 0 ? dz : -dz) - v8;
+            if (pull > static_cast<int>(max_pull))
+                pull = static_cast<int>(max_pull);
+            if (dz >= 0)
+                pull = -pull;
+            player->m.pos.z -= pull;
+            player->atd[0].pos.z = orig_z - pull;
+        }
     }
 
     // 0x004D9940

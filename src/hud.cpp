@@ -955,9 +955,32 @@ namespace openre::hud
     }
 
     // 0x00502B30
-    static void check_cursol_distance(int a0)
+    static int16_t check_cursol_distance(int a0)
     {
-        interop::call<int>(0x00502B30, a0);
+        auto& cursor = gGameTable.inventory_cursor;
+        auto& cursor_2 = gGameTable.inventory_cursor_2;
+
+        if (a0 != 0)
+        {
+            bool hasItem = gGameTable.inventory[cursor_2].Type != 0;
+
+            if (cursor & 1)
+                gGameTable.byte_691F7C = hasItem ? -2 : ((cursor_2 & 1) ? 0 : -4);
+            else
+                gGameTable.byte_691F7C = hasItem ? 2 : ((cursor_2 & 1) ? 4 : 0);
+
+            int16_t result = static_cast<int16_t>(3 * static_cast<int8_t>((cursor_2 >> 1) - (cursor >> 1)));
+            gGameTable.byte_691F7D = static_cast<uint8_t>(result);
+            return result;
+        }
+        else
+        {
+            gGameTable.byte_691F80 = (cursor_2 & 1) ? -2 : ((cursor & 1) ? 4 : 0);
+
+            int16_t result = static_cast<int16_t>(3 * static_cast<int8_t>((cursor >> 1) - (cursor_2 >> 1)));
+            gGameTable.byte_691F81 = static_cast<uint8_t>(result);
+            return result;
+        }
     }
 
     // 0x005024D0
