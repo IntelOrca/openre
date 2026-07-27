@@ -29,9 +29,10 @@ namespace openre::room
     static const char* font2 = "common\\data\\font1.adt";
 
     // 0x00442EA0
-    static void set_registry_flag(int a0, int a1)
+    static void set_registry_flag(int index, int bit)
     {
-        interop::call<void, int, int>(0x00442EA0, a0, a1);
+        auto* flags = reinterpret_cast<uint32_t*>(&gGameTable.pad_68059C);
+        flags[index + (bit >> 5)] |= 0x80000000 >> (bit & 0x1F);
     }
 
     // 0x004450C0
@@ -43,7 +44,84 @@ namespace openre::room
     // 0x0043DF40
     static int sub_43DF40()
     {
-        return interop::call<int>(0x0043DF40);
+        auto* marni = gGameTable.pMarni;
+
+        // Iterate over OBJ_TEXTURE array (32 entries, 85 dwords each, starting at 0x671620)
+        auto* pTex = reinterpret_cast<int*>(gGameTable.obj_tex_handle + 16); // obj_tex_handle[0].Tex_handle2
+        auto* end = reinterpret_cast<int*>(gGameTable.obj_tex_handle + 0x2A90);
+
+        while (pTex < end)
+        {
+            // Unload texture 1 if present
+            if (pTex[-1])
+            {
+                marni::unload_texture(marni, pTex[-1]);
+                pTex[-1] = 0;
+            }
+
+            // Unload texture 2 if present
+            if (pTex[0])
+            {
+                marni::unload_texture(marni, pTex[0]);
+                pTex[0] = 0;
+            }
+
+            // Destroy object 1 if present
+            if (pTex[1])
+            {
+                interop::thiscall<void, void*, int>(0x00404CA0, marni, pTex[1]);
+                pTex[1] = 0;
+            }
+
+            // Destroy object 2 if present
+            if (pTex[2])
+            {
+                interop::thiscall<void, void*, int>(0x00404CA0, marni, pTex[2]);
+                pTex[2] = 0;
+            }
+
+            // Reset linked list pointers to self
+            auto* self = pTex - 4; // back to OBJ_TEXTURE start
+            pTex[3] = reinterpret_cast<int>(self);
+            pTex[4] = reinterpret_cast<int>(self);
+
+            // Clear various fields
+            pTex[70] = 0;
+            pTex[71] = 0;
+            pTex[72] = 0;
+            pTex[73] = 0;
+            pTex[74] = 0;
+
+            // Clear trailing 24 bytes (last portion of the struct)
+            memset(pTex + 75, 0, 0x18);
+
+            // Advance to next entry (sizeof(OBJ_TEXTURE) = 85 dwords)
+            pTex += 85;
+        }
+
+        // Destroy objects in secondary array (dword_671424..dword_67144C)
+        auto* pObj = reinterpret_cast<int*>(&gGameTable.dword_671424[0]);
+        auto* objEnd = reinterpret_cast<int*>(&gGameTable.dword_671424[10]);
+        while (pObj < objEnd)
+        {
+            if (*pObj)
+            {
+                interop::thiscall<void, void*, int>(0x00404CA0, marni, *pObj);
+                *pObj = 0;
+            }
+            ++pObj;
+        }
+
+        // Unload final texture if present
+        int result = gGameTable.dword_674DF0;
+        if (result)
+        {
+            marni::unload_texture(marni, result);
+            gGameTable.dword_674DF0 = 0;
+        }
+
+        gGameTable.dword_674DF4 = 0;
+        return result;
     }
 
     // 0x00502190
@@ -55,13 +133,25 @@ namespace openre::room
     // 0x004DD0C0
     static void psp_init0()
     {
-        interop::call(0x004DD0C0);
+        auto& psp_work = gGameTable.psp_work;
+        psp_work = reinterpret_cast<int>(gGameTable.mem_top);
+        // Original advances Mem_top as LPVOID*: lea eax, [eax+ecx*4]
+        gGameTable.mem_top
+            = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(gGameTable.mem_top) + gGameTable.rdt->header.unknown7 * 4);
     }
 
     // 0x004DD0E0
     static void psp_init1()
     {
-        interop::call(0x004DD0E0);
+        auto& psp_prim_0 = gGameTable.psp_prim_0;
+        auto& psp_prim_1 = gGameTable.psp_prim_1;
+        auto count = gGameTable.rdt->header.unknown7;
+        auto memTop = reinterpret_cast<int>(gGameTable.mem_top);
+
+        psp_prim_0 = memTop;
+        // &Mem_top[8 * count] where Mem_top is LPVOID* (sizeof = 4) = memTop + 8 * count * 4
+        psp_prim_1 = memTop + 32 * count;
+        gGameTable.mem_top = reinterpret_cast<void*>(psp_prim_1 + 32 * count);
     }
 
     // 0x005023D0

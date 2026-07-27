@@ -2426,15 +2426,93 @@ namespace openre::marni
     // 0x0040ee30
 
     // 0x0040EE60
-    static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect)
+    static int invalidate_window(HWND hWnd, int width, int height, int /*fullscreen*/, LPRECT lpResRect)
     {
-        return interop::call<int, HWND, int, int, int, LPRECT>(0x0040EE60, hWnd, width, height, fullscreen, lpResRect);
+        RECT rc;
+        SetRect(&rc, 0, 0, width, height);
+        BOOL hasMenu = GetMenu(hWnd) != 0;
+        DWORD style = GetWindowLongA(hWnd, GWL_STYLE);
+        AdjustWindowRectEx(&rc, style, hasMenu, 0);
+        SetWindowPos(hWnd, 0, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        SetWindowPos(hWnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+
+        if (lpResRect)
+        {
+            POINT p0 = { 0, 0 };
+            POINT p1 = { width, height };
+            ClientToScreen(hWnd, &p0);
+            ClientToScreen(hWnd, &p1);
+            SetRect(lpResRect, p0.x, p0.y, p1.x, p1.y);
+        }
+
+        InvalidateRect(hWnd, nullptr, TRUE);
+        return 1;
     }
 
     // 0x0040EF50
     static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc)
     {
-        return interop::call<int, LPDDSURFACEDESC, MarniSurfaceDesc*>(0x0040EF50, pDDesc, pDesc);
+        if ((pDDesc->ddpfPixelFormat.dwFlags & (DDPF_PALETTEINDEXED8 | DDPF_PALETTEINDEXED4)) != 0)
+        {
+            pDesc->r_shift = 0;
+            pDesc->g_mask = 0;
+            pDesc->b_bitcnt = 0;
+            return 1;
+        }
+
+        auto extract_shift_count = [](DWORD mask, uint8_t& shift, uint8_t& count, uint8_t& outMask) {
+            shift = 0;
+            if (mask)
+            {
+                while (!(mask & 1) && shift < 32)
+                {
+                    mask >>= 1;
+                    ++shift;
+                }
+                count = 0;
+                while ((mask & 1) && count < 32)
+                {
+                    mask >>= 1;
+                    ++count;
+                }
+            }
+            else
+            {
+                count = 0;
+            }
+            outMask = (uint8_t)((1 << count) - 1);
+        };
+
+        extract_shift_count(pDDesc->ddpfPixelFormat.dwRBitMask, pDesc->r_shift, pDesc->r_bitcnt, pDesc->r_mask);
+        extract_shift_count(pDDesc->ddpfPixelFormat.dwGBitMask, pDesc->g_shift, pDesc->g_bitcnt, pDesc->g_mask);
+        extract_shift_count(pDDesc->ddpfPixelFormat.dwBBitMask, pDesc->b_shift, pDesc->b_bitcnt, pDesc->b_mask);
+
+        DWORD aMask = pDDesc->ddpfPixelFormat.dwRGBAlphaBitMask;
+        pDesc->a_shift = 0;
+        if (aMask)
+        {
+            while (!(aMask & 1) && pDesc->a_shift < 32)
+            {
+                aMask >>= 1;
+                ++pDesc->a_shift;
+            }
+            pDesc->a_bitcnt = 0;
+            do
+            {
+                if (!(aMask & 1))
+                    break;
+                aMask >>= 1;
+                ++pDesc->a_bitcnt;
+            } while (pDesc->a_bitcnt < 32);
+            pDesc->a_mask = (uint8_t)((1 << pDesc->a_bitcnt) - 1);
+        }
+        else
+        {
+            pDesc->a_bitcnt = 0;
+            pDesc->a_mask = (uint8_t)((1 << pDesc->a_bitcnt) - 1);
+        }
+
+        return 1;
     }
 
     // 0x0040F090
@@ -2475,7 +2553,9 @@ namespace openre::marni
     // 0x0040F170
     static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface)
     {
-        return interop::call<HRESULT, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE>(0x0040F170, lpDDSurfaceDesc, lpDDSurface);
+        memset(lpDDSurfaceDesc, 0, sizeof(*lpDDSurfaceDesc));
+        lpDDSurfaceDesc->dwSize = sizeof(DDSURFACEDESC);
+        return lpDDSurface->GetSurfaceDesc(lpDDSurfaceDesc);
     }
 
     // 0x0040F1A0
