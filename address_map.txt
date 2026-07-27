@@ -992,6 +992,13 @@ declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
 declare     idd                     u32                     0x00689790
+declare     word_6897C4             s16                     0x006897C4
+declare     dword_6897C8            u32                     0x006897C8
+declare     f_pos                   Vec32                   0x006897CC
+declare     word_6897DC             s16                     0x006897DC
+declare     vec_6897E0              Vec32                   0x006897E0
+declare     dword_6897F0            u32                     0x006897F0
+declare     vec_6897F4              Vec16                   0x006897F4
 declare     dword_689800            u32                     0x00689800
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
@@ -1203,6 +1210,7 @@ declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     obj_ptr                 ObjectEntity*           0x0098E51C
 declare     aot_count               u8                      0x0098E528
 declare     pickup_item             u8                      0x0098E529
+declare     word_98E52A             u16                     0x0098E52A
 declare     itembox_obj_index       u8                      0x0098E533
 declare     byte_98E541             u8                      0x0098E541
 declare     question_state          u8                      0x0098E542
@@ -1279,6 +1287,7 @@ declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
 declare     dword_98F1AC            u32                     0x0098F1AC
 declare     dword_98F1B0            u32                     0x0098F1B0
+declare     byte_98F1B5             u8                      0x0098F1B5
 declare     byte_98F1B6             u8                      0x0098F1B6
 declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F1B8             u8                      0x0098F1B8
@@ -1289,6 +1298,8 @@ declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     dword_991F70            u32                     0x00991F70
 declare     dword_991F74            u32                     0x00991F74
 declare     byte_991F80             u8                      0x00991F80
+declare     byte_991F81             u8                      0x00991F81
+declare     dword_991FC0            u32                     0x00991FC0
 declare     dword_991FC4            u32                     0x00991FC4
 declare     pdemo                   DemoPlayer              0x00991FC8
 declare     byte_99270E             u8                      0x0099270E
