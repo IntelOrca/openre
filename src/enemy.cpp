@@ -360,7 +360,12 @@ namespace openre::enemy
     // 0x004C1270
     void* partswork_set(Entity* entity, void* parts)
     {
-        return interop::call<void*, Entity*, void*>(0x004C1270, entity, parts);
+        auto* actor = (ActorEntity*)entity;
+        auto count = *(uint32_t*)((uint8_t*)entity->pTmd - 4) >> 1;
+        entity->parts_num = (uint8_t)count;
+        auto index = entity->parts_num;
+        actor->pSin_parts_ptr = (PartsW*)parts;
+        return &((PartsW*)parts)[index];
     }
 
     // 0x004C12B0
@@ -372,7 +377,28 @@ namespace openre::enemy
     // 0x004DFD20
     void* sa_dat_set(Entity* entity, void* arg1)
     {
-        return interop::call<void*, Entity*, void*>(0x004DFD20, entity, arg1);
+        auto* actor = (ActorEntity*)entity;
+        actor->pSa_dat = arg1;
+
+        auto mask = *(uint32_t*)arg1;
+        if (mask == 0)
+            return entity;
+
+        auto count = *(uint32_t*)((uint8_t*)entity->pTmd - 4) >> 1;
+        auto* parts = (PartsW*)actor->pSin_parts_ptr;
+        auto* src = (uint32_t*)((uint8_t*)arg1 + 12);
+
+        for (unsigned i = 0; i < count; i++)
+        {
+            parts[i].psa_dat_head = nullptr;
+            if ((1 << i) & mask)
+            {
+                parts[i].psa_dat_head = src;
+                src += src[2] + 3;
+            }
+        }
+
+        return &parts[count];
     }
 
     // 0x004C52A0

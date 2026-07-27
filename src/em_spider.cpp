@@ -5,6 +5,16 @@
 
 namespace openre::enemy
 {
+    enum : uint32_t
+    {
+        BE_FLG_ATK_NEAR = 0x4000000,  // Near-range attack behavior
+        BE_FLG_ATK_FAR = 0x8000000,   // Far-range/chase behavior
+        BE_FLG_ATK_BOTH = 0xC000000,  // Both attack flags
+        BE_FLG_WARY = 0x10000000,     // Wary/surprised behavior
+        BE_FLG_WARY_FAR = 0x18000000, // Wary + far attack
+        BE_FLG_ATK_CLR = 0xE3FFFFFF,  // Clear attack behavior bits
+    };
+
     void em_spider_01(EnemyEntity* enemy, Emr* emr, Edd* edd);
 
     // 0x004EA1C0
@@ -28,19 +38,102 @@ namespace openre::enemy
     // 0x004728B0
     static void sub_4728B0(EnemyEntity* enemy)
     {
-        interop::call<void, EnemyEntity*>(0x004728B0, enemy);
+        if (!enemy->water)
+        {
+            enemy->var_23A = 1;
+            enemy->var_23F = 0;
+            enemy->m.pos.y = enemy->ground;
+            return;
+        }
+
+        auto& state = reinterpret_cast<uint8_t&>(enemy->pad_023E[0]);
+
+        switch (state)
+        {
+        case 1:
+            state = 2;
+            enemy->spd.y = 140;
+            reinterpret_cast<int16_t&>(enemy->pad_0240[4]) = 0;
+            [[fallthrough]];
+        case 2:
+        {
+            auto& counter = reinterpret_cast<int16_t&>(enemy->pad_0240[4]);
+            counter += enemy->spd.y;
+            enemy->spd.y -= 15;
+            enemy->m.pos.y = counter + enemy->water + 70;
+
+            if (enemy->spd.y > 0)
+            {
+                if (enemy->m.pos.y >= enemy->ground)
+                {
+                    enemy->spd.y = 0;
+                    enemy->m.pos.y = enemy->ground;
+                }
+            }
+            else
+            {
+                if (enemy->spd.y < -70)
+                    enemy->spd.y = -70;
+                if (enemy->m.pos.y <= enemy->water)
+                {
+                    enemy->m.pos.y = enemy->water;
+                    state = 3;
+                }
+            }
+            break;
+        }
+        case 3:
+        {
+            static const uint8_t bob_table[8] = { 0, 8, 16, 32, 32, 16, 8, 0 };
+            auto t = enemy->timer1;
+            enemy->m.pos.y = bob_table[(t >> 3) & 7] + enemy->water + 70;
+            enemy->timer1 = t + 1;
+            return;
+        }
+        default: return;
+        }
     }
 
     // 0x004733D0
     static void sub_4733D0(EnemyEntity* enemy)
     {
-        interop::call<void, EnemyEntity*>(0x004733D0, enemy);
+        reinterpret_cast<uint8_t&>(enemy->pad_0237[0]) = 0;
+        if ((gGameTable.fg_status & 0x10000000) && (enemy->l_spl & 0xC0000000) == 0x40000000
+            && enemy->l_pl > (enemy->l_spl & 0x3FFFFFFF))
+        {
+            reinterpret_cast<uint8_t&>(enemy->pad_0237[0]) = 1;
+        }
     }
 
     // 0x004735A0
     static void sub_4735A0(EnemyEntity* enemy)
     {
-        interop::call<void, EnemyEntity*>(0x004735A0, enemy);
+        auto be_flg = enemy->be_flg & BE_FLG_ATK_CLR;
+        enemy->be_flg = be_flg;
+
+        switch (enemy->var_222)
+        {
+        case 0: enemy->be_flg = be_flg | BE_FLG_ATK_BOTH; break;
+        case 1: enemy->be_flg = be_flg | BE_FLG_WARY; break;
+        case 2:
+        case 3:
+        {
+            auto dy = gGameTable.pl.m.pos.y - enemy->m.pos.y;
+            if (dy <= 4200)
+            {
+                auto v5 = be_flg | BE_FLG_WARY_FAR;
+                enemy->be_flg = v5;
+                if (dy < 2100)
+                    enemy->be_flg = v5 | BE_FLG_ATK_NEAR;
+            }
+            else
+            {
+                enemy->be_flg = be_flg | BE_FLG_WARY;
+            }
+            break;
+        }
+        default: break;
+        }
     }
 
     // 0x00472DF0
@@ -380,11 +473,11 @@ namespace openre::enemy
             sub_4728B0(enemy);
         }
 
-        enemy->be_flg |= 0x4000000;
+        enemy->be_flg |= BE_FLG_ATK_NEAR;
 
         if (enemy->m.pos.y < gGameTable.pl.m.pos.y)
         {
-            enemy->be_flg |= 0x8000000;
+            enemy->be_flg |= BE_FLG_ATK_FAR;
         }
     }
 

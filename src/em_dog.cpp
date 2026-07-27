@@ -6,6 +6,14 @@
 
 namespace openre::enemy
 {
+    enum : uint32_t
+    {
+        BE_FLG_ATK_NEAR = 0x4000000, // Near-range attack behavior
+        BE_FLG_ATK_FAR = 0x8000000,  // Far-range/chase behavior
+        BE_FLG_ATK_BOTH = 0xC000000, // Both attack flags
+        BE_FLG_WARY = 0x10000000,    // Wary/surprised behavior
+        BE_FLG_ATK_CLR = 0xE3FFFFFF, // Clear attack behavior bits
+    };
     enum
     {
         POSE_IDLE = 0,
@@ -44,14 +52,36 @@ namespace openre::enemy
     static uint8_t _byte_527588[] = { 0, 1, 2, 4, 10, 12, 14, 13, 15, 0, 0, 0, 0, 0, 0, 0 };
     static uint8_t _byte_527550[] = { 7, 31, 15, 15, 15, 15, 7, 31 };
 
-    static void sub_45F630(EnemyEntity* enemy, int a1, int a2)
+    // 0x0045F630
+    static int16_t sub_45F630(EnemyEntity* enemy, int16_t a2, int a3)
     {
-        interop::call<void, EnemyEntity*, int, int>(0x0045F630, enemy, a1, a2);
+        auto result = enemy->spd.x;
+        if (result > a3)
+        {
+            result -= a2;
+            enemy->spd.x = result;
+            if (result < a3)
+                enemy->spd.x = static_cast<int16_t>(a3);
+        }
+        return result;
     }
 
+    // 0x0045EDD0
     static void sub_45EDD0(EnemyEntity* enemy, int a1)
     {
-        interop::call<void, EnemyEntity*, int>(0x0045EDD0, enemy, a1);
+        auto flags = enemy->be_flg;
+        if (a1)
+        {
+            enemy->atd[0].ofs.z = -1000;
+            enemy->atd[0].at_h = 1000;
+            enemy->be_flg = flags | BE_FLG_ATK_BOTH;
+        }
+        else
+        {
+            enemy->atd[0].ofs.z = -500;
+            enemy->atd[0].at_h = 500;
+            enemy->be_flg = (flags & BE_FLG_ATK_CLR) | BE_FLG_ATK_NEAR;
+        }
     }
 
     static void sub_45E680(EnemyEntity* enemy, Emr* emr, Edd* edd)
@@ -195,7 +225,7 @@ namespace openre::enemy
         auto type = enemy->type;
         if (type > 0x2003)
         {
-            enemy->be_flg |= 0xC000000;
+            enemy->be_flg |= BE_FLG_ATK_BOTH;
         }
         else if (type == 0x2003)
         {
@@ -203,7 +233,7 @@ namespace openre::enemy
             enemy->move_cnt = 0;
             enemy->hokan_flg = 15;
             enemy->mplay_flg = 0;
-            enemy->be_flg |= 0x4000000;
+            enemy->be_flg |= BE_FLG_ATK_NEAR;
         }
         else
         {
@@ -216,7 +246,7 @@ namespace openre::enemy
                 enemy->move_cnt = rnd() & 0x3F;
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
-                enemy->be_flg |= 0xC000000;
+                enemy->be_flg |= BE_FLG_ATK_BOTH;
                 break;
             case 2:
             case 6:
@@ -224,7 +254,7 @@ namespace openre::enemy
                 enemy->move_cnt = rnd() & 0xF;
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
-                enemy->be_flg |= 0xC000000;
+                enemy->be_flg |= BE_FLG_ATK_BOTH;
                 break;
             case 7:
                 enemy->timer2 = (rnd() & 3) + 1;
@@ -237,7 +267,7 @@ namespace openre::enemy
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
                 enemy->var_22D = 1;
-                enemy->be_flg |= 0x8000000;
+                enemy->be_flg |= BE_FLG_ATK_FAR;
                 break;
             case 9:
                 enemy->move_no = 1;
@@ -245,9 +275,9 @@ namespace openre::enemy
                 enemy->hokan_flg = 15;
                 enemy->mplay_flg = 0;
                 enemy->var_22E = 1;
-                enemy->be_flg |= 0xC000000;
+                enemy->be_flg |= BE_FLG_ATK_BOTH;
                 break;
-            default: enemy->be_flg |= 0xC000000; break;
+            default: enemy->be_flg |= BE_FLG_ATK_BOTH; break;
             }
         }
         joint_move(enemy, emr, seq, 256);
@@ -286,8 +316,8 @@ namespace openre::enemy
             enemy->spd.x = 30;
             enemy->spd.z = 0;
             enemy->neck_flg |= 2;
-            enemy->be_flg |= 0x4000000;
-            enemy->be_flg &= ~0x10000000;
+            enemy->be_flg |= BE_FLG_ATK_NEAR;
+            enemy->be_flg &= ~BE_FLG_WARY;
             enemy->var_219 = 0;
             enemy->var_22D = 0;
             enemy->damage_cnt &= ~0x80;
