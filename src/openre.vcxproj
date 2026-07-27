@@ -86,6 +86,7 @@
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="logger.cpp" />
+    <ClCompile Include="marni_config.cpp" />
     <ClCompile Include="marni.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />

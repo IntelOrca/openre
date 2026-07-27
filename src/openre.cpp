@@ -13,6 +13,7 @@
 #include "itembox.h"
 #include "logger.h"
 #include "marni.h"
+#include "marni_config.h"
 #include "math.h"
 #include "player.h"
 #include "rdt.h"
@@ -36,6 +37,7 @@ using namespace openre::hud;
 using namespace openre::math;
 using namespace openre::player;
 using namespace openre::rdt;
+using namespace openre::marni;
 using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
@@ -2972,6 +2974,7 @@ void onAttach()
     camera_init_hooks();
     enemy_init_hooks();
     file_init_hooks();
+    marni_config_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
     if (!gClassicRebirthEnabled)

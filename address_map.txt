@@ -850,9 +850,8 @@ declare     data                    char*
 declare     length                  u32
 
 struct      MarniConfig
-declare     key                     u32
-declare     var_04                  u32
-declare     var_08                  u32
+declare     root_key                u32
+declare     path                    OldStdString
 declare     hKey                    u32
 declare     ex_flag                 u32
 declare     ex_time                 u32[3]

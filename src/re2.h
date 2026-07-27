@@ -1086,9 +1086,8 @@ static_assert(sizeof(OldStdString) == 0x08);
 
 struct MarniConfig
 {
-    uint32_t key;                       // 0x0000
-    uint32_t var_04;                    // 0x0004
-    uint32_t var_08;                    // 0x0008
+    uint32_t root_key;                  // 0x0000
+    OldStdString path;                  // 0x0004
     uint32_t hKey;                      // 0x000C
     uint32_t ex_flag;                   // 0x0010
     uint32_t ex_time[3];                // 0x0014

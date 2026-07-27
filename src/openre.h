@@ -1,5 +1,6 @@
 #pragma once
 
+#include "interop.hpp"
 #include "re2.h"
 #include <cstdint>
 #include <vector>
@@ -223,5 +224,16 @@ namespace openre
         auto mask = a - 1;
         auto remainder = iValue & mask;
         return (T)(remainder == 0 ? iValue : iValue + a - remainder);
+    }
+
+    // 0x0050BC60
+    inline OldStdString* __stdcall oldstring_set_2(OldStdString* self, const char* s)
+    {
+        return interop::thiscall<OldStdString*, void*, const char*>(0x50BC60, self, s);
+    }
+
+    inline const char* oldstring_get_data(const OldStdString* self)
+    {
+        return self->data;
     }
 }
