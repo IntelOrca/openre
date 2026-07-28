@@ -917,6 +917,8 @@ declare     misc_text_j             u8[728]                 0x0052F310
 declare     misc_ptr_j              u16[512]                0x0052F5E8
 declare     desc_txt_j              u8[4832]                0x0052F9E8
 declare     desc_ptr_j              u16[256]                0x00530CC8
+declare     word_5338D8             u16[32]                 0x005338D8
+declare     byte_533938             u8                      0x00533938
 declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -949,6 +951,7 @@ declare     String                  char[26100]             0x00663500
 declare     hFont                   void*                   0x00669AF4
 declare     FontIndex               s32                     0x00669AF8
 declare     is_480p                 u8                      0x00669AFC
+declare     hadid                   void*                   0x00669B20
 declare     dword_66D394            u32                     0x0066D394
 declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
@@ -998,6 +1001,7 @@ declare     blood_censor            u8                      0x0068059A
 declare     byte_68059B             u8                      0x0068059B
 declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
+declare     byte_6805B2             u8                      0x006805B2
 declare     censorship_off          u8                      0x006805B3
 declare     byte_6805B4             u8                      0x006805B4
 declare     window_active           u8                      0x006805B5
@@ -1025,6 +1029,7 @@ declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
 declare     systemInitialized       u32                     0x0068984C
 declare     byte_689ABC             u8                      0x00689ABC
+declare     dword_689B3C            u32                     0x00689B3C
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10
 declare     rdt_top_ptr             void*                   0x00689C14
@@ -1189,11 +1194,13 @@ declare     byte_988528             u8*                     0x00988528
 declare     dword_9885A8            u32                     0x009885A8
 declare     dword_9885AC            u32                     0x009885AC
 declare     dword_9885D0            u32                     0x009885D0
+declare     dword_9885F4            u32                     0x009885F4
 declare     dword_9885F8            u32                     0x009885F8
 declare     word_9885FC             u16                     0x009885FC
 declare     dword_9885FE            u32                     0x009885FE
 declare     g_key                   u32                     0x00988604
 declare     key_trg                 u32                     0x00988608
+declare     dword_98860C            u32                     0x0098860C
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     dword_988620            u32                     0x00988620
