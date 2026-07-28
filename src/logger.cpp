@@ -57,8 +57,6 @@ namespace openre::logging
             return LogVerbosity::warning;
         if (std::strcmp(str, "info") == 0)
             return LogVerbosity::info;
-        if (std::strcmp(str, "verbose") == 0)
-            return LogVerbosity::verbose;
         if (std::strcmp(str, "debug") == 0)
             return LogVerbosity::debug;
         return fallback;

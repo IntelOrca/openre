@@ -14,7 +14,6 @@ namespace openre::logging
         error,
         warning,
         info,
-        verbose,
         debug,
     };
 
@@ -88,11 +87,6 @@ namespace openre::logging
     void initConsoleLogger(LogVerbosity defaultVerbosity);
 
     // Convenience variadic template functions
-    template<typename... Args> void logTrace(const char* format, Args... args)
-    {
-        gLogger->log(LogVerbosity::none, format, args...);
-    }
-
     template<typename... Args> void logError(const char* format, Args... args)
     {
         gLogger->log(LogVerbosity::error, format, args...);
@@ -106,11 +100,6 @@ namespace openre::logging
     template<typename... Args> void logInfo(const char* format, Args... args)
     {
         gLogger->log(LogVerbosity::info, format, args...);
-    }
-
-    template<typename... Args> void logVerbose(const char* format, Args... args)
-    {
-        gLogger->log(LogVerbosity::verbose, format, args...);
     }
 
     template<typename... Args> void logDebug(const char* format, Args... args)
