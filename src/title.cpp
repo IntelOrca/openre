@@ -180,7 +180,7 @@ namespace openre::title
         }
         case 4:
         {
-            snd_load_core(0x11, 0);
+            snd_load_core(0x10, 0);
             if (ctcb.var_13 == 0)
             {
                 ctcb.var_09 = 5;
@@ -231,7 +231,6 @@ namespace openre::title
                 if (gGameTable.byte_98F1BB == 2)
                 {
                     set_flag(FlagGroup::System, FG_SYSTEM_30, false);
-                    set_flag(FlagGroup::System, FG_SYSTEM_31, false);
                 }
             }
             else
