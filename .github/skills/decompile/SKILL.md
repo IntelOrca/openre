@@ -107,6 +107,7 @@ gGameTable.hFont    // member already defined in re2.h
 ### Standalone globals
 
 For globals not in GameTable, consider adding them unless they map to immutable/constant data, in which case define that data directly in the source file.
+Do not use std::string in OG data, use OldStdString instead which is compatible.
 
 ## Verification
 
