@@ -23,6 +23,7 @@
 #include "scheduler.h"
 #include "tim.h"
 #include "title.h"
+#include "window.h"
 #include <ddraw.h>
 
 #include <cstring>
@@ -2251,9 +2252,33 @@ namespace openre
     }
 
     // 0x00442800
-    static INT_PTR CALLBACK about_dialog(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    static INT_PTR CALLBACK about_dialog(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-        return interop::stdcall<INT_PTR, HWND, UINT, WPARAM, LPARAM>(0x00442800, hWnd, msg, wParam, lParam);
+        if (msg == WM_INITDIALOG)
+        {
+            SetDlgItemTextA(hDlg, 1017, "BIOHAZARD(R) 2 PC\nVersion: 1.1.0");
+            auto hParent = GetParent(hDlg);
+            if (hParent)
+            {
+                RECT rcParent, rcDlg;
+                GetWindowRect(hParent, &rcParent);
+                GetWindowRect(hDlg, &rcDlg);
+                MoveWindow(
+                    hDlg,
+                    (rcParent.left + rcParent.right) / 2 - (rcDlg.right - rcDlg.left) / 2,
+                    (rcParent.top + rcParent.bottom) / 2 - (rcDlg.bottom - rcDlg.top) / 2,
+                    rcDlg.right - rcDlg.left,
+                    rcDlg.bottom - rcDlg.top,
+                    TRUE);
+            }
+            return TRUE;
+        }
+
+        if (msg == WM_COMMAND && wParam && (uint32_t)wParam <= 2)
+        {
+            EndDialog(hDlg, -1);
+        }
+        return FALSE;
     }
 
     // 0x00442750
@@ -2265,7 +2290,27 @@ namespace openre
     // 0x00442C60
     static void cursor_op()
     {
-        interop::call(0x00442C60);
+        auto marni = gGameTable.pMarni;
+        if (marni == nullptr)
+            return;
+
+        auto gpu_flg = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(marni) + 0x8C83F4);
+
+        if (gpu_flg & 0x400)
+        {
+            if (!gGameTable.byte_6805B2)
+            {
+                gGameTable.byte_6805B2 = 1;
+                ShowCursor(FALSE);
+                interop::call<int>(0x00433870, 0); // SsSetCoopLevel(0)
+            }
+        }
+        else if (gGameTable.byte_6805B2 == 1)
+        {
+            gGameTable.byte_6805B2 = 0;
+            ShowCursor(TRUE);
+            interop::call<int>(0x00433870, 1); // SsSetCoopLevel(1)
+        }
     }
 
     // 0x00441A00
@@ -2977,6 +3022,7 @@ void onAttach()
     marni_config_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
+    window::window_init_hooks();
     if (!gClassicRebirthEnabled)
     {
         input_init_hooks();

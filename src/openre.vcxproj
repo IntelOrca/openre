@@ -99,6 +99,7 @@
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
+    <ClCompile Include="window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
@@ -129,6 +130,7 @@
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
+    <ClInclude Include="window.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyLauncher" AfterTargets="Build">
