@@ -1,9 +1,13 @@
-#include <cstring>
-
 #include "audio.h"
 #include "file.h"
 #include "interop.hpp"
 #include "openre.h"
+
+#include <cstring>
+#include <windows.h>
+
+#include <mmreg.h>
+#include <msacm.h>
 
 using namespace openre::file;
 
@@ -350,10 +354,41 @@ namespace openre::audio
         snd_se_on(a0, nullptr);
     }
 
+    static MMRESULT acmDriverDetailsA_proxy(HACMDRIVERID hadid, LPACMDRIVERDETAILSA padd, DWORD fdwDetails)
+    {
+        return interop::stdcall<MMRESULT, HACMDRIVERID, LPACMDRIVERDETAILSA, DWORD>(0x0050C7B2, hadid, padd, fdwDetails);
+    }
+
+    // 0x004329B0
+    static BOOL __stdcall acmDriverEnumCallback(HACMDRIVERID hadid, DWORD dwInstance, DWORD fdwSupport)
+    {
+        ACMDRIVERDETAILSA padd{};
+        padd.cbStruct = sizeof(ACMDRIVERDETAILSA);
+
+        acmDriverDetailsA_proxy(hadid, &padd, 0);
+
+        if (dwInstance)
+        {
+            auto v3 = strstr(padd.szShortName, "MS-PCM");
+            if (!v3)
+                return TRUE;
+        }
+        else
+        {
+            auto v3 = strstr(padd.szShortName, "MS-ADPCM");
+            if (!v3)
+                return TRUE;
+        }
+
+        gGameTable.hadid = hadid;
+        return FALSE;
+    }
+
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
+        interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
     }
 }
