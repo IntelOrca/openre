@@ -1161,12 +1161,6 @@ namespace openre
         task_execute(2, task_null);
     }
 
-    // 0x004D0F30
-    static void pad_set()
-    {
-        interop::call(0x004D0F30);
-    }
-
     // 0x00441870
     static void movie_set(int id)
     {

@@ -20,6 +20,20 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * The exception is constant/immutable data which can be added directly to the source file or best suited place.
 * Helpers are often used to get certain things rather than directly accessing GameTable, look for one, potentially add one.
 
+## RE2 flags (check_flag / set_flag)
+* `check_flag(group, index)` / `set_flag(group, index, value)` use **MSB-first** bit numbering via
+  `bitarray_get`/`bitarray_set` (sce.cpp): index N tests mask `0x80000000 >> N`.
+  This is NOT the usual LSB convention (`1 << N`). `index = 31 - lsb_bit_position`.
+* Examples: index 0 = `0x80000000`, index 18 = `0x00002000`, index 31 = `0x00000001`.
+  A conversion table is written as a comment above each `FG_*` enum in `openre.h`.
+* When decompiling original code that uses raw masks, convert mask → index, never assume index = LSB bit position:
+  * `fg_system & 0x2000` → LSB bit 13 → index 18 → `FG_SYSTEM_DEMO` (NOT `FG_SYSTEM_13`; that is mask `0x40000`)
+  * `fg_system & 0x40000000` → index 1 → `FG_SYSTEM_1`
+  * `fg_system |= 0x80000000` / `fg_system < 0` → index 0 → `FG_SYSTEM_0`
+  * `fg_system & 1` → index 31 → `FG_SYSTEM_31`
+* After touching flag code, sanity-check the mask: compute `0x80000000 >> index` and compare against the original assembly.
+* Indexes ≥ 32 address subsequent dwords of the flag group (index 32 = `0x80000000` of `dword[1]`).
+
 ## RE2 hooks
 * It is possible to force original code to call our new implementation using hooks.
   Typically each module defines its hooks at the bottom of the source file like:

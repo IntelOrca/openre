@@ -44,5 +44,6 @@ namespace openre::input
     void input_pause(Input* self);
     void input_wmkeyup(Input* self, int vk);
     void input_wmkeydown(Input* self, int vk);
+    void pad_set();
     void input_init_hooks();
 };

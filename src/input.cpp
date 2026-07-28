@@ -381,6 +381,111 @@ namespace openre::input
         interop::thiscall<int, Input*>(0x004103F0, self);
     }
 
+    // 0x004D0F30
+    void pad_set()
+    {
+        // Save previous raw input
+        gGameTable.dword_9885F8 = gGameTable.dword_9885F4;
+
+        // Copy Vk_press bit 4 (0x10) to bit 5 (0x20), then clear bit 4
+        auto vk = gGameTable.vk_press;
+        vk = vk & 0xDF;
+        if (vk & 0x10)
+            vk |= 0x20;
+        vk = vk & 0xEF;
+        gGameTable.vk_press = vk;
+
+        // Get combined keyboard + gamepad input
+        int rawInput = sub_43BB00();
+        int prevInput = gGameTable.dword_9885F8;
+        gGameTable.dword_9885F4 = rawInput;
+
+        // Demo playback: if demo flag is set, replay recorded input
+        if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+        {
+            auto inputChanged = (rawInput & (rawInput ^ prevInput) & 0xFFF) != 0;
+            if (inputChanged || gGameTable.word_98E52A >= gGameTable.pdemo.frames || (gGameTable.vk_press & 0x40))
+            {
+                gGameTable.vk_press &= ~0x40;
+                if (check_flag(FlagGroup::System, FG_SYSTEM_1))
+                {
+                    if (gGameTable.word_98E52A < gGameTable.pdemo.frames)
+                        gGameTable.byte_98F1BB = 1;
+                    gGameTable.word_98E52A = gGameTable.pdemo.frames + 1;
+                    gGameTable.dword_9885F4 = 0;
+                    rawInput = 0;
+                }
+                else
+                {
+                    set_flag(FlagGroup::System, FG_SYSTEM_19, true);
+                }
+            }
+            else if (check_flag(FlagGroup::System, FG_SYSTEM_1))
+            {
+                rawInput = gGameTable.pdemo.input[gGameTable.word_98E52A];
+                gGameTable.word_98E52A++;
+                gGameTable.dword_9885F4 = rawInput;
+            }
+        }
+
+        // Map raw input bits to logical key bits via the mapping table
+        int oldKey = gGameTable.g_key;
+        int newKey = 0;
+        gGameTable.dword_98860C = gGameTable.g_key;
+        gGameTable.g_key = 0;
+
+        auto* mapping = &gGameTable.word_5338D8[16 * gGameTable.byte_98E9AA];
+
+        for (int i = 0; i < 16; i++)
+        {
+            if (mapping[i] & rawInput)
+                newKey |= (1 << i);
+        }
+
+        gGameTable.g_key = newKey;
+
+        // Stop flag handling: if input is blocked, only allow directional keys
+        if (gGameTable.fg_stop & 0x1000000)
+        {
+            newKey &= 0x3C00;
+            gGameTable.dword_689B3C = gGameTable.fg_stop;
+            gGameTable.g_key = newKey;
+        }
+        else if (gGameTable.dword_689B3C & 0x1000000)
+        {
+            oldKey = newKey;
+            gGameTable.dword_689B3C = 0;
+            gGameTable.dword_98860C = newKey;
+        }
+
+        // Calculate trigger (edge detection) values
+        uint32_t inputTrigger = rawInput & (rawInput ^ prevInput);
+        uint32_t keyTrigger = newKey & (newKey ^ oldKey);
+
+        gGameTable.dword_9885FE = (gGameTable.dword_9885FE & 0xFFFF0000) | (inputTrigger & 0xFFFF);
+        gGameTable.word_9885FC = (uint16_t)gGameTable.dword_9885F4;
+        gGameTable.key_trg = keyTrigger;
+        gGameTable.dword_9885F8 = inputTrigger;
+
+        // Key repeat handling for the mask bits in dword_98F074
+        if (gGameTable.dword_98F074 & inputTrigger)
+        {
+            gGameTable.byte_533938 = gGameTable.word_98F078 & 0xFF;
+            set_flag(FlagGroup::System, FG_SYSTEM_0, true);
+        }
+        else if (gGameTable.byte_533938)
+        {
+            if (gGameTable.dword_98F074 & rawInput)
+                gGameTable.byte_533938--;
+            set_flag(FlagGroup::System, FG_SYSTEM_0, false);
+        }
+        else
+        {
+            gGameTable.byte_533938 = (gGameTable.word_98F078 >> 8) & 0xFF;
+            set_flag(FlagGroup::System, FG_SYSTEM_0, true);
+        }
+    }
+
     void input_init_hooks()
     {
         writeJmp(0x00410450, &input_wmkeyup);
@@ -391,5 +496,6 @@ namespace openre::input
         writeJmp(0x00432670, &get_menu_key);
         writeJmp(0x004354D0, &get_config_key_state);
         writeJmp(0x0043BB00, &sub_43BB00);
+        writeJmp(0x004D0F30, &pad_set);
     }
 };
