@@ -1,10 +1,14 @@
 #include "audio.h"
 #include "file.h"
 #include "interop.hpp"
+#include "logger.h"
 #include "openre.h"
 
 #include <cstring>
+#include <string>
 #include <windows.h>
+#include <dsound.h>
+#include <mmsystem.h>
 
 #include <mmreg.h>
 #include <msacm.h>
@@ -23,6 +27,101 @@ namespace openre::audio
         case 2: return entry->sub1;
         }
         return 0;
+    }
+
+    // 0x00433870
+    static int ss_set_coop_level(int mode)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
+        DWORD level = (mode == 1) ? DSSCL_NORMAL : DSSCL_EXCLUSIVE;
+        if (ds->SetCooperativeLevel((HWND)gGameTable.hwnd, level))
+            return 0;
+        return 1;
+    }
+
+    // 0x004338B0
+    static int ss_set_stereo_mono(int is_mono)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
+        DWORD config = (is_mono == 1) ? DSSPEAKER_MONO : DSSPEAKER_STEREO;
+        return (ds->SetSpeakerConfig(config) == DS_OK) ? 1 : 0;
+    }
+
+    // 0x00433740
+    static int ss_init()
+    {
+        if (!gGameTable.enable_dsound)
+        {
+            gGameTable.audio_pMarniSnd = nullptr;
+            return 1;
+        }
+
+        if (DirectSoundCreate(nullptr, (LPDIRECTSOUND*)&gGameTable.audio_pMarniSnd, nullptr))
+        {
+            gGameTable.audio_pMarniSnd = nullptr;
+            return 0;
+        }
+
+        int result = ss_set_coop_level((~gGameTable.pMarni->gpu_flag >> 10) & 1);
+        if (!result)
+            return result;
+
+        ss_set_stereo_mono(gGameTable.audio_SpeakerConfig);
+        memset(gGameTable.audio_BufferArms, 0, sizeof(gGameTable.audio_BufferArms));
+        memset(gGameTable.audio_BufferCore, 0, sizeof(gGameTable.audio_BufferCore));
+        memset(gGameTable.audio_BufferEnemy, 0, sizeof(gGameTable.audio_BufferEnemy));
+        gGameTable.audio_BufferDoor[0] = 0;
+        gGameTable.audio_BufferDoor[1] = 0;
+        memset(gGameTable.audio_BufferRoom, 0, sizeof(gGameTable.audio_BufferRoom));
+        gGameTable.audio_BufferDoor[2] = 0;
+        gGameTable.audio_BufferBgm[0] = 0;
+        gGameTable.audio_BufferDoor[3] = 0;
+        gGameTable.audio_BufferBgm[1] = 0;
+        gGameTable.audio_BufferSBgm[0] = 0;
+        gGameTable.audio_BufferVoice[0] = 0;
+        gGameTable.audio_BufferBgm[2] = 0;
+        gGameTable.audio_BufferSBgm[1] = 0;
+        gGameTable.audio_BufferVoice[1] = 0;
+        return 1;
+    }
+
+    // 0x00435930
+    static int ss_create_buffer(HMMIO hmmio, DWORD type, int sub)
+    {
+        return interop::call<int, HMMIO, DWORD, int>(0x435930, hmmio, type, sub);
+    }
+
+    // 0x00435540
+    static MMRESULT ss_init_buffers(DWORD type)
+    {
+        auto& ss = gGameTable.ss_file_string;
+        logging::logInfo("[AUDIO OPEN] {}", ss.data);
+        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
+        if (!hmmio)
+            return mmioClose(nullptr, 0);
+
+        int32_t mask0, mask1;
+        if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4 || mmioRead(hmmio, (HPSTR)&mask1, 4) != 4)
+            return mmioClose(hmmio, 0);
+
+        for (int i = 0; i < 32; i++)
+        {
+            if ((mask0 >> i) & 1)
+                ss_create_buffer(hmmio, type, i);
+        }
+        for (int j = 0; j < 16; j++)
+        {
+            if ((mask1 >> j) & 1)
+                ss_create_buffer(hmmio, type, j + 32);
+        }
+
+        return mmioClose(hmmio, 0);
     }
 
     // 0x00433f10
@@ -76,9 +175,7 @@ namespace openre::audio
     {
         if (gGameTable.enable_dsound)
         {
-            using SsInit_t = void (*)();
-            auto SsInit = (SsInit_t)0x00433740;
-            SsInit();
+            ss_init();
             gGameTable.cd_vol_0 = 120;
             using Snd_sys_init_sub_t = void (*)();
             auto Snd_sys_init_sub = (Snd_sys_init_sub_t)0x004EC350;
@@ -386,9 +483,10 @@ namespace openre::audio
 
     void bgm_init_hooks()
     {
+        interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
+        interop::writeJmp(0x00435540, &ss_init_buffers);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
-        interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
     }
 }

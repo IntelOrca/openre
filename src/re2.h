@@ -1232,7 +1232,19 @@ struct GameTable
     uint8_t is_480p;                    // 0x669AFC
     uint8_t pad_669AFD[35];             // 0x669AFD
     void* hadid;                        // 0x669B20
-    uint8_t pad_669B24[14448];          // 0x669B24
+    uint8_t pad_669B24[460];            // 0x669B24
+    void* audio_pMarniSnd;              // 0x669CF0
+    uint32_t audio_BufferSBgm[2];       // 0x669CF4
+    int32_t audio_SpeakerConfig;        // 0x669CFC
+    uint32_t audio_BufferDoor[4];       // 0x669D00
+    uint32_t audio_BufferEnemy[32];     // 0x669D10
+    uint32_t audio_BufferBgm[3];        // 0x669D90
+    uint8_t pad_669D9C[4];              // 0x669D9C
+    uint32_t audio_BufferRoom[48];      // 0x669DA0
+    uint32_t audio_BufferCore[22];      // 0x669E60
+    uint32_t audio_BufferArms[32];      // 0x669EB8
+    uint32_t audio_BufferVoice[2];      // 0x669F38
+    uint8_t pad_669F40[13396];          // 0x669F40
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[16492];          // 0x66D398
     uint32_t dword_671404;              // 0x671404
@@ -1369,7 +1381,9 @@ struct GameTable
     uint8_t pad_689F25[7];              // 0x689F25
     uint32_t task_disable;              // 0x689F2C
     uint32_t task_no;                   // 0x689F30
-    uint8_t pad_689F34[28];             // 0x689F34
+    char dword_689F34[8];               // 0x689F34
+    OldStdString ss_file_string;        // 0x689F3C
+    uint8_t pad_689F44[12];             // 0x689F44
     MarniConfig marni_config;           // 0x689F50
     uint8_t pad_689FAD[599];            // 0x689FAD
     Task* ctcb;                         // 0x68A204

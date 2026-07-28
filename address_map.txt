@@ -952,6 +952,16 @@ declare     hFont                   void*                   0x00669AF4
 declare     FontIndex               s32                     0x00669AF8
 declare     is_480p                 u8                      0x00669AFC
 declare     hadid                   void*                   0x00669B20
+declare     audio_pMarniSnd          void*                  0x00669CF0
+declare     audio_BufferSBgm         u32[2]                 0x00669CF4
+declare     audio_SpeakerConfig      s32                    0x00669CFC
+declare     audio_BufferDoor         u32[4]                 0x00669D00
+declare     audio_BufferEnemy        u32[32]                0x00669D10
+declare     audio_BufferBgm          u32[3]                 0x00669D90
+declare     audio_BufferRoom         u32[48]                0x00669DA0
+declare     audio_BufferCore         u32[22]                0x00669E60
+declare     audio_BufferArms         u32[32]                0x00669EB8
+declare     audio_BufferVoice        u32[2]                 0x00669F38
 declare     dword_66D394            u32                     0x0066D394
 declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
@@ -1050,6 +1060,8 @@ declare     dword_689F20            u32                     0x00689F20
 declare     byte_689F24             u8                      0x00689F24
 declare     task_disable            u32                     0x00689F2C
 declare     task_no                 u32                     0x00689F30
+declare     dword_689F34            char[8]                 0x00689F34
+declare     ss_file_string          OldStdString            0x00689F3C
 declare     marni_config            MarniConfig             0x00689F50
 declare     ctcb                    Task*                   0x0068A204
 declare     tasks                   Task[8]                 0x0068A220
