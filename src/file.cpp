@@ -314,6 +314,111 @@ namespace openre::file
         return memoryBlock;
     }
 
+    // 0x0043BBC0
+    static unsigned int file_read_chunk()
+    {
+        if (--gGameTable.dword_671414 >= 0)
+            return (gGameTable.dword_67140C >> gGameTable.dword_671414) & 1;
+
+        gGameTable.dword_671414 = 7;
+
+        if (gGameTable.dword_99DAC8)
+        {
+            gGameTable.dword_67140C = *(char*)(gGameTable.adt_in_pos + gGameTable.adt_in_base);
+            gGameTable.adt_in_pos++;
+            return (gGameTable.dword_67140C >> 7) & 1;
+        }
+
+        int pos = gGameTable.dword_99DAB8;
+        if (pos >= (int)gGameTable.adt_bytes_read)
+        {
+            if (!ReadFile(
+                    gGameTable.adt_file_handle, gGameTable.adt_buffer_in, 0x8000, (LPDWORD)&gGameTable.adt_bytes_read, NULL))
+            {
+                CloseHandle(gGameTable.adt_file_handle);
+                gGameTable.adt_file_handle = 0;
+                return 0;
+            }
+            pos = 0;
+            gGameTable.dword_99DAB8 = 0;
+        }
+
+        gGameTable.dword_67140C = ((unsigned char*)gGameTable.adt_buffer_in)[pos];
+        gGameTable.dword_99DAB8 = pos + 1;
+        return (gGameTable.dword_67140C >> 7) & 1;
+    }
+
+    // 0x0043BC90
+    static short file_read_chunk2(int num_bits)
+    {
+        int bits_remaining = gGameTable.dword_671414;
+        unsigned int bit_buffer = gGameTable.dword_67140C;
+        int result = 0;
+
+        if (gGameTable.dword_99DAC8)
+        {
+            int remaining = num_bits;
+
+            if (num_bits > bits_remaining)
+            {
+                int pos = gGameTable.adt_in_pos;
+
+                do
+                {
+                    remaining -= bits_remaining;
+                    result |= (bit_buffer & ((1 << bits_remaining) - 1)) << remaining;
+                    bit_buffer = *(char*)(pos + gGameTable.adt_in_base);
+                    bits_remaining = 8;
+                    gGameTable.dword_67140C = bit_buffer;
+                    gGameTable.dword_671414 = 8;
+                    pos++;
+                    gGameTable.adt_in_pos = pos;
+                } while (remaining > 8);
+            }
+
+            gGameTable.dword_671414 = bits_remaining - remaining;
+            return result | ((1 << remaining) - 1) & (bit_buffer >> (bits_remaining - remaining));
+        }
+        else
+        {
+            int remaining = num_bits;
+
+            if (num_bits > bits_remaining)
+            {
+                int file_pos = gGameTable.dword_99DAB8;
+                unsigned char* buf = (unsigned char*)gGameTable.adt_buffer_in;
+
+                do
+                {
+                    remaining -= bits_remaining;
+                    result |= (bit_buffer & ((1 << bits_remaining) - 1)) << remaining;
+
+                    if (file_pos >= (int)gGameTable.adt_bytes_read)
+                    {
+                        if (!ReadFile(gGameTable.adt_file_handle, buf, 0x8000, (LPDWORD)&gGameTable.adt_bytes_read, NULL))
+                        {
+                            CloseHandle(gGameTable.adt_file_handle);
+                            gGameTable.adt_file_handle = 0;
+                            return 0;
+                        }
+                        buf = (unsigned char*)gGameTable.adt_buffer_in;
+                        file_pos = 0;
+                        gGameTable.dword_99DAB8 = 0;
+                    }
+
+                    bits_remaining = 8;
+                    bit_buffer = buf[file_pos++];
+                    gGameTable.dword_67140C = bit_buffer;
+                    gGameTable.dword_99DAB8 = file_pos;
+                    gGameTable.dword_671414 = 8;
+                } while (remaining > 8);
+            }
+
+            gGameTable.dword_671414 = bits_remaining - remaining;
+            return result | ((1 << remaining) - 1) & (bit_buffer >> (bits_remaining - remaining));
+        }
+    }
+
     // 0x00509620
     static void adt_store_last_filename(const char* filename)
     {
@@ -379,5 +484,7 @@ namespace openre::file
         interop::writeJmp(0x00509780, &file_read_save);
         interop::writeJmp(0x005097E0, &file_write_save);
         interop::writeJmp(0x00432600, &remove_save);
+        interop::writeJmp(0x0043BBC0, &file_read_chunk);
+        interop::writeJmp(0x0043BC90, &file_read_chunk2);
     }
 }

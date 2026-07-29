@@ -989,7 +989,7 @@ declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
 declare     dword_67140C            u32                     0x0067140C
 declare     dword_671410            u32                     0x00671410
-declare     dword_671414            u32                     0x00671414
+declare     dword_671414            s32                     0x00671414
 declare     dword_671418            u32                     0x00671418
 declare     dword_67141C            u32                     0x0067141C
 declare     dword_671420            u32                     0x00671420
@@ -1397,6 +1397,7 @@ declare     dword_99CEC4            u32                     0x0099CEC4
 declare     dword_99CF64            u32                     0x0099CF64
 declare     dword_99CF6C            u32                     0x0099CF6C
 declare     dword_99CF70            u32                     0x0099CF70
+declare     adt_in_pos              u32                     0x0099DAA0
 declare     adt_buffer_in           void*                   0x0099DAA4
 declare     adt_out_ptr             u32                     0x0099DAA8
 declare     adt_file_handle         void*                   0x0099DAAC
@@ -1405,6 +1406,7 @@ declare     adt_out_offset          u32                     0x0099DAB4
 declare     dword_99DAB8            u32                     0x0099DAB8
 declare     adt_buffer_out          u32                     0x0099DABC
 declare     adt_bytes_read          u32                     0x0099DAC0
+declare     adt_in_base             u32                     0x0099DAC4
 declare     dword_99DAC8            u32                     0x0099DAC8
 
 struct      Unknown988628

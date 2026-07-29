@@ -1276,7 +1276,7 @@ struct GameTable
     uint32_t dword_671408;              // 0x671408
     uint32_t dword_67140C;              // 0x67140C
     uint32_t dword_671410;              // 0x671410
-    uint32_t dword_671414;              // 0x671414
+    int32_t dword_671414;               // 0x671414
     uint32_t dword_671418;              // 0x671418
     uint32_t dword_67141C;              // 0x67141C
     uint32_t dword_671420;              // 0x671420
@@ -1838,7 +1838,8 @@ struct GameTable
     uint8_t pad_99CF68[4];              // 0x99CF68
     uint32_t dword_99CF6C;              // 0x99CF6C
     uint32_t dword_99CF70;              // 0x99CF70
-    uint8_t pad_99CF74[2864];           // 0x99CF74
+    uint8_t pad_99CF74[2860];           // 0x99CF74
+    uint32_t adt_in_pos;                // 0x99DAA0
     void* adt_buffer_in;                // 0x99DAA4
     uint32_t adt_out_ptr;               // 0x99DAA8
     void* adt_file_handle;              // 0x99DAAC
@@ -1847,7 +1848,7 @@ struct GameTable
     uint32_t dword_99DAB8;              // 0x99DAB8
     uint32_t adt_buffer_out;            // 0x99DABC
     uint32_t adt_bytes_read;            // 0x99DAC0
-    uint8_t pad_99DAC4[4];              // 0x99DAC4
+    uint32_t adt_in_base;               // 0x99DAC4
     uint32_t dword_99DAC8;              // 0x99DAC8
 };
 static_assert(sizeof(GameTable) == 0x99DACC);

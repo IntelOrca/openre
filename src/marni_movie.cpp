@@ -1,6 +1,6 @@
 #include "marni_movie.h"
-#include "marni.h"
 #include "interop.hpp"
+#include "marni.h"
 #include "openre.h"
 #include "re2.h"
 
@@ -83,25 +83,35 @@ namespace openre::marni
 
     // DirectShow CLSID/IID GUIDs used by movie_open (from binary rdata)
     // CLSID_FilterGraph {E436EBB3-524F-11CE-9F53-0020AF0BA770}
-    static const GUID CLSID_FilterGraph_Movie = {0xE436EBB3, 0x524F, 0x11CE, {0x9F, 0x53, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70}};
+    static const GUID CLSID_FilterGraph_Movie
+        = { 0xE436EBB3, 0x524F, 0x11CE, { 0x9F, 0x53, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
     // IID_IGraphBuilder {56A868A9-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IGraphBuilder_Movie = {0x56A868A9, 0x0AD4, 0x11CE, {0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70}};
+    static const GUID IID_IGraphBuilder_Movie
+        = { 0x56A868A9, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
     // IID_IMediaControl {56A868B1-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IMediaControl_Movie = {0x56A868B1, 0x0AD4, 0x11CE, {0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70}};
+    static const GUID IID_IMediaControl_Movie
+        = { 0x56A868B1, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
     // IID_IVideoWindow {56A868B4-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IVideoWindow_Movie = {0x56A868B4, 0x0AD4, 0x11CE, {0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70}};
+    static const GUID IID_IVideoWindow_Movie
+        = { 0x56A868B4, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
     // IID_IMediaPosition {56A868B2-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IMediaPosition_Movie = {0x56A868B2, 0x0AD4, 0x11CE, {0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70}};
+    static const GUID IID_IMediaPosition_Movie
+        = { 0x56A868B2, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
     // MSPID_PrimaryVideo {A35FF56A-9FDA-11D0-8FDF-00C04FD9189D}
-    static const GUID MSPID_PrimaryVideo_Movie = {0xA35FF56A, 0x9FDA, 0x11D0, {0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D}};
+    static const GUID MSPID_PrimaryVideo_Movie
+        = { 0xA35FF56A, 0x9FDA, 0x11D0, { 0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
     // MSPID_PrimaryAudio {A35FF56B-9FDA-11D0-8FDF-00C04FD9189D}
-    static const GUID MSPID_PrimaryAudio_Movie = {0xA35FF56B, 0x9FDA, 0x11D0, {0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D}};
+    static const GUID MSPID_PrimaryAudio_Movie
+        = { 0xA35FF56B, 0x9FDA, 0x11D0, { 0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
     // CLSID_AMMultiMediaStream {49C47CE5-9BA4-11D0-8212-00C04FC32C45}
-    static const GUID CLSID_AMMultiMediaStream_Movie = {0x49C47CE5, 0x9BA4, 0x11D0, {0x82, 0x12, 0x00, 0xC0, 0x4F, 0xC3, 0x2C, 0x45}};
+    static const GUID CLSID_AMMultiMediaStream_Movie
+        = { 0x49C47CE5, 0x9BA4, 0x11D0, { 0x82, 0x12, 0x00, 0xC0, 0x4F, 0xC3, 0x2C, 0x45 } };
     // IID_IAMMultiMediaStream {BEBE595C-9A6F-11D0-8FDE-00C04FD9189D}
-    static const GUID IID_IAMMultiMediaStream_Movie = {0xBEBE595C, 0x9A6F, 0x11D0, {0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D}};
+    static const GUID IID_IAMMultiMediaStream_Movie
+        = { 0xBEBE595C, 0x9A6F, 0x11D0, { 0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
     // IID_IDirectDrawMediaStream {F4104FCE-9A70-11D0-8FDE-00C04FD9189D}
-    static const GUID IID_IDirectDrawMediaStream_Movie = {0xF4104FCE, 0x9A70, 0x11D0, {0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D}};
+    static const GUID IID_IDirectDrawMediaStream_Movie
+        = { 0xF4104FCE, 0x9A70, 0x11D0, { 0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
 
     // 0x00414CF0
     int __stdcall
@@ -113,8 +123,7 @@ namespace openre::marni
         MultiByteToWideChar(0, 0, path, -1, widePath, 260);
 
         void* pGraphBuilder = nullptr;
-        auto hr = CoCreateInstance(
-            CLSID_FilterGraph_Movie, nullptr, 1u, IID_IGraphBuilder_Movie, &pGraphBuilder);
+        auto hr = CoCreateInstance(CLSID_FilterGraph_Movie, nullptr, 1u, IID_IGraphBuilder_Movie, &pGraphBuilder);
         if (FAILED(hr))
         {
             out("failed to generate Filter Graph. MarniMovie::Open", "");
@@ -127,8 +136,7 @@ namespace openre::marni
         {
             // Streaming mode
             void* pAMStream = nullptr;
-            CoCreateInstance(
-                CLSID_AMMultiMediaStream_Movie, nullptr, 1u, IID_IAMMultiMediaStream_Movie, &pAMStream);
+            CoCreateInstance(CLSID_AMMultiMediaStream_Movie, nullptr, 1u, IID_IAMMultiMediaStream_Movie, &pAMStream);
             if (!pAMStream)
             {
                 out("failed to generate Filter Graph. MarniMovie::Open", "");
