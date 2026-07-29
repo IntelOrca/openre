@@ -181,6 +181,32 @@ namespace openre::file
         return result;
     }
 
+    // 0x005094B0
+    static DWORD bufferize_file_0(LPVOID filename, LPVOID buffer, DWORD type)
+    {
+        auto hFile = file_open_handle((const char*)filename, (int)type);
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        DWORD fileSize = GetFileSize(hFile, NULL);
+        DWORD bytesRead = 0;
+        if (ReadFile(hFile, buffer, fileSize, &bytesRead, NULL) && fileSize == bytesRead)
+        {
+            update_timer();
+            CloseHandle(hFile);
+            return bytesRead;
+        }
+        else
+        {
+            gGameTable.error_no = 11;
+            CloseHandle(hFile);
+            return 0;
+        }
+    }
+
     // 0x00509540
     uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t mode)
     {
@@ -252,6 +278,12 @@ namespace openre::file
         return result;
     }
 
+    // 0x00432600
+    static bool remove_save(LPCSTR lpFileName)
+    {
+        return DeleteFileA(lpFileName);
+    }
+
     // 0x005095D0
     int file_exists(const char* path, int mode)
     {
@@ -285,9 +317,7 @@ namespace openre::file
     // 0x00509620
     static void adt_store_last_filename(const char* filename)
     {
-        using sig = void (*)(const char*);
-        auto p = (sig)0x00509620;
-        p(filename);
+        og_string_assign((uint32_t)&gGameTable.ss_file_string, filename);
     }
 
     // 0x0043C590
@@ -343,9 +373,11 @@ namespace openre::file
     void file_init_hooks()
     {
         interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x005094B0, &bufferize_file_0);
         interop::writeJmp(0x00509020, &file_open_handle);
         interop::writeJmp(0x005095D0, &file_exists);
         interop::writeJmp(0x00509780, &file_read_save);
         interop::writeJmp(0x005097E0, &file_write_save);
+        interop::writeJmp(0x00432600, &remove_save);
     }
 }
