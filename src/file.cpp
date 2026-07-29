@@ -212,9 +212,28 @@ namespace openre::file
     // 0x00509540
     uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t mode)
     {
-        using sig = uint32_t (*)(const char*, void*, size_t, size_t, size_t);
-        auto p = (sig)0x00509540;
-        return p(path, buffer, offset, length, mode);
+        auto hFile = file_open_handle(path, (int)mode);
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        if (SetFilePointer(hFile, (LONG)offset, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER &&
+            ReadFile(hFile, buffer, (DWORD)length, (LPDWORD)&mode, NULL) &&
+            length == mode)
+        {
+            update_timer();
+            uint32_t bytesRead = (uint32_t)mode;
+            CloseHandle(hFile);
+            return bytesRead;
+        }
+        else
+        {
+            gGameTable.error_no = 11;
+            CloseHandle(hFile);
+            return 0;
+        }
     }
 
     // 0x00505B20
@@ -692,6 +711,7 @@ namespace openre::file
         interop::writeJmp(0x004DD360, &osp_read);
         interop::writeJmp(0x00509020, &file_open_handle);
         interop::writeJmp(0x005094B0, &bufferize_file_0);
+        interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
         interop::writeJmp(0x005095D0, &file_exists);
         interop::writeJmp(0x00509780, &file_read_save);
         interop::writeJmp(0x005097E0, &file_write_save);
