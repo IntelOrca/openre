@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "openre.h"
 
+#include <algorithm>
 #include <cstring>
 #include <dsound.h>
 #include <malloc.h>
@@ -564,6 +565,475 @@ namespace openre::audio
         return p(type, index, vol);
     }
 
+    // 0x00434EA0
+    static int ss_load_sap(DWORD type, int id, int bank, int player)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        char path[260];
+        int mode = 1;
+
+        switch (type)
+        {
+        case 0:
+            wsprintfA(path, "common\\sound\\door\\door%02d.sap", id);
+            strcpy(gGameTable.ss_name_door, path);
+            break;
+        case 1:
+            wsprintfA(path, "common\\sound\\arms\\weapon%02d.sap", id);
+            strcpy(gGameTable.ss_name_arms, path);
+            break;
+        case 2:
+            wsprintfA(path, "common\\sound\\room\\room%d%02x.sap", id + 1, bank);
+            if (id + 1 > 0)
+                strcpy(gGameTable.ss_name_room, path);
+            break;
+        case 3:
+            wsprintfA(path, "common\\sound\\enemy\\enemy%02d.sap", id);
+            strcpy(gGameTable.ss_name_enemy, path);
+            break;
+        case 4:
+            wsprintfA(path, "common\\sound\\core\\core%02d.sap", id);
+            if (id != 22)
+                strcpy(gGameTable.ss_name_core, path);
+            break;
+        case 7:
+            if (player)
+                wsprintfA(path, "pl1\\voice\\stage%d\\v%03d.sap", id, bank);
+            else
+                wsprintfA(path, "pl0\\voice\\stage%d\\v%03d.sap", id, bank);
+            mode = 8;
+            break;
+        default:
+            return 1;
+        }
+
+        if (!file_exists(path, mode))
+        {
+            gGameTable.error_no = 2;
+            return 0;
+        }
+
+        HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
+        if (!hmmio)
+            return 0;
+
+        int32_t mask0, mask1;
+        if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4 || mmioRead(hmmio, (HPSTR)&mask1, 4) != 4)
+        {
+            mmioClose(hmmio, 0);
+            return 0;
+        }
+
+        for (int i = 0; i < 32; i++)
+        {
+            if ((mask0 >> i) & 1)
+                ss_create_buffer(hmmio, type, i);
+        }
+        for (int j = 0; j < 16; j++)
+        {
+            if ((mask1 >> j) & 1)
+                ss_create_buffer(hmmio, type, j + 32);
+        }
+
+        mmioClose(hmmio, 0);
+        return 1;
+    }
+
+    // 0x00435170
+    static int ss_load_steps(const char* name, int a2)
+    {
+        if (!gGameTable.audio_pMarniSnd || !*name)
+            return 1;
+
+        char path[260];
+        sprintf(path, "common\\sound\\room\\%s.sap", name);
+
+        strcpy(&gGameTable.ss_name_step[260 * a2], path);
+
+        if (!file_exists(path, 1))
+        {
+            gGameTable.error_no = 2;
+            return 0;
+        }
+
+        auto& ss = gGameTable.ss_file_string;
+        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
+        if (!hmmio)
+        {
+            mmioClose(0, 0);
+            interop::call<void>(0x004DBFD0, "mmioOpen ERROR!", "dsound.cpp");
+            return 0;
+        }
+
+        int base;
+        switch (a2)
+        {
+        case 0: base = 23; break;
+        case 1: base = 26; break;
+        case 2: base = 29; break;
+        default: base = 0; break; // unreachable
+        }
+
+        int bitmask;
+        if (mmioRead(hmmio, (HPSTR)&bitmask, 4) != 4)
+        {
+            mmioClose(hmmio, 0);
+            return 0;
+        }
+
+        char unused[4];
+        if (mmioRead(hmmio, unused, 4) != 4)
+        {
+            mmioClose(hmmio, 0);
+            return 0;
+        }
+
+        for (int i = 0; i < 32; i++)
+        {
+            if ((bitmask >> i) & 1)
+                ss_create_buffer(hmmio, 2, i + base);
+        }
+
+        mmioClose(hmmio, 0);
+        return 1;
+    }
+
+    // 0x00435300
+    static int ss_load_bgm(const char* name, DWORD type, int sample)
+    {
+        if (!gGameTable.audio_pMarniSnd || !*name)
+            return 1;
+
+        char path[260];
+        sprintf(path, "common\\sound\\bgm\\%s.sap", name);
+
+        if (type == 5)
+            strcpy(&gGameTable.ss_name_bgm[260 * sample], path);
+        else if (type == 6)
+            strcpy(&gGameTable.ss_name_sbgm[260 * sample], path);
+
+        if (!file_exists(path, 1))
+        {
+            gGameTable.error_no = 2;
+            return 0;
+        }
+
+        auto& ss = gGameTable.ss_file_string;
+        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
+        if (!hmmio)
+            return 0;
+
+        ss_create_buffer(hmmio, type, sample);
+        mmioClose(hmmio, 0);
+        return 1;
+    }
+
+    // 0x004EEE40
+    static void sub_4eee40()
+    {
+        interop::call(0x004EEE40);
+    }
+
+    // 0x00435610
+    static int ss_init_2()
+    {
+        ss_init();
+
+        // Door (type 0)
+        if (gGameTable.ss_name_door[0])
+        {
+            if (!file_exists(gGameTable.ss_name_door, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+            ss_init_buffers(0);
+        }
+
+        // Room (type 2)
+        if (gGameTable.ss_name_room[0])
+        {
+            if (!file_exists(gGameTable.ss_name_room, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+            ss_init_buffers(2);
+        }
+
+        // Steps (3 entries, type 2, base sub offsets {23, 26, 29})
+        static const int stepBase[3] = { 23, 26, 29 };
+        for (int i = 0; i < 3; i++)
+        {
+            char* name = &gGameTable.ss_name_step[260 * i];
+            if (!*name)
+                continue;
+
+            if (!file_exists(name, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+
+            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
+            if (!hmmio)
+                return 0;
+
+            int32_t mask0 = 0;
+            if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4)
+            {
+                mmioClose(hmmio, 0);
+                return 0;
+            }
+
+            int32_t unusedMask1 = 0;
+            if (mmioRead(hmmio, (HPSTR)&unusedMask1, 4) != 4)
+            {
+                mmioClose(hmmio, 0);
+                return 0;
+            }
+
+            int base = stepBase[i];
+            for (int j = 0; j < 32; j++)
+            {
+                if (((int32_t)mask0 >> j) & 1)
+                    ss_create_buffer(hmmio, 2, j + base);
+            }
+
+            mmioClose(hmmio, 0);
+        }
+
+        // Arms (type 1)
+        if (gGameTable.ss_name_arms[0])
+        {
+            if (!file_exists(gGameTable.ss_name_arms, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+            ss_init_buffers(1);
+        }
+
+        // Core (type 4)
+        if (gGameTable.ss_name_core[0])
+        {
+            if (!file_exists(gGameTable.ss_name_core, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+            ss_init_buffers(4);
+            ss_load_sap(4, 22, 0, 0);
+        }
+
+        // Enemy (type 3)
+        if (gGameTable.ss_name_enemy[0])
+        {
+            if (!file_exists(gGameTable.ss_name_enemy, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+            ss_init_buffers(3);
+        }
+
+        // BGM (type 5, up to 3 entries)
+        for (int i = 0; i < 3; i++)
+        {
+            char* name = &gGameTable.ss_name_bgm[260 * i];
+            if (!*name)
+                continue;
+
+            if (!file_exists(name, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+
+            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
+            if (!hmmio)
+                return 0;
+
+            ss_create_buffer(hmmio, 5, i);
+            mmioClose(hmmio, 0);
+        }
+
+        // SBGM (type 6, up to 2 entries)
+        for (int i = 0; i < 2; i++)
+        {
+            char* name = &gGameTable.ss_name_sbgm[260 * i];
+            if (!*name)
+                continue;
+
+            if (!file_exists(name, 1))
+            {
+                gGameTable.error_no = 2;
+                return 0;
+            }
+
+            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
+            if (!hmmio)
+                return 0;
+
+            ss_create_buffer(hmmio, 6, i);
+            mmioClose(hmmio, 0);
+        }
+
+        sub_4eee40();
+
+        return 1;
+    }
+
+    static float ss_voice_parse(HMMIO hmmio);
+
+    // 0x00436470
+    static int ss_voice_load(int room_id, int voice)
+    {
+        char path[260];
+        int player = get_player_num();
+        sprintf(path, "pl%d\\voice\\stage%d\\v%03d.sap", player, room_id, voice);
+
+        if (!file_exists(path, 8))
+        {
+            gGameTable.error_no = 2;
+            return 0;
+        }
+
+        auto& ss = gGameTable.ss_file_string;
+        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
+        if (!hmmio)
+        {
+            mmioClose(0, 0);
+            interop::call<void>(0x004DBFD0, "mmioOpen ERROR!", "dsound.cpp");
+            return 0;
+        }
+
+        int pch;
+        char unused[4];
+        if (mmioRead(hmmio, (HPSTR)&pch, 4) == 4 && mmioRead(hmmio, (HPSTR)unused, 4) == 4)
+        {
+            float duration = ss_voice_parse(hmmio);
+            int fps = 60 >> gGameTable.vsync_rate;
+            mmioClose(hmmio, 0);
+            return (int)(fps * duration);
+        }
+
+        mmioClose(hmmio, 0);
+        return 0;
+    }
+
+    // 0x00436590
+    static float ss_voice_parse(HMMIO hmmio)
+    {
+        float cbInput = 0.0f;
+        WAVEFORMATEX* wf = nullptr;
+
+        MMCKINFO pmmcki = {};
+        pmmcki.fccType = mmioFOURCC('W', 'A', 'V', 'E');
+
+        if (mmioDescend(hmmio, &pmmcki, nullptr, MMIO_FINDRIFF))
+            return 0.0f;
+
+        MMCKINFO v15 = {};
+        if (mmioDescend(hmmio, &v15, &pmmcki, 0))
+            goto ascend_parent;
+
+        while (1)
+        {
+            DWORD cksize = v15.cksize;
+            if (cksize + v15.dwDataOffset > pmmcki.dwDataOffset + pmmcki.cksize)
+                break;
+
+            if (v15.ckid == mmioFOURCC('f', 'm', 't', ' '))
+            {
+                DWORD allocSize = (std::max<DWORD>(cksize, sizeof(WAVEFORMATEX)) + 3) & ~3u;
+                void* buf = _alloca(allocSize);
+                wf = (WAVEFORMATEX*)buf;
+                if (!wf || mmioRead(hmmio, (HPSTR)wf, cksize) != (LRESULT)cksize)
+                    break;
+            }
+            else if (v15.ckid == mmioFOURCC('d', 'a', 't', 'a'))
+            {
+                cbInput = (float)cksize;
+                if (wf && wf->wFormatTag == WAVE_FORMAT_PCM)
+                {
+                    int64_t num = (16 / wf->nBlockAlign) * (int64_t)cksize;
+                    int32_t den = wf->wBitsPerSample * wf->nSamplesPerSec;
+                    cbInput = (float)((double)num / (double)den);
+                }
+                else if (wf)
+                {
+                    acmDriverEnum(acmDriverEnumCallback, 0, 0);
+                    auto had_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.had);
+                    auto hadid = reinterpret_cast<HACMDRIVERID>(gGameTable.hadid);
+                    if (acmDriverOpen(had_ptr, hadid, 0))
+                        break;
+
+                    DWORD pMetric = 0;
+                    acmMetrics(nullptr, ACM_METRIC_MAX_SIZE_FORMAT, &pMetric);
+                    DWORD allocSize = (pMetric + 3) & ~3u;
+                    void* buf = _alloca(allocSize);
+                    auto wfxDst = (WAVEFORMATEX*)buf;
+
+                    wfxDst->wFormatTag = WAVE_FORMAT_PCM;
+                    wfxDst->cbSize = 0;
+                    wfxDst->wBitsPerSample = 16;
+
+                    HACMSTREAM phas = nullptr;
+                    DWORD pdwOutputBytes = 0;
+                    bool acmFailed = false;
+
+                    if (acmFormatSuggest(*had_ptr, wf, wfxDst, pMetric, ACM_FORMATSUGGESTF_WFORMATTAG)
+                        || acmStreamOpen(&phas, *had_ptr, wf, wfxDst, nullptr, 0, 0, 0)
+                        || acmStreamSize(phas, (DWORD)cbInput, &pdwOutputBytes, 0))
+                    {
+                        acmFailed = true;
+                    }
+
+                    if (phas)
+                    {
+                        acmStreamClose(phas, 0);
+                        phas = nullptr;
+                    }
+                    if (*had_ptr)
+                    {
+                        acmDriverClose(*had_ptr, 0);
+                        *had_ptr = nullptr;
+                    }
+
+                    if (acmFailed)
+                        break;
+
+                    int64_t num = (16 / wfxDst->nBlockAlign) * (int64_t)pdwOutputBytes;
+                    int32_t den = wfxDst->nSamplesPerSec * wfxDst->wBitsPerSample;
+                    cbInput = (float)((double)num / (double)den);
+                }
+            }
+
+            mmioAscend(hmmio, &v15, 0);
+            if (mmioDescend(hmmio, &v15, &pmmcki, 0))
+                goto ascend_parent;
+        }
+
+        // Break/error: ascend child before parent
+        mmioAscend(hmmio, &v15, 0);
+
+    ascend_parent:
+        mmioAscend(hmmio, &pmmcki, 0);
+
+        // Cleanup global ACM driver handle
+        auto had_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.had);
+        if (*had_ptr)
+        {
+            acmDriverClose(*had_ptr, 0);
+            *had_ptr = nullptr;
+        }
+
+        return cbInput;
+    }
+
     // START SND
 
     // 0x004EC220
@@ -872,11 +1342,25 @@ namespace openre::audio
         return FALSE;
     }
 
+    // 0x00436810
+    static void bgm_channels_init()
+    {
+        interop::call<void>(0x00436820);
+        atexit([] { interop::call<void>(0x004368A0); });
+    }
+
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
+        interop::writeJmp(0x00434EA0, &ss_load_sap);
+        interop::writeJmp(0x00435170, &ss_load_steps);
+        interop::writeJmp(0x00435300, &ss_load_bgm);
+        interop::writeJmp(0x00435610, &ss_init_2);
         interop::writeJmp(0x00435540, &ss_init_buffers);
         interop::writeJmp(0x00435930, &ss_create_buffer);
+        interop::writeJmp(0x00436470, &ss_voice_load);
+        interop::writeJmp(0x00436590, &ss_voice_parse);
+        interop::writeJmp(0x00436810, &bgm_channels_init);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);

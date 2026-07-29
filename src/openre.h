@@ -189,6 +189,7 @@ namespace openre
 
     static const char* gStageSymbols = "123456789abcdefg";
 
+    uint8_t get_player_num();
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
     uint8_t rnd_area();

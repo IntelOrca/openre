@@ -1088,6 +1088,12 @@ struct OldStdString
 };
 static_assert(sizeof(OldStdString) == 0x08);
 
+struct BgmChannel
+{
+    uint8_t data[268];                  // 0x0000
+};
+static_assert(sizeof(BgmChannel) == 0x10C);
+
 struct MarniConfig
 {
     uint32_t root_key;                  // 0x0000
@@ -1250,7 +1256,9 @@ struct GameTable
     uint16_t MarniSnd_SoundDepth;       // 0x669F40
     uint8_t pad_669F42[2];              // 0x669F42
     int32_t XA_idx;                     // 0x669F44
-    uint8_t pad_669F48[13388];          // 0x669F48
+    uint8_t pad_669F48[8];              // 0x669F48
+    BgmChannel bgm_channels[30];        // 0x669F50
+    uint8_t pad_66BEB8[5340];           // 0x66BEB8
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[16492];          // 0x66D398
     uint32_t dword_671404;              // 0x671404
@@ -1484,7 +1492,11 @@ struct GameTable
     uint16_t word_692FC0;               // 0x692FC0
     uint8_t pad_692FC2[51];             // 0x692FC2
     uint8_t vab_id[16];                 // 0x692FF5
-    uint8_t pad_693005[1132];           // 0x693005
+    uint8_t pad_693005[59];             // 0x693005
+    char ss_name_step[780];             // 0x693040
+    uint8_t pad_69334C[20];             // 0x69334C
+    char ss_name_enemy[260];            // 0x693360
+    uint8_t pad_693464[13];             // 0x693464
     uint8_t bgm_vol;                    // 0x693471
     uint8_t pad_693472[66];             // 0x693472
     uint8_t* dword_6934B4;              // 0x6934B4
@@ -1501,17 +1513,24 @@ struct GameTable
     uint8_t byte_693810;                // 0x693810
     uint8_t pad_693811[1];              // 0x693811
     uint8_t byte_693812;                // 0x693812
-    uint8_t pad_693813[1077];           // 0x693813
+    uint8_t pad_693813[813];            // 0x693813
+    char ss_name_room[260];             // 0x693B40
+    uint8_t pad_693C44[4];              // 0x693C44
     uint8_t sfx_vol;                    // 0x693C48
     uint8_t pad_693C49[3];              // 0x693C49
     uint32_t dword_693C4C;              // 0x693C4C
-    uint8_t pad_693C50[564];            // 0x693C50
+    uint8_t pad_693C50[16];             // 0x693C50
+    char ss_name_core[260];             // 0x693C60
+    uint8_t pad_693D64[28];             // 0x693D64
+    char ss_name_arms[260];             // 0x693D80
     uint8_t* current_bgm_address;       // 0x693E84
     uint32_t cd_vol_0;                  // 0x693E88
     uint8_t pad_693E8C[20];             // 0x693E8C
     char ss_name_sbgm[260];             // 0x693EA0
     uint8_t byte_693FA4;                // 0x693FA4
-    uint8_t pad_693FA5[2635];           // 0x693FA5
+    uint8_t pad_693FA5[283];            // 0x693FA5
+    char ss_name_door[260];             // 0x6940C0
+    uint8_t pad_6941C4[2092];           // 0x6941C4
     uint16_t word_6949F0;               // 0x6949F0
     uint8_t pad_6949F2[2];              // 0x6949F2
     uint16_t word_6949F4;               // 0x6949F4

@@ -142,15 +142,10 @@ namespace openre::input
     };
 
     static const uint8_t config_vk_codes[] = {
-        0x08, 0x09, 0x10, 0x11,
-        0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-        0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A,
-        0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54,
-        0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
-        0x6A, 0x6B, 0x6D, 0x6E, 0x6F,
-        0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0,
-        0xDB, 0xDC, 0xDD, 0xDE, 0xE2,
+        0x08, 0x09, 0x10, 0x11, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43,
+        0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54,
+        0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A,
+        0x6B, 0x6D, 0x6E, 0x6F, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xDB, 0xDC, 0xDD, 0xDE, 0xE2,
     };
 
     // 0x00432670
@@ -218,26 +213,25 @@ namespace openre::input
             if (joystick[0x1C8 / 4] != 0) // init flag at offset 0x1C8
             {
                 memset(joystick, 0, 0x34);
-                joystick[0] = 52;      // JOYINFOEX::dwSize
-                joystick[1] = 0xFF;    // JOYINFOEX::dwFlags (JOY_RETURNALL)
+                joystick[0] = 52;   // JOYINFOEX::dwSize
+                joystick[1] = 0xFF; // JOYINFOEX::dwFlags (JOY_RETURNALL)
 
                 auto mmres = joyGetPosEx(joy - 1, (LPJOYINFOEX)joystick);
-                if (mmres != MMSYSERR_NODRIVER &&
-                    mmres != JOYERR_PARMS &&
-                    mmres != 167) // JOYERR_UNPLUGGED (not in all headers)
+                if (mmres != MMSYSERR_NODRIVER && mmres != JOYERR_PARMS
+                    && mmres != 167) // JOYERR_UNPLUGGED (not in all headers)
                 {
                     // Process POV hat into directional bits
                     auto xPos = joystick[2]; // dwXpos
                     auto yPos = joystick[3]; // dwYpos
                     int dir = 0;
                     if (xPos > 0xC000)
-                        dir |= 8;  // left
+                        dir |= 8; // left
                     if (xPos < 0x3000)
-                        dir |= 4;  // right
+                        dir |= 4; // right
                     if (yPos > 0xC000)
-                        dir |= 2;  // down
+                        dir |= 2; // down
                     if (yPos < 0x3000)
-                        dir |= 1;  // up
+                        dir |= 1; // up
 
                     // Process POV hat
                     if ((reinterpret_cast<uint8_t*>(joystick)[148] & 0x10) != 0)
@@ -269,18 +263,23 @@ namespace openre::input
                     // Update gamepad state trg/old tracking
                     auto v = result ^ gamepadState[0]; // gamepad_raw_state
                     gamepadState[2] = gamepadState[0]; // gamepad_old = old gamepad_raw_state
-                    gamepadState[0] = result;           // gamepad_raw_state = result
-                    gamepadState[1] = result & v;       // gamepad_trg = result & (result ^ old)
+                    gamepadState[0] = result;          // gamepad_raw_state = result
+                    gamepadState[1] = result & v;      // gamepad_trg = result & (result ^ old)
                 }
                 else
                 {
                     const char* msg;
                     if (mmres == MMSYSERR_NODRIVER)
-                        msg = "\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E \x83\x68\x83\x89\x83\x43\x83\x6F\x82\xAA\x91\xB6\x8D\xDD\x82\xB5\x82\xDC\x82\xB9\x82\xF1";
+                        msg = "\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E "
+                              "\x83\x68\x83\x89\x83\x43\x83\x6F\x82\xAA\x91\xB6\x8D\xDD\x82\xB5\x82\xDC\x82\xB9\x82\xF1";
                     else if (mmres == JOYERR_PARMS)
-                        msg = "\x8E\x77\x92\xE8\x82\xB3\x82\xEA\x82\xBD\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E\x49\x44\x20\x28\x49\x44\x44\x65\x76\x69\x63\x65\x29\x20\x82\xAA\x96\xB3\x8C\xF8\x82\xC5\x82\xB7";
+                        msg = "\x8E\x77\x92\xE8\x82\xB3\x82\xEA\x82\xBD\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62"
+                              "\x83\x4E\x49\x44\x20\x28\x49\x44\x44\x65\x76\x69\x63\x65\x29\x20\x82\xAA\x96\xB3\x8C\xF8\x82\xC5"
+                              "\x82\xB7";
                     else
-                        msg = "\x8E\x77\x92\xE8\x82\xB3\x82\xEA\x82\xBD\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E\x82\xCD\x83\x56\x83\x58\x83\x65\x83\x80\x82\xC9\x90\xDA\x91\xB1\x82\xB3\x82\xEA\x82\xC4\x82\xA2\x82\xDC\x82\xB9\x82\xF1";
+                        msg = "\x8E\x77\x92\xE8\x82\xB3\x82\xEA\x82\xBD\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62"
+                              "\x83\x4E\x82\xCD\x83\x56\x83\x58\x83\x65\x83\x80\x82\xC9\x90\xDA\x91\xB1\x82\xB3\x82\xEA\x82\xC4"
+                              "\x82\xA2\x82\xDC\x82\xB9\x82\xF1";
                     marni::out(msg, "MarniSystem DirectInput Class");
                 }
             }
@@ -345,20 +344,20 @@ namespace openre::input
                 *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 1; // init flag
                 joyGetDevCapsA(joy - 1, (LPJOYCAPSA)caps, 0x194);
                 memset(joystick, 0, 0x34);
-                *reinterpret_cast<uint32_t*>(joystick) = 52;      // JOYINFOEX::dwSize
+                *reinterpret_cast<uint32_t*>(joystick) = 52;       // JOYINFOEX::dwSize
                 *reinterpret_cast<uint32_t*>(joystick + 4) = 0xFF; // JOYINFOEX::dwFlags
 
                 auto mmres = joyGetPosEx(joy - 1, (LPJOYINFOEX)joystick);
-                if (mmres == MMSYSERR_NODRIVER ||
-                    mmres == JOYERR_PARMS ||
-                    mmres == 167) // JOYERR_UNPLUGGED (not in all headers)
+                if (mmres == MMSYSERR_NODRIVER || mmres == JOYERR_PARMS
+                    || mmres == 167) // JOYERR_UNPLUGGED (not in all headers)
                 {
                     *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 0; // mark as uninitialized
                 }
                 else
                 {
                     char msg[1024];
-                    sprintf(msg,
+                    sprintf(
+                        msg,
                         "\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E"
                         "\x82\x68\x82\x63%d\x94\xD4\x82\xCD\x81\x41%s\x83\x7B\x83\x5E\x83\x93"
                         "\x82\xCC\x90\x94 %d \x8E\xB2\x82\xCC\x90\x94%d ",

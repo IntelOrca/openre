@@ -84,7 +84,7 @@ namespace openre::file
             if (re2Data && re2Data[0])
             {
                 std::string fullPath = std::string(re2Data) + "\\" + path;
-                og_string_assign(0x689F3C, fullPath.c_str());
+                oldstring_set_2(&gGameTable.ss_file_string, fullPath.c_str());
                 return file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
             }
         }
@@ -123,8 +123,8 @@ namespace openre::file
                 for (int sub = 0; sub < 2 && hFile == INVALID_HANDLE_VALUE; sub++)
                 {
                     std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
-                    // Store resolved path in OG global dword_689F3C
-                    og_string_assign(0x689F3C, fullPath.c_str());
+                    // Store resolved path in OG global ss_file_string
+                    oldstring_set_2(&gGameTable.ss_file_string, fullPath.c_str());
                     hFile = file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
                 }
             }
@@ -253,7 +253,7 @@ namespace openre::file
     }
 
     // 0x005095D0
-    static int file_exists(const char* path, int mode)
+    int file_exists(const char* path, int mode)
     {
         auto hFile = open_file_impl(path, mode, true);
         if (hFile != INVALID_HANDLE_VALUE)

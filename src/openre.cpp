@@ -59,7 +59,7 @@ namespace openre
     static const char* fontFaceName = "ＭＳ ゴシック";
 
     // 0x00509C90
-    static uint8_t get_player_num()
+    uint8_t get_player_num()
     {
         return check_flag(FlagGroup::Status, FG_STATUS_PLAYER) ? 1 : 0;
     }

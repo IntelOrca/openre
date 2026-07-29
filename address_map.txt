@@ -853,6 +853,9 @@ struct      OldStdString
 declare     data                    char*
 declare     length                  u32
 
+struct      BgmChannel
+declare     data                    u8[268]
+
 struct      MarniConfig
 declare     root_key                u32
 declare     path                    OldStdString
@@ -967,6 +970,7 @@ declare     audio_BufferArms         u32[32]                0x00669EB8
 declare     audio_BufferVoice        u32[2]                 0x00669F38
 declare     MarniSnd_SoundDepth      u16                    0x00669F40
 declare     XA_idx                  s32                     0x00669F44
+declare     bgm_channels            BgmChannel[30]          0x00669F50
 declare     dword_66D394            u32                     0x0066D394
 declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
@@ -1137,6 +1141,8 @@ declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
 declare     vab_id                  u8[16]                  0x00692FF5
+declare     ss_name_step            char[780]               0x00693040
+declare     ss_name_enemy           char[260]               0x00693360
 declare     bgm_vol                 u8                      0x00693471
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
@@ -1146,12 +1152,16 @@ declare     byte_693808             u8                      0x00693808
 declare     byte_69380A             s8                      0x0069380A
 declare     byte_693810             u8                      0x00693810
 declare     byte_693812             u8                      0x00693812
+declare     ss_name_room            char[260]               0x00693B40
 declare     sfx_vol                 u8                      0x00693C48
 declare     dword_693C4C            u32                     0x00693C4C
+declare     ss_name_core            char[260]               0x00693C60
+declare     ss_name_arms            char[260]               0x00693D80
 declare     current_bgm_address     u8*                     0x00693E84
 declare     cd_vol_0                u32                     0x00693E88
 declare     ss_name_sbgm            char[260]               0x00693EA0
 declare     byte_693FA4             u8                      0x00693FA4
+declare     ss_name_door            char[260]               0x006940C0
 declare     word_6949F0             u16                     0x006949F0
 declare     word_6949F4             u16                     0x006949F4
 declare     dword_6949F8            Unknown6949F8*          0x006949F8
