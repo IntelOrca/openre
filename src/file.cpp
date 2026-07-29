@@ -63,14 +63,15 @@ namespace openre::file
     // 0x005092A0
     static bool check_disk_id()
     {
-        return interop::call<bool>(0x5092A0);
+        // We are not implementing this function
+        return false;
     }
 
     // 0x00508F30
     static bool dlg_disk_retry()
     {
-        // Shows CD swap dialog. Returns true if user wants to retry, false if cancelled.
-        return interop::call<INT_PTR, LPCSTR>(0x508F30, (LPCSTR)0xA4) != 1019;
+        // We are not implementing this function
+        return false;
     }
 
     // --- Internal: matches OpenFile at 0x509040 ---
@@ -548,6 +549,19 @@ namespace openre::file
     int tim_buffer_to_surface(int* timPtr, int page, int mode)
     {
         return interop::call<int, int*, int, int>(0x0043FF40, timPtr, page, mode);
+    }
+
+    // 0x0043C0E0
+    static void file_close()
+    {
+        // This shouldn't be called as we have implemented ADT reading
+        abort();
+    }
+
+    // 0x0043C700
+    static int load_adt_sub(const char* path, int a1, int a2, int a3)
+    {
+        return interop::call<int, const char*, int, int>(0x0043C700, path, a1, a2, a3);
     }
 
     void file_init_hooks()
