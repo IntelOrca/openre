@@ -1842,7 +1842,7 @@ struct GameTable
     uint8_t pad_99CF74[2860];           // 0x99CF74
     uint32_t adt_in_pos;                // 0x99DAA0
     void* adt_buffer_in;                // 0x99DAA4
-    uint32_t adt_out_ptr;               // 0x99DAA8
+    uint8_t* adt_out_ptr;               // 0x99DAA8
     void* adt_file_handle;              // 0x99DAAC
     uint32_t dword_99DAB0;              // 0x99DAB0
     uint32_t adt_out_offset;            // 0x99DAB4

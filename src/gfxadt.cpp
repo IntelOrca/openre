@@ -1,4 +1,5 @@
 #include "gfx.h"
+#include "stream.h"
 
 #include <cstring>
 #include <memory>
@@ -11,46 +12,30 @@ namespace openre::graphics
         struct BitReader
         {
         private:
-            const uint8_t* src{};
-            size_t len{};
-            size_t index{};
+            Stream& stream;
             uint8_t srcByte{};
             int32_t srcBitIndex{};
 
         public:
-            BitReader(const std::vector<uint8_t>& v)
-                : src(v.data())
-                , len(v.size())
+            BitReader(Stream& s)
+                : stream(s)
             {
             }
 
             void seek(int len, int origin)
             {
-                this->index += len;
+                this->stream.seek(len, origin);
             }
 
-            bool read(uint8_t* src, int len)
+            bool read(uint8_t* dst, int len)
             {
-                auto remaining = this->len - this->index;
-                while (remaining > 0 && len > 0)
+                auto readSize = this->stream.read(dst, len);
+                if (readSize < static_cast<size_t>(len))
                 {
-                    *src++ = this->src[this->index++];
-                    len--;
-                    remaining--;
-                }
-                if (len > 0)
-                {
-                    while (len > 0)
-                    {
-                        *src++ = 0;
-                        len--;
-                    }
+                    std::memset(dst + readSize, 0, static_cast<size_t>(len) - readSize);
                     return false;
                 }
-                else
-                {
-                    return true;
-                }
+                return true;
             }
 
             int32_t readBits(int32_t count)
@@ -254,7 +239,7 @@ namespace openre::graphics
         HuffmanData<8, 16> huffman3;
 
     public:
-        std::vector<uint8_t> decode(const std::vector<uint8_t>& input)
+        std::vector<uint8_t> decode(Stream& input)
         {
             std::vector<uint8_t> output;
 
@@ -385,6 +370,12 @@ namespace openre::graphics
     };
 
     std::vector<uint8_t> decodeAdt(const std::vector<uint8_t>& input)
+    {
+        MemoryStream stream(input);
+        return decodeAdt(stream);
+    }
+
+    std::vector<uint8_t> decodeAdt(Stream& input)
     {
         auto unpacker = std::make_unique<AdtUnpacker>();
         return unpacker->decode(input);

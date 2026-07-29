@@ -1,6 +1,7 @@
 #pragma once
 
 #include "data.hpp"
+#include "stream.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -9,6 +10,7 @@
 namespace openre::graphics
 {
     std::vector<uint8_t> decodeAdt(const std::vector<uint8_t>& input);
+    std::vector<uint8_t> decodeAdt(Stream& input);
 
     inline uint32_t rgb555to8888(uint16_t c16)
     {

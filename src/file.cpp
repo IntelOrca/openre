@@ -3,6 +3,7 @@
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
+#include "stream.h"
 #include <cstdlib>
 #include <string>
 #include <windows.h>
@@ -510,7 +511,7 @@ namespace openre::file
         auto output = openre::graphics::decodeAdt(input);
         if (!output.empty())
         {
-            auto* dst = (uint8_t*)(uintptr_t)gGameTable.adt_out_ptr;
+            auto* dst = gGameTable.adt_out_ptr;
             std::memcpy(dst, output.data(), output.size());
             gGameTable.adt_out_offset = (uint32_t)output.size();
         }
@@ -531,7 +532,7 @@ namespace openre::file
         gGameTable.adt_out_offset = 0;
         gGameTable.dword_99DAB8 = 0;
         gGameTable.dword_99DAB0 = 0;
-        gGameTable.adt_out_ptr = out_ptr;
+        gGameTable.adt_out_ptr = (uint8_t*)(uintptr_t)out_ptr;
         gGameTable.adt_in_base = (uint32_t)in_data;
         gGameTable.adt_in_pos = 4;
 
@@ -558,24 +559,141 @@ namespace openre::file
         abort();
     }
 
-    // 0x0043C700
-    static int load_adt_sub(const char* path, int a1, int a2, int a3)
+    class Win32FileStream : public Stream
     {
-        return interop::call<int, const char*, int, int>(0x0043C700, path, a1, a2, a3);
+    private:
+        HANDLE _hFile;
+
+    public:
+        Win32FileStream(HANDLE hFile)
+            : _hFile(hFile)
+        {
+        }
+
+        size_t read(void* buffer, size_t size) override
+        {
+            DWORD bytesRead = 0;
+            if (!ReadFile(_hFile, buffer, static_cast<DWORD>(size), &bytesRead, NULL))
+                return 0;
+            return bytesRead;
+        }
+
+        size_t write(const void* buffer, size_t size) override
+        {
+            DWORD bytesWritten = 0;
+            if (!WriteFile(_hFile, buffer, static_cast<DWORD>(size), &bytesWritten, NULL))
+                return 0;
+            return bytesWritten;
+        }
+
+        int64_t seek(int64_t offset, int origin) override
+        {
+            DWORD moveMethod;
+            switch (origin)
+            {
+            case SEEK_CUR:
+                moveMethod = FILE_CURRENT;
+                break;
+            case SEEK_END:
+                moveMethod = FILE_END;
+                break;
+            default:
+                moveMethod = FILE_BEGIN;
+                break;
+            }
+            LARGE_INTEGER liOffset;
+            liOffset.QuadPart = offset;
+            liOffset.LowPart = SetFilePointer(_hFile, liOffset.LowPart, &liOffset.HighPart, moveMethod);
+            if (liOffset.LowPart == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
+                return -1;
+            return liOffset.QuadPart;
+        }
+
+        int64_t tell() const override
+        {
+            LARGE_INTEGER liOffset;
+            liOffset.QuadPart = 0;
+            liOffset.LowPart = SetFilePointer(_hFile, 0, &liOffset.HighPart, FILE_CURRENT);
+            return liOffset.QuadPart;
+        }
+    };
+
+    // 0x0043C700
+    static int load_adt_sub(const char* path, uint8_t* dst, int pos, int mode)
+    {
+        gGameTable.dword_99DAC8 = 0;
+
+        if (gGameTable.error_no == 11)
+            return 0;
+
+        gGameTable.dword_671404 = 0;
+        gGameTable.dword_671408 = 0;
+        gGameTable.dword_67140C = 0;
+        gGameTable.dword_671410 = 0;
+        gGameTable.dword_671414 = 0;
+        gGameTable.dword_524E08 = 8;
+        gGameTable.dword_671418 = 0;
+        gGameTable.dword_524E0C = 0x4000;
+        gGameTable.adt_out_offset = 0;
+        gGameTable.dword_99DAB8 = 0;
+        gGameTable.dword_99DAB0 = 0;
+        gGameTable.adt_out_ptr = dst;
+
+        auto hFile = file_open_handle(path, mode);
+        gGameTable.adt_file_handle = hFile;
+
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        if (SetFilePointer(hFile, pos, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
+        {
+            CloseHandle(hFile);
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        {
+            Win32FileStream stream(hFile);
+            auto output = openre::graphics::decodeAdt(stream);
+            if (!output.empty())
+            {
+                auto* dstPtr = gGameTable.adt_out_ptr;
+                std::memcpy(dstPtr, output.data(), output.size());
+                gGameTable.adt_out_offset = (uint32_t)output.size();
+            }
+        }
+
+        if (!gGameTable.adt_file_handle)
+        {
+            adt_store_last_filename(path);
+            gGameTable.error_no = 11;
+            return 0;
+        }
+
+        CloseHandle(hFile);
+        update_timer();
+
+        return gGameTable.adt_out_offset;
     }
 
     void file_init_hooks()
     {
-        interop::writeJmp(0x004DD360, &osp_read);
-        interop::writeJmp(0x005094B0, &bufferize_file_0);
-        interop::writeJmp(0x00509020, &file_open_handle);
-        interop::writeJmp(0x005095D0, &file_exists);
-        interop::writeJmp(0x00509780, &file_read_save);
-        interop::writeJmp(0x005097E0, &file_write_save);
         interop::writeJmp(0x00432600, &remove_save);
         interop::writeJmp(0x0043BBC0, &file_read_chunk);
         interop::writeJmp(0x0043BC90, &file_read_chunk2);
         interop::writeJmp(0x0043C590, &load_adt);
+        interop::writeJmp(0x0043C700, &load_adt_sub);
         interop::writeJmp(0x0043C890, &decompress_file_page);
+        interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x00509020, &file_open_handle);
+        interop::writeJmp(0x005094B0, &bufferize_file_0);
+        interop::writeJmp(0x005095D0, &file_exists);
+        interop::writeJmp(0x00509780, &file_read_save);
+        interop::writeJmp(0x005097E0, &file_write_save);
     }
 }
