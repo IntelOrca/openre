@@ -843,11 +843,20 @@ static_assert(sizeof(MarniSurfaceY) == 0x44);
 
 struct MarniMovie
 {
-    uint8_t pad_0000[148];              // 0x0000
+    uint8_t surf_pad[108];              // 0x0000
+    void* field_6C;                     // 0x006C
+    void* pGraphBuilder;                // 0x0070
+    void* pMediaControl;                // 0x0074
+    void* field_78;                     // 0x0078
+    void* pVideoWindow;                 // 0x007C
+    void* pMediaPosition;               // 0x0080
+    void* pMediaStream;                 // 0x0084
+    void* field_88;                     // 0x0088
+    void* field_8C;                     // 0x008C
+    void* field_90;                     // 0x0090
     uint32_t flag;                      // 0x0094
     double pos;                         // 0x0098
-    int32_t var_A0;                     // 0x00A0
-    int32_t var_A4;                     // 0x00A4
+    double duration;                    // 0x00A0
 };
 static_assert(sizeof(MarniMovie) == 0xA8);
 

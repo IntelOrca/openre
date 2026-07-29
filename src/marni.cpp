@@ -1,4 +1,5 @@
 #include "marni.h"
+#include "marni_movie.h"
 #include "interop.hpp"
 #include "openre.h"
 #include "re2.h"
@@ -41,14 +42,6 @@ namespace openre::marni
     static int __stdcall init_all(Marni* self);
     static int __stdcall clear_buffers(Marni* self);
     static void __stdcall move(Marni* marni);
-    static int __stdcall
-    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
-    static MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode);
-    static void __stdcall movie_dtor(MarniMovie* self);
-    static void __stdcall movie_release(MarniMovie* self);
-    static int __stdcall movie_seek(MarniMovie* self);
-    static int __stdcall movie_update(MarniMovie* self);
-    static int __stdcall movie_update_window(MarniMovie* self);
     static void __stdcall polygon_object_dtor(PolygonObject* self);
     static MarniOt* __stdcall ot_ctor(MarniOt* self, size_t a2, int a3);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
@@ -66,7 +59,6 @@ namespace openre::marni
     static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count);
     static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface);
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
-    static int __stdcall sub_414B30(MarniMovie* self);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
     static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index);
     static void __stdcall tessellate_insert_draw_op(
@@ -2804,60 +2796,6 @@ namespace openre::marni
         self->vtbl = (MarniSurfaceVTBL*)0x005173D4;
         surface3_vrelease(self);
         surface2_release(self);
-    }
-
-    // 0x00414B30
-    static int __stdcall sub_414B30(MarniMovie* self)
-    {
-        if (!(self->flag & 0x01))
-            return 0;
-
-        return interop::thiscall<int, MarniMovie*>(0x00414B30, self);
-    }
-
-    // 0x00414B50
-    static int __stdcall movie_update_window(MarniMovie* self)
-    {
-        return interop::thiscall<int, MarniMovie*>(0x00414B50, self);
-    }
-
-    // 0x00414C00
-    static int __stdcall movie_update(MarniMovie* self)
-    {
-        return interop::thiscall<int, MarniMovie*>(0x00414C00, self);
-    }
-
-    // 0x00414C80
-    static int __stdcall movie_seek(MarniMovie* self)
-    {
-        return interop::thiscall<int, MarniMovie*>(0x00414C80, self);
-    }
-
-    // 0x00414CF0
-    static int __stdcall
-    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
-    {
-        return interop::thiscall<int, MarniMovie*, LPCSTR, HWND, LPRECT, LPDIRECTDRAW2, LPDIRECTDRAWSURFACE>(
-            0x00414CF0, self, path, hWnd, pRect, pDD2, pSurface);
-    }
-
-    // 0x00414F50
-    static MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode)
-    {
-        return interop::thiscall<MarniMovie*, MarniMovie*, int>(0x00414F50, self, mode);
-    }
-
-    // 0x00414FC0
-    static void __stdcall movie_dtor(MarniMovie* self)
-    {
-        movie_release(self);
-        CoUninitialize();
-    }
-
-    // 0x00414FD0
-    static void __stdcall movie_release(MarniMovie* self)
-    {
-        interop::thiscall<int, MarniMovie*>(0x00414FD0, self);
     }
 
     // 0x00401EF0

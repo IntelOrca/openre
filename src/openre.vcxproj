@@ -88,6 +88,7 @@
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="marni_config.cpp" />
     <ClCompile Include="marni.cpp" />
+    <ClCompile Include="marni_movie.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="openre.cpp" />
@@ -118,6 +119,7 @@
     <ClInclude Include="itembox.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="marni.h" />
+    <ClInclude Include="marni_movie.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="openre.h" />

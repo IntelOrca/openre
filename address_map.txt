@@ -663,10 +663,20 @@ declare     texture_handle          u32
 declare     pDDtexture              void*
 
 struct      MarniMovie
+declare     surf_pad                u8[0x6C]                0x00
+declare     field_6C                void*                   0x6C
+declare     pGraphBuilder           void*
+declare     pMediaControl           void*
+declare     field_78                void*
+declare     pVideoWindow            void*
+declare     pMediaPosition          void*
+declare     pMediaStream            void*
+declare     field_88                void*
+declare     field_8C                void*
+declare     field_90                void*
 declare     flag                    u32                     0x94
 declare     pos                     f64
-declare     var_A0                  s32
-declare     var_A4                  s32
+declare     duration                f64                     0xA0
 
 struct      MarniOt
 declare     zdepth                  s32
