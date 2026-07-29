@@ -1230,21 +1230,27 @@ struct GameTable
     void* hFont;                        // 0x669AF4
     int32_t FontIndex;                  // 0x669AF8
     uint8_t is_480p;                    // 0x669AFC
-    uint8_t pad_669AFD[35];             // 0x669AFD
+    uint8_t pad_669AFD[7];              // 0x669AFD
+    void* had;                          // 0x669B04
+    uint8_t pad_669B08[24];             // 0x669B08
     void* hadid;                        // 0x669B20
-    uint8_t pad_669B24[460];            // 0x669B24
+    void* phad;                         // 0x669B24
+    uint8_t pad_669B28[456];            // 0x669B28
     void* audio_pMarniSnd;              // 0x669CF0
     uint32_t audio_BufferSBgm[2];       // 0x669CF4
     int32_t audio_SpeakerConfig;        // 0x669CFC
     uint32_t audio_BufferDoor[4];       // 0x669D00
     uint32_t audio_BufferEnemy[32];     // 0x669D10
     uint32_t audio_BufferBgm[3];        // 0x669D90
-    uint8_t pad_669D9C[4];              // 0x669D9C
+    int32_t MarniSnd_Frequency;         // 0x669D9C
     uint32_t audio_BufferRoom[48];      // 0x669DA0
     uint32_t audio_BufferCore[22];      // 0x669E60
     uint32_t audio_BufferArms[32];      // 0x669EB8
     uint32_t audio_BufferVoice[2];      // 0x669F38
-    uint8_t pad_669F40[13396];          // 0x669F40
+    uint16_t MarniSnd_SoundDepth;       // 0x669F40
+    uint8_t pad_669F42[2];              // 0x669F42
+    int32_t XA_idx;                     // 0x669F44
+    uint8_t pad_669F48[13388];          // 0x669F48
     uint32_t dword_66D394;              // 0x66D394
     uint8_t pad_66D398[16492];          // 0x66D398
     uint32_t dword_671404;              // 0x671404
