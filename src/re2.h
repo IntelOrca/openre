@@ -1292,7 +1292,8 @@ struct GameTable
     uint32_t global_cy;                 // 0x67C9C8
     uint8_t pad_67C9CC[4];              // 0x67C9CC
     void* file_buffer;                  // 0x67C9D0
-    uint8_t pad_67C9D4[8];              // 0x67C9D4
+    void* pAllocator0;                  // 0x67C9D4
+    void* pAllocator1;                  // 0x67C9D8
     uint8_t movie_playing;              // 0x67C9DC
     uint8_t pad_67C9DD[7];              // 0x67C9DD
     uint8_t timer_r0;                   // 0x67C9E4

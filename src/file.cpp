@@ -469,6 +469,81 @@ namespace openre::file
         return static_cast<int>(decompressed.size());
     }
 
+    // 0x00441670
+    static void* alloc0(size_t size)
+    {
+        if (gGameTable.pAllocator0)
+        {
+            operator_delete(gGameTable.pAllocator0);
+            gGameTable.pAllocator0 = nullptr;
+        }
+        if (!size)
+            return nullptr;
+
+        auto memoryBlock = operator_new(size);
+        gGameTable.pAllocator0 = memoryBlock;
+        return memoryBlock;
+    }
+
+    // 0x004416B0
+    static void* alloc1(size_t size)
+    {
+        if (gGameTable.pAllocator1)
+        {
+            operator_delete(gGameTable.pAllocator1);
+            gGameTable.pAllocator1 = nullptr;
+        }
+        if (!size)
+            return nullptr;
+
+        auto memoryBlock = operator_new(size);
+        gGameTable.pAllocator1 = memoryBlock;
+        return memoryBlock;
+    }
+
+    // 0x0043C390
+    static void decompress_adt()
+    {
+        auto* src = (const uint8_t*)gGameTable.adt_in_base;
+        std::vector<uint8_t> input(src, src + 0x8000);
+        auto output = openre::graphics::decodeAdt(input);
+        if (!output.empty())
+        {
+            auto* dst = (uint8_t*)(uintptr_t)gGameTable.adt_out_ptr;
+            std::memcpy(dst, output.data(), output.size());
+            gGameTable.adt_out_offset = (uint32_t)output.size();
+        }
+    }
+
+    // 0x0043C890
+    static int decompress_file_page(const uint8_t* in_data, int out_ptr)
+    {
+        gGameTable.dword_99DAC8 = 1;
+        gGameTable.dword_671404 = 0;
+        gGameTable.dword_671408 = 0;
+        gGameTable.dword_67140C = 0;
+        gGameTable.dword_671410 = 0;
+        gGameTable.dword_671414 = 0;
+        gGameTable.dword_524E08 = 8;
+        gGameTable.dword_671418 = 0;
+        gGameTable.dword_524E0C = 0x4000;
+        gGameTable.adt_out_offset = 0;
+        gGameTable.dword_99DAB8 = 0;
+        gGameTable.dword_99DAB0 = 0;
+        gGameTable.adt_out_ptr = out_ptr;
+        gGameTable.adt_in_base = (uint32_t)in_data;
+        gGameTable.adt_in_pos = 4;
+
+        gGameTable.adt_buffer_in = alloc0(0x8000);
+        gGameTable.adt_buffer_out = (uint32_t)alloc1(0x5D80);
+        decompress_adt();
+        alloc1(0);
+        alloc0(0);
+        update_timer();
+
+        return gGameTable.adt_out_offset;
+    }
+
     // 0x0043FF40
     int tim_buffer_to_surface(int* timPtr, int page, int mode)
     {
@@ -486,5 +561,7 @@ namespace openre::file
         interop::writeJmp(0x00432600, &remove_save);
         interop::writeJmp(0x0043BBC0, &file_read_chunk);
         interop::writeJmp(0x0043BC90, &file_read_chunk2);
+        interop::writeJmp(0x0043C590, &load_adt);
+        interop::writeJmp(0x0043C890, &decompress_file_page);
     }
 }
