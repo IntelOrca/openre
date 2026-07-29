@@ -605,8 +605,7 @@ namespace openre::audio
                 wsprintfA(path, "pl0\\voice\\stage%d\\v%03d.sap", id, bank);
             mode = 8;
             break;
-        default:
-            return 1;
+        default: return 1;
         }
 
         if (!file_exists(path, mode))

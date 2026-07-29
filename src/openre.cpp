@@ -2602,6 +2602,155 @@ namespace openre
         return 1;
     }
 
+    // 0x00431470
+    static void SavePrint(int x, int y, const char* str, int color, int len)
+    {
+        interop::call<void, int, int, const char*, int, int>(0x00431470, x, y, str, color, len);
+    }
+
+    // 0x00509840
+    static char* GetSaveFolder()
+    {
+        return interop::call<char*>(0x00509840);
+    }
+
+    // 0x00509930
+    static int unknown_libname_19()
+    {
+        return interop::call<int>(0x00509930);
+    }
+
+    // 0x00432860
+    static void sub_432860(char* str)
+    {
+        interop::call<void, char*>(0x00432860, str);
+    }
+
+    // 0x004315D0
+    static BOOL __cdecl sub_4315D0(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8)
+    {
+        static const char* aExit = (const char*)0x5220A4;
+        static const char* aCreateNew = (const char*)0x5220B8;
+
+        int y0[2] = { 30, 60 };
+        int y1[2] = { 50, 100 };
+        int y2[2] = { 288, 576 };
+        char String[264];
+
+        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
+        HDC hdc;
+        pSurface->GetDC(&hdc);
+        auto oldFont = SelectObject(hdc, gGameTable.hFont);
+
+        auto folderLen = unknown_libname_19();
+        auto saveFolder = GetSaveFolder();
+        SIZE psizl;
+        GetTextExtentPoint32A(hdc, saveFolder, folderLen, &psizl);
+
+        auto is_480p = gGameTable.is_480p;
+        int8_t scroll;
+        int y2_val = y2[is_480p];
+        if (psizl.cx <= y2_val)
+            scroll = 0;
+        else
+            scroll = (int8_t)((psizl.cx - y2_val) / (gGameTable.FontH / 2));
+
+        int scroll_pos = *(int32_t*)a8;
+        if (scroll_pos < scroll)
+            scroll = (int8_t)scroll_pos;
+
+        int v12 = scroll;
+        int v37 = scroll;
+        SavePrint(0, y0[is_480p], saveFolder, 0, scroll);
+
+        if (gGameTable.dword_986394 > 0)
+        {
+            int v14 = 0;
+            int v15 = a3;
+            do
+            {
+                if (a7 || (v14 + v15))
+                {
+                    int v16 = v14 + v15;
+                    if (v16 >= gGameTable.cnt0 - a7 + 1)
+                    {
+                        int v27 = gGameTable.cnt1 - a7 + gGameTable.cnt0 + 1;
+                        if (v16 >= v27)
+                        {
+                            if (v16 == v27)
+                            {
+                                SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, aExit, 0, 0);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            int v28 = v14 + a7 - gGameTable.cnt0 + v15 - 1;
+                            wsprintfA(String, "[%s]", (const char*)(a5 + 261 * v28));
+                            GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+                            int8_t v30;
+                            int v29 = y2[is_480p];
+                            if (psizl.cx <= v29)
+                                v30 = 0;
+                            else
+                                v30 = (int8_t)((psizl.cx - v29) / (gGameTable.FontH / 2));
+                            if (*(int32_t*)a8 < v30)
+                                v30 = (int8_t)*(int32_t*)a8;
+                            if (v37 < v30)
+                                v37 = v30;
+                            SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, String, 4, v30);
+                            v12 = v37;
+                        }
+                    }
+                    else
+                    {
+                        int v17 = v15 + v14 + a7;
+                        int v18 = a4 + 276 * v17;
+                        strcpy(String, (char*)(v18 - 276));
+                        sub_432860(String);
+                        GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+                        int8_t v23;
+                        int v22 = y2[is_480p];
+                        if (psizl.cx <= v22)
+                            v23 = 0;
+                        else
+                            v23 = (int8_t)((psizl.cx - v22) / (gGameTable.FontH / 2));
+                        if (*(int32_t*)a8 < v23)
+                            v23 = (int8_t)*(int32_t*)a8;
+                        int v24 = v23;
+                        if (v37 < v23)
+                            v37 = v23;
+                        auto v25 = *(uint8_t*)(v18 - 15);
+                        int v26;
+                        if (v25 < 4)
+                        {
+                            if (*(uint8_t*)(v18 - 1))
+                                v26 = 0;
+                            else
+                                v26 = ((v25 & 1) != 0) + 1;
+                        }
+                        else
+                            v26 = 3;
+                        SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, String, v26, v24);
+                        v12 = v37;
+                    }
+                }
+                else
+                {
+                    SavePrint(0, y1[is_480p], aCreateNew, 0, 0);
+                }
+                ++v14;
+            } while (v14 < (int)gGameTable.dword_986394);
+        }
+
+        SelectObject(hdc, oldFont);
+        pSurface->ReleaseDC(hdc);
+        *(int32_t*)a8 = v12;
+        auto result = gGameTable.dword_669B00 != v12;
+        gGameTable.dword_669B00 = v12;
+        return result;
+    }
+
     // 0x004CAF90
     static void movie()
     {
@@ -3001,6 +3150,7 @@ void onAttach()
     interop::writeJmp(0x00441A00, WndProc);
     interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
+    interop::writeJmp(0x004315D0, sub_4315D0);
 
     scheduler_init_hooks();
     title_init_hooks();

@@ -1225,18 +1225,20 @@ struct GameTable
     void* Names;                        // 0x662E60
     uint8_t pad_662E64[4];              // 0x662E64
     int32_t FontXY[200];                // 0x662E68
-    uint8_t pad_663188[4];              // 0x663188
+    int32_t cnt0;                       // 0x663188
     void* pMem;                         // 0x66318C
     uint8_t pad_663190[264];            // 0x663190
     uint32_t FontColor[100];            // 0x663298
     uint8_t pad_663428[208];            // 0x663428
     uint8_t byte_6634F8;                // 0x6634F8
-    uint8_t pad_6634F9[7];              // 0x6634F9
+    uint8_t pad_6634F9[3];              // 0x6634F9
+    int32_t cnt1;                       // 0x6634FC
     char String[26100];                 // 0x663500
     void* hFont;                        // 0x669AF4
     int32_t FontIndex;                  // 0x669AF8
     uint8_t is_480p;                    // 0x669AFC
-    uint8_t pad_669AFD[7];              // 0x669AFD
+    uint8_t pad_669AFD[3];              // 0x669AFD
+    int32_t dword_669B00;               // 0x669B00
     void* had;                          // 0x669B04
     uint8_t pad_669B08[24];             // 0x669B08
     void* hadid;                        // 0x669B20
@@ -1602,7 +1604,9 @@ struct GameTable
     uint32_t mess_stop;                 // 0x985070
     uint8_t pad_985074[12];             // 0x985074
     uint8_t font_rgb[16];               // 0x985080
-    uint8_t pad_985090[5200];           // 0x985090
+    uint8_t pad_985090[4868];           // 0x985090
+    uint32_t dword_986394;              // 0x986394
+    uint8_t pad_986398[328];            // 0x986398
     uint8_t* g_table;                   // 0x9864E0
     uint8_t pad_9864E4[60];             // 0x9864E4
     uint32_t dword_986520;              // 0x986520

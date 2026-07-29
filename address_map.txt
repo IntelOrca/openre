@@ -947,13 +947,16 @@ declare     FontH                   u32                     0x00662E58
 declare     Cards                   void*                   0x00662E5C
 declare     Names                   void*                   0x00662E60
 declare     FontXY                  s32[200]                0x00662E68
+declare     cnt0                    s32                     0x00663188
 declare     pMem                    void*                   0x0066318C
 declare     FontColor               u32[100]                0x00663298
 declare     byte_6634F8             u8                      0x006634F8
+declare     cnt1                    s32                     0x006634FC
 declare     String                  char[26100]             0x00663500
 declare     hFont                   void*                   0x00669AF4
 declare     FontIndex               s32                     0x00669AF8
 declare     is_480p                 u8                      0x00669AFC
+declare     dword_669B00            s32                     0x00669B00
 declare     had                     void*                   0x00669B04
 declare     hadid                   void*                   0x00669B20
 declare     phad                    void*                   0x00669B24
@@ -1213,6 +1216,7 @@ declare     mess_attr               u16                     0x00985068
 declare     mess_fg_stop            u32                     0x0098506C
 declare     mess_stop               u32                     0x00985070
 declare     font_rgb                u8[16]                  0x00985080
+declare     dword_986394            u32                     0x00986394
 declare     g_table                 u8*                     0x009864E0
 declare     dword_986520            u32                     0x00986520
 declare     byte_986524             u8*                     0x00986524

@@ -56,7 +56,7 @@ namespace openre::marni
     static int __stdcall ot_clear(MarniOt* self);
     static int __stdcall ot_alloc(MarniOt* self, int depth, int a3);
     static void __stdcall ot_dtor(MarniOt* self);
-    static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
@@ -1505,9 +1505,88 @@ namespace openre::marni
     }
 
     // 0x004065C0
-    static void __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-        interop::thiscall<int, Marni*, HWND, UINT, WPARAM, LPARAM>(0x004065C0, marni, hWnd, msg, wParam, lParam);
+        if (!marni->is_gpu_active)
+            return 1;
+
+        if (wParam == 1)
+        {
+            marni->var_8C7EE0 = 1;
+            sub_401F00(marni);
+            DefWindowProcA(hWnd, msg, 1, lParam);
+            return 1;
+        }
+
+        auto gpu_flg = marni->gpu_flag;
+        if (gpu_flg & GpuFlags::GPU_FULLSCREEN)
+        {
+            marni->is_gpu_busy = 1;
+            gGameTable.error = dd_set_coop_level((HWND)marni->hWnd, 1, (LPDIRECTDRAW2)marni->pDirectDraw2);
+            auto res = &marni->resolutions[marni->modes];
+            gGameTable.error = ((LPDIRECTDRAW2)marni->pDirectDraw2)->SetDisplayMode(res->width, res->height, res->depth, 0, 0);
+            marni->is_gpu_busy = 0;
+
+            if (gGameTable.error)
+            {
+                out("SetDisplayMode failed", "MarniSystem Direct3D::WM_Size");
+                error(gGameTable.error);
+                marni->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
+                return 0;
+            }
+
+            if (res->fullscreen == 1 || res->fullscreen == 3)
+            {
+                if (res->fullscreen == 3)
+                {
+                    marni->xsize = marni->render_w;
+                    marni->ysize = marni->render_h;
+                }
+                SetRect((LPRECT)&marni->window_rect, 0, 0, res->width, res->height);
+            }
+            else if (res->fullscreen == 2)
+            {
+                marni->xsize = marni->render_w;
+                marni->ysize = marni->render_h;
+                SetRect(
+                    (LPRECT)&marni->window_rect,
+                    res->width / 2 - marni->render_w / 2,
+                    res->height / 2 - marni->render_h / 2,
+                    marni->render_w / 2 + res->width / 2,
+                    marni->render_h / 2 + res->height / 2);
+            }
+
+            restore_surfaces(marni);
+            marni->var_8C7EE0 = 0;
+            DefWindowProcA(hWnd, msg, wParam, lParam);
+            surface_fill(&marni->surface2, 0, 0, 0);
+            marni->var_8C8318 = 0;
+            return 1;
+        }
+
+        if (marni->var_8C7EE0)
+        {
+            marni->var_8C7EE0 = 0;
+            DefWindowProcA(hWnd, msg, wParam, lParam);
+            prepare_movie(marni);
+            return 1;
+        }
+
+        marni->is_gpu_busy = 1;
+        if (!(gpu_flg & GpuFlags::GPU_9))
+            return 0;
+
+        clear_buffers(marni);
+        auto result = init_all(marni);
+        if (result)
+        {
+            restore_surfaces(marni);
+            marni->is_gpu_busy = 0;
+            marni->gpu_flag |= GpuFlags::GPU_9;
+            DefWindowProcA(hWnd, msg, wParam, lParam);
+            return 1;
+        }
+        return result;
     }
 
     // 0x00406860
