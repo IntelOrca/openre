@@ -37,15 +37,9 @@ namespace openre
     {
         switch (origin)
         {
-        case SEEK_SET:
-            _position = static_cast<size_t>(offset);
-            break;
-        case SEEK_CUR:
-            _position += static_cast<size_t>(offset);
-            break;
-        case SEEK_END:
-            _position = _size + static_cast<size_t>(offset);
-            break;
+        case SEEK_SET: _position = static_cast<size_t>(offset); break;
+        case SEEK_CUR: _position += static_cast<size_t>(offset); break;
+        case SEEK_END: _position = _size + static_cast<size_t>(offset); break;
         }
         if (_position > _size)
             _position = _size;

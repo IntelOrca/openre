@@ -219,9 +219,8 @@ namespace openre::file
             return 0;
         }
 
-        if (SetFilePointer(hFile, (LONG)offset, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER &&
-            ReadFile(hFile, buffer, (DWORD)length, (LPDWORD)&mode, NULL) &&
-            length == mode)
+        if (SetFilePointer(hFile, (LONG)offset, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER
+            && ReadFile(hFile, buffer, (DWORD)length, (LPDWORD)&mode, NULL) && length == mode)
         {
             update_timer();
             uint32_t bytesRead = (uint32_t)mode;
@@ -610,15 +609,9 @@ namespace openre::file
             DWORD moveMethod;
             switch (origin)
             {
-            case SEEK_CUR:
-                moveMethod = FILE_CURRENT;
-                break;
-            case SEEK_END:
-                moveMethod = FILE_END;
-                break;
-            default:
-                moveMethod = FILE_BEGIN;
-                break;
+            case SEEK_CUR: moveMethod = FILE_CURRENT; break;
+            case SEEK_END: moveMethod = FILE_END; break;
+            default: moveMethod = FILE_BEGIN; break;
             }
             LARGE_INTEGER liOffset;
             liOffset.QuadPart = offset;

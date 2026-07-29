@@ -2798,6 +2798,87 @@ namespace openre::marni
         surface2_release(self);
     }
 
+    // 0x00412ED0
+    static void __stdcall MarniBits_SetAddress(MarniSurface2* self, void* address, int flags)
+    {
+        interop::thiscall<void, MarniSurface2*, void*, int>(0x00412ED0, self, address, flags);
+    }
+
+    // 0x00412D20
+    static int __stdcall MarniBits_FileOut(MarniSurface* self, const char* lpFileName, int /*a3*/)
+    {
+        if (!self->bOpen)
+        {
+            out("surface is not open", "MarniBits::FileOut");
+            return 0;
+        }
+
+        auto dataSize = static_cast<int>(3 * self->width * self->height + 58);
+        auto* buffer = (uint8_t*)std::malloc(dataSize);
+        if (!buffer)
+        {
+            out("failed to allocate memory", "MarniBits::FileOut");
+            return 0;
+        }
+
+        // BMP file header (14 bytes)
+        *(uint16_t*)(buffer + 0) = 0x4D42;   // 'BM'
+        *(uint32_t*)(buffer + 2) = dataSize; // file size
+        *(uint16_t*)(buffer + 6) = 0;        // reserved1
+        *(uint16_t*)(buffer + 8) = 0;        // reserved2
+        *(uint32_t*)(buffer + 10) = 58;      // offset to pixel data
+
+        // DIB header (BITMAPINFOHEADER, 40 bytes)
+        *(uint32_t*)(buffer + 14) = 40;           // header size
+        *(uint32_t*)(buffer + 18) = self->width;  // width
+        *(uint32_t*)(buffer + 22) = self->height; // height
+        *(uint16_t*)(buffer + 26) = 1;            // planes
+        *(uint16_t*)(buffer + 28) = 24;           // bit count
+        *(uint32_t*)(buffer + 30) = 0;            // compression
+        *(uint32_t*)(buffer + 34) = 0;            // image size
+        *(uint32_t*)(buffer + 38) = 0;            // x pixels per meter
+        *(uint32_t*)(buffer + 42) = 0;            // y pixels per meter
+        *(uint32_t*)(buffer + 46) = 0;            // colors used
+        *(uint32_t*)(buffer + 50) = 0;            // important colors
+
+        MarniSurface2 ecx0a;
+        surface2_ctor(&ecx0a);
+
+        ecx0a.desc.r_bitcnt = 8;
+        ecx0a.desc.g_shift = 8;
+        ecx0a.desc.g_bitcnt = 8;
+        ecx0a.desc.b_bitcnt = 8;
+        ecx0a.desc.r_mask = 0xFF;
+        ecx0a.desc.g_mask = 0xFF;
+        ecx0a.desc.b_mask = 0xFF;
+        ecx0a.width = self->width;
+        ecx0a.height = self->height;
+        ecx0a.desc.r_shift = 16;
+        ecx0a.desc.b_shift = 0;
+        ecx0a.bpp = 24;
+        ecx0a.var_25 = 0;
+        ecx0a.pitch = 3 * self->width;
+
+        MarniBits_SetAddress(&ecx0a, buffer + 58, 0);
+        ecx0a.var_29 = 1;
+        ecx0a.bOpen = 1;
+        ecx0a.var_27 = 1;
+
+        interop::thiscall<int, MarniSurface2*, RECT*, RECT*, MarniSurface*, int, int>(
+            0x00412580, &ecx0a, nullptr, nullptr, self, 32, 0);
+
+        ecx0a.var_27 = 0;
+
+        DWORD bytesWritten;
+        HANDLE hFile = CreateFileA(lpFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        WriteFile(hFile, buffer, dataSize, &bytesWritten, nullptr);
+        CloseHandle(hFile);
+        std::free(buffer);
+
+        surface2_release(&ecx0a);
+        return 1;
+    }
+
     // 0x00401EF0
     void __stdcall movie_kill(Marni* self)
     {
@@ -3201,5 +3282,6 @@ namespace openre::marni
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
+        interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
     }
 }

@@ -2353,6 +2353,7 @@ namespace openre
             gGameTable.vk_press |= 0x80;
             switch (wParam)
             {
+            case VK_F11:
             case VK_SNAPSHOT:
                 screenshot();
                 SetFocus(hWnd);
