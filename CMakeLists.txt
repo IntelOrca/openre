@@ -9,10 +9,14 @@ SET(CMAKE_C_COMPILER ${COMPILER_PREFIX}gcc)
 SET(CMAKE_CXX_COMPILER ${COMPILER_PREFIX}c++)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -m32 -static-libgcc -static-libstdc++ -fpermissive -w")
 
+include_directories(${CMAKE_SOURCE_DIR}/lib/include)
+
 file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm imm32)
+target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm imm32 ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
+
+add_custom_command(TARGET openre POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/lib/bin/x86/SDL3.dll" $<TARGET_FILE_DIR:openre>)

@@ -5,6 +5,7 @@
 #include "openre.h"
 #include "str.h"
 #include "stream.h"
+#include "system_filesystem.h"
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -194,20 +195,15 @@ namespace openre::file
     }
 
     // 0x00502D40
-    size_t read_file_into_buffer(const char* path, void* buffer, size_t length)
+    size_t read_file_into_buffer(const char* path, void* buffer, size_t mode)
     {
         size_t result = 0;
-        auto hFile = file_open_handle(path, length);
-        if (hFile != INVALID_HANDLE_VALUE)
+        size_t fileSize = 8 * 1024 * 1024; // 8 MiB (obviously unsafe but that's what OG interface is)
+        if (system::fs::readAllBytes(path, buffer, &fileSize) == 0)
         {
-            auto fileSize = GetFileSize(hFile, NULL);
-            DWORD bytesRead = 0;
-            if (ReadFile(hFile, buffer, fileSize, &bytesRead, nullptr) && bytesRead == fileSize)
-            {
-                result = bytesRead;
-            }
-            CloseHandle(hFile);
+            result = fileSize;
         }
+
         if (result == 0)
         {
             gGameTable.error_no = 11;
@@ -368,13 +364,10 @@ namespace openre::file
     // 0x005095D0
     int file_exists(const char* path, int mode)
     {
-        auto hFile = open_file_impl(path, mode, true);
-        if (hFile != INVALID_HANDLE_VALUE)
-        {
-            CloseHandle(hFile);
-            return 1;
-        }
-        return 0;
+        std::string resolvedPath;
+        auto exists = system::fs::exists(path, &resolvedPath);
+        oldstring_set_2(&gGameTable.ss_file_string, resolvedPath.c_str());
+        return exists ? 1 : 0;
     }
 
     // 0x00441630

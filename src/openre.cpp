@@ -27,6 +27,8 @@
 #include "window.h"
 #include <ddraw.h>
 
+#include <SDL3/SDL.h>
+
 #include <cstring>
 #include <windows.h>
 
@@ -2840,6 +2842,13 @@ namespace openre
     // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
+        if (!SDL_Init(0))
+        {
+            logging::logError("[SDL3] SDL_Init failed: {}", SDL_GetError());
+            return 1;
+        }
+        logging::logInfo("[SDL3] Initialized");
+
         const char* mutexName = "bio2.658b45ea117473d4.game";
 
         gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
@@ -3015,6 +3024,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
     case DLL_PROCESS_DETACH:
         // Perform any necessary cleanup.
+        SDL_Quit();
         break;
     }
     return TRUE; // Successful DLL_PROCESS_ATTACH.
