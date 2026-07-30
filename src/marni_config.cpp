@@ -370,13 +370,13 @@ namespace openre::marni
 
     void marni_config_init_hooks()
     {
-        interop::hookThisCall(0x0050B450, &MarniConfig_CreateKey);
-        interop::hookThisCall(0x0050B4B0, &MarniConfig_CloseKey);
-        interop::hookThisCall(0x0050B500, &MarniConfig_GetString);
-        interop::hookThisCall(0x0050B620, &MarniConfig_GetDword);
-        interop::hookThisCall(0x0050B730, &MarniConfig_QueryValue);
-        interop::hookThisCall(0x0050B7D0, &MarniConfig_WriteString);
-        interop::hookThisCall(0x0050B820, &MarniConfig_WriteDword);
-        interop::hookThisCall(0x0050B8B0, &MarniConfig_WriteBinary);
+        // interop::hookThisCall(0x0050B450, &MarniConfig_CreateKey);
+        // interop::hookThisCall(0x0050B4B0, &MarniConfig_CloseKey);
+        // interop::hookThisCall(0x0050B500, &MarniConfig_GetString);
+        // interop::hookThisCall(0x0050B620, &MarniConfig_GetDword);
+        // interop::hookThisCall(0x0050B730, &MarniConfig_QueryValue);
+        // interop::hookThisCall(0x0050B7D0, &MarniConfig_WriteString);
+        // interop::hookThisCall(0x0050B820, &MarniConfig_WriteDword);
+        // interop::hookThisCall(0x0050B8B0, &MarniConfig_WriteBinary);
     }
 }

@@ -75,25 +75,6 @@ namespace openre::file
 
     // --- File I/O wrapper with error dialog suppression and logging ---
 
-    static HANDLE
-    file_open_internal(const char* path, DWORD access, DWORD shareMode, DWORD creationDisposition, bool suppressErrors)
-    {
-        UINT oldMode = 0;
-        if (suppressErrors)
-            oldMode = SetErrorMode(0x8001);
-        HANDLE hFile = CreateFileA(path, access, shareMode, NULL, creationDisposition, 0, NULL);
-        if (suppressErrors)
-            SetErrorMode(oldMode);
-
-        const char* type = (access & GENERIC_WRITE) ? "WRITE" : "READ";
-        if (hFile != INVALID_HANDLE_VALUE)
-            logging::logInfo("[{} SUCCESS] {}", type, path);
-        else
-            logging::logWarning("[{} FAIL] {}", type, path);
-
-        return hFile;
-    }
-
     // 0x005092A0
     static bool check_disk_id()
     {
@@ -108,100 +89,18 @@ namespace openre::file
         return false;
     }
 
-    // --- Internal: matches OpenFile at 0x509040 ---
-    // Tries all mode/sub-approach combos, retries with disk checks, and
-    // shows the CD swap dialog when silent==0.
-    static HANDLE open_file_impl(const char* path, int mode, bool silent)
-    {
-        // If OPENRE_RE2_DATA is set, bypass OG path resolution entirely
-        {
-            const char* re2Data = std::getenv("OPENRE_RE2_DATA");
-            if (re2Data && re2Data[0])
-            {
-                std::string fullPath = std::string(re2Data) + "\\" + path;
-                str::string_assign_cstr(&gGameTable.ss_file_string, fullPath.c_str());
-                return file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
-            }
-        }
-
-        HANDLE hFile = INVALID_HANDLE_VALUE;
-        for (;;)
-        {
-            // Mode loop: 0=Class prefix, 1=Module directory, 2=CD path
-            for (int currentMode = 0; currentMode < 3 && hFile == INVALID_HANDLE_VALUE; currentMode++)
-            {
-                std::string basePath;
-                switch (currentMode)
-                {
-                case 0:
-                    if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x669F4C)))
-                        basePath = s;
-                    break;
-                case 1:
-                {
-                    char buf[MAX_PATH];
-                    if (GetModuleFileNameA(NULL, buf, MAX_PATH))
-                    {
-                        std::string ms(buf);
-                        auto p = ms.find_last_of('\\');
-                        if (p != std::string::npos)
-                            basePath = ms.substr(0, p + 1);
-                    }
-                    break;
-                }
-                case 2:
-                    if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x689F34)))
-                        basePath = s;
-                    break;
-                }
-                // Sub-mode loop: 0=direct, 1=append "data\"
-                for (int sub = 0; sub < 2 && hFile == INVALID_HANDLE_VALUE; sub++)
-                {
-                    std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
-                    // Store resolved path in OG global ss_file_string
-                    str::string_assign_cstr(&gGameTable.ss_file_string, fullPath.c_str());
-                    hFile = file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
-                }
-            }
-            // If all modes failed, check for a valid disc
-            if (hFile == INVALID_HANDLE_VALUE)
-            {
-                if (check_disk_id())
-                    continue; // disc found — retry all modes
-            }
-            // In silent mode with a known CD path, exit without dialog
-            if (silent)
-            {
-                if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x689F34)))
-                {
-                    if (s[0])
-                        break;
-                }
-            }
-            if (hFile != INVALID_HANDLE_VALUE)
-                break;
-            // Show CD swap dialog
-            if (!dlg_disk_retry())
-                break;
-            // Otherwise retry all modes
-        }
-        return hFile;
-    }
-
-    // 0x00509020
-    HANDLE file_open_handle(const char* path, int mode)
-    {
-        return open_file_impl(path, mode, false);
-    }
-
     // 0x00502D40
-    size_t read_file_into_buffer(const char* path, void* buffer, size_t mode)
+    size_t read_file_into_buffer(const char* path, void* buffer, size_t length)
     {
         size_t result = 0;
-        size_t fileSize = 8 * 1024 * 1024; // 8 MiB (obviously unsafe but that's what OG interface is)
-        if (system::fs::readAllBytes(path, buffer, &fileSize) == 0)
+        auto data = system::fs::readAllBytes((std::string("data://") + path).c_str());
+        if (!data.empty())
         {
-            result = fileSize;
+            auto bytesToCopy = data.size();
+            if (bytesToCopy > 8 * 1024 * 1024)
+                bytesToCopy = 8 * 1024 * 1024;
+            std::memcpy(buffer, data.data(), bytesToCopy);
+            result = bytesToCopy;
         }
 
         if (result == 0)
@@ -212,84 +111,51 @@ namespace openre::file
     }
 
     // 0x005094B0
-    static DWORD bufferize_file_0(LPVOID filename, LPVOID buffer, DWORD type)
+    static uint32_t bufferize_file_0(void* filename, void* buffer, uint32_t type)
     {
-        auto hFile = file_open_handle((const char*)filename, (int)type);
-        if (hFile == INVALID_HANDLE_VALUE)
+        auto data = system::fs::readAllBytes((std::string("data://") + (const char*)filename).c_str());
+        if (data.empty())
         {
             gGameTable.error_no = 11;
             return 0;
         }
 
-        DWORD fileSize = GetFileSize(hFile, NULL);
-        DWORD bytesRead = 0;
-        if (ReadFile(hFile, buffer, fileSize, &bytesRead, NULL) && fileSize == bytesRead)
-        {
-            update_timer();
-            CloseHandle(hFile);
-            return bytesRead;
-        }
-        else
-        {
-            gGameTable.error_no = 11;
-            CloseHandle(hFile);
-            return 0;
-        }
+        std::memcpy(buffer, data.data(), data.size());
+        update_timer();
+        return static_cast<uint32_t>(data.size());
     }
 
     // 0x00509540
     uint32_t read_partial_file_into_buffer(const char* path, void* buffer, size_t offset, size_t length, size_t mode)
     {
-        auto hFile = file_open_handle(path, (int)mode);
-        if (hFile == INVALID_HANDLE_VALUE)
+        auto stream = system::fs::open((std::string("data://") + path).c_str(), system::fs::FileMode::read);
+        if (stream == nullptr)
         {
             gGameTable.error_no = 11;
             return 0;
         }
 
-        if (SetFilePointer(hFile, (LONG)offset, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER
-            && ReadFile(hFile, buffer, (DWORD)length, (LPDWORD)&mode, NULL) && length == mode)
+        if (stream->seek(static_cast<int64_t>(offset), SEEK_SET) >= 0)
         {
-            update_timer();
-            uint32_t bytesRead = (uint32_t)mode;
-            CloseHandle(hFile);
-            return bytesRead;
+            auto bytesRead = stream->read(buffer, length);
+            if (bytesRead == length)
+            {
+                update_timer();
+                return static_cast<uint32_t>(bytesRead);
+            }
         }
-        else
-        {
-            gGameTable.error_no = 11;
-            CloseHandle(hFile);
-            return 0;
-        }
+
+        gGameTable.error_no = 11;
+        return 0;
     }
 
     // 0x00435430
     static const char* Save_open_fp(
-        const char* lpFileName, void* lpBuffer, DWORD nNumberOfBytesToRead, LONG lDistanceToMove, DWORD* outTimeHigh,
-        DWORD* outTimeLow)
+        const char* path, void* buffer, uint32_t bytes_to_read, long distance_to_move, uint32_t* out_time_high,
+        uint32_t* out_time_low)
     {
-        HANDLE hFile = CreateFileA(lpFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-        if (hFile == INVALID_HANDLE_VALUE)
-            return 0;
-
-        SetFilePointer(hFile, lDistanceToMove, NULL, FILE_BEGIN);
-
-        DWORD bytesRead;
-        if (ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, &bytesRead, NULL))
-        {
-            FILETIME lastWriteTime;
-            GetFileTime(hFile, NULL, NULL, &lastWriteTime);
-            *outTimeHigh = lastWriteTime.dwHighDateTime;
-            *outTimeLow = lastWriteTime.dwLowDateTime;
-            CloseHandle(hFile);
-            update_timer();
-            return lpFileName;
-        }
-        else
-        {
-            CloseHandle(hFile);
-            return 0;
-        }
+        abort();
+        return nullptr;
     }
 
     // 0x00505B20
@@ -319,54 +185,38 @@ namespace openre::file
     // 0x00509780
     int file_read_save(void* buffer, const char* filename, size_t size)
     {
-        auto file = file_open_internal(filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, false);
-        if (file == INVALID_HANDLE_VALUE)
-        {
+        auto data = system::fs::readAllBytes((std::string("save://") + filename).c_str());
+        if (data.empty() || data.size() < size)
             return READ_SAVE_FILE_ERROR;
-        }
 
-        DWORD bytesRead;
-        int result = READ_SAVE_FILE_ERROR;
-        if (ReadFile(file, buffer, size, &bytesRead, 0) && bytesRead == size)
-        {
-            result = READ_SAVE_FILE_SUCCESS;
-        }
-        CloseHandle(file);
-        return result;
+        std::memcpy(buffer, data.data(), size);
+        return READ_SAVE_FILE_SUCCESS;
     }
 
     // 0x005097E0
     size_t file_write_save(const char* filename, void* buffer, size_t size)
     {
-        auto file = file_open_internal(filename, GENERIC_WRITE, FILE_SHARE_WRITE, CREATE_ALWAYS, false);
-        if (file == INVALID_HANDLE_VALUE)
-        {
-            return 0;
-        }
-
-        DWORD bytesWritten;
-        size_t result = 0;
-        if (WriteFile(file, buffer, size, &bytesWritten, 0))
+        auto result = system::fs::writeAllBytes((std::string("save://") + filename).c_str(), buffer, size);
+        if (result == 0)
         {
             update_timer();
-            result = bytesWritten;
+            return size;
         }
-        CloseHandle(file);
-        return result;
+        return 0;
     }
 
     // 0x00432600
-    bool remove_save(LPCSTR lpFileName)
+    bool remove_save(const char* path)
     {
-        return DeleteFileA(lpFileName);
+        return system::fs::remove((std::string("save://") + path).c_str());
     }
 
     // 0x005095D0
     int file_exists(const char* path, int mode)
     {
         std::string resolvedPath;
-        auto exists = system::fs::exists(path, &resolvedPath);
-        oldstring_set_2(&gGameTable.ss_file_string, resolvedPath.c_str());
+        auto exists = system::fs::exists((std::string("data://") + path).c_str(), &resolvedPath);
+        str::string_assign_cstr(&gGameTable.ss_file_string, resolvedPath.c_str());
         return exists ? 1 : 0;
     }
 
@@ -391,106 +241,15 @@ namespace openre::file
     // 0x0043BBC0
     static unsigned int file_read_chunk()
     {
-        if (--gGameTable.dword_671414 >= 0)
-            return (gGameTable.dword_67140C >> gGameTable.dword_671414) & 1;
-
-        gGameTable.dword_671414 = 7;
-
-        if (gGameTable.dword_99DAC8)
-        {
-            gGameTable.dword_67140C = *(char*)(gGameTable.adt_in_pos + gGameTable.adt_in_base);
-            gGameTable.adt_in_pos++;
-            return (gGameTable.dword_67140C >> 7) & 1;
-        }
-
-        int pos = gGameTable.dword_99DAB8;
-        if (pos >= (int)gGameTable.adt_bytes_read)
-        {
-            if (!ReadFile(
-                    gGameTable.adt_file_handle, gGameTable.adt_buffer_in, 0x8000, (LPDWORD)&gGameTable.adt_bytes_read, NULL))
-            {
-                CloseHandle(gGameTable.adt_file_handle);
-                gGameTable.adt_file_handle = 0;
-                return 0;
-            }
-            pos = 0;
-            gGameTable.dword_99DAB8 = 0;
-        }
-
-        gGameTable.dword_67140C = ((unsigned char*)gGameTable.adt_buffer_in)[pos];
-        gGameTable.dword_99DAB8 = pos + 1;
-        return (gGameTable.dword_67140C >> 7) & 1;
+        abort();
+        return 0;
     }
 
     // 0x0043BC90
     static short file_read_chunk2(int num_bits)
     {
-        int bits_remaining = gGameTable.dword_671414;
-        unsigned int bit_buffer = gGameTable.dword_67140C;
-        int result = 0;
-
-        if (gGameTable.dword_99DAC8)
-        {
-            int remaining = num_bits;
-
-            if (num_bits > bits_remaining)
-            {
-                int pos = gGameTable.adt_in_pos;
-
-                do
-                {
-                    remaining -= bits_remaining;
-                    result |= (bit_buffer & ((1 << bits_remaining) - 1)) << remaining;
-                    bit_buffer = *(char*)(pos + gGameTable.adt_in_base);
-                    bits_remaining = 8;
-                    gGameTable.dword_67140C = bit_buffer;
-                    gGameTable.dword_671414 = 8;
-                    pos++;
-                    gGameTable.adt_in_pos = pos;
-                } while (remaining > 8);
-            }
-
-            gGameTable.dword_671414 = bits_remaining - remaining;
-            return result | ((1 << remaining) - 1) & (bit_buffer >> (bits_remaining - remaining));
-        }
-        else
-        {
-            int remaining = num_bits;
-
-            if (num_bits > bits_remaining)
-            {
-                int file_pos = gGameTable.dword_99DAB8;
-                unsigned char* buf = (unsigned char*)gGameTable.adt_buffer_in;
-
-                do
-                {
-                    remaining -= bits_remaining;
-                    result |= (bit_buffer & ((1 << bits_remaining) - 1)) << remaining;
-
-                    if (file_pos >= (int)gGameTable.adt_bytes_read)
-                    {
-                        if (!ReadFile(gGameTable.adt_file_handle, buf, 0x8000, (LPDWORD)&gGameTable.adt_bytes_read, NULL))
-                        {
-                            CloseHandle(gGameTable.adt_file_handle);
-                            gGameTable.adt_file_handle = 0;
-                            return 0;
-                        }
-                        buf = (unsigned char*)gGameTable.adt_buffer_in;
-                        file_pos = 0;
-                        gGameTable.dword_99DAB8 = 0;
-                    }
-
-                    bits_remaining = 8;
-                    bit_buffer = buf[file_pos++];
-                    gGameTable.dword_67140C = bit_buffer;
-                    gGameTable.dword_99DAB8 = file_pos;
-                    gGameTable.dword_671414 = 8;
-                } while (remaining > 8);
-            }
-
-            gGameTable.dword_671414 = bits_remaining - remaining;
-            return result | ((1 << remaining) - 1) & (bit_buffer >> (bits_remaining - remaining));
-        }
+        abort();
+        return 0;
     }
 
     // 0x00509620
@@ -502,33 +261,13 @@ namespace openre::file
     // 0x0043C590
     int load_adt(const char* path, void* dst, int mode)
     {
-        auto hFile = file_open_handle(path, mode);
-        if (hFile == INVALID_HANDLE_VALUE)
+        auto compressed = system::fs::readAllBytes((std::string("data://") + path).c_str());
+        if (compressed.empty())
         {
             adt_store_last_filename(path);
             gGameTable.error_no = 11;
             return 0;
         }
-
-        auto fileSize = GetFileSize(hFile, NULL);
-        if (fileSize == INVALID_FILE_SIZE || fileSize == 0)
-        {
-            CloseHandle(hFile);
-            adt_store_last_filename(path);
-            gGameTable.error_no = 11;
-            return 0;
-        }
-
-        std::vector<uint8_t> compressed(fileSize);
-        DWORD bytesRead;
-        if (!ReadFile(hFile, compressed.data(), fileSize, &bytesRead, NULL) || bytesRead != fileSize)
-        {
-            CloseHandle(hFile);
-            adt_store_last_filename(path);
-            gGameTable.error_no = 11;
-            return 0;
-        }
-        CloseHandle(hFile);
 
         auto decompressed = openre::graphics::decodeAdt(compressed);
         if (decompressed.empty())
@@ -631,59 +370,6 @@ namespace openre::file
         abort();
     }
 
-    class Win32FileStream : public Stream
-    {
-    private:
-        HANDLE _hFile;
-
-    public:
-        Win32FileStream(HANDLE hFile)
-            : _hFile(hFile)
-        {
-        }
-
-        size_t read(void* buffer, size_t size) override
-        {
-            DWORD bytesRead = 0;
-            if (!ReadFile(_hFile, buffer, static_cast<DWORD>(size), &bytesRead, NULL))
-                return 0;
-            return bytesRead;
-        }
-
-        size_t write(const void* buffer, size_t size) override
-        {
-            DWORD bytesWritten = 0;
-            if (!WriteFile(_hFile, buffer, static_cast<DWORD>(size), &bytesWritten, NULL))
-                return 0;
-            return bytesWritten;
-        }
-
-        int64_t seek(int64_t offset, int origin) override
-        {
-            DWORD moveMethod;
-            switch (origin)
-            {
-            case SEEK_CUR: moveMethod = FILE_CURRENT; break;
-            case SEEK_END: moveMethod = FILE_END; break;
-            default: moveMethod = FILE_BEGIN; break;
-            }
-            LARGE_INTEGER liOffset;
-            liOffset.QuadPart = offset;
-            liOffset.LowPart = SetFilePointer(_hFile, liOffset.LowPart, &liOffset.HighPart, moveMethod);
-            if (liOffset.LowPart == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR)
-                return -1;
-            return liOffset.QuadPart;
-        }
-
-        int64_t tell() const override
-        {
-            LARGE_INTEGER liOffset;
-            liOffset.QuadPart = 0;
-            liOffset.LowPart = SetFilePointer(_hFile, 0, &liOffset.HighPart, FILE_CURRENT);
-            return liOffset.QuadPart;
-        }
-    };
-
     // 0x0043C700
     int load_adt_sub(const char* path, uint8_t* dst, int pos, int mode)
     {
@@ -705,27 +391,24 @@ namespace openre::file
         gGameTable.dword_99DAB0 = 0;
         gGameTable.adt_out_ptr = dst;
 
-        auto hFile = file_open_handle(path, mode);
-        gGameTable.adt_file_handle = hFile;
-
-        if (hFile == INVALID_HANDLE_VALUE)
+        auto stream = system::fs::open((std::string("data://") + path).c_str(), system::fs::FileMode::read);
+        if (stream == nullptr)
         {
             adt_store_last_filename(path);
             gGameTable.error_no = 11;
             return 0;
         }
 
-        if (SetFilePointer(hFile, pos, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
+        if (stream->seek(pos, SEEK_SET) < 0)
         {
-            CloseHandle(hFile);
             adt_store_last_filename(path);
             gGameTable.error_no = 11;
             return 0;
         }
 
+        gGameTable.adt_file_handle = (void*)(uintptr_t)0xDEADBEEF;
         {
-            Win32FileStream stream(hFile);
-            auto output = openre::graphics::decodeAdt(stream);
+            auto output = openre::graphics::decodeAdt(*stream);
             if (!output.empty())
             {
                 auto* dstPtr = gGameTable.adt_out_ptr;
@@ -734,89 +417,45 @@ namespace openre::file
             }
         }
 
-        if (!gGameTable.adt_file_handle)
-        {
-            adt_store_last_filename(path);
-            gGameTable.error_no = 11;
-            return 0;
-        }
-
-        CloseHandle(hFile);
+        gGameTable.adt_file_handle = 0;
         update_timer();
 
         return gGameTable.adt_out_offset;
     }
 
     // 0x00442D50
-    int CreateSaveFolder(LPCSTR lpPathName)
+    int CreateSaveFolder(const char* path)
     {
-        SECURITY_ATTRIBUTES sa;
-        sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-        sa.lpSecurityDescriptor = nullptr;
-        sa.bInheritHandle = TRUE;
-
-        char pathCopy[MAX_PATH];
-        if (CreateDirectoryA(lpPathName, &sa) || GetLastError() == ERROR_ALREADY_EXISTS
-            || (strcpy(pathCopy, lpPathName),
-                *strrchr(pathCopy, '\\') = '\0',
-                CreateSaveFolder(pathCopy),
-                CreateDirectoryA(lpPathName, &sa)))
-        {
-            return 1;
-        }
-        else
-        {
-            if (GetLastError() != ERROR_ALREADY_EXISTS)
-                return 0;
-            return 1;
-        }
+        return system::fs::createDirectory((std::string("save://") + path).c_str()) ? 1 : 0;
     }
 
     // 0x004326E0
-    static int ck_valid_save(const char* a1, LPVOID a2)
+    static int ck_valid_save(const char* folder, void* entry)
     {
-        return interop::call<int, const char*, LPVOID>(0x004326E0, a1, a2);
+        return interop::call<int, const char*, void*>(0x004326E0, folder, entry);
     }
 
     // 0x00431F40
     int SaveGetPlID(const char* folder, int* cnt0, int* cnt1)
     {
-        char searchPath[MAX_PATH];
-        wsprintfA(searchPath, "%s*.*", folder);
-
         *cnt1 = 0;
         *cnt0 = 0;
 
-        WIN32_FIND_DATAA findData;
-        HANDLE hFind = FindFirstFileA(searchPath, &findData);
-        if (hFind == INVALID_HANDLE_VALUE)
-        {
-            GetLastError();
+        auto entries = system::fs::getDirectoryContents((std::string("save://") + folder).c_str(), "*");
+        if (entries.empty())
             return -1;
-        }
 
-        if (findData.cFileName[0] != '.' && ck_valid_save(folder, findData.cFileName))
-            ++*cnt0;
-
-        while (FindNextFileA(hFind, &findData))
+        for (const auto& entry : entries)
         {
-            if (ck_valid_save(folder, findData.cFileName))
+            if (entry[0] != '.' && ck_valid_save(folder, (void*)entry.c_str()))
                 ++*cnt0;
         }
 
-        if (GetLastError() == ERROR_NO_MORE_FILES)
-        {
-            FindClose(hFind);
-            const char* saveFolder = reinterpret_cast<const char*>(0x986280);
-            if (strcmp(saveFolder, folder) == 0 && --*cnt1 < 0)
-                *cnt1 = 0;
-            return 0;
-        }
-        else
-        {
-            FindClose(hFind);
-            return -1;
-        }
+        const char* saveFolder = reinterpret_cast<const char*>(0x986280);
+        if (strcmp(saveFolder, folder) == 0 && --*cnt1 < 0)
+            *cnt1 = 0;
+
+        return 0;
     }
 
     // 0x004C7A30
@@ -899,7 +538,6 @@ namespace openre::file
         interop::writeJmp(0x0043C890, &decompress_file_page);
         interop::writeJmp(0x00442D50, &CreateSaveFolder);
         interop::writeJmp(0x004DD360, &osp_read);
-        interop::writeJmp(0x00509020, &file_open_handle);
         interop::writeJmp(0x005094B0, &bufferize_file_0);
         interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
         interop::writeJmp(0x005095D0, &file_exists);
