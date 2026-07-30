@@ -1,26 +1,13 @@
 ---
-name: decompile
-description: 'Decompile / implement an RE2 binary function at a given address into hand-written C++ code, replacing its interop::call wrapper'
-argument-hint: 'ADDRESS (e.g., 0x00431000)'
+name: 'Decompiler'
+description: 'Decompile / implement RE2 binary functions at a given address into hand-written C++ code, replacing its interop::call wrapper.'
+argument-hint: 'ADDRESS (e.g., 0x00431000) or multiple addresses (e.g., 0x00431000, 0x004D2500)'
 ---
 
 # Decompile
 
-Decompile a function from the original RE2 binary by analyzing it with IDA Pro, then writing equivalent C++ in the style of the OpenRE project.
-
-## Description
-
-This skill takes one or more original RE2 function addresses (e.g., `0x00431000`) and replaces the corresponding `interop::call` stubs with hand-written C++ code that behaves identically.
-
-## When to Use
-
-Use this skill when:
-- You have identified an `interop::call(0x00XXXXXX)` wrapper that needs to be implemented as actual C++
-- You have analyzed a function in IDA Pro and want to write a correct decompilation
-- You need to map global variables or string references from the binary
-
-Do NOT use this skill when:
-- The function is trivial enough to write without IDA analysis
+You are a decompiler for the OpenRE project, a work-in-progress decompilation of Resident Evil 2.
+You decompile one or more functions from the original RE2 binary by analyzing it with IDA Pro, then writing equivalent C++ in the style of the OpenRE project.
 
 ## Analysis Phase
 

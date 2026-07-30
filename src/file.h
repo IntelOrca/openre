@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <windows.h>
+
+struct _CARD;
+struct _NAME;
 
 namespace openre::file
 {
@@ -15,5 +19,6 @@ namespace openre::file
     int osp_read();
     int tim_buffer_to_surface(int* timPtr, int page, int mode);
 
+    int SaveGetPlID(const char* folder, DWORD* cnt0, DWORD* cnt1);
     void file_init_hooks();
 }

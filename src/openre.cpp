@@ -2604,9 +2604,85 @@ namespace openre
     }
 
     // 0x00431470
-    static void SavePrint(int x, int y, const char* str, int color, int len)
+    static int SavePrint(int x, int y, const char* str, int color, int len)
     {
-        interop::call<void, int, int, const char*, int, int>(0x00431470, x, y, str, color, len);
+        char buf[264];
+
+        // Skip 'len' bytes of the input, character-aware (Shift-JIS lead bytes are 2 bytes)
+        int i;
+        for (i = 0; i < len; )
+        {
+            auto c = (unsigned char)str[i];
+            if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC))
+                i += 2;
+            else
+                i += 1;
+        }
+
+        // Copy from the scroll-cut position into temp buffer
+        {
+            const char* src = &str[i];
+            char* dst = buf;
+            do
+            {
+                *dst++ = *src;
+            }
+            while (*src++);
+        }
+
+        // Truncate to at most 48 bytes, respecting Shift-JIS character boundaries
+        {
+            int j;
+            int lastPos = 0;
+            for (j = 0; j < 48; )
+            {
+                auto c = (unsigned char)buf[j];
+                lastPos = j;
+                if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC))
+                    j += 2;
+                else
+                    j += 1;
+            }
+            buf[lastPos] = '\0';
+        }
+
+        // Copy into the global string buffer for this font slot
+        int idx = gGameTable.FontIndex;
+        strcpy(&gGameTable.String[261 * idx], buf);
+
+        // Save the position
+        gGameTable.FontXY[2 * idx] = x;
+        gGameTable.FontXY[2 * idx + 1] = y;
+
+        // Save the color
+        switch (color)
+        {
+        case 0:
+            gGameTable.FontColor[idx] = 0xD8E8E8;
+            break;
+        case 1:
+            gGameTable.FontColor[idx] = 0xFF6030;
+            break;
+        case 2:
+            gGameTable.FontColor[idx] = 0x4000BA;
+            break;
+        case 3:
+            gGameTable.FontColor[idx] = 0x20BA00;
+            break;
+        case 4:
+            gGameTable.FontColor[idx] = 0xBAC8C8;
+            break;
+        default:
+            break;
+        }
+
+        idx++;
+        gGameTable.FontIndex = idx;
+        if (idx < 100)
+            return 1;
+
+        gGameTable.FontIndex = idx - 1;
+        return 0;
     }
 
     // 0x00509840

@@ -5,8 +5,51 @@
 #include "openre.h"
 #include "stream.h"
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <windows.h>
+
+// Memory card save structures (forward-declared in file.h)
+// Must be packed to match the original binary's 1-byte alignment.
+#pragma pack(push, 1)
+struct SaveFile
+{
+    unsigned char magic[2];
+    unsigned char type;
+    unsigned char blockEntry;
+    unsigned char title[64];
+    unsigned char reserved[28];
+    unsigned short clut[16];
+    unsigned char icon[128];
+    char extra;
+    char field_101;
+    char field_102;
+    char field_103;
+    char field_104;
+    char field_105;
+    char field_106;
+    char field_107;
+    char field_108;
+    char field_109;
+    char field_10A;
+    char field_10B;
+    char field_10C;
+    char field_10D;
+    char field_10E;
+    char field_10F;
+    char field_110;
+    char field_111;
+    char field_112;
+    char field_113;
+};
+assert_struct_size(SaveFile, 276);
+
+struct SaveFileName
+{
+    char data[261];
+};
+assert_struct_size(SaveFileName, 261);
+#pragma pack(pop)
 
 namespace openre::file
 {
@@ -230,6 +273,33 @@ namespace openre::file
         else
         {
             gGameTable.error_no = 11;
+            CloseHandle(hFile);
+            return 0;
+        }
+    }
+
+    // 0x00435430
+    static const char* Save_open_fp(const char* lpFileName, void* lpBuffer, DWORD nNumberOfBytesToRead, LONG lDistanceToMove, DWORD* outTimeHigh, DWORD* outTimeLow)
+    {
+        HANDLE hFile = CreateFileA(lpFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (hFile == INVALID_HANDLE_VALUE)
+            return 0;
+
+        SetFilePointer(hFile, lDistanceToMove, NULL, FILE_BEGIN);
+
+        DWORD bytesRead;
+        if (ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, &bytesRead, NULL))
+        {
+            FILETIME lastWriteTime;
+            GetFileTime(hFile, NULL, NULL, &lastWriteTime);
+            *outTimeHigh = lastWriteTime.dwHighDateTime;
+            *outTimeLow = lastWriteTime.dwLowDateTime;
+            CloseHandle(hFile);
+            update_timer();
+            return lpFileName;
+        }
+        else
+        {
             CloseHandle(hFile);
             return 0;
         }
@@ -693,14 +763,198 @@ namespace openre::file
         return gGameTable.adt_out_offset;
     }
 
+    // 0x00442D50
+    static int CreateSaveFolder(LPCSTR lpPathName)
+    {
+        auto hMem = GlobalAlloc(GMEM_MOVEABLE, MAX_PATH);
+        if (!hMem)
+            return 0;
+
+        auto* pathCopy = static_cast<char*>(GlobalLock(hMem));
+        if (!pathCopy)
+        {
+            GlobalFree(hMem);
+            return 0;
+        }
+
+        SECURITY_ATTRIBUTES sa;
+        sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+        sa.lpSecurityDescriptor = nullptr;
+        sa.bInheritHandle = TRUE;
+
+        if (CreateDirectoryA(lpPathName, &sa)
+            || GetLastError() == ERROR_ALREADY_EXISTS
+            || (strcpy(pathCopy, lpPathName),
+                *strrchr(pathCopy, '\\') = '\0',
+                CreateSaveFolder(pathCopy),
+                CreateDirectoryA(lpPathName, &sa)))
+        {
+            GlobalUnlock(hMem);
+            GlobalFree(hMem);
+            return 1;
+        }
+        else
+        {
+            if (GetLastError() != ERROR_ALREADY_EXISTS)
+            {
+                GlobalUnlock(hMem);
+                GlobalFree(hMem);
+                return 0;
+            }
+            GlobalUnlock(hMem);
+            GlobalFree(hMem);
+            return 1;
+        }
+    }
+
+    // 0x004326E0
+    static int ck_valid_save(const char* a1, LPVOID a2)
+    {
+        return interop::call<int, const char*, LPVOID>(0x004326E0, a1, a2);
+    }
+
+    // 0x00431F40
+    int SaveGetPlID(const char* folder, DWORD* cnt0, DWORD* cnt1)
+    {
+        char searchPath[MAX_PATH];
+        wsprintfA(searchPath, "%s*.*", folder);
+
+        *cnt1 = 0;
+        *cnt0 = 0;
+
+        WIN32_FIND_DATAA findData;
+        HANDLE hFind = FindFirstFileA(searchPath, &findData);
+        if (hFind == INVALID_HANDLE_VALUE)
+        {
+            GetLastError();
+            return -1;
+        }
+
+        if (findData.cFileName[0] != '.' && ck_valid_save(folder, findData.cFileName))
+            ++*cnt0;
+
+        while (FindNextFileA(hFind, &findData))
+        {
+            if (ck_valid_save(folder, findData.cFileName))
+                ++*cnt0;
+        }
+
+        if (GetLastError() == ERROR_NO_MORE_FILES)
+        {
+            FindClose(hFind);
+            const char* saveFolder = reinterpret_cast<const char*>(0x986280);
+            if (strcmp(saveFolder, folder) == 0 && --*cnt1 < 0)
+                *cnt1 = 0;
+            return 0;
+        }
+        else
+        {
+            FindClose(hFind);
+            return -1;
+        }
+    }
+
+    // 0x004C7A30
+    static int Card_write(SaveFile* Head, const char* Name, const char* Title)
+    {
+        return interop::call<int, SaveFile*, const char*, const char*>(0x4C7A30, Head, Name, Title);
+    }
+
+    // 0x00431D80
+    // Enumerate save files in a directory, filling the cards and names arrays.
+    // Allocates/reallocates global memory for each array when the count is nonzero.
+    // Returns 1 on success (all files enumerated), 0 on failure.
+    static int SaveListFiles(const char* file_name, int cnt0, SaveFile** cards, int cnt1, SaveFileName** names)
+    {
+        // Allocate/reallocate cards array
+        if (cnt0 > 0)
+        {
+            if (*cards)
+            {
+                HGLOBAL hMem = GlobalHandle(*cards);
+                GlobalUnlock(hMem);
+                hMem = GlobalHandle(*cards);
+                GlobalFree(hMem);
+            }
+
+            HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFile) * cnt0);
+            *cards = static_cast<SaveFile*>(GlobalLock(hAlloc));
+            if (!*cards)
+            {
+                GetLastError();
+                return 0;
+            }
+        }
+
+        // Allocate/reallocate names array
+        if (cnt1 > 0)
+        {
+            if (*names)
+            {
+                HGLOBAL hMem = GlobalHandle(*names);
+                GlobalUnlock(hMem);
+                hMem = GlobalHandle(*names);
+                GlobalFree(hMem);
+            }
+
+            HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFileName) * cnt1);
+            *names = static_cast<SaveFileName*>(GlobalLock(hAlloc));
+            if (!*names)
+            {
+                GetLastError();
+                return 0;
+            }
+        }
+
+        // Build search pattern and enumerate files
+        char searchPath[MAX_PATH];
+        wsprintfA(searchPath, "%s*.*", file_name);
+
+        WIN32_FIND_DATAA findData;
+        HANDLE hFind = FindFirstFileA(searchPath, &findData);
+        if (hFind == INVALID_HANDLE_VALUE)
+        {
+            GetLastError();
+            return 0;
+        }
+
+        // Process first match
+        if (findData.cFileName[0] != '.' && ck_valid_save(file_name, findData.cFileName))
+        {
+            Card_write(*cards, file_name, findData.cFileName);
+        }
+
+        // Process remaining matches
+        while (FindNextFileA(hFind, &findData))
+        {
+            if (ck_valid_save(file_name, findData.cFileName))
+            {
+                Card_write(*cards, file_name, findData.cFileName);
+            }
+        }
+
+        if (GetLastError() == ERROR_NO_MORE_FILES)
+        {
+            FindClose(hFind);
+            return 1;
+        }
+        else
+        {
+            FindClose(hFind);
+            return 0;
+        }
+    }
+
     void file_init_hooks()
     {
+        interop::writeJmp(0x00431D80, &SaveListFiles);
         interop::writeJmp(0x00432600, &remove_save);
         interop::writeJmp(0x0043BBC0, &file_read_chunk);
         interop::writeJmp(0x0043BC90, &file_read_chunk2);
         interop::writeJmp(0x0043C590, &load_adt);
         interop::writeJmp(0x0043C700, &load_adt_sub);
         interop::writeJmp(0x0043C890, &decompress_file_page);
+        interop::writeJmp(0x00442D50, &CreateSaveFolder);
         interop::writeJmp(0x004DD360, &osp_read);
         interop::writeJmp(0x00509020, &file_open_handle);
         interop::writeJmp(0x005094B0, &bufferize_file_0);

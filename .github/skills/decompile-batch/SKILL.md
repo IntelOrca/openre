@@ -8,7 +8,7 @@ argument-hint: 'Multiple address (e.g., 0x00431000, 0x004D2500)'
 
 ## Step 1
 
-Spawn multiple sub agents, one per function to decompile. Each sub agent shall use the decompile skill.
+Spawn multiple "decompiler" sub agents, one per function to decompile.
 You expect each sub agent to return a fully complete C++ implementation of their designated function.
 You the orchastrator does NOT decompile or analyze anything.
 
