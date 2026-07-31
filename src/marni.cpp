@@ -4,6 +4,7 @@
 #include "openre.h"
 #include "re2.h"
 #include "str.h"
+#include "system_config.h"
 
 #include <algorithm>
 #include <cstring>
@@ -3158,6 +3159,7 @@ namespace openre::marni
     // 0x0050ACB0
     void config_read_all(MarniConfig* self)
     {
+        system::config::load();
         interop::thiscall<void, MarniConfig*>(0x0050ACB0, self);
     }
 
@@ -3165,6 +3167,7 @@ namespace openre::marni
     void config_flush_all(MarniConfig* self)
     {
         interop::thiscall<void, MarniConfig*>(0x0050B020, self);
+        system::config::save();
     }
 
     // 0x0050B900

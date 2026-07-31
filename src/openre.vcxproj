@@ -100,6 +100,7 @@
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="stream.cpp" />
     <ClCompile Include="str.cpp" />
+    <ClCompile Include="system_config.cpp" />
     <ClCompile Include="system_filesystem.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="tim.cpp" />
@@ -137,6 +138,7 @@
     <ClInclude Include="str.h" />
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="save.h" />
+    <ClInclude Include="system_config.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
     <ClInclude Include="window.h" />

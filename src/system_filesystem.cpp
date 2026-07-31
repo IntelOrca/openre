@@ -110,6 +110,21 @@ namespace openre::system::fs
             return std::string(basePath) + "savedata" + DIR_SEPARATOR + subPath;
         }
 
+        // Handle user:// prefix — user config/data files
+        if (std::strncmp(path, "user://", 7) == 0)
+        {
+            auto subPath = path + 7;
+            auto prefPath = SDL_GetPrefPath(nullptr, "openre"); // deliberately null for org.
+            if (!prefPath || !prefPath[0])
+            {
+                logging::logError("[system::fs::resolvePath] SDL_GetPrefPath failed");
+                return {};
+            }
+            // Ensure directory exists
+            SDL_CreateDirectory(prefPath);
+            return std::string(prefPath) + subPath;
+        }
+
         // No recognized prefix — fail
         logging::logError("[system::fs::resolvePath] unknown path scheme: {}", path);
         return {};
