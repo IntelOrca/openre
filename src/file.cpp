@@ -865,7 +865,7 @@ namespace openre::file
     // Enumerate save files in a directory, filling the cards and names arrays.
     // Allocates/reallocates global memory for each array when the count is nonzero.
     // Returns 1 on success (all files enumerated), 0 on failure.
-    static int SaveListFiles(const char* file_name, int cnt0, SaveFile** cards, int cnt1, SaveFileName** names)
+    int save_list_files(const char* file_name, int cnt0, void** cards, int cnt1, void** names)
     {
         // Allocate/reallocate cards array
         if (cnt0 > 0)
@@ -879,7 +879,7 @@ namespace openre::file
             }
 
             HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFile) * cnt0);
-            *cards = static_cast<SaveFile*>(GlobalLock(hAlloc));
+            *cards = GlobalLock(hAlloc);
             if (!*cards)
             {
                 GetLastError();
@@ -899,7 +899,7 @@ namespace openre::file
             }
 
             HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFileName) * cnt1);
-            *names = static_cast<SaveFileName*>(GlobalLock(hAlloc));
+            *names = GlobalLock(hAlloc);
             if (!*names)
             {
                 GetLastError();
@@ -922,7 +922,7 @@ namespace openre::file
         // Process first match
         if (findData.cFileName[0] != '.' && ck_valid_save(file_name, findData.cFileName))
         {
-            Card_write(*cards, file_name, findData.cFileName);
+            Card_write((SaveFile*)*cards, file_name, findData.cFileName);
         }
 
         // Process remaining matches
@@ -930,7 +930,7 @@ namespace openre::file
         {
             if (ck_valid_save(file_name, findData.cFileName))
             {
-                Card_write(*cards, file_name, findData.cFileName);
+                Card_write((SaveFile*)*cards, file_name, findData.cFileName);
             }
         }
 
@@ -946,14 +946,9 @@ namespace openre::file
         }
     }
 
-    int save_list_files(const char* file_name, int cnt0, void** cards, int cnt1, void** names)
-    {
-        return SaveListFiles(file_name, cnt0, (SaveFile**)cards, cnt1, (SaveFileName**)names);
-    }
-
     void file_init_hooks()
     {
-        interop::writeJmp(0x00431D80, &SaveListFiles);
+        interop::writeJmp(0x00431D80, &save_list_files);
         interop::writeJmp(0x00432600, &remove_save);
         interop::writeJmp(0x0043BBC0, &file_read_chunk);
         interop::writeJmp(0x0043BC90, &file_read_chunk2);

@@ -197,6 +197,12 @@ namespace openre
     uint8_t rnd_area();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
+    void rsrc_release();
+    void font_create();
+    void config_write();
+    void bg_load();
+    void movie_suspend_texture_use();
+    void movie_resume_texture_use();
     void set_geom_screen(int prj);
     bool check_flag(FlagGroup group, uint32_t index);
     bool check_flags(FlagGroup group, std::vector<uint32_t> indexes);

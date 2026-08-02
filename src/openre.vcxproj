@@ -95,6 +95,7 @@
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="room.cpp" />
+    <ClCompile Include="save.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="stream.cpp" />
@@ -132,6 +133,7 @@
     <ClInclude Include="sce.h" />
     <ClInclude Include="stream.h" />
     <ClInclude Include="scheduler.h" />
+    <ClInclude Include="save.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
     <ClInclude Include="window.h" />
