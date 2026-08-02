@@ -1275,13 +1275,85 @@ namespace openre
     // 0x004C6C40
     static void cardaccess_init()
     {
-        interop::call(0x004C6C40);
+        auto& ctcb = *gGameTable.ctcb;
+
+        memset(gGameTable.card_save_buf, 0, sizeof(gGameTable.card_save_buf));
+
+        switch (ctcb.var_0A)
+        {
+        case 2:
+            ctcb.var_0A = 0;
+            return;
+        case 1:
+            break;
+        default:
+            hud_fade_set(0x103, 0, 7, 1);
+            hud_fade_adjust(3, 0, 0, nullptr);
+            memclr((uint32_t*)gGameTable.card_work_ptr, 0x475);
+            gGameTable.byte_98F07A = 2;
+            if (!load_adt("common\\data\\type00.adt", gGameTable.bg_buffer, 4))
+            {
+                file_error();
+                return;
+            }
+            bg_to_surface(gGameTable.bg_buffer);
+            bg_set_mode(0, 0);
+            hud_fade_set(512, -6144, 7, 1);
+            ctcb.var_0A = 1;
+            break;
+        }
+
+        if (!hud_fade_status(0))
+        {
+            task_sleep(1);
+            return;
+        }
+
+        auto p = gGameTable.card_work_ptr;
+        *(uint16_t*)(p + 0x18) = 0;
+        *(uint16_t*)(p + 0x24) = 23;
+        *(uint16_t*)(p + 0x26) = 50;
+        *(uint16_t*)(p + 0x28) = 276;
+        *(uint16_t*)(p + 0x2A) = 106;
+        p[0x15] = 0;
+        *(uint16_t*)(p + 0x1A) = 0;
+        p[0x16] = 0;
+        p[0x17] = 0;
+        ctcb.var_0A = 2;
+        task_sleep(2);
     }
 
     // 0x004C6D80
     static void cardaccess_exit(int mode)
     {
-        interop::call<void, int>(0x004C6D80, mode);
+        auto& ctcb = *gGameTable.ctcb;
+
+        switch (ctcb.var_0A)
+        {
+        case 2:
+            ctcb.var_0A = 0;
+            if (mode == 0 && !check_flag(FlagGroup::System, FG_SYSTEM_10))
+            {
+                gGameTable.byte_98F07A = 2;
+                gGameTable.byte_98F07B = 2;
+            }
+            return;
+        case 1:
+            break;
+        default:
+            hud_fade_off(3);
+            hud_fade_set(512, 6144, 7, 1);
+            ctcb.var_0A = 1;
+            break;
+        }
+
+        if (hud_fade_status(0))
+        {
+            hud_fade_set(512, 0, 7, 1);
+            hud_fade_adjust(0, 0x7FFF, 0xFFFFFF, nullptr);
+            ctcb.var_0A = 2;
+        }
+        task_sleep(1);
     }
 
     // 0x004C6E30
