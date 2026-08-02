@@ -20,6 +20,11 @@ namespace openre::file
     int osp_read();
     int tim_buffer_to_surface(int* timPtr, int page, int mode);
 
-    int SaveGetPlID(const char* folder, DWORD* cnt0, DWORD* cnt1);
+    int SaveGetPlID(const char* folder, int* cnt0, int* cnt1);
+    int save_list_files(const char* file_name, int cnt0, void** cards, int cnt1, void** names);
+    int file_read_save(void* buffer, const char* filename, size_t size);
+    size_t file_write_save(const char* filename, void* buffer, size_t size);
+    bool remove_save(LPCSTR lpFileName);
+    int CreateSaveFolder(LPCSTR lpPathName);
     void file_init_hooks();
 }

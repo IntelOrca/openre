@@ -332,7 +332,7 @@ namespace openre::file
     }
 
     // 0x00509780
-    static int file_read_save(void* buffer, const char* filename, size_t size)
+    int file_read_save(void* buffer, const char* filename, size_t size)
     {
         auto file = file_open_internal(filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, false);
         if (file == INVALID_HANDLE_VALUE)
@@ -351,7 +351,7 @@ namespace openre::file
     }
 
     // 0x005097E0
-    static size_t file_write_save(const char* filename, void* buffer, size_t size)
+    size_t file_write_save(const char* filename, void* buffer, size_t size)
     {
         auto file = file_open_internal(filename, GENERIC_WRITE, FILE_SHARE_WRITE, CREATE_ALWAYS, false);
         if (file == INVALID_HANDLE_VALUE)
@@ -371,7 +371,7 @@ namespace openre::file
     }
 
     // 0x00432600
-    static bool remove_save(LPCSTR lpFileName)
+    bool remove_save(LPCSTR lpFileName)
     {
         return DeleteFileA(lpFileName);
     }
@@ -766,7 +766,7 @@ namespace openre::file
     }
 
     // 0x00442D50
-    static int CreateSaveFolder(LPCSTR lpPathName)
+    int CreateSaveFolder(LPCSTR lpPathName)
     {
         auto hMem = GlobalAlloc(GMEM_MOVEABLE, MAX_PATH);
         if (!hMem)
@@ -815,7 +815,7 @@ namespace openre::file
     }
 
     // 0x00431F40
-    int SaveGetPlID(const char* folder, DWORD* cnt0, DWORD* cnt1)
+    int SaveGetPlID(const char* folder, int* cnt0, int* cnt1)
     {
         char searchPath[MAX_PATH];
         wsprintfA(searchPath, "%s*.*", folder);
@@ -944,6 +944,11 @@ namespace openre::file
             FindClose(hFind);
             return 0;
         }
+    }
+
+    int save_list_files(const char* file_name, int cnt0, void** cards, int cnt1, void** names)
+    {
+        return SaveListFiles(file_name, cnt0, (SaveFile**)cards, cnt1, (SaveFileName**)names);
     }
 
     void file_init_hooks()
