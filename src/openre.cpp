@@ -1248,10 +1248,58 @@ namespace openre
         interop::call(0x00501BD0);
     }
 
+    static void config_write();
+
+    // 0x00441440
+    static void movie_suspend_texture_use()
+    {
+        interop::call(0x00441440);
+    }
+
+    // 0x004414B0
+    static void movie_resume_texture_use()
+    {
+        interop::call(0x004414B0);
+    }
+
+    // 0x004C58A0
+    static void card_access()
+    {
+        interop::call(0x004C58A0);
+    }
+
+    // 0x004C4700
+    static void bg_load()
+    {
+        interop::call(0x004C4700);
+    }
+
     // 0x004C57E0
     static void mem_card()
     {
-        interop::call(0x004C57E0);
+        auto& ctcb = *gGameTable.ctcb;
+        if (ctcb.var_08 != 0)
+        {
+            if (ctcb.var_08 != 1)
+                return;
+        }
+        else
+        {
+            config_write();
+            task_suspend(0);
+            movie_suspend_texture_use();
+            ctcb.var_08 = 1;
+        }
+
+        card_access();
+        if (ctcb.var_13 == 0)
+        {
+            movie_resume_texture_use();
+            bg_load();
+            task_signal(0);
+            task_exit();
+            ctcb.var_08 = 0;
+        }
     }
 
     // 0x004D1F50
