@@ -4,13 +4,6 @@
 #include <SDL3/SDL.h>
 #include <cstring>
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 namespace openre::system::fs
 {
 #ifdef _WIN32
