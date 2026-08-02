@@ -922,6 +922,8 @@ declare     math_const_table        s16[1224]               0x00526270
 declare     byte_5286F4             u8[8]                   0x005286F4
 declare     byte_528724             u8[4]                   0x00528724
 declare     pGG                     void*                   0x0052C4B0
+declare     cache_stage             s32                     0x0052D878
+declare     cache_room              s32                     0x0052D87C
 declare     g_identity_mat          Mat16                   0x0052D880
 declare     byte_52D8A7             u8[57]                  0x0052D8A7
 declare     curtain2                u8[7]                   0x0052D8E0
@@ -1059,6 +1061,7 @@ declare     vec_6897E0              Vec32                   0x006897E0
 declare     dword_6897F0            u32                     0x006897F0
 declare     vec_6897F4              Vec16                   0x006897F4
 declare     dword_689800            u32                     0x00689800
+declare     bg_colorized            u8                      0x00689848
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
 declare     systemInitialized       u32                     0x0068984C
@@ -1379,6 +1382,7 @@ declare     byte_98F1B8             u8                      0x0098F1B8
 declare     byte_98F1B9             u8                      0x0098F1B9
 declare     pause                   u8                      0x0098F1BA
 declare     byte_98F1BB             u8                      0x0098F1BB
+declare     roomptr                 s32[16]                 0x0098F1E0
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     dword_991F70            u32                     0x00991F70
 declare     dword_991F74            u32                     0x00991F74

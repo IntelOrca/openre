@@ -279,7 +279,9 @@ namespace openre::file
     }
 
     // 0x00435430
-    static const char* Save_open_fp(const char* lpFileName, void* lpBuffer, DWORD nNumberOfBytesToRead, LONG lDistanceToMove, DWORD* outTimeHigh, DWORD* outTimeLow)
+    static const char* Save_open_fp(
+        const char* lpFileName, void* lpBuffer, DWORD nNumberOfBytesToRead, LONG lDistanceToMove, DWORD* outTimeHigh,
+        DWORD* outTimeLow)
     {
         HANDLE hFile = CreateFileA(lpFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
         if (hFile == INVALID_HANDLE_VALUE)
@@ -701,7 +703,7 @@ namespace openre::file
     };
 
     // 0x0043C700
-    static int load_adt_sub(const char* path, uint8_t* dst, int pos, int mode)
+    int load_adt_sub(const char* path, uint8_t* dst, int pos, int mode)
     {
         gGameTable.dword_99DAC8 = 0;
 
@@ -782,8 +784,7 @@ namespace openre::file
         sa.lpSecurityDescriptor = nullptr;
         sa.bInheritHandle = TRUE;
 
-        if (CreateDirectoryA(lpPathName, &sa)
-            || GetLastError() == ERROR_ALREADY_EXISTS
+        if (CreateDirectoryA(lpPathName, &sa) || GetLastError() == ERROR_ALREADY_EXISTS
             || (strcpy(pathCopy, lpPathName),
                 *strrchr(pathCopy, '\\') = '\0',
                 CreateSaveFolder(pathCopy),

@@ -1268,10 +1268,99 @@ namespace openre
         interop::call(0x004C58A0);
     }
 
+    // 0x0043F750
+    static int bg_colorize(int pData, uint8_t a2, uint8_t a3, uint8_t a4)
+    {
+        return interop::call<int, int, uint8_t, uint8_t, uint8_t>(0x0043F750, pData, a2, a3, a4);
+    }
+
     // 0x004C4700
     static void bg_load()
     {
-        interop::call(0x004C4700);
+        if (gGameTable.cache_stage != (int32_t)gGameTable.current_stage
+            || gGameTable.cache_room != (int32_t)gGameTable.current_room)
+        {
+            gGameTable.cache_stage = (int32_t)gGameTable.current_stage;
+            gGameTable.cache_room = (int32_t)gGameTable.current_room;
+            if (!read_partial_file_into_buffer(
+                    "common\\bin\\roomcut.bin",
+                    gGameTable.roomptr,
+                    ((int32_t)gGameTable.current_room + 32 * (int32_t)gGameTable.current_stage) << 6,
+                    0x40,
+                    4))
+            {
+                file_error();
+                return;
+            }
+        }
+
+        auto adtSize
+            = load_adt_sub("common\\bin\\roomcut.bin", gGameTable.bg_buffer, gGameTable.roomptr[gGameTable.current_cut], 4);
+        if (!adtSize)
+        {
+            file_error();
+            return;
+        }
+        if (adtSize >= 0x38300)
+        {
+            gGameTable.error_no = 11;
+            file_error();
+            return;
+        }
+
+        int v1 = 0;
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
+        if (!check_flag(FlagGroup::Status, FG_STATUS_12) && !gGameTable.byte_68984A)
+        {
+            if (gGameTable.current_stage != 5)
+                goto label_16;
+        }
+        else
+        {
+            if (gGameTable.current_stage != 5)
+                goto label_16;
+            switch (gGameTable.current_room)
+            {
+            case 9:
+            case 10:
+            case 11:
+            case 12:
+            case 14:
+            case 15:
+            case 16:
+            case 22:
+                v1 = 1;
+                r = 0;
+                g = 16;
+                b = 0;
+                gGameTable.byte_68984A = 1;
+                break;
+            default: break;
+            }
+        }
+        if (gGameTable.current_room == 13)
+        {
+            b = 32;
+            g = 32;
+            r = 32;
+            if (!sub_442E40())
+            {
+                goto label_16;
+            }
+        }
+        else if (!v1)
+        {
+            goto label_16;
+        }
+        gGameTable.bg_colorized = 1;
+        bg_colorize((int)gGameTable.bg_buffer, r, g, b);
+        return;
+
+    label_16:
+        gGameTable.bg_colorized = 0;
+        bg_to_surface(gGameTable.bg_buffer);
     }
 
     // 0x004C57E0
@@ -2658,7 +2747,7 @@ namespace openre
 
         // Skip 'len' bytes of the input, character-aware (Shift-JIS lead bytes are 2 bytes)
         int i;
-        for (i = 0; i < len; )
+        for (i = 0; i < len;)
         {
             auto c = (unsigned char)str[i];
             if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC))
@@ -2674,15 +2763,14 @@ namespace openre
             do
             {
                 *dst++ = *src;
-            }
-            while (*src++);
+            } while (*src++);
         }
 
         // Truncate to at most 48 bytes, respecting Shift-JIS character boundaries
         {
             int j;
             int lastPos = 0;
-            for (j = 0; j < 48; )
+            for (j = 0; j < 48;)
             {
                 auto c = (unsigned char)buf[j];
                 lastPos = j;
@@ -2705,23 +2793,12 @@ namespace openre
         // Save the color
         switch (color)
         {
-        case 0:
-            gGameTable.FontColor[idx] = 0xD8E8E8;
-            break;
-        case 1:
-            gGameTable.FontColor[idx] = 0xFF6030;
-            break;
-        case 2:
-            gGameTable.FontColor[idx] = 0x4000BA;
-            break;
-        case 3:
-            gGameTable.FontColor[idx] = 0x20BA00;
-            break;
-        case 4:
-            gGameTable.FontColor[idx] = 0xBAC8C8;
-            break;
-        default:
-            break;
+        case 0: gGameTable.FontColor[idx] = 0xD8E8E8; break;
+        case 1: gGameTable.FontColor[idx] = 0xFF6030; break;
+        case 2: gGameTable.FontColor[idx] = 0x4000BA; break;
+        case 3: gGameTable.FontColor[idx] = 0x20BA00; break;
+        case 4: gGameTable.FontColor[idx] = 0xBAC8C8; break;
+        default: break;
         }
 
         idx++;

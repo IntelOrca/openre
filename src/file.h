@@ -16,6 +16,7 @@ namespace openre::file
     void sub_505B20();
     void* file_alloc(const size_t size);
     int load_adt(const char* path, void* dst, int mode);
+    int load_adt_sub(const char* path, uint8_t* dst, int pos, int mode);
     int osp_read();
     int tim_buffer_to_surface(int* timPtr, int page, int mode);
 
