@@ -176,8 +176,8 @@ namespace openre
 
     enum
     {
-        FG_MESSAGE_ANSWER_NO = 0,
-        FG_MESSAGE_WAITING_ANSWER = 7,
+        FG_MESSAGE_ANSWER_NO = 31,
+        FG_MESSAGE_WAITING_ANSWER = 24,
     };
 
     enum
