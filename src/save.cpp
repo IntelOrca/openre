@@ -211,32 +211,275 @@ namespace openre::save
     static const char* aOverwrite = (const char*)0x52E2B0;  // 上書き
     static const char* aHowToSave = (const char*)0x52E2BC;  // どのように保存しますか？
 
+    // Font width table (int16, sign-extended) used by get_mess_width for the
+    // mode & 0x4000 kerning path.
+    static const int16_t* width_tbl = (const int16_t*)0x52E478;
+
+    // data_savemes message control-byte table: index 0 (0xFE) terminates a
+    // message; indices 1-5 are two-byte control codes (parameter byte skipped).
+    static const uint8_t* byte_52DFCC = (const uint8_t*)0x52DFCC;
+
+    // Memory-card cursor glyph drawn by cursor_disp.
+    static const char* aCursor = (const char*)0x52E2D8; // "&"
+
     // 0x004C5850
     // Returns the byte length of a data_savemes message, scaled by 14 per
     // character. Used to compute how many bytes of the save-slot room name
     // message to copy for display.
     static int get_savemes_len(int index)
     {
-        return interop::call<int, int>(0x004C5850, index);
+        const uint8_t* v1 = (const uint8_t*)&data_savemes[ptr_savemes[index]];
+        int result = 0;
+        for (;;)
+        {
+            // Normal characters (< 0xEE) each account for 14 bytes.
+            while (*v1 < 0xEE)
+            {
+                result += 14;
+                ++v1;
+            }
+            // Match the control byte against the 6-entry terminator table.
+            int v3 = 0;
+            while (*v1 != byte_52DFCC[v3])
+            {
+                if (++v3 >= 6)
+                    break;
+            }
+            if (v3 >= 6)
+            {
+                // Unknown control byte (>= 0xEE): skip it and keep scanning.
+                ++v1;
+                continue;
+            }
+            if (v3 == 0)
+                return result; // byte_52DFCC[0] == 0xFE end-of-message marker
+            v1 += 2;           // Two-byte control code: skip its parameter byte.
+        }
     }
 
     // 0x004C7CD0
+    // Pixel width of a card message string. Each normal character contributes
+    // 14px (or a kerning-corrected width from width_tbl when mode & 0x4000).
+    // 0xEE/0xEF/0xF0 are two-byte control codes, 0xF5 pads nothing, 0xF6 pads
+    // 7px, 0xF7 terminates. Each rendered character consumes one 20-byte sprite
+    // slot in the moji_tbl1 window for the current moji index.
     static int get_mess_width(const uint8_t* str, int16_t mode)
     {
-        return interop::call<int, const uint8_t*, int16_t>(0x004C7CD0, str, mode);
+        char* sprt = (char*)gGameTable.moji_work0;
+        const uint8_t* v3 = str;
+        int modea = mode & 0x4000;
+        uint8_t v4 = *str;
+        // The moji sprite window for the current index spans the second half of
+        // moji_tbl1 plus index*5120 bytes.
+        char* sprt_end = (char*)gGameTable.moji_tbl1 + 5120 * (gGameTable.byte_9888D8 + 1);
+        int i;
+
+        for (i = 0; v4 != 0xFE; ++v3)
+        {
+            int v6 = 14;
+            if (v4)
+            {
+                switch (v4)
+                {
+                case 0xEE:
+                case 0xEF:
+                case 0xF0:
+                    ++v3; // skip the second byte of the two-byte control code
+                    goto sprite_check;
+                case 0xF5: goto advance;
+                case 0xF6: i += 7; goto advance;
+                case 0xF7:
+                case 0xFE: return i;
+                default:
+                    if (modea && v4 <= 0x56)
+                    {
+                        int v8 = width_tbl[2 * v4]; // int16, sign-extended
+                        i -= v8;
+                        v6 = v8 + width_tbl[2 * v4 + 1];
+                    }
+                sprite_check:
+                    sprt += 20;
+                    if (sprt != sprt_end)
+                        goto add_width;
+                    return i;
+                }
+            }
+            if (modea)
+            {
+                // NUL padding character: net width_tbl[1] pixels.
+                i -= width_tbl[0];
+                v6 = width_tbl[0] + width_tbl[1];
+            }
+        add_width:
+            i += v6;
+        advance:
+            v4 = v3[1];
+        }
+        return i;
     }
 
     // 0x004C7810
+    // Draws the memory-card cursor glyph "&" at (x1, y) via Prim14 (0x4C8603).
     static int cursor_disp(int16_t x1, int16_t y)
     {
-        return interop::call<int, int16_t, int16_t>(0x004C7810, x1, y);
+        // Prim14(x1, y, 0, 0, "&", 0) - x86 pushes right-to-left, matching the
+        // 0x18 bytes of stack args in the original.
+        return interop::call<int, int16_t, int16_t, uint16_t, int16_t, const char*, int>(0x004C8603, x1, y, 0, 0, aCursor, 0);
     }
 
+    // Forward declarations used by print_save_list.
+    static int SavePrint(int x, int y, const char* str, int color, int len);
+    static int save_path_len();
+    static const char* strip_save_extension(char* str);
+
     // 0x004319A0
-    static int print_save_list(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint32_t* a8, uint8_t* a9)
+    // Draws the save/load slot list on the memory card screen: the save folder
+    // path, the "new save" entry (the typed name), each card's file name, the
+    // "[name]" bracket entries for empty slots and the final exit entry.
+    // The horizontal scroll needed for each line is passed to SavePrint as its
+    // len parameter; the largest scroll is stored back through *pScrollMax.
+    static int print_save_list(
+        int unused1, int unused2, int scroll, int cards, int names, int pMem, char mode, uint32_t* pScrollMax, uint8_t* newName)
     {
-        return interop::call<int, int, int, int, int, int, int, char, uint32_t*, uint8_t*>(
-            0x004319A0, a1, a2, a3, a4, a5, a6, a7, a8, a9);
+        static const char* aExit = (const char*)0x5220A4; // やめる (exit)
+
+        // [0] = standard resolution, [1] = 480p.
+        int visibleChars[2] = { 22, 20 }; // visible line width in half-width chars (x2 = byte width)
+        int folderY[2] = { 30, 60 };      // y of the save folder line
+        int listY[2] = { 50, 100 };       // y of the first list entry
+        char str[264];
+
+        // Visible line width in bytes (44 in 240p, 40 in 480p). Stored in the
+        // shared scratch global dword_662E64 so the card write code can reuse it.
+        gGameTable.pad_662E64[0] = (uint8_t)(2 * visibleChars[gGameTable.is_480p]);
+
+        // Horizontal scroll for the save folder line: byte length of the path
+        // minus the visible width, clamped to >= 0 and to the caller's limit.
+        int8_t folderScroll = (int8_t)(save_path_len() - gGameTable.pad_662E64[0]);
+        if (folderScroll < 0)
+        {
+            folderScroll = 0;
+            save_path_len(); // dead re-call, present in the original binary
+        }
+        if ((int32_t)*pScrollMax < (int8_t)folderScroll)
+            folderScroll = (int8_t)*pScrollMax;
+
+        int8_t maxScroll = folderScroll;
+        SavePrint(0, folderY[gGameTable.is_480p], GetSaveFolder(), 0, folderScroll);
+
+        int row = 0;
+        if (gGameTable.dword_986394 > 0)
+        {
+            int base = scroll;
+            do
+            {
+                if (mode || (base + row))
+                {
+                    // A real card slot, a "[name]" bracket slot, or the final
+                    // exit entry.
+                    int index = base + row;
+                    if (index >= gGameTable.cnt0 - mode + 1)
+                    {
+                        // Past the saved cards: "[name]" bracket or the exit entry.
+                        int exitIndex = gGameTable.cnt1 - mode + gGameTable.cnt0 + 1;
+                        if (index >= exitIndex)
+                        {
+                            if (index == exitIndex)
+                            {
+                                SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, aExit, 0, 0);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // "[name]" bracket for a slot without save data.
+                            int nameIndex = row + mode - gGameTable.cnt0 + base - 1;
+                            wsprintfA(str, "[%s]", (const char*)(names + nameIndex + 260 * nameIndex));
+
+                            int8_t len = (int8_t)((int)strlen(str) - (int)gGameTable.pad_662E64[0]);
+                            if (len < 0)
+                                len = 0;
+                            if ((int32_t)*pScrollMax < (int8_t)len)
+                                len = (int8_t)*pScrollMax;
+                            if (maxScroll < len)
+                                maxScroll = len;
+                            SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, str, 4, len);
+                        }
+                    }
+                    else
+                    {
+                        // A card with save data: copy its file name and strip
+                        // the extension at the last '.'.
+                        int cardIndex = base + row + mode;
+                        int entry = cards + 276 * cardIndex;
+                        strcpy(str, (char*)(entry - 276));
+                        if (char* dot = strrchr(str, '.'))
+                            *dot = 0;
+
+                        int8_t len = (int8_t)((int)strlen(str) - (int)gGameTable.pad_662E64[0]);
+                        if (len < 0)
+                            len = 0;
+                        if ((int32_t)*pScrollMax < (int8_t)len)
+                            len = (int8_t)*pScrollMax;
+                        if (maxScroll < len)
+                            maxScroll = len;
+
+                        // Color from the card type (entry[261]) and written
+                        // flag (entry[275]).
+                        int8_t type = *(int8_t*)(entry - 15);
+                        int color;
+                        if (type < 4)
+                        {
+                            if (*(int8_t*)(entry - 1))
+                                color = 0;
+                            else
+                                color = ((type & 1) != 0) + 1;
+                        }
+                        else
+                        {
+                            color = 3;
+                        }
+                        SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, str, color, len);
+                    }
+                }
+                else
+                {
+                    // The "new save" entry: the typed name from newName.
+                    strcpy(str, (char*)newName);
+                    strip_save_extension(str);
+
+                    int8_t len = (int8_t)((int)strlen(str) - (int)gGameTable.pad_662E64[0]);
+                    if (len < 0)
+                        len = 0;
+                    if ((int32_t)*pScrollMax < (int8_t)len)
+                        len = (int8_t)*pScrollMax;
+                    if (maxScroll < len)
+                        maxScroll = len;
+
+                    // Same color logic as the card slots, from newName[261] and
+                    // newName[275].
+                    int8_t type = *(int8_t*)(newName + 261);
+                    int color;
+                    if (type < 4)
+                    {
+                        if (*(int8_t*)(newName + 275))
+                            color = 0;
+                        else
+                            color = ((type & 1) != 0) + 1;
+                    }
+                    else
+                    {
+                        color = 3;
+                    }
+                    SavePrint(0, listY[gGameTable.is_480p], str, color, len);
+                }
+                ++row;
+            } while (row < gGameTable.dword_986394);
+        }
+
+        // Store the largest scroll back (sign-extended char written as dword).
+        *pScrollMax = (int8_t)maxScroll;
+        return 1;
     }
 
     // 0x00431470
@@ -657,19 +900,60 @@ namespace openre::save
         return 0;
     }
 
+    // 0x689F44 is the OG save-path scratch std::string; save_path_string() is
+    // defined further down.
+    static OldStdString* save_path_string();
+
     // 0x00509930
     // Returns the byte length of the global save path std::string (0x689F44).
     static int save_path_len()
     {
-        return interop::call<int>(0x00509930);
+        // Thunk: mov ecx, offset ss_save_path_string; jmp std::string::size,
+        // where std::string::size (0x50BD00) is strlen(this->data).
+        return (int)strlen(save_path_string()->data);
     }
 
     // 0x00432860
     // Strips a trailing ".biohazard2" or ".resident2" extension (case-insensitive)
-    // from a memory card file name.
-    static void strip_save_extension(char* str)
+    // from a memory card file name. Returns str if truncated, otherwise 0 if the
+    // name is too short, otherwise the strcmp() result (callers ignore the return).
+    static const char* strip_save_extension(char* str)
     {
-        interop::call<void, char*>(0x00432860, str);
+        const char* aBiohazard2 = (const char*)0x52207C; // ".biohazard2"
+        const char* aResident2 = (const char*)0x522088;  // ".resident2"
+
+        char buf[264];
+        size_t len;
+
+        strcpy(buf, str);
+        len = strlen(buf);
+        if (len >= strlen(aBiohazard2))
+        {
+            _strlwr(buf);
+            strstr(buf, aBiohazard2); // return value discarded in the original binary
+            if (strcmp(aBiohazard2, &buf[len - 11]) == 0)
+            {
+                str[len - 11] = 0;
+                return str;
+            }
+        }
+
+        // Retry with ".resident2"; buf was lowercased above, so copy again.
+        strcpy(buf, str);
+        len = strlen(buf);
+        const char* result = 0;
+        if (len >= strlen(aResident2))
+        {
+            _strlwr(buf);
+            strstr(buf, aResident2); // return value discarded in the original binary
+            result = (const char*)strcmp(aResident2, &buf[len - 10]);
+            if (result == 0)
+            {
+                str[len - 10] = 0;
+                result = str;
+            }
+        }
+        return result;
     }
 
     // 0x004315D0
