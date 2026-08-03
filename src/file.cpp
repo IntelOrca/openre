@@ -757,42 +757,24 @@ namespace openre::file
     // 0x00442D50
     int CreateSaveFolder(LPCSTR lpPathName)
     {
-        auto hMem = GlobalAlloc(GMEM_MOVEABLE, MAX_PATH);
-        if (!hMem)
-            return 0;
-
-        auto* pathCopy = static_cast<char*>(GlobalLock(hMem));
-        if (!pathCopy)
-        {
-            GlobalFree(hMem);
-            return 0;
-        }
-
         SECURITY_ATTRIBUTES sa;
         sa.nLength = sizeof(SECURITY_ATTRIBUTES);
         sa.lpSecurityDescriptor = nullptr;
         sa.bInheritHandle = TRUE;
 
+        char pathCopy[MAX_PATH];
         if (CreateDirectoryA(lpPathName, &sa) || GetLastError() == ERROR_ALREADY_EXISTS
             || (strcpy(pathCopy, lpPathName),
                 *strrchr(pathCopy, '\\') = '\0',
                 CreateSaveFolder(pathCopy),
                 CreateDirectoryA(lpPathName, &sa)))
         {
-            GlobalUnlock(hMem);
-            GlobalFree(hMem);
             return 1;
         }
         else
         {
             if (GetLastError() != ERROR_ALREADY_EXISTS)
-            {
-                GlobalUnlock(hMem);
-                GlobalFree(hMem);
                 return 0;
-            }
-            GlobalUnlock(hMem);
-            GlobalFree(hMem);
             return 1;
         }
     }
@@ -852,48 +834,26 @@ namespace openre::file
 
     // 0x00431D80
     // Enumerate save files in a directory, filling the cards and names arrays.
-    // Allocates/reallocates global memory for each array when the count is nonzero.
+    // Allocates/reallocates the arrays when the count is nonzero.
     // Returns 1 on success (all files enumerated), 0 on failure.
     int save_list_files(const char* file_name, int cnt0, void** cards, int cnt1, void** names)
     {
         // Allocate/reallocate cards array
         if (cnt0 > 0)
         {
-            if (*cards)
-            {
-                HGLOBAL hMem = GlobalHandle(*cards);
-                GlobalUnlock(hMem);
-                hMem = GlobalHandle(*cards);
-                GlobalFree(hMem);
-            }
-
-            HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFile) * cnt0);
-            *cards = GlobalLock(hAlloc);
+            free(*cards);
+            *cards = calloc(cnt0, sizeof(SaveFile));
             if (!*cards)
-            {
-                GetLastError();
                 return 0;
-            }
         }
 
         // Allocate/reallocate names array
         if (cnt1 > 0)
         {
-            if (*names)
-            {
-                HGLOBAL hMem = GlobalHandle(*names);
-                GlobalUnlock(hMem);
-                hMem = GlobalHandle(*names);
-                GlobalFree(hMem);
-            }
-
-            HGLOBAL hAlloc = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(SaveFileName) * cnt1);
-            *names = GlobalLock(hAlloc);
+            free(*names);
+            *names = calloc(cnt1, sizeof(SaveFileName));
             if (!*names)
-            {
-                GetLastError();
                 return 0;
-            }
         }
 
         // Build search pattern and enumerate files

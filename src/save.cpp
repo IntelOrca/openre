@@ -802,21 +802,9 @@ namespace openre::save
     // pointers so the next save screen run re-allocates them.
     void rsrc_release()
     {
-        if (gGameTable.Cards)
-        {
-            GlobalUnlock(GlobalHandle(gGameTable.Cards));
-            GlobalFree(GlobalHandle(gGameTable.Cards));
-        }
-        if (gGameTable.Names)
-        {
-            GlobalUnlock(GlobalHandle(gGameTable.Names));
-            GlobalFree(GlobalHandle(gGameTable.Names));
-        }
-        if (gGameTable.pMem)
-        {
-            GlobalUnlock(GlobalHandle(gGameTable.pMem));
-            GlobalFree(GlobalHandle(gGameTable.pMem));
-        }
+        free(gGameTable.Cards);
+        free(gGameTable.Names);
+        free(gGameTable.pMem);
         gGameTable.Cards = nullptr;
         gGameTable.Names = nullptr;
         gGameTable.pMem = nullptr;
@@ -1825,5 +1813,6 @@ namespace openre::save
     void save_init_hooks()
     {
         interop::writeJmp(0x004C57E0, &mem_card);
+        interop::writeJmp(0x00432080, &rsrc_release);
     }
 }
