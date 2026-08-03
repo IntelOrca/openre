@@ -197,7 +197,6 @@ namespace openre
     uint8_t rnd_area();
     void set_view(const Vec32p& pVp, const Vec32p& pVr);
     void bg_set_mode(int mode, int rgb);
-    void rsrc_release();
     void font_create();
     void config_write();
     void bg_load();
@@ -234,10 +233,4 @@ namespace openre
         auto remainder = iValue & mask;
         return (T)(remainder == 0 ? iValue : iValue + a - remainder);
     }
-
-    // 0x00431470
-    int SavePrint(int x, int y, const char* str, int color, int len);
-
-    // 0x004315D0
-    int save_menu_draw(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8);
 }

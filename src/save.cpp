@@ -14,8 +14,10 @@
 #include "str.h"
 #include "title.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <ddraw.h>
 #include <windows.h>
 
 using namespace openre;
@@ -233,6 +235,9 @@ namespace openre::save
         return interop::call<int, int, int, int, int, int, int, char, uint32_t*, uint8_t*>(
             0x004319A0, a1, a2, a3, a4, a5, a6, a7, a8, a9);
     }
+
+    // 0x00431470
+    static int SavePrint(int x, int y, const char* str, int color, int len);
 
     // 0x004C6E30
     // Draws the messages on the memory card save/load screen. Which messages are
@@ -460,6 +465,358 @@ namespace openre::save
         *(uint16_t*)(cardWork + 0x18) = 0;
         cardStateBytes[1] = v26;
         hud_fade_adjust(3, (int16_t)(*(uint16_t*)(cardWork + 0x18) << 7), 0, (PsxRect*)(cardWork + 0x24));
+    }
+
+    // ── Save screen text rendering ────────────────────────────────────────
+
+    // 0x004310B0
+    // Clears the font string buffers that SavePrint writes into, so each frame
+    // starts with an empty text queue.
+    void save_reset()
+    {
+        auto* v0 = &gGameTable.FontXY[1];
+        char* v1 = gGameTable.String;
+        std::memset(gGameTable.FontColor, 0, sizeof(gGameTable.FontColor));
+        do
+        {
+            *v1 = 0;
+            *(v0 - 1) = 0;
+            *v0 = 0;
+            v1 += 261;
+            v0 += 2;
+        } while (v1 < reinterpret_cast<char*>(&gGameTable.hFont));
+        gGameTable.FontIndex = 0;
+    }
+
+    // 0x004310F0
+    // Flushes the text queued by SavePrint to the drawing surface via GDI.
+    int save_print_flush()
+    {
+        if (!gGameTable.FontIndex)
+            return 1;
+
+        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
+        HDC hdc;
+        if (pSurface->GetDC(&hdc) != DD_OK)
+            return 1;
+
+        auto oldFont = SelectObject(hdc, gGameTable.hFont);
+        if (!oldFont)
+            return 0;
+        auto oldMode = SetBkMode(hdc, TRANSPARENT);
+
+        for (int i = 0; i < gGameTable.FontIndex; i++)
+        {
+            auto* str = &gGameTable.String[261 * i];
+            if (!*str)
+                continue;
+
+            auto x = gGameTable.FontXY[2 * i];
+            auto y = gGameTable.FontXY[2 * i + 1];
+
+            if (x != 0)
+            {
+                // Centered text with shadow (offset by +1 pixel)
+                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowColor = RGB(shadowR, shadowG, shadowB);
+
+                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
+                    return 0;
+                TextOutA(hdc, gGameTable.is_480p + x + 1, y, str, (int)strlen(str));
+
+                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
+                    return 0;
+                if (!TextOutA(hdc, x, y, str, (int)strlen(str)))
+                    return 0;
+            }
+            else
+            {
+                // Left-aligned text with clipping rectangle and shadow
+                SIZE psizl;
+                GetTextExtentPoint32A(hdc, str, (int)strlen(str), &psizl);
+                auto cx = psizl.cx;
+
+                RECT rect;
+                int v6;
+                if (gGameTable.is_480p)
+                {
+                    if (cx > 576)
+                        cx = 576;
+                    rect.left = 32;
+                    rect.right = 608;
+                    v6 = (576 - cx) / 2 + 32;
+                    rect.bottom = y + gGameTable.byte_6634F8;
+                }
+                else
+                {
+                    if (cx > 288)
+                        cx = 288;
+                    rect.left = 16;
+                    rect.right = 304;
+                    v6 = (288 - cx) / 2 + 16;
+                    rect.bottom = y + gGameTable.byte_6634F8;
+                }
+                rect.top = y;
+
+                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
+                auto shadowColor = RGB(shadowR, shadowG, shadowB);
+
+                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
+                    return 0;
+                ExtTextOutA(hdc, gGameTable.is_480p + v6 + 1, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr);
+
+                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
+                    return 0;
+                if (!ExtTextOutA(hdc, v6, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr))
+                    return 0;
+            }
+        }
+
+        SelectObject(hdc, oldFont);
+        SetBkMode(hdc, oldMode);
+        pSurface->ReleaseDC(hdc);
+        return 1;
+    }
+
+    // 0x00431470
+    // Queues a string for the save screen text renderer, handling Shift-JIS
+    // scroll cutting and color lookup. The strings are drawn by save_print_flush.
+    static int SavePrint(int x, int y, const char* str, int color, int len)
+    {
+        char buf[264];
+
+        // Skip 'len' bytes of the input, character-aware (Shift-JIS lead bytes are 2 bytes)
+        int i;
+        for (i = 0; i < len;)
+        {
+            auto c = (unsigned char)str[i];
+            if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC))
+                i += 2;
+            else
+                i += 1;
+        }
+
+        // Copy from the scroll-cut position into temp buffer
+        {
+            const char* src = &str[i];
+            char* dst = buf;
+            do
+            {
+                *dst++ = *src;
+            } while (*src++);
+        }
+
+        // Truncate to at most 48 bytes, respecting Shift-JIS character boundaries
+        {
+            int j;
+            int lastPos = 0;
+            for (j = 0; j < 48;)
+            {
+                auto c = (unsigned char)buf[j];
+                lastPos = j;
+                if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xFC))
+                    j += 2;
+                else
+                    j += 1;
+            }
+            buf[lastPos] = '\0';
+        }
+
+        // Copy into the global string buffer for this font slot
+        int idx = gGameTable.FontIndex;
+        strcpy(&gGameTable.String[261 * idx], buf);
+
+        // Save the position
+        gGameTable.FontXY[2 * idx] = x;
+        gGameTable.FontXY[2 * idx + 1] = y;
+
+        // Save the color
+        switch (color)
+        {
+        case 0: gGameTable.FontColor[idx] = 0xD8E8E8; break;
+        case 1: gGameTable.FontColor[idx] = 0xFF6030; break;
+        case 2: gGameTable.FontColor[idx] = 0x4000BA; break;
+        case 3: gGameTable.FontColor[idx] = 0x20BA00; break;
+        case 4: gGameTable.FontColor[idx] = 0xBAC8C8; break;
+        default: break;
+        }
+
+        idx++;
+        gGameTable.FontIndex = idx;
+        if (idx < 100)
+            return 1;
+
+        gGameTable.FontIndex = idx - 1;
+        return 0;
+    }
+
+    // 0x00509930
+    // Returns the byte length of the global save path std::string (0x689F44).
+    static int save_path_len()
+    {
+        return interop::call<int>(0x00509930);
+    }
+
+    // 0x00432860
+    // Strips a trailing ".biohazard2" or ".resident2" extension (case-insensitive)
+    // from a memory card file name.
+    static void strip_save_extension(char* str)
+    {
+        interop::call<void, char*>(0x00432860, str);
+    }
+
+    // 0x004315D0
+    int save_menu_draw(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8)
+    {
+        static const char* aExit = (const char*)0x5220A4;
+        static const char* aCreateNew = (const char*)0x5220B8;
+
+        int y0[2] = { 30, 60 };
+        int y1[2] = { 50, 100 };
+        int y2[2] = { 288, 576 };
+        char String[264];
+
+        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
+        HDC hdc;
+        pSurface->GetDC(&hdc);
+        auto oldFont = SelectObject(hdc, gGameTable.hFont);
+
+        auto folderLen = save_path_len();
+        auto saveFolder = GetSaveFolder();
+        SIZE psizl;
+        GetTextExtentPoint32A(hdc, saveFolder, folderLen, &psizl);
+
+        auto is_480p = gGameTable.is_480p;
+        int8_t scroll;
+        int y2_val = y2[is_480p];
+        if (psizl.cx <= y2_val)
+            scroll = 0;
+        else
+            scroll = (int8_t)((psizl.cx - y2_val) / (gGameTable.FontH / 2));
+
+        int scroll_pos = *(int32_t*)a8;
+        if (scroll_pos < scroll)
+            scroll = (int8_t)scroll_pos;
+
+        int v12 = scroll;
+        int v37 = scroll;
+        SavePrint(0, y0[is_480p], saveFolder, 0, scroll);
+
+        if (gGameTable.dword_986394 > 0)
+        {
+            int v14 = 0;
+            int v15 = a3;
+            do
+            {
+                if (a7 || (v14 + v15))
+                {
+                    int v16 = v14 + v15;
+                    if (v16 >= gGameTable.cnt0 - a7 + 1)
+                    {
+                        int v27 = gGameTable.cnt1 - a7 + gGameTable.cnt0 + 1;
+                        if (v16 >= v27)
+                        {
+                            if (v16 == v27)
+                            {
+                                SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, aExit, 0, 0);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            int v28 = v14 + a7 - gGameTable.cnt0 + v15 - 1;
+                            wsprintfA(String, "[%s]", (const char*)(a5 + 261 * v28));
+                            GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+                            int8_t v30;
+                            int v29 = y2[is_480p];
+                            if (psizl.cx <= v29)
+                                v30 = 0;
+                            else
+                                v30 = (int8_t)((psizl.cx - v29) / (gGameTable.FontH / 2));
+                            if (*(int32_t*)a8 < v30)
+                                v30 = (int8_t)*(int32_t*)a8;
+                            if (v37 < v30)
+                                v37 = v30;
+                            SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, String, 4, v30);
+                            v12 = v37;
+                        }
+                    }
+                    else
+                    {
+                        int v17 = v15 + v14 + a7;
+                        int v18 = a4 + 276 * v17;
+                        strcpy(String, (char*)(v18 - 276));
+                        strip_save_extension(String);
+                        GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+                        int8_t v23;
+                        int v22 = y2[is_480p];
+                        if (psizl.cx <= v22)
+                            v23 = 0;
+                        else
+                            v23 = (int8_t)((psizl.cx - v22) / (gGameTable.FontH / 2));
+                        if (*(int32_t*)a8 < v23)
+                            v23 = (int8_t)*(int32_t*)a8;
+                        int v24 = v23;
+                        if (v37 < v23)
+                            v37 = v23;
+                        auto v25 = *(uint8_t*)(v18 - 15);
+                        int v26;
+                        if (v25 < 4)
+                        {
+                            if (*(uint8_t*)(v18 - 1))
+                                v26 = 0;
+                            else
+                                v26 = ((v25 & 1) != 0) + 1;
+                        }
+                        else
+                            v26 = 3;
+                        SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, String, v26, v24);
+                        v12 = v37;
+                    }
+                }
+                else
+                {
+                    SavePrint(0, y1[is_480p], aCreateNew, 0, 0);
+                }
+                ++v14;
+            } while (v14 < (int)gGameTable.dword_986394);
+        }
+
+        SelectObject(hdc, oldFont);
+        pSurface->ReleaseDC(hdc);
+        *(int32_t*)a8 = v12;
+        auto result = gGameTable.dword_669B00 != v12;
+        gGameTable.dword_669B00 = v12;
+        return result;
+    }
+
+    // 0x00432080
+    // Releases the memory card file lists (Cards, Names, pMem) and resets the
+    // pointers so the next save screen run re-allocates them.
+    void rsrc_release()
+    {
+        if (gGameTable.Cards)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.Cards));
+            GlobalFree(GlobalHandle(gGameTable.Cards));
+        }
+        if (gGameTable.Names)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.Names));
+            GlobalFree(GlobalHandle(gGameTable.Names));
+        }
+        if (gGameTable.pMem)
+        {
+            GlobalUnlock(GlobalHandle(gGameTable.pMem));
+            GlobalFree(GlobalHandle(gGameTable.pMem));
+        }
+        gGameTable.Cards = nullptr;
+        gGameTable.Names = nullptr;
+        gGameTable.pMem = nullptr;
     }
 
     // 0x00432840
@@ -754,7 +1111,7 @@ namespace openre::save
     // 'string' indexes a table of Shift-JIS messages (see card_write_result):
     //   0 = Claire scenario data, 1 = Leon scenario data,
     //   2 = load failed, 3 = save failed, 4 = no message.
-    // Uses the shared SavePrint (0x00431470) implementation in openre.cpp.
+    // Uses the shared SavePrint (0x00431470) implementation to queue the text.
     static int save_print_tbl(int string)
     {
         if (gGameTable.is_480p)
