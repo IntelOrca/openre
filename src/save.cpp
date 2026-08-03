@@ -864,9 +864,26 @@ namespace openre::save
 
     // 0x00509860
     // Builds a save path from the current module file name when no save path is set.
-    static int sub_509860()
+    static int build_default_save_path()
     {
-        return interop::call<int>(0x00509860);
+        char filename[264];
+        OldStdString slice;
+
+        // Use the directory of the running executable as the default save folder.
+        GetModuleFileNameA(nullptr, filename, 0x105);
+        str::string_copy(save_path_string(), filename);
+
+        // Truncate to the directory portion (including the trailing backslash).
+        int lastSlash = str::string_find_last(save_path_string(), "\\");
+        str::string_slice(save_path_string(), &slice, lastSlash + 1);
+        str::string_assign(save_path_string(), &slice);
+        str::string_dtor(&slice);
+
+        // Ensure the path ends with a backslash.
+        int result = str::string_sjis_len(save_path_string()) - 1;
+        if (str::string_find_last(save_path_string(), "\\") != result)
+            return (int)str::string_append(save_path_string(), "\\");
+        return result;
     }
 
     // 0x00509940
@@ -877,7 +894,7 @@ namespace openre::save
     {
         str::string_copy(save_path_string(), savePath);
         if (str::string_sjis_len(save_path_string()) == 0)
-            return sub_509860();
+            return build_default_save_path();
 
         int lastSlash = str::string_find_last(save_path_string(), "\\");
         int lastChar = str::string_sjis_len(save_path_string()) - 1;
@@ -1797,7 +1814,7 @@ namespace openre::save
     char* GetSaveFolder()
     {
         if (str::string_sjis_len(save_path_string()) == 0)
-            sub_509860();
+            build_default_save_path();
         return save_path_string()->data;
     }
 
