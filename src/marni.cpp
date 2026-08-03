@@ -3,6 +3,7 @@
 #include "marni_movie.h"
 #include "openre.h"
 #include "re2.h"
+#include "str.h"
 
 #include <algorithm>
 #include <cstring>
@@ -74,8 +75,6 @@ namespace openre::marni
     static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth);
     static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
-    static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s);
-    static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s);
     static void __stdcall surface3_dtor(MarniSurface3* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
 
@@ -501,7 +500,7 @@ namespace openre::marni
             if (change_mode(self, r.width, r.height, r.depth))
             {
                 out("Direct3D::ChangeDisplayMode - (%d->%d) w:%d h:%d bpp:%d", "");
-                oldstring_set(&gGameTable.marni_config.display_mode, generate_res_string(&r));
+                str::string_assign(&gGameTable.marni_config.display_mode, generate_res_string(&r));
                 self->var_8C8318 = 0;
                 return true;
             }
@@ -1322,7 +1321,7 @@ namespace openre::marni
         {
             const auto& d = gGameTable.d3d_devices[i];
             exception = 11;
-            auto isEq = oldstring_eq(&gGameTable.marni_config.device_name, std::string(d.lpDeviceName));
+            auto isEq = str::string_eq(&gGameTable.marni_config.device_name, std::string(d.lpDeviceName));
             exception = 9;
             if (isEq)
             {
@@ -1332,7 +1331,7 @@ namespace openre::marni
         }
 
         exception = 12;
-        oldstring_set(&gGameTable.marni_config.device_name, gGameTable.d3d_devices[self->device_cnt].lpDeviceName);
+        str::string_assign(&gGameTable.marni_config.device_name, gGameTable.d3d_devices[self->device_cnt].lpDeviceName);
         exception = 11;
 
         if (gGameTable.d3d_devices[self->device_cnt].hwAccelerated2 || (self->gpu_flag & GpuFlags::GPU_13))
@@ -1385,7 +1384,7 @@ namespace openre::marni
         for (auto i = 0; i < self->res_count; i++)
         {
             exception = 13;
-            auto isEq = oldstring_eq(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[i]));
+            auto isEq = str::string_eq(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[i]));
             exception = 9;
             if (isEq)
             {
@@ -1395,7 +1394,7 @@ namespace openre::marni
         }
 
         exception = 14;
-        oldstring_set(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[self->modes]));
+        str::string_assign(&gGameTable.marni_config.display_mode, generate_res_string(&self->resolutions[self->modes]));
         exception = 9;
         if (self->modes >= (uint32_t)self->res_count)
         {
@@ -3173,27 +3172,6 @@ namespace openre::marni
     {
         interop::call(0x00509C70);
         interop::thiscall<void, MarniConfig*>(0x0050ACA0, &gGameTable.marni_config);
-    }
-
-    // 0x0050BC60
-    static OldStdString* __stdcall oldstring_set_2(OldStdString* self, const char* s)
-    {
-        return interop::thiscall<OldStdString*, void*, const char*>(0x50BC60, self, s);
-    }
-
-    // 0x0050C400
-    static OldStdString* __stdcall oldstring_set(OldStdString* self, const std::string& s)
-    {
-        oldstring_set_2(self, s.c_str());
-        return self;
-    }
-
-    // 0x0050C550
-    static bool __stdcall oldstring_eq(OldStdString* self, const std::string& s)
-    {
-        if (self->length - 1 != s.size())
-            return false;
-        return std::memcmp(self->data, s.c_str(), s.size()) == 0;
     }
 
     // 0x00442CB0

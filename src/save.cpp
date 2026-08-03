@@ -11,6 +11,7 @@
 #include "player.h"
 #include "re2.h"
 #include "scheduler.h"
+#include "str.h"
 #include "title.h"
 
 #include <cstdlib>
@@ -217,27 +218,6 @@ namespace openre::save
         return reinterpret_cast<OldStdString*>(0x689F44);
     }
 
-    // 0x0050C420
-    static OldStdString* std_string_copy(OldStdString* str, const char* s)
-    {
-        return interop::thiscall<OldStdString*, OldStdString*, const char*>(0x0050C420, str, s);
-    }
-
-    // 0x0050BD50
-    // Searches the Shift-JIS string for the last occurrence of the needle,
-    // returning its character index (double-byte characters count as one) or -1.
-    static int sub_50BD50(OldStdString* str, const char* needle)
-    {
-        return interop::thiscall<int, OldStdString*, const char*>(0x0050BD50, str, needle);
-    }
-
-    // 0x0050C4E0
-    // Appends the given C string to the std::string and returns the string object.
-    static OldStdString* sub_50C4E0(OldStdString* str, const char* s)
-    {
-        return interop::thiscall<OldStdString*, OldStdString*, const char*>(0x0050C4E0, str, s);
-    }
-
     // 0x00509860
     // Builds a save path from the current module file name when no save path is set.
     static int sub_509860()
@@ -245,74 +225,21 @@ namespace openre::save
         return interop::call<int>(0x00509860);
     }
 
-    // Forward declarations, defined below.
-    static int std_string_sjis_len(OldStdString* str);
-    static OldStdString* __stdcall string_ctor_from_cstr(OldStdString* self, const char* s);
-    static void string_dtor(OldStdString* self);
-
     // 0x00509940
     // Copies the given save path into the global save-path string, ensuring it is
     // non-empty and ends with a backslash (appending one if the last Shift-JIS
     // character is not a backslash). Falls back to the module path when empty.
     static int sub_509940(char* savePath)
     {
-        std_string_copy(save_path_string(), savePath);
-        if (std_string_sjis_len(save_path_string()) == 0)
+        str::string_copy(save_path_string(), savePath);
+        if (str::string_sjis_len(save_path_string()) == 0)
             return sub_509860();
 
-        int lastSlash = sub_50BD50(save_path_string(), "\\");
-        int lastChar = std_string_sjis_len(save_path_string()) - 1;
+        int lastSlash = str::string_find_last(save_path_string(), "\\");
+        int lastChar = str::string_sjis_len(save_path_string()) - 1;
         if (lastSlash != lastChar)
-            return (int)sub_50C4E0(save_path_string(), "\\");
+            return (int)str::string_append(save_path_string(), "\\");
         return lastChar;
-    }
-
-    // 0x0050BD10
-    static int std_string_sjis_len(OldStdString* str)
-    {
-        return interop::thiscall<int, OldStdString*>(0x0050BD10, str);
-    }
-
-    // 0x00509AF0
-    // Returns the length (in characters) of the given string, counting Shift-JIS
-    // double-byte characters as a single character.
-    static int sub_509AF0(const char* str)
-    {
-        OldStdString temp;
-        string_ctor_from_cstr(&temp, str);
-        int len = std_string_sjis_len(&temp);
-        string_dtor(&temp);
-        return len;
-    }
-
-    // 0x0050BBB0
-    static OldStdString* __stdcall string_ctor_from_cstr(OldStdString* self, const char* s)
-    {
-        return interop::thiscall<OldStdString*, void*, const char*>(0x50BBB0, self, s);
-    }
-
-    // 0x0050BF30
-    static OldStdString* __stdcall string_slice(OldStdString* self, OldStdString* out, int count)
-    {
-        return interop::thiscall<OldStdString*, void*, OldStdString*, int>(0x50BF30, self, out, count);
-    }
-
-    // 0x0050C400
-    static OldStdString* __stdcall string_assign(OldStdString* self, const OldStdString* other)
-    {
-        return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50C400, self, other);
-    }
-
-    // 0x0050C3F0
-    static const char* string_get_data(const OldStdString* self)
-    {
-        return self->data;
-    }
-
-    // 0x0050BBF0
-    static void string_dtor(OldStdString* self)
-    {
-        interop::thiscall<void, void*>(0x50BBF0, self);
     }
 
     // 0x00509B20
@@ -324,20 +251,12 @@ namespace openre::save
         // Build src_str from the source string, then truncate it to the first
         // `count` Shift-JIS characters and copy the result into dest.
         // Used for the typewriter reveal animation of the save name.
-        string_ctor_from_cstr(&src_str, src);
-        string_slice(&src_str, &sliced, count);
-        string_assign(&src_str, &sliced);
-        string_dtor(&sliced);
-        strcpy(dest, string_get_data(&src_str));
-        string_dtor(&src_str);
-    }
-
-    // 0x0050BE30
-    // Copies a Shift-JIS substring: skips `skipChars` characters from `self`,
-    // then copies up to `maxChars` characters into `out`.
-    static OldStdString* __stdcall string_sjis_copy(OldStdString* self, OldStdString* out, int skipChars, int maxChars)
-    {
-        return interop::thiscall<OldStdString*, void*, void*, int, int>(0x50BE30, self, out, skipChars, maxChars);
+        str::string_ctor_from_cstr(&src_str, src);
+        str::string_slice(&src_str, &sliced, count);
+        str::string_assign(&src_str, &sliced);
+        str::string_dtor(&sliced);
+        strcpy(dest, str::string_get_data(&src_str));
+        str::string_dtor(&src_str);
     }
 
     // 0x00509B80
@@ -350,54 +269,34 @@ namespace openre::save
         // starting after `a3` Shift-JIS characters, keeping up to `a4`
         // characters, and copy the result into a1.
         // Used to grab the current character of the save name being typed.
-        string_ctor_from_cstr(&src_str, a2);
-        string_sjis_copy(&src_str, &sliced, a3, a4);
-        string_assign(&src_str, &sliced);
-        string_dtor(&sliced);
-        strcpy(a1, string_get_data(&src_str));
-        string_dtor(&src_str);
-    }
-
-    // 0x0050C5C0
-    static bool __stdcall string_eq_cstr(OldStdString* self, const char* s)
-    {
-        return interop::thiscall<bool, void*, const char*>(0x50C5C0, self, s) != 0;
+        str::string_ctor_from_cstr(&src_str, a2);
+        str::string_sjis_copy(&src_str, &sliced, a3, a4);
+        str::string_assign(&src_str, &sliced);
+        str::string_dtor(&sliced);
+        strcpy(a1, str::string_get_data(&src_str));
+        str::string_dtor(&src_str);
     }
 
     // 0x00509BE0
     static int sub_509BE0(const char* a1)
     {
         OldStdString name;
-        string_ctor_from_cstr(&name, a1);
+        str::string_ctor_from_cstr(&name, a1);
         // A save name consisting of only a space, underscore, or Shift-JIS blank
         // character is treated as an invalid/blank name (error sound is played).
-        if (string_eq_cstr(&name, " ")            // 0x51D868 - half-width space
-            || string_eq_cstr(&name, "\x81\x40")  // 0x540B48 - full-width space
-            || string_eq_cstr(&name, "_")         // 0x540B44 - underscore
-            || string_eq_cstr(&name, "\x81\x51")) // 0x5220D4
+        if (str::string_eq_cstr(&name, " ")            // 0x51D868 - half-width space
+            || str::string_eq_cstr(&name, "\x81\x40")  // 0x540B48 - full-width space
+            || str::string_eq_cstr(&name, "_")         // 0x540B44 - underscore
+            || str::string_eq_cstr(&name, "\x81\x51")) // 0x5220D4
         {
-            string_dtor(&name);
+            str::string_dtor(&name);
             return 1;
         }
         else
         {
-            string_dtor(&name);
+            str::string_dtor(&name);
             return 0;
         }
-    }
-
-    // 0x0050BFF0
-    // Stores the last `count` Shift-JIS characters of `self` into `out` and returns `out`.
-    static OldStdString* __stdcall string_right(OldStdString* self, OldStdString* out, int count)
-    {
-        return interop::thiscall<OldStdString*, void*, OldStdString*, int>(0x50BFF0, self, out, count);
-    }
-
-    // 0x0050C630
-    // Returns true if `self` differs from the C string `s`.
-    static bool __stdcall string_ne_cstr(OldStdString* self, const char* s)
-    {
-        return interop::thiscall<bool, void*, const char*>(0x50C630, self, s) != 0;
     }
 
     // 0x005099A0
@@ -410,54 +309,54 @@ namespace openre::save
         OldStdString path;    // working folder path
         OldStdString tmp;     // temporary substring
 
-        string_ctor_from_cstr(&nameStr, name);
+        str::string_ctor_from_cstr(&nameStr, name);
 
-        if (string_eq_cstr(&nameStr, ".."))
+        if (str::string_eq_cstr(&nameStr, ".."))
         {
             // Move up one directory level.
-            string_ctor_from_cstr(&path, GetSaveFolder());
+            str::string_ctor_from_cstr(&path, GetSaveFolder());
 
             // tmp = the last character of the current folder.
-            string_right(&path, &tmp, 1);
-            bool hasTrailingSlash = string_eq_cstr(&tmp, "\\");
-            string_dtor(&tmp);
+            str::string_right(&path, &tmp, 1);
+            bool hasTrailingSlash = str::string_eq_cstr(&tmp, "\\");
+            str::string_dtor(&tmp);
 
             if (hasTrailingSlash)
             {
                 // Drop the trailing backslash.
-                string_slice(&path, &tmp, std_string_sjis_len(&path) - 1);
-                string_assign(&path, &tmp);
-                string_dtor(&tmp);
+                str::string_slice(&path, &tmp, str::string_sjis_len(&path) - 1);
+                str::string_assign(&path, &tmp);
+                str::string_dtor(&tmp);
             }
 
             // Truncate at the last backslash to reach the parent directory.
-            int sep = sub_50BD50(&path, "\\");
+            int sep = str::string_find_last(&path, "\\");
             if (sep >= 0)
             {
-                string_slice(&path, &tmp, sep);
-                string_assign(&path, &tmp);
-                string_dtor(&tmp);
+                str::string_slice(&path, &tmp, sep);
+                str::string_assign(&path, &tmp);
+                str::string_dtor(&tmp);
             }
         }
         else
         {
             // Enter a subfolder named after the card.
-            string_ctor_from_cstr(&path, GetSaveFolder());
+            str::string_ctor_from_cstr(&path, GetSaveFolder());
 
-            string_right(&path, &tmp, 1);
-            bool missingTrailingSlash = string_ne_cstr(&tmp, "\\");
-            string_dtor(&tmp);
+            str::string_right(&path, &tmp, 1);
+            bool missingTrailingSlash = str::string_ne_cstr(&tmp, "\\");
+            str::string_dtor(&tmp);
 
             if (missingTrailingSlash)
-                sub_50C4E0(&path, "\\");
+                str::string_append(&path, "\\");
 
-            sub_50C4E0(&path, name);
+            str::string_append(&path, name);
         }
 
-        sub_50C4E0(&path, "\\");
-        sub_509940((char*)string_get_data(&path));
-        string_dtor(&path);
-        string_dtor(&nameStr);
+        str::string_append(&path, "\\");
+        sub_509940((char*)str::string_get_data(&path));
+        str::string_dtor(&path);
+        str::string_dtor(&nameStr);
     }
 
     // 0x00432110
@@ -1112,7 +1011,7 @@ namespace openre::save
                 gGameTable.card_mess_timer--;
                 break;
             }
-            if (gGameTable.card_name_index >= sub_509AF0(gGameTable.save_name))
+            if (gGameTable.card_name_index >= str::string_sjis_len_cstr(gGameTable.save_name))
             {
                 cardState = CARD_STATE_WAIT_OVERWRITE;
                 gGameTable.card_mess_timer = 60;
@@ -1155,7 +1054,7 @@ namespace openre::save
                 gGameTable.card_mess_timer--;
                 break;
             }
-            if (gGameTable.card_name_index >= sub_509AF0(gGameTable.save_name))
+            if (gGameTable.card_name_index >= str::string_sjis_len_cstr(gGameTable.save_name))
             {
                 cardState = CARD_STATE_WAIT_NEW;
                 gGameTable.card_mess_timer = 60;
@@ -1272,7 +1171,7 @@ namespace openre::save
     // trailing backslash) and cached in the OG save-path string at 0x689F44.
     char* GetSaveFolder()
     {
-        if (std_string_sjis_len(save_path_string()) == 0)
+        if (str::string_sjis_len(save_path_string()) == 0)
             sub_509860();
         return save_path_string()->data;
     }

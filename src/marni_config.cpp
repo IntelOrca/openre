@@ -7,6 +7,7 @@
 #include "marni_config.h"
 #include "openre.h"
 #include "re2.h"
+#include "str.h"
 
 #include <cstring>
 
@@ -95,14 +96,14 @@ namespace openre::marni
         static OldStdString* __stdcall
         MarniConfig_GetString(MarniConfig* self, OldStdString* out, const char* name, const char* defaultValue)
         {
-            // Must zero output before writing, otherwise oldstring_set_2
+            // Must zero output before writing, otherwise string_assign_cstr
             // will try to free uninitialized stack memory.
             memset(out, 0, sizeof(OldStdString));
 
             if (!MarniConfig_CreateKey(self, 0))
             {
                 // Key creation/opening failed; use default value
-                oldstring_set_2(out, defaultValue ? defaultValue : "");
+                str::string_assign_cstr(out, defaultValue ? defaultValue : "");
                 MarniConfig_CloseKey(self);
                 logging::logWarning("[REG READ] name='{}' - using default value", name);
                 return out;
@@ -135,12 +136,12 @@ namespace openre::marni
 
                 if (result == ERROR_SUCCESS)
                 {
-                    oldstring_set_2(out, buffer);
+                    str::string_assign_cstr(out, buffer);
                     logging::logDebug("[REG READ] name='{}', value='{}'", name, buffer);
                 }
                 else
                 {
-                    oldstring_set_2(out, defaultValue ? defaultValue : "");
+                    str::string_assign_cstr(out, defaultValue ? defaultValue : "");
                     logging::logWarning(
                         "[REG READ] name='{}' - second query failed, error={}", name, static_cast<uint32_t>(result));
                 }
@@ -149,7 +150,7 @@ namespace openre::marni
             }
             else
             {
-                oldstring_set_2(out, defaultValue ? defaultValue : "");
+                str::string_assign_cstr(out, defaultValue ? defaultValue : "");
                 logging::logWarning(
                     "[REG READ] name='{}' - query failed or wrong type, error={}", name, static_cast<uint32_t>(result));
             }

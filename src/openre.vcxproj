@@ -99,6 +99,7 @@
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="stream.cpp" />
+    <ClCompile Include="str.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
@@ -132,6 +133,7 @@
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
     <ClInclude Include="stream.h" />
+    <ClInclude Include="str.h" />
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="save.h" />
     <ClInclude Include="tim.h" />

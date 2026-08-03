@@ -237,15 +237,4 @@ namespace openre
 
     // 0x00431470
     int SavePrint(int x, int y, const char* str, int color, int len);
-
-    // 0x0050BC60
-    inline OldStdString* __stdcall oldstring_set_2(OldStdString* self, const char* s)
-    {
-        return interop::thiscall<OldStdString*, void*, const char*>(0x50BC60, self, s);
-    }
-
-    inline const char* oldstring_get_data(const OldStdString* self)
-    {
-        return self->data;
-    }
 }

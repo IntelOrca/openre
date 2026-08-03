@@ -3,6 +3,7 @@
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
+#include "str.h"
 #include "stream.h"
 #include <cstdlib>
 #include <cstring>
@@ -71,18 +72,6 @@ namespace openre::file
             gGameTable.error_no = 12;
     }
 
-    // --- Helpers to access OG std::string globals ---
-
-    static const char* og_string_data(uint32_t addr)
-    {
-        return interop::thiscall<const char*, void*>(0x50C3F0, (void*)(uintptr_t)addr);
-    }
-
-    static void og_string_assign(uint32_t addr, const char* str)
-    {
-        interop::thiscall<void, void*, const char*>(0x50C420, (void*)(uintptr_t)addr, str);
-    }
-
     // --- File I/O wrapper with error dialog suppression and logging ---
 
     static HANDLE
@@ -129,7 +118,7 @@ namespace openre::file
             if (re2Data && re2Data[0])
             {
                 std::string fullPath = std::string(re2Data) + "\\" + path;
-                oldstring_set_2(&gGameTable.ss_file_string, fullPath.c_str());
+                str::string_assign_cstr(&gGameTable.ss_file_string, fullPath.c_str());
                 return file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
             }
         }
@@ -144,7 +133,7 @@ namespace openre::file
                 switch (currentMode)
                 {
                 case 0:
-                    if (const char* s = og_string_data(0x669F4C))
+                    if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x669F4C)))
                         basePath = s;
                     break;
                 case 1:
@@ -160,7 +149,7 @@ namespace openre::file
                     break;
                 }
                 case 2:
-                    if (const char* s = og_string_data(0x689F34))
+                    if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x689F34)))
                         basePath = s;
                     break;
                 }
@@ -169,7 +158,7 @@ namespace openre::file
                 {
                     std::string fullPath = (sub == 0) ? (basePath + path) : (basePath + "data\\" + path);
                     // Store resolved path in OG global ss_file_string
-                    oldstring_set_2(&gGameTable.ss_file_string, fullPath.c_str());
+                    str::string_assign_cstr(&gGameTable.ss_file_string, fullPath.c_str());
                     hFile = file_open_internal(fullPath.c_str(), GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, true);
                 }
             }
@@ -182,7 +171,7 @@ namespace openre::file
             // In silent mode with a known CD path, exit without dialog
             if (silent)
             {
-                if (const char* s = og_string_data(0x689F34))
+                if (const char* s = str::string_get_data(reinterpret_cast<OldStdString*>(0x689F34)))
                 {
                     if (s[0])
                         break;
@@ -514,7 +503,7 @@ namespace openre::file
     // 0x00509620
     static void adt_store_last_filename(const char* filename)
     {
-        og_string_assign((uint32_t)&gGameTable.ss_file_string, filename);
+        str::string_copy(&gGameTable.ss_file_string, filename);
     }
 
     // 0x0043C590
