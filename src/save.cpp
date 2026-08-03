@@ -212,7 +212,10 @@ namespace openre::save
     static const char* aHowToSave = (const char*)0x52E2BC;  // どのように保存しますか？
 
     // 0x004C5850
-    static int sub_4C5850(int index)
+    // Returns the byte length of a data_savemes message, scaled by 14 per
+    // character. Used to compute how many bytes of the save-slot room name
+    // message to copy for display.
+    static int get_savemes_len(int index)
     {
         return interop::call<int, int>(0x004C5850, index);
     }
@@ -353,7 +356,7 @@ namespace openre::save
                 str1[1] += (char)((int8_t)slotPtr[-14] / 10);
                 str1[2] += (char)((int8_t)slotPtr[-14] % 10);
                 int v11 = (int8_t)slotPtr[-13];
-                int v12 = (int16_t)sub_4C5850(v11 + 43);
+                int v12 = (int16_t)get_savemes_len(v11 + 43);
                 std::memcpy(dst, &data_savemes[ptr_savemes[v11 + 43]], 2 * (v12 / 14) + 2);
                 int mess_width = get_mess_width((const uint8_t*)str, 0);
                 int v14 = (320 - get_mess_width((const uint8_t*)str1, 0) - mess_width) / 2;
@@ -419,7 +422,7 @@ namespace openre::save
             str1[1] += (char)((int8_t)sbuf[262] / 10);
             str1[2] += (char)((int8_t)sbuf[262] % 10);
             int v18 = (int8_t)sbuf[263];
-            int v19 = (int16_t)sub_4C5850(v18 + 43);
+            int v19 = (int16_t)get_savemes_len(v18 + 43);
             std::memcpy(dst, &data_savemes[ptr_savemes[v18 + 43]], 2 * (v19 / 14) + 2);
             int v20 = get_mess_width((const uint8_t*)str, 0);
             int v21 = (320 - get_mess_width((const uint8_t*)str1, 0) - v20) / 2;
@@ -826,9 +829,10 @@ namespace openre::save
     }
 
     // 0x00432070
-    static void sub_432070(uint32_t* a1, uint32_t* a2)
+    // Clears a card-access work field during memory card screen initialization.
+    static void reset_card_work(uint32_t* work, uint32_t* /*unused*/)
     {
-        *a1 = 0;
+        *work = 0;
     }
 
     // 0x00431D10
@@ -890,7 +894,7 @@ namespace openre::save
     // Copies the given save path into the global save-path string, ensuring it is
     // non-empty and ends with a backslash (appending one if the last Shift-JIS
     // character is not a backslash). Falls back to the module path when empty.
-    static int sub_509940(char* savePath)
+    static int set_save_folder(char* savePath)
     {
         str::string_copy(save_path_string(), savePath);
         if (str::string_sjis_len(save_path_string()) == 0)
@@ -904,7 +908,7 @@ namespace openre::save
     }
 
     // 0x00509B20
-    static void sub_509B20(char* dest, const char* src, int count)
+    static void save_name_prefix(char* dest, const char* src, int count)
     {
         OldStdString src_str;
         OldStdString sliced;
@@ -921,41 +925,41 @@ namespace openre::save
     }
 
     // 0x00509B80
-    static void sub_509B80(char* a1, const char* a2, int a3, int a4)
+    static void save_name_slice(char* dest, const char* src, int start, int count)
     {
         OldStdString src_str;
         OldStdString sliced;
 
         // Build src_str from the source string, then extract the substring
-        // starting after `a3` Shift-JIS characters, keeping up to `a4`
-        // characters, and copy the result into a1.
+        // starting after `start` Shift-JIS characters, keeping up to `count`
+        // characters, and copy the result into dest.
         // Used to grab the current character of the save name being typed.
-        str::string_ctor_from_cstr(&src_str, a2);
-        str::string_sjis_copy(&src_str, &sliced, a3, a4);
+        str::string_ctor_from_cstr(&src_str, src);
+        str::string_sjis_copy(&src_str, &sliced, start, count);
         str::string_assign(&src_str, &sliced);
         str::string_dtor(&sliced);
-        strcpy(a1, str::string_get_data(&src_str));
+        strcpy(dest, str::string_get_data(&src_str));
         str::string_dtor(&src_str);
     }
 
     // 0x00509BE0
-    static int sub_509BE0(const char* a1)
+    static int save_name_is_blank(const char* name)
     {
-        OldStdString name;
-        str::string_ctor_from_cstr(&name, a1);
+        OldStdString nameStr;
+        str::string_ctor_from_cstr(&nameStr, name);
         // A save name consisting of only a space, underscore, or Shift-JIS blank
         // character is treated as an invalid/blank name (error sound is played).
-        if (str::string_eq_cstr(&name, " ")            // 0x51D868 - half-width space
-            || str::string_eq_cstr(&name, "\x81\x40")  // 0x540B48 - full-width space
-            || str::string_eq_cstr(&name, "_")         // 0x540B44 - underscore
-            || str::string_eq_cstr(&name, "\x81\x51")) // 0x5220D4
+        if (str::string_eq_cstr(&nameStr, " ")            // 0x51D868 - half-width space
+            || str::string_eq_cstr(&nameStr, "\x81\x40")  // 0x540B48 - full-width space
+            || str::string_eq_cstr(&nameStr, "_")         // 0x540B44 - underscore
+            || str::string_eq_cstr(&nameStr, "\x81\x51")) // 0x5220D4
         {
-            str::string_dtor(&name);
+            str::string_dtor(&nameStr);
             return 1;
         }
         else
         {
-            str::string_dtor(&name);
+            str::string_dtor(&nameStr);
             return 0;
         }
     }
@@ -963,8 +967,8 @@ namespace openre::save
     // 0x005099A0
     // Changes the current save folder. If `name` is ".." the folder moves up one
     // directory level; otherwise a subfolder named `name` is entered. The resulting
-    // path is stored as the global save folder via sub_509940.
-    static void sub_5099A0(char* name)
+    // path is stored as the global save folder via set_save_folder.
+    static void change_save_folder(char* name)
     {
         OldStdString nameStr; // std::string built from the card name
         OldStdString path;    // working folder path
@@ -1015,7 +1019,7 @@ namespace openre::save
         }
 
         str::string_append(&path, "\\");
-        sub_509940((char*)str::string_get_data(&path));
+        set_save_folder((char*)str::string_get_data(&path));
         str::string_dtor(&path);
         str::string_dtor(&nameStr);
     }
@@ -1372,7 +1376,7 @@ namespace openre::save
         case CARD_STATE_INIT:
             ck_480p();
             font_create();
-            sub_432070(&gGameTable.dword_663190, (uint32_t*)&gGameTable.pMem);
+            reset_card_work(&gGameTable.dword_663190, (uint32_t*)&gGameTable.pMem);
             strcpy(gGameTable.save_folder, GetSaveFolder());
             cardState = CARD_STATE_ENUMERATE;
             break;
@@ -1488,14 +1492,14 @@ namespace openre::save
                             gGameTable.p_card_save = (uint8_t*)gGameTable.Cards + 276 * gGameTable.card_select;
                             break;
                         case 2:
-                            sub_5099A0((char*)gGameTable.Names + 261 * gGameTable.card_select);
+                            change_save_folder((char*)gGameTable.Names + 261 * gGameTable.card_select);
                             cardState = CARD_STATE_ENUMERATE;
                             gGameTable.card_scroll = 0;
                             gGameTable.card_cursor = 0;
                             snd_se_on(0x4060000);
                             break;
                         case 3:
-                            sub_509940((char*)gGameTable.pMem + 8 * gGameTable.card_select);
+                            set_save_folder((char*)gGameTable.pMem + 8 * gGameTable.card_select);
                             cardState = CARD_STATE_ENUMERATE;
                             gGameTable.card_scroll = 0;
                             gGameTable.card_cursor = 0;
@@ -1660,9 +1664,9 @@ namespace openre::save
             }
             else
             {
-                sub_509B20((char*)gGameTable.p_card_save, gGameTable.save_name, ++gGameTable.card_name_index);
-                sub_509B80(gGameTable.save_path, gGameTable.save_name, gGameTable.card_name_index - 1, 1);
-                if (sub_509BE0(gGameTable.save_path))
+                save_name_prefix((char*)gGameTable.p_card_save, gGameTable.save_name, ++gGameTable.card_name_index);
+                save_name_slice(gGameTable.save_path, gGameTable.save_name, gGameTable.card_name_index - 1, 1);
+                if (save_name_is_blank(gGameTable.save_path))
                 {
                     gGameTable.card_mess_timer = 4;
                     snd_se_on(0x2240000);
@@ -1703,9 +1707,9 @@ namespace openre::save
             }
             else
             {
-                sub_509B20((char*)gGameTable.p_card_save, gGameTable.save_name, ++gGameTable.card_name_index);
-                sub_509B80(gGameTable.save_path, gGameTable.save_name, gGameTable.card_name_index - 1, 1);
-                if (sub_509BE0(gGameTable.save_path))
+                save_name_prefix((char*)gGameTable.p_card_save, gGameTable.save_name, ++gGameTable.card_name_index);
+                save_name_slice(gGameTable.save_path, gGameTable.save_name, gGameTable.card_name_index - 1, 1);
+                if (save_name_is_blank(gGameTable.save_path))
                 {
                     gGameTable.card_mess_timer = 8;
                     snd_se_on(0x2240000);
