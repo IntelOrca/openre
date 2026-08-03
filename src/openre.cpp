@@ -2779,7 +2779,7 @@ namespace openre
     }
 
     // 0x004315D0
-    static BOOL __cdecl sub_4315D0(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8)
+    int save_menu_draw(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8)
     {
         static const char* aExit = (const char*)0x5220A4;
         static const char* aCreateNew = (const char*)0x5220B8;
@@ -3302,7 +3302,7 @@ void onAttach()
     interop::writeJmp(0x00441A00, WndProc);
     interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
-    interop::writeJmp(0x004315D0, sub_4315D0);
+    interop::writeJmp(0x004315D0, save_menu_draw);
 
     scheduler_init_hooks();
     title_init_hooks();

@@ -1379,7 +1379,9 @@ struct GameTable
     uint8_t byte_68984A;                // 0x68984A
     uint8_t pad_68984B[1];              // 0x68984B
     uint32_t systemInitialized;         // 0x68984C
-    uint8_t pad_689850[16];             // 0x689850
+    uint8_t pad_689850[8];              // 0x689850
+    int32_t Mwork_pc2;                  // 0x689858
+    uint8_t pad_68985C[4];              // 0x68985C
     char save_path[260];                // 0x689860
     uint8_t pad_689964[4];              // 0x689964
     char save_name[260];                // 0x689968

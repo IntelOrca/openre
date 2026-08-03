@@ -1067,6 +1067,7 @@ declare     bg_colorized            u8                      0x00689848
 declare     stage_bk                u8                      0x00689849
 declare     byte_68984A             u8                      0x0068984A
 declare     systemInitialized       u32                     0x0068984C
+declare     Mwork_pc2               s32                     0x00689858
 declare     save_path               char[260]               0x00689860
 declare     save_name               char[260]               0x00689968
 declare     inventory_bk            InventorySlot[11]       0x00689A6C

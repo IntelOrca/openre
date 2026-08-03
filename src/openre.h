@@ -237,4 +237,7 @@ namespace openre
 
     // 0x00431470
     int SavePrint(int x, int y, const char* str, int color, int len);
+
+    // 0x004315D0
+    int save_menu_draw(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint8_t* a8);
 }

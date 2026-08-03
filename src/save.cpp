@@ -169,10 +169,297 @@ namespace openre::save
         task_sleep(1);
     }
 
+    // Save/load screen states. The card state value is passed to card_mess_disp as rno.
+    enum CardState : uint8_t
+    {
+        CARD_STATE_INIT = 0,            // Initialize display and save folder
+        CARD_STATE_ENUMERATE = 1,       // Enumerate save files in the current folder
+        CARD_STATE_MENU = 2,            // Main save/load list navigation
+        CARD_STATE_SAVE_NEW = 3,        // Write save data to a new file
+        CARD_STATE_LOAD = 10,           // Read save data from the selected file
+        CARD_STATE_SAVE_OPTIONS = 30,   // Overwrite/update/cancel sub menu
+        CARD_STATE_SAVE_OVERWRITE = 31, // Write save data over the selected file
+        CARD_STATE_TYPE_OVERWRITE = 32, // Typewriter name animation after overwriting
+        CARD_STATE_WAIT_OVERWRITE = 33, // Pause once the overwrite animation finishes
+        CARD_STATE_TYPE_NEW = 34,       // Typewriter name animation after a new save
+        CARD_STATE_WAIT_NEW = 36,       // Pause once the new save animation finishes
+        CARD_STATE_CONFIRM_EXIT = 96,   // "Data was not saved" yes/no prompt
+        CARD_STATE_EXIT = 97,           // Leave the memory card screen
+        CARD_STATE_ERROR = 98,          // Error message display
+        CARD_STATE_CANCEL = 99,         // Cancel out of the current screen
+    };
+
+    // Message tables for the memory card screen (immutable data). data_savemes
+    // holds the Shift-JIS message strings, selected by the uint16_t offsets in
+    // ptr_savemes.
+    static const char* data_savemes = (const char*)0x52DB68;
+    static const uint16_t* ptr_savemes = (const uint16_t*)0x52DF20;
+
+    // Save/load screen strings (Shift-JIS).
+    static const char* aSave = (const char*)0x52E210;       // セーブ
+    static const char* aLeaveSave = (const char*)0x52E218;  // セーブ画面から
+    static const char* aLeaveLoad = (const char*)0x52E230;  // ロード画面から
+    static const char* aFolder = (const char*)0x52E248;     // フォルダ
+    static const char* aNo = (const char*)0x52E254;         // いいえ
+    static const char* aYes = (const char*)0x52E25C;        // はい
+    static const char* aDidNotSave = (const char*)0x52E264; // データをセーブしていません
+    static const char* aLoad = (const char*)0x52E294;       // ロード
+    static const char* aCancel = (const char*)0x52E29C;     // キャンセル
+    static const char* aUpdate = (const char*)0x52E2A8;     // 更新
+    static const char* aOverwrite = (const char*)0x52E2B0;  // 上書き
+    static const char* aHowToSave = (const char*)0x52E2BC;  // どのように保存しますか？
+
+    // 0x004C5850
+    static int sub_4C5850(int index)
+    {
+        return interop::call<int, int>(0x004C5850, index);
+    }
+
+    // 0x004C7CD0
+    static int get_mess_width(const uint8_t* str, int16_t mode)
+    {
+        return interop::call<int, const uint8_t*, int16_t>(0x004C7CD0, str, mode);
+    }
+
+    // 0x004C7810
+    static int cursor_disp(int16_t x1, int16_t y)
+    {
+        return interop::call<int, int16_t, int16_t>(0x004C7810, x1, y);
+    }
+
+    // 0x004319A0
+    static int print_save_list(int a1, int a2, int a3, int a4, int a5, int a6, char a7, uint32_t* a8, uint8_t* a9)
+    {
+        return interop::call<int, int, int, int, int, int, int, char, uint32_t*, uint8_t*>(
+            0x004319A0, a1, a2, a3, a4, a5, a6, a7, a8, a9);
+    }
+
     // 0x004C6E30
+    // Draws the messages on the memory card save/load screen. Which messages are
+    // drawn depends on the current card state (rno).
     static void card_mess_disp(int rno, int mode, uint32_t cursor, int errCode)
     {
-        interop::call<void, int, int, uint32_t, int>(0x004C6E30, rno, mode, cursor, errCode);
+        int y[2] = { 208, 416 };     // "how to save" / "did not save" prompt y
+        int infoY[2] = { 217, 434 }; // "folder" / "leave" message y
+        int titleY[2] = { 10, 20 };  // "save" / "load" title y
+        int yes_x[2] = { 100, 200 };
+        int no_x[2] = { 184, 368 };
+        int yesno_x[2] = { 86, 170 };
+        int x_overwrite[2] = { 63, 126 };
+        int x_update[2] = { 149, 298 };
+        int x_cancel[2] = { 211, 422 };
+        int choice_x[3] = { 49, 135, 197 };
+        int cursorYoff[2] = { 16, 15 };
+        // The time text and the save-room message are rendered as one continuous
+        // string: Mess_print reads past the 4-byte time text into the room
+        // message (which ends with the 0xFE terminator). Keep them in a single
+        // contiguous buffer to match the adjacent str1/dst locals of the OG code.
+        char str1[4 + 64];
+        char* dst = str1 + 4;
+        char str[8];
+
+        auto* cardStateBytes = (uint8_t*)&gGameTable.card_state;
+
+        // Prints the save/load title, the save list (via the shared
+        // save_menu_draw implementation) and the cursor tile.
+        auto drawMenu = [&]() {
+            SavePrint(0, titleY[gGameTable.is_480p], mode ? aLoad : aSave, 0, 0);
+            if (save_menu_draw(
+                    0,
+                    0,
+                    gGameTable.card_scroll,
+                    (int)gGameTable.Cards,
+                    (int)gGameTable.Names,
+                    (int)gGameTable.pMem,
+                    (char)mode,
+                    (uint8_t*)&gGameTable.card_fade)
+                && errCode == 1)
+            {
+                snd_se_on(0x4040000);
+                gGameTable.card_mess_timer = 3;
+            }
+            Tile pPrim{};
+            pPrim.r = 80;
+            pPrim.g = 80;
+            pPrim.b = 80;
+            pPrim.tag = 1;
+            pPrim.code = 2;
+            pPrim.psxRect.x = 16;
+            pPrim.psxRect.y = (int16_t)(15 * (int)cursor + 49);
+            pPrim.psxRect.w = 288;
+            pPrim.psxRect.h = 14;
+            marni::add_tile(&pPrim, 1, 0);
+        };
+
+        // Prints the save list and title without the cursor tile.
+        auto printList = [&]() {
+            print_save_list(
+                0,
+                0,
+                gGameTable.card_scroll,
+                (int)gGameTable.Cards,
+                (int)gGameTable.Names,
+                (int)gGameTable.pMem,
+                (char)mode,
+                (uint32_t*)&gGameTable.card_fade,
+                gGameTable.card_save_buf);
+            SavePrint(0, titleY[gGameTable.is_480p], mode ? aLoad : aSave, 0, 0);
+        };
+
+        // Advances the sub-cursor blink counter and draws the cursor at the
+        // selected entry while the counter is in its visible phase.
+        auto blinkCursor = [&](const int* xs) {
+            uint8_t counter;
+            if (gGameTable.Mwork_pc2 == gGameTable.card_sub_cursor)
+                counter = cardStateBytes[2];
+            else
+            {
+                counter = 31;
+                gGameTable.Mwork_pc2 = gGameTable.card_sub_cursor;
+            }
+            counter = (counter + 1) & 0x1F;
+            cardStateBytes[2] = counter;
+            if (counter < 0xF)
+                cursor_disp((int16_t)xs[gGameTable.card_sub_cursor], (int16_t)(cursorYoff[gGameTable.is_480p] + 207));
+        };
+
+        switch (rno)
+        {
+        case CARD_STATE_MENU:
+        case CARD_STATE_LOAD:
+        case CARD_STATE_TYPE_OVERWRITE:
+        case CARD_STATE_WAIT_OVERWRITE:
+        {
+            int idx = gGameTable.card_scroll + (int)cursor;
+            if (idx < gGameTable.cnt0 - mode + 1 && (idx + mode) != 0)
+            {
+                // Draw the save-slot info message.
+                auto* cards = (char*)gGameTable.Cards;
+                int slot = idx + mode;
+                std::memcpy(str, &data_savemes[ptr_savemes[(int8_t)cards[276 * slot - 15] + 31]], 8);
+                auto* slotPtr = cards + 276 * slot;
+                int v9 = (slotPtr[-15] & 1) ? 2 : 4;
+                if (slotPtr[-3])
+                {
+                    v9 = 1;
+                    str[3] += slotPtr[-2];
+                }
+                std::memcpy(str1, &data_savemes[ptr_savemes[42]], 4);
+                str1[1] += (char)((int8_t)slotPtr[-14] / 10);
+                str1[2] += (char)((int8_t)slotPtr[-14] % 10);
+                int v11 = (int8_t)slotPtr[-13];
+                int v12 = (int16_t)sub_4C5850(v11 + 43);
+                std::memcpy(dst, &data_savemes[ptr_savemes[v11 + 43]], 2 * (v12 / 14) + 2);
+                int mess_width = get_mess_width((const uint8_t*)str, 0);
+                int v14 = (320 - get_mess_width((const uint8_t*)str1, 0) - mess_width) / 2;
+                mess_print(v14, 216, (const uint8_t*)str, (short)((16 * v9) | 2));
+                mess_print(mess_width + v14, 216, (const uint8_t*)str1, 2);
+            }
+            if (idx >= gGameTable.cnt0 - mode + 1 && (idx + mode) != 0 && idx < gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
+            {
+                SavePrint(0, infoY[gGameTable.is_480p], aFolder, 0, 0);
+            }
+            if ((idx + mode) != 0 && idx == gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
+            {
+                SavePrint(0, infoY[gGameTable.is_480p], mode ? aLeaveLoad : aLeaveSave, 0, 0);
+            }
+            drawMenu();
+            break;
+        }
+
+        case CARD_STATE_SAVE_OPTIONS:
+            SavePrint(0, y[gGameTable.is_480p], aHowToSave, 0, 0);
+            SavePrint(
+                x_overwrite[gGameTable.is_480p],
+                y[gGameTable.is_480p] + gGameTable.byte_6634F8,
+                aOverwrite,
+                gGameTable.card_sub_cursor != 0 ? 0 : 3,
+                0);
+            SavePrint(
+                x_update[gGameTable.is_480p],
+                y[gGameTable.is_480p] + gGameTable.byte_6634F8,
+                aUpdate,
+                gGameTable.card_sub_cursor != 1 ? 0 : 3,
+                0);
+            SavePrint(
+                x_cancel[gGameTable.is_480p],
+                y[gGameTable.is_480p] + gGameTable.byte_6634F8,
+                aCancel,
+                gGameTable.card_sub_cursor != 2 ? 0 : 3,
+                0);
+            blinkCursor(choice_x);
+            drawMenu();
+            break;
+
+        case CARD_STATE_SAVE_OVERWRITE:
+        case CARD_STATE_ERROR: drawMenu(); break;
+
+        case CARD_STATE_SAVE_NEW: printList(); break;
+
+        case CARD_STATE_TYPE_NEW:
+        case CARD_STATE_WAIT_NEW:
+        {
+            int idx = gGameTable.card_scroll + (int)cursor;
+            // Draw the message for the save currently being written, taken from
+            // the tail of card_save_buf (byte offsets 261..274 of the 276-byte slot).
+            auto* sbuf = gGameTable.card_save_buf;
+            std::memcpy(str, &data_savemes[ptr_savemes[(int8_t)sbuf[261] + 31]], 8);
+            int v17 = (sbuf[261] & 1) ? 2 : 4;
+            if (sbuf[273])
+            {
+                v17 = 1;
+                str[3] += sbuf[274];
+            }
+            std::memcpy(str1, &data_savemes[ptr_savemes[42]], 4);
+            str1[1] += (char)((int8_t)sbuf[262] / 10);
+            str1[2] += (char)((int8_t)sbuf[262] % 10);
+            int v18 = (int8_t)sbuf[263];
+            int v19 = (int16_t)sub_4C5850(v18 + 43);
+            std::memcpy(dst, &data_savemes[ptr_savemes[v18 + 43]], 2 * (v19 / 14) + 2);
+            int v20 = get_mess_width((const uint8_t*)str, 0);
+            int v21 = (320 - get_mess_width((const uint8_t*)str1, 0) - v20) / 2;
+            mess_print(v21, 216, (const uint8_t*)str, (short)((16 * v17) | 2));
+            mess_print(v20 + v21, 216, (const uint8_t*)str1, 2);
+
+            if (idx >= gGameTable.cnt0 - mode + 1 && (idx + mode) != 0 && idx < gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
+            {
+                SavePrint(0, infoY[gGameTable.is_480p], aFolder, 0, 0);
+            }
+            if ((idx + mode) != 0 && idx == gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
+            {
+                SavePrint(0, infoY[gGameTable.is_480p], mode ? aLeaveLoad : aLeaveSave, 0, 0);
+            }
+            printList();
+            break;
+        }
+
+        case CARD_STATE_CONFIRM_EXIT:
+            SavePrint(0, y[gGameTable.is_480p], aDidNotSave, 0, 0);
+            SavePrint(
+                yes_x[gGameTable.is_480p],
+                y[gGameTable.is_480p] + gGameTable.byte_6634F8,
+                aYes,
+                gGameTable.card_sub_cursor != 0 ? 0 : 3,
+                0);
+            SavePrint(
+                no_x[gGameTable.is_480p],
+                y[gGameTable.is_480p] + gGameTable.byte_6634F8,
+                aNo,
+                gGameTable.card_sub_cursor != 1 ? 0 : 3,
+                0);
+            blinkCursor(yesno_x);
+            drawMenu();
+            break;
+
+        default: break;
+        }
+
+        // Restore the fade rectangle from the card work buffer.
+        auto* cardWork = gGameTable.card_work_ptr;
+        auto v26 = cardWork[3];
+        *(uint16_t*)(cardWork + 0x18) = 0;
+        cardStateBytes[1] = v26;
+        hud_fade_adjust(3, (int16_t)(*(uint16_t*)(cardWork + 0x18) << 7), 0, (PsxRect*)(cardWork + 0x24));
     }
 
     // 0x00432840
@@ -659,25 +946,6 @@ namespace openre::save
         gGameTable.card_mess_timer = 0;
         return successState;
     }
-
-    enum CardState : uint8_t
-    {
-        CARD_STATE_INIT = 0,            // Initialize display and save folder
-        CARD_STATE_ENUMERATE = 1,       // Enumerate save files in the current folder
-        CARD_STATE_MENU = 2,            // Main save/load list navigation
-        CARD_STATE_SAVE_NEW = 3,        // Write save data to a new file
-        CARD_STATE_LOAD = 10,           // Read save data from the selected file
-        CARD_STATE_SAVE_OPTIONS = 30,   // Overwrite/update/cancel sub menu
-        CARD_STATE_SAVE_OVERWRITE = 31, // Write save data over the selected file
-        CARD_STATE_TYPE_OVERWRITE = 32, // Typewriter name animation after overwriting
-        CARD_STATE_WAIT_OVERWRITE = 33, // Pause once the overwrite animation finishes
-        CARD_STATE_TYPE_NEW = 34,       // Typewriter name animation after a new save
-        CARD_STATE_WAIT_NEW = 36,       // Pause once the new save animation finishes
-        CARD_STATE_CONFIRM_EXIT = 96,   // "Data was not saved" yes/no prompt
-        CARD_STATE_EXIT = 97,           // Leave the memory card screen
-        CARD_STATE_ERROR = 98,          // Error message display
-        CARD_STATE_CANCEL = 99,         // Cancel out of the current screen
-    };
 
     // 0x004C58A0
     static void card_access()
