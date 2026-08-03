@@ -134,9 +134,13 @@ namespace openre::input
 
     // ---- key polling helper state ----
 
+    // Previous keyboard state snapshot used for menu key edge detection.
+    // Maps to byte_663198 in the original binary.
     static uint8_t menu_key_state[256] = {};
+
     static uint8_t config_key_state[256] = {};
 
+    // Menu navigation keys, in priority order. Maps to byte_522074.
     static const uint8_t menu_vk_codes[] = {
         0x21, 0x22, 0x23, 0x24, 0x2E, // VK_PRIOR, VK_NEXT, VK_END, VK_HOME, VK_DELETE
     };
@@ -149,7 +153,10 @@ namespace openre::input
     };
 
     // 0x00432670
-    static int16_t get_menu_key()
+    // Returns the first menu navigation key that was just pressed (transitioned
+    // to down since the last poll), or 0 if none. Matches the original's quirky
+    // edge test: key is down (0x80) AND its low bit differs from the previous state.
+    int16_t get_menu_key()
     {
         uint8_t key_state[256];
         GetKeyboardState(key_state);

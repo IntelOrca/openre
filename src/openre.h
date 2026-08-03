@@ -235,6 +235,9 @@ namespace openre
         return (T)(remainder == 0 ? iValue : iValue + a - remainder);
     }
 
+    // 0x00431470
+    int SavePrint(int x, int y, const char* str, int color, int len);
+
     // 0x0050BC60
     inline OldStdString* __stdcall oldstring_set_2(OldStdString* self, const char* s)
     {

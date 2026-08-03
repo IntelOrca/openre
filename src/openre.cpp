@@ -2697,7 +2697,7 @@ namespace openre
     }
 
     // 0x00431470
-    static int SavePrint(int x, int y, const char* str, int color, int len)
+    int SavePrint(int x, int y, const char* str, int color, int len)
     {
         char buf[264];
 

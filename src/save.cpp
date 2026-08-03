@@ -3,8 +3,10 @@
 #include "error.h"
 #include "file.h"
 #include "hud.h"
+#include "input.h"
 #include "interop.hpp"
 #include "item.h"
+#include "marni.h"
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
@@ -20,11 +22,72 @@ using namespace openre::audio;
 using namespace openre::error;
 using namespace openre::file;
 using namespace openre::hud;
+using namespace openre::input;
 using namespace openre::player;
 using namespace openre::title;
 
 namespace openre::save
 {
+    // Save file name string tables (Shift-JIS). Maps to aSavePlayers,
+    // aSaveNumbers, aSaveRooms and asc_5220D4 in the original binary.
+    // Shared by format_save_name0 and format_save_name1.
+    static const char* const _save_player_names[] = {
+        "\x83\x8c\x83\x49\x83\x93",         // レオン (Leon A)
+        "\x83\x4e\x83\x8c\x83\x41",         // クレア (Claire A)
+        "\x83\x8c\x83\x49\x83\x93\x97\xa0", // レオン裏 (Leon B)
+        "\x83\x4e\x83\x8c\x83\x41\x97\xa0", // クレア裏 (Claire B)
+        nullptr,
+        nullptr,
+        "\x83\x8c\x83\x49\x83\x93", // レオン (extreme battle)
+        "\x83\x4e\x83\x8c\x83\x41", // クレア (extreme battle)
+        "\x83\x47\x83\x43\x83\x5f", // エイダ (extreme battle)
+        "\x83\x4e\x83\x8a\x83\x58", // クリス (extreme battle)
+    };
+
+    static const char* const _save_number_names[] = {
+        "\x82\x4f", // ０
+        "\x82\x50", // １
+        "\x82\x51", // ２
+        "\x82\x52", // ３
+        "\x82\x53", // ４
+        "\x82\x54", // ５
+        "\x82\x55", // ６
+        "\x82\x56", // ７
+        "\x82\x57", // ８
+        "\x82\x58", // ９
+    };
+
+    static const char* const _save_room_names[] = {
+        "\x8c\x78\x8e\x40\x8f\x90\x81\x40\x81\x40\x91\xd2\x8d\x87\x8e\xba", // 警察署　　待合室
+        "\x8c\x78\x8e\x40\x8f\x90\x81\x40\x81\x40\x83\x7a\x81\x5b\x83\x8b", // 警察署　　ホール
+        "\x8c\x78\x8e\x40\x8f\x90\x81\x40\x8e\xca\x90\x5e\x88\xc3\x8e\xba", // 警察署　写真暗室
+        "\x8f\x88\x97\x9d\x8f\xea\x81\x40\x81\x40\x8d\xb6\x95\xa8\x92\x75", // 処理場　　左物置
+        "\x8f\x88\x97\x9d\x8f\xea\x81\x40\x81\x40\x89\x45\x95\xa8\x92\x75", // 処理場　　右物置
+        "\x89\xba\x90\x85\x81\x40\x91\xe6\x82\x50\x8a\xc7\x97\x9d\x8e\xba", // 下水　第１管理室
+        "\x89\xba\x90\x85\x81\x40\x91\xe6\x82\x51\x8a\xc7\x97\x9d\x8e\xba", // 下水　第２管理室
+        "\x89\xba\x90\x85\x81\x40\x8f\x88\x97\x9d\x83\x76\x81\x5b\x83\x8b", // 下水　処理プール
+        "\x8d\x48\x8f\xea\x81\x40\x81\x40\x83\x70\x83\x6c\x83\x8b\x8e\xba", // 工場　　パネル室
+        "\x8c\xa4\x8b\x86\x8f\x8a\x81\x40\x83\x7c\x83\x93\x83\x76\x8e\xba", // 研究所　ポンプ室
+        "\x8c\xa4\x8b\x86\x8f\x8a\x81\x40\x81\x40\x8c\x78\x94\xf5\x8e\xba", // 研究所　　警備室
+        "\x8c\xa4\x8b\x86\x8f\x8a\x83\x82\x83\x6a\x83\x5e\x81\x7c\x8e\xba", // 研究所モニタ−室
+        "\x83\x4b\x83\x93\x83\x56\x83\x87\x83\x62\x83\x76",                 // ガンショップ
+        "\x8c\x78\x8e\x40\x8f\x90\x81\x40\x95\xa8\x92\x75\x8f\xac\x89\xae", // 警察署　物置小屋
+        "\x8c\xa4\x8b\x86\x8f\x8a\x81\x40\x81\x40\x81\x40\x8e\xd4\x93\xe0", // 研究所　　　車内
+        "\x83\x56\x83\x69\x83\x8a\x83\x49\x81\x40\x82\x50\x82\x93\x82\x94", // シナリオ　１ｓｔ
+    };
+
+    static const char* const _save_name_sep = "\x81\x51"; // ＿
+
+    // Memory card result message table (Shift-JIS). Maps to aSaveWarning
+    // in the original binary. Indexed by save_print_tbl.
+    static const char* const _save_warning[] = {
+        "\x82\xb1\x82\xea\x82\xcd\x83\x4e\x83\x8c\x83\x41\x95\xd2\x82\xcc\x83\x66\x81\x5b\x83\x5e\x82\xc5\x82\xb7", // これはクレア編のデータです
+        "\x82\xb1\x82\xea\x82\xcd\x83\x8c\x83\x49\x83\x93\x95\xd2\x82\xcc\x83\x66\x81\x5b\x83\x5e\x82\xc5\x82\xb7", // これはレオン編のデータです
+        "\x93\xc7\x82\xdd\x8d\x9e\x82\xdd\x82\xc9\x8e\xb8\x94\x73\x82\xb5\x82\xdc\x82\xb5\x82\xbd", // 読み込みに失敗しました
+        "\x8f\x91\x82\xab\x8d\x9e\x82\xdd\x82\xc9\x8e\xb8\x94\x73\x82\xb5\x82\xdc\x82\xb5\x82\xbd", // 書き込みに失敗しました
+        nullptr,
+    };
+
     // 0x004C6C40
     static void cardaccess_init()
     {
@@ -114,92 +177,479 @@ namespace openre::save
     // 0x00432840
     static void ck_480p()
     {
-        interop::call(0x00432840);
+        gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
     }
 
     // 0x00432070
     static void sub_432070(uint32_t* a1, uint32_t* a2)
     {
-        interop::call<void, uint32_t*, uint32_t*>(0x00432070, a1, a2);
+        *a1 = 0;
     }
 
     // 0x00431D10
-    static int sub_431D10(int a1, int* a2, char a3)
+    // Resolves which menu entry the card cursor is on within the save/load list.
+    // The return value selects the caller's action: 0 = new save, 1 = select an
+    // existing card, 4 = cancel, 99 = invalid position. On 1, *select receives
+    // the card index.
+    static int card_menu_action(int scroll, int* select, char mode)
     {
-        return interop::call<int, int, int*, char>(0x00431D10, a1, a2, a3);
+        int index = gGameTable.card_cursor + scroll;
+        if (index == -mode)
+        {
+            // Cursor is on the "new save" entry.
+            *select = -1;
+            return 0;
+        }
+        if (index >= gGameTable.cnt0 - mode + 1)
+        {
+            // Cursor is on the last entry (cancel) or beyond it.
+            return gGameTable.cnt1 - mode + gGameTable.cnt0 + 1 != index ? 99 : 4;
+        }
+        // Cursor is on one of the existing card slots.
+        *select = gGameTable.card_cursor + mode + scroll - 1;
+        return 1;
     }
+
+    // The OG save-path scratch std::string (OldStdString {data, length}) at
+    // 0x689F44, used by the save file name helpers below.
+    static OldStdString* save_path_string()
+    {
+        return reinterpret_cast<OldStdString*>(0x689F44);
+    }
+
+    // 0x0050C420
+    static OldStdString* std_string_copy(OldStdString* str, const char* s)
+    {
+        return interop::thiscall<OldStdString*, OldStdString*, const char*>(0x0050C420, str, s);
+    }
+
+    // 0x0050BD50
+    // Searches the Shift-JIS string for the last occurrence of the needle,
+    // returning its character index (double-byte characters count as one) or -1.
+    static int sub_50BD50(OldStdString* str, const char* needle)
+    {
+        return interop::thiscall<int, OldStdString*, const char*>(0x0050BD50, str, needle);
+    }
+
+    // 0x0050C4E0
+    // Appends the given C string to the std::string and returns the string object.
+    static OldStdString* sub_50C4E0(OldStdString* str, const char* s)
+    {
+        return interop::thiscall<OldStdString*, OldStdString*, const char*>(0x0050C4E0, str, s);
+    }
+
+    // 0x00509860
+    // Builds a save path from the current module file name when no save path is set.
+    static int sub_509860()
+    {
+        return interop::call<int>(0x00509860);
+    }
+
+    // Forward declarations, defined below.
+    static int std_string_sjis_len(OldStdString* str);
+    static OldStdString* __stdcall string_ctor_from_cstr(OldStdString* self, const char* s);
+    static void string_dtor(OldStdString* self);
 
     // 0x00509940
-    static void sub_509940(char* a1)
+    // Copies the given save path into the global save-path string, ensuring it is
+    // non-empty and ends with a backslash (appending one if the last Shift-JIS
+    // character is not a backslash). Falls back to the module path when empty.
+    static int sub_509940(char* savePath)
     {
-        interop::call<void, char*>(0x00509940, a1);
+        std_string_copy(save_path_string(), savePath);
+        if (std_string_sjis_len(save_path_string()) == 0)
+            return sub_509860();
+
+        int lastSlash = sub_50BD50(save_path_string(), "\\");
+        int lastChar = std_string_sjis_len(save_path_string()) - 1;
+        if (lastSlash != lastChar)
+            return (int)sub_50C4E0(save_path_string(), "\\");
+        return lastChar;
     }
 
-    // 0x005099A0
-    static void sub_5099A0(char* a1)
+    // 0x0050BD10
+    static int std_string_sjis_len(OldStdString* str)
     {
-        interop::call<void, char*>(0x005099A0, a1);
+        return interop::thiscall<int, OldStdString*>(0x0050BD10, str);
     }
 
     // 0x00509AF0
-    static int sub_509AF0(const char* a1)
+    // Returns the length (in characters) of the given string, counting Shift-JIS
+    // double-byte characters as a single character.
+    static int sub_509AF0(const char* str)
     {
-        return interop::call<int, const char*>(0x00509AF0, a1);
+        OldStdString temp;
+        string_ctor_from_cstr(&temp, str);
+        int len = std_string_sjis_len(&temp);
+        string_dtor(&temp);
+        return len;
+    }
+
+    // 0x0050BBB0
+    static OldStdString* __stdcall string_ctor_from_cstr(OldStdString* self, const char* s)
+    {
+        return interop::thiscall<OldStdString*, void*, const char*>(0x50BBB0, self, s);
+    }
+
+    // 0x0050BF30
+    static OldStdString* __stdcall string_slice(OldStdString* self, OldStdString* out, int count)
+    {
+        return interop::thiscall<OldStdString*, void*, OldStdString*, int>(0x50BF30, self, out, count);
+    }
+
+    // 0x0050C400
+    static OldStdString* __stdcall string_assign(OldStdString* self, const OldStdString* other)
+    {
+        return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50C400, self, other);
+    }
+
+    // 0x0050C3F0
+    static const char* string_get_data(const OldStdString* self)
+    {
+        return self->data;
+    }
+
+    // 0x0050BBF0
+    static void string_dtor(OldStdString* self)
+    {
+        interop::thiscall<void, void*>(0x50BBF0, self);
     }
 
     // 0x00509B20
-    static void sub_509B20(char* a1, const char* a2, int a3)
+    static void sub_509B20(char* dest, const char* src, int count)
     {
-        interop::call<void, char*, const char*, int>(0x00509B20, a1, a2, a3);
+        OldStdString src_str;
+        OldStdString sliced;
+
+        // Build src_str from the source string, then truncate it to the first
+        // `count` Shift-JIS characters and copy the result into dest.
+        // Used for the typewriter reveal animation of the save name.
+        string_ctor_from_cstr(&src_str, src);
+        string_slice(&src_str, &sliced, count);
+        string_assign(&src_str, &sliced);
+        string_dtor(&sliced);
+        strcpy(dest, string_get_data(&src_str));
+        string_dtor(&src_str);
+    }
+
+    // 0x0050BE30
+    // Copies a Shift-JIS substring: skips `skipChars` characters from `self`,
+    // then copies up to `maxChars` characters into `out`.
+    static OldStdString* __stdcall string_sjis_copy(OldStdString* self, OldStdString* out, int skipChars, int maxChars)
+    {
+        return interop::thiscall<OldStdString*, void*, void*, int, int>(0x50BE30, self, out, skipChars, maxChars);
     }
 
     // 0x00509B80
     static void sub_509B80(char* a1, const char* a2, int a3, int a4)
     {
-        interop::call<void, char*, const char*, int, int>(0x00509B80, a1, a2, a3, a4);
+        OldStdString src_str;
+        OldStdString sliced;
+
+        // Build src_str from the source string, then extract the substring
+        // starting after `a3` Shift-JIS characters, keeping up to `a4`
+        // characters, and copy the result into a1.
+        // Used to grab the current character of the save name being typed.
+        string_ctor_from_cstr(&src_str, a2);
+        string_sjis_copy(&src_str, &sliced, a3, a4);
+        string_assign(&src_str, &sliced);
+        string_dtor(&sliced);
+        strcpy(a1, string_get_data(&src_str));
+        string_dtor(&src_str);
+    }
+
+    // 0x0050C5C0
+    static bool __stdcall string_eq_cstr(OldStdString* self, const char* s)
+    {
+        return interop::thiscall<bool, void*, const char*>(0x50C5C0, self, s) != 0;
     }
 
     // 0x00509BE0
     static int sub_509BE0(const char* a1)
     {
-        return interop::call<int, const char*>(0x00509BE0, a1);
+        OldStdString name;
+        string_ctor_from_cstr(&name, a1);
+        // A save name consisting of only a space, underscore, or Shift-JIS blank
+        // character is treated as an invalid/blank name (error sound is played).
+        if (string_eq_cstr(&name, " ")            // 0x51D868 - half-width space
+            || string_eq_cstr(&name, "\x81\x40")  // 0x540B48 - full-width space
+            || string_eq_cstr(&name, "_")         // 0x540B44 - underscore
+            || string_eq_cstr(&name, "\x81\x51")) // 0x5220D4
+        {
+            string_dtor(&name);
+            return 1;
+        }
+        else
+        {
+            string_dtor(&name);
+            return 0;
+        }
+    }
+
+    // 0x0050BFF0
+    // Stores the last `count` Shift-JIS characters of `self` into `out` and returns `out`.
+    static OldStdString* __stdcall string_right(OldStdString* self, OldStdString* out, int count)
+    {
+        return interop::thiscall<OldStdString*, void*, OldStdString*, int>(0x50BFF0, self, out, count);
+    }
+
+    // 0x0050C630
+    // Returns true if `self` differs from the C string `s`.
+    static bool __stdcall string_ne_cstr(OldStdString* self, const char* s)
+    {
+        return interop::thiscall<bool, void*, const char*>(0x50C630, self, s) != 0;
+    }
+
+    // 0x005099A0
+    // Changes the current save folder. If `name` is ".." the folder moves up one
+    // directory level; otherwise a subfolder named `name` is entered. The resulting
+    // path is stored as the global save folder via sub_509940.
+    static void sub_5099A0(char* name)
+    {
+        OldStdString nameStr; // std::string built from the card name
+        OldStdString path;    // working folder path
+        OldStdString tmp;     // temporary substring
+
+        string_ctor_from_cstr(&nameStr, name);
+
+        if (string_eq_cstr(&nameStr, ".."))
+        {
+            // Move up one directory level.
+            string_ctor_from_cstr(&path, GetSaveFolder());
+
+            // tmp = the last character of the current folder.
+            string_right(&path, &tmp, 1);
+            bool hasTrailingSlash = string_eq_cstr(&tmp, "\\");
+            string_dtor(&tmp);
+
+            if (hasTrailingSlash)
+            {
+                // Drop the trailing backslash.
+                string_slice(&path, &tmp, std_string_sjis_len(&path) - 1);
+                string_assign(&path, &tmp);
+                string_dtor(&tmp);
+            }
+
+            // Truncate at the last backslash to reach the parent directory.
+            int sep = sub_50BD50(&path, "\\");
+            if (sep >= 0)
+            {
+                string_slice(&path, &tmp, sep);
+                string_assign(&path, &tmp);
+                string_dtor(&tmp);
+            }
+        }
+        else
+        {
+            // Enter a subfolder named after the card.
+            string_ctor_from_cstr(&path, GetSaveFolder());
+
+            string_right(&path, &tmp, 1);
+            bool missingTrailingSlash = string_ne_cstr(&tmp, "\\");
+            string_dtor(&tmp);
+
+            if (missingTrailingSlash)
+                sub_50C4E0(&path, "\\");
+
+            sub_50C4E0(&path, name);
+        }
+
+        sub_50C4E0(&path, "\\");
+        sub_509940((char*)string_get_data(&path));
+        string_dtor(&path);
+        string_dtor(&nameStr);
     }
 
     // 0x00432110
+    // Builds the memory card save file name (without the .BIOHAZARD2 extension)
+    // into str. The name is composed of Shift-JIS parts as:
+    //   <player> [<extreme level digit>]＿<save count>＿<room>
+    // e.g. "レオン＿０１＿警察署　　待合室" (＿ = fullwidth underscore 0x8151).
+    // If a save file already on the memory card (Cards list) uses that name,
+    // "_2", "_3", ... is appended and the scan is repeated until the name is unique.
     static int format_save_name0(char* str, int player, int saveCnt, int saveRoom, int extremeLv)
     {
-        return interop::call<int, char*, int, int, int, int>(0x00432110, str, player, saveCnt, saveRoom, extremeLv);
+        char base[264];      // player + extreme level + save count + room
+        char candidate[264]; // candidate save name (gets "_N" suffix on collision)
+        char cardName[264];  // existing card save name with the extension stripped
+
+        strcpy(base, _save_player_names[player]);
+        if (extremeLv)
+            strcat(base, _save_number_names[extremeLv]);
+        strcat(base, _save_name_sep); // ＿
+        strcat(base, _save_number_names[saveCnt / 10]);
+        strcat(base, _save_number_names[saveCnt % 10]);
+        strcat(base, _save_name_sep); // ＿
+        strcat(base, _save_room_names[saveRoom]);
+        strcpy(candidate, base);
+
+        // Reject names already present on the memory card by appending
+        // "_2", "_3", ... and re-scanning until the name is unique.
+        int dupCount = 1;
+        for (;;)
+        {
+            bool duplicate = false;
+            for (int cardIndex = 0; cardIndex < gGameTable.cnt0; cardIndex++)
+            {
+                if (dupCount == 0)
+                    return wsprintfA(str, candidate); // unreachable: dupCount only increments
+
+                strcpy(cardName, (const char*)gGameTable.Cards + 276 * cardIndex);
+                if (char* dot = strrchr(cardName, '.'))
+                    *dot = '\0';
+                if (strcmp(cardName, candidate) == 0)
+                {
+                    wsprintfA(candidate, "%s_%d", base, ++dupCount);
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate)
+                break;
+        }
+
+        strcpy(str, candidate);
+        return strlen(str); // the original returns an unused leftover value here
     }
 
     // 0x00432380
-    static int format_save_name1(char* str, int player, int saveCnt, int saveRoom, int extremeLv, int a6, int a7)
+    static int
+    format_save_name1(char* str, int player, int saveCnt, int saveRoom, int extremeLv, int cardCursor, int cardSelect)
     {
-        return interop::call<int, char*, int, int, int, int, int, int>(
-            0x00432380, str, player, saveCnt, saveRoom, extremeLv, a6, a7);
+        char name[264];      // base name without numeric suffix
+        char candidate[264]; // current candidate (base or base_N)
+        char cardName[264];  // file name of an existing card entry
+
+        // Build "<player>[<extreme>]＿<saveCnt>＿<room>".
+        strcpy(name, _save_player_names[player]);
+        if (extremeLv)
+            strcat(name, _save_number_names[extremeLv]);
+        strcat(name, _save_name_sep);
+        strcat(name, _save_number_names[saveCnt / 10]);
+        strcat(name, _save_number_names[saveCnt % 10]);
+        strcat(name, _save_name_sep);
+        strcat(name, _save_room_names[saveRoom]);
+        strcpy(candidate, name);
+
+        // If the name already exists on the card, and not in the slot being
+        // overwritten (index cardCursor + cardSelect - 1), append a "_N"
+        // suffix and scan the card again.
+        int suffix = 1;
+        bool restart;
+        do
+        {
+            restart = false;
+            for (int i = 0; i < gGameTable.cnt0; i++)
+            {
+                if (!suffix)
+                    return wsprintfA(str, candidate); // unreachable: suffix only increments
+                strcpy(cardName, (const char*)gGameTable.Cards + i * 276);
+                char* dot = strrchr(cardName, '.');
+                if (dot)
+                    *dot = 0;
+                if (strcmp(cardName, candidate) == 0)
+                {
+                    if (cardCursor + cardSelect - 1 != i)
+                    {
+                        wsprintfA(candidate, "%s_%d", name, ++suffix);
+                        restart = true;
+                    }
+                    break;
+                }
+            }
+        } while (restart);
+
+        strcpy(str, candidate);
+        return 0;
     }
 
     // 0x00432620
+    // Displays the memory card result message on the save screen.
+    // 'string' indexes a table of Shift-JIS messages (see card_write_result):
+    //   0 = Claire scenario data, 1 = Leon scenario data,
+    //   2 = load failed, 3 = save failed, 4 = no message.
+    // Uses the shared SavePrint (0x00431470) implementation in openre.cpp.
     static int save_print_tbl(int string)
     {
-        return interop::call<int, int>(0x00432620, string);
+        if (gGameTable.is_480p)
+            return SavePrint(0, 416, _save_warning[string], 3, 0);
+        else
+            return SavePrint(0, 208, _save_warning[string], 3, 0);
     }
 
     // 0x004C7830
-    static void save_push()
+    static uint8_t save_push()
     {
-        interop::call(0x004C7830);
+        // Backs up the current player state and game flags into the save data
+        // buffer (the reverse of load_pop).
+        gGameTable.byte_98E9A6 = gGameTable.pl.id;
+        gGameTable.word_98E9BE = *(uint16_t*)&gGameTable.pl.m.pos.x;
+        gGameTable.word_98E9C2 = *(uint16_t*)&gGameTable.pl.m.pos.z;
+        gGameTable.word_98E9C0 = *(uint16_t*)&gGameTable.pl.m.pos.y;
+        gGameTable.word_98EE78 = gGameTable.pl.cdir.y;
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_10))
+        {
+            gGameTable.dword_98E99C = 0;
+        }
+        else
+        {
+            gGameTable.dword_98E99C = set_game_seconds(1);
+        }
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
+        {
+            set_flag(FlagGroup::Status, FG_STATUS_17, true);
+            gGameTable.nExtremeLv = (int16_t)gGameTable.ex_battle_mode;
+            std::memcpy(&gGameTable.dword_98EEF0, &gGameTable.dword_989E94, 0x3C);
+        }
+
+        gGameTable.word_98E9B4 = (uint16_t)((gGameTable.byte_691F68 << 8) | gGameTable.byte_691F6A);
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EASY))
+        {
+            set_flag(FlagGroup::Status, FG_STATUS_EASY, true);
+        }
+        if (check_flag(FlagGroup::System, FG_SYSTEM_12))
+        {
+            set_flag(FlagGroup::Status, 2, true); // fg_status bit 29 (0x20000000)
+        }
+
+        gGameTable.dword_98E9B0 = gGameTable.fg_status;
+        gGameTable.word_98E9B6 = gGameTable.pl.life;
+        gGameTable.byte_98E9AB = gGameTable.poison_timer;
+        gGameTable.word_98E9AC = gGameTable.poison_status;
+
+        gGameTable.pad_98E9A8[0] = gGameTable.sfx_vol; // byte_98E9A8
+        uint8_t result = gGameTable.byte_98F1B6;
+        gGameTable.pad_98E9A8[1] = gGameTable.bgm_vol; // byte_98E9A9
+        gGameTable.byte_98E9A5 = gGameTable.byte_9888D9;
+        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        return result;
     }
 
     // 0x004C7980
-    static void load_pop()
+    static char load_pop()
     {
-        interop::call(0x004C7980);
-    }
-
-    // 0x00432670
-    static int16_t get_menu_key()
-    {
-        return interop::call<int16_t>(0x00432670);
+        // Restore the flag state saved into the memory card buffer (see save_push).
+        gGameTable.fg_status = gGameTable.dword_98E9B0;
+        if ((gGameTable.dword_98E9B0 & 0x4000000) != 0)
+            gGameTable.fg_system |= 0x20; // FG_SYSTEM_EASY
+        if ((gGameTable.dword_98E9B0 & 0x20000000) != 0)
+            gGameTable.fg_system |= 0x80000; // FG_SYSTEM_12
+        gGameTable.byte_989EEA = (uint8_t)gGameTable.current_cut;
+        marni::out();
+        gGameTable.byte_691F68 = (uint8_t)(gGameTable.word_98E9B4 >> 8);
+        gGameTable.byte_691F6A = (uint8_t)(gGameTable.word_98E9B4 & 0xFF);
+        gGameTable.pl.life = gGameTable.word_98E9B6;
+        gGameTable.poison_timer = gGameTable.byte_98E9AB;
+        gGameTable.poison_status = (uint16_t)gGameTable.word_98E9AC;
+        auto result = gGameTable.byte_98E9A5;
+        gGameTable.sfx_vol = gGameTable.pad_98E9A8[0];
+        gGameTable.bgm_vol = gGameTable.pad_98E9A8[1];
+        gGameTable.byte_9888D9 = result;
+        gGameTable.byte_98F1B6 = gGameTable.byte_98E9AA;
+        return result;
     }
 
     // Backs up the inventory and consumes one ink ribbon before writing a save.
@@ -483,7 +933,7 @@ namespace openre::save
                 {
                     if ((gGameTable.key_trg & 0x1000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
                     {
-                        switch (sub_431D10(gGameTable.card_scroll, &gGameTable.card_select, cardMode))
+                        switch (card_menu_action(gGameTable.card_scroll, &gGameTable.card_select, cardMode))
                         {
                         case 0:
                             cardState = CARD_STATE_SAVE_NEW;
@@ -817,9 +1267,14 @@ namespace openre::save
     }
 
     // 0x00509840
+    // Returns the current save folder path. On first use the path is built from
+    // the module file name (the directory of the running executable, with a
+    // trailing backslash) and cached in the OG save-path string at 0x689F44.
     char* GetSaveFolder()
     {
-        return interop::call<char*>(0x00509840);
+        if (std_string_sjis_len(save_path_string()) == 0)
+            sub_509860();
+        return save_path_string()->data;
     }
 
     void save_init_hooks()
