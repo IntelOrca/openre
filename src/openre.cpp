@@ -2378,6 +2378,15 @@ namespace openre
         }
     }
 
+    // Common work after the display mode has changed (F8 / ALT+ENTER).
+    static void after_resolution_change()
+    {
+        gGameTable.byte_680591 = 120;
+        cursor_op();
+        gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+        font_create();
+    }
+
     // Handles a keyboard event delivered by the SDL window module.
     // vk is a Win32 VK code, repeat is the key auto-repeat flag.
     void handle_key(int vk, bool repeat)
@@ -2422,16 +2431,9 @@ namespace openre
             if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
             {
                 if (marni::change_resolution(gGameTable.pMarni))
-                {
-                    gGameTable.byte_680591 = 120;
-                    cursor_op();
-                    gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
-                    font_create();
-                }
+                    after_resolution_change();
                 else
-                {
                     marni::out("???", "winmain.cpp");
-                }
             }
             break;
         case VK_F9:
@@ -2645,7 +2647,22 @@ namespace openre
                 ssclose();
                 font_delete();
                 return quit_cleanup();
-            case system::window::EventType::KeyDown: handle_key(ev.vk, ev.repeat); break;
+            case system::window::EventType::KeyDown:
+                if (!ev.repeat && ev.vk == VK_RETURN && ev.alt)
+                {
+                    // ALT+ENTER toggles between windowed and fullscreen, keeping
+                    // the last window position/size.
+                    if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
+                    {
+                        if (marni::toggle_fullscreen(gGameTable.pMarni))
+                            after_resolution_change();
+                    }
+                }
+                else
+                {
+                    handle_key(ev.vk, ev.repeat);
+                }
+                break;
             case system::window::EventType::KeyUp: input_wmkeyup(&gGameTable.input, ev.vk); break;
             case system::window::EventType::FocusGained: wnd_activate(); break;
             case system::window::EventType::FocusLost:
@@ -2760,16 +2777,8 @@ namespace openre
         {
             marni::set_gpu_flag();
             gGameTable.scaler.type = 15872;
-            if (gGameTable.pMarni->xsize == 640)
-            {
-                gGameTable.scaler.rate_x = 2.0f;
-                gGameTable.scaler.rate_y = 2.0f;
-            }
-            else
-            {
-                gGameTable.scaler.rate_x = 1.0f;
-                gGameTable.scaler.rate_y = 1.0f;
-            }
+            gGameTable.scaler.rate_x = (float)gGameTable.pMarni->xsize / gGameTable.pMarni->render_w;
+            gGameTable.scaler.rate_y = (float)gGameTable.pMarni->ysize / gGameTable.pMarni->render_h;
             gGameTable.scaler.prj = gGameTable.global_prj;
             gGameTable.scaler.rgb0 = gGameTable.global_rgb;
             gGameTable.scaler.c_x = gGameTable.global_cx + 160;

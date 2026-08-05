@@ -29,6 +29,7 @@ namespace openre::marni
     Marni* __stdcall init(Marni* self, void* hWnd, int width, int height);
     long __stdcall message(Marni* self, void* hWnd, uint32_t msg, void* wParam, void* lParam);
     bool __stdcall change_resolution(Marni* self);
+    bool __stdcall toggle_fullscreen(Marni* self);
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
     void __stdcall unload_texture(Marni* self, int handle);
     int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z);

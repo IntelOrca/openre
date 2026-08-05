@@ -23,6 +23,7 @@ namespace openre::system::window
         EventType type = EventType::None;
         int vk = 0;          // Win32 VK code for KeyDown/KeyUp
         bool repeat = false; // key auto-repeat (was lParam & 0x40000000)
+        bool alt = false;    // Alt modifier held during a key event
         int data1 = 0;
         int data2 = 0;
     };
@@ -31,6 +32,11 @@ namespace openre::system::window
     bool init();
     // Destroys the window and shuts SDL down.
     void destroy();
+
+    // Toggles borderless desktop fullscreen on the game window.
+    bool set_fullscreen(bool fullscreen);
+    // Sets the window client area size (windowed mode).
+    bool set_window_size(int width, int height);
 
     // Underlying Win32 window handle (never SDL_Window*).
     void* get_hwnd();

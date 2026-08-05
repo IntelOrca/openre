@@ -78,10 +78,12 @@ namespace openre::system::window
                 event.type = EventType::KeyDown;
                 event.vk = sdl_keycode_to_vk(sdlEvent.key.key);
                 event.repeat = sdlEvent.key.repeat;
+                event.alt = (sdlEvent.key.mod & SDL_KMOD_ALT) != 0;
                 break;
             case SDL_EVENT_KEY_UP:
                 event.type = EventType::KeyUp;
                 event.vk = sdl_keycode_to_vk(sdlEvent.key.key);
+                event.alt = (sdlEvent.key.mod & SDL_KMOD_ALT) != 0;
                 break;
             case SDL_EVENT_WINDOW_FOCUS_GAINED: event.type = EventType::FocusGained; break;
             case SDL_EVENT_WINDOW_FOCUS_LOST: event.type = EventType::FocusLost; break;
@@ -137,6 +139,20 @@ namespace openre::system::window
         if (!gWindow)
             return nullptr;
         return SDL_GetPointerProperty(SDL_GetWindowProperties(gWindow), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+    }
+
+    bool set_fullscreen(bool fullscreen)
+    {
+        if (!gWindow)
+            return false;
+        return SDL_SetWindowFullscreen(gWindow, fullscreen);
+    }
+
+    bool set_window_size(int width, int height)
+    {
+        if (!gWindow)
+            return false;
+        return SDL_SetWindowSize(gWindow, width, height);
     }
 
     void* get_hinstance()

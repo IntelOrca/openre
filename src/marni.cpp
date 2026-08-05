@@ -1,10 +1,12 @@
 #include "marni.h"
 #include "interop.hpp"
+#include "logger.h"
 #include "marni_movie.h"
 #include "openre.h"
 #include "re2.h"
 #include "str.h"
 #include "system_config.h"
+#include "system_window.h"
 
 #include <algorithm>
 #include <cstring>
@@ -224,9 +226,13 @@ namespace openre::marni
         RECT rc;
         ZeroMemory(&rc, sizeof(RECT));
         if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
-            rc.top = -(GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CYCAPTION));
-
-        if (self->resolutions[self->modes].width == 640)
+        {
+            // Borderless fullscreen: the movie window covers the whole screen.
+            // (The original offset it up by the frame/caption height to
+            // compensate for the exclusive-fullscreen window frame.)
+            GetClientRect((HWND)self->hWnd, &rc);
+        }
+        else if (self->resolutions[self->modes].width == 640)
         {
             rc.right = 640;
             rc.bottom = 480;
@@ -326,10 +332,37 @@ namespace openre::marni
         interop::thiscall<int, Marni*>(0x004022E0, self);
     }
 
+    // The windowed mode index to restore when leaving fullscreen via ALT+ENTER.
+    // Updated in change_display_mode whenever we switch away from a windowed mode.
+    static int g_last_windowed_mode = -1;
+
     // 0x00402500
     bool __stdcall change_resolution(Marni* self)
     {
         return change_display_mode(self, self->modes + 1 >= (uint32_t)self->res_count ? 0 : self->modes + 1);
+    }
+
+    // ALT+ENTER: toggles between the current windowed mode and the fullscreen
+    // mode. Leaving fullscreen restores the last windowed mode, keeping the
+    // window position and size the user had before (SDL restores the window
+    // geometry when it exits fullscreen).
+    bool __stdcall toggle_fullscreen(Marni* self)
+    {
+        for (auto i = 0; i < self->res_count; i++)
+        {
+            if (self->resolutions[i].fullscreen > 0)
+            {
+                if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+                {
+                    auto mode = g_last_windowed_mode;
+                    if (mode < 0 || mode >= self->res_count || self->resolutions[mode].fullscreen > 0)
+                        mode = 0;
+                    return change_display_mode(self, mode);
+                }
+                return change_display_mode(self, i);
+            }
+        }
+        return false;
     }
 
     // 0x00402530
@@ -445,24 +478,10 @@ namespace openre::marni
             surface_fill(&self->surface2, 0, 0, 0);
         }
 
-        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
-        {
-            auto fullscreen = self->resolutions[self->modes].fullscreen;
-            if (fullscreen == 1)
-            {
-                auto surface0 = (LPDIRECTDRAWSURFACE7)self->surface0.pDDsurface;
-                auto surface2 = (LPDIRECTDRAWSURFACE7)self->surface2.pDDsurface;
-                surface2->Flip(surface0, DDFLIP_WAIT);
-            }
-            else if (fullscreen == 2 || fullscreen == 3)
-            {
-                flip_blt(self, (int32_t)(self->render_w * self->aspect_x), (int32_t)(self->render_h * self->aspect_y));
-            }
-        }
-        else
-        {
-            flip_blt(self, self->xsize, self->ysize);
-        }
+        // Both windowed and borderless fullscreen present the render surface by
+        // blitting it into the window (the original exclusive fullscreen used a
+        // DirectDraw flip chain, which is no longer created).
+        flip_blt(self, self->xsize, self->ysize);
     }
 
     // 0x00402BC0
@@ -496,6 +515,10 @@ namespace openre::marni
         if (mode < self->res_count)
         {
             auto originalMode = self->modes;
+            // Remember the last windowed mode so ALT+ENTER can restore it (with
+            // its position and size) when leaving fullscreen.
+            if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
+                g_last_windowed_mode = originalMode;
             self->modes = mode;
             const auto& r = self->resolutions[mode];
             if (change_mode(self, r.width, r.height, r.depth))
@@ -503,6 +526,14 @@ namespace openre::marni
                 out("Direct3D::ChangeDisplayMode - (%d->%d) w:%d h:%d bpp:%d", "");
                 str::string_assign(&gGameTable.marni_config.display_mode, generate_res_string(&r));
                 self->var_8C8318 = 0;
+                logging::logInfo(
+                    "[marni] Display mode changed: {} -> {} ({}x{} {}bpp fullscreen:{})",
+                    originalMode,
+                    mode,
+                    r.width,
+                    r.height,
+                    r.depth,
+                    r.fullscreen);
                 return true;
             }
             self->modes = originalMode;
@@ -592,6 +623,37 @@ namespace openre::marni
 
     // 0x00403ec0
 
+    // Computes the letterboxed 4:3 rectangle (in screen coordinates) used to
+    // present the render in borderless fullscreen. The rect is derived from the
+    // actual window rect (GetWindowRect) rather than SDL display bounds: the
+    // DirectDraw window-attached primary surface is sized to the window client
+    // area in the process's DPI coordinate space, and GetWindowRect reports the
+    // window in exactly that space (SDL_GetDisplayBounds can report a different,
+    // physical-pixel DPI scale, which made the letterbox rect cover the whole
+    // window and look stretched).
+    static void compute_fullscreen_window_rect(Marni* self)
+    {
+        RECT window;
+        if (GetWindowRect((HWND)self->hWnd, &window) && (window.right - window.left) > 0 && (window.bottom - window.top) > 0)
+        {
+            auto winW = window.right - window.left;
+            auto winH = window.bottom - window.top;
+            double scale = std::min((double)winW / self->xsize, (double)winH / self->ysize);
+            auto rectW = (int)(self->xsize * scale);
+            auto rectH = (int)(self->ysize * scale);
+            SetRect(
+                (LPRECT)&self->window_rect,
+                window.left + (winW - rectW) / 2,
+                window.top + (winH - rectH) / 2,
+                window.left + (winW + rectW) / 2,
+                window.top + (winH + rectH) / 2);
+        }
+        else
+        {
+            SetRect((LPRECT)&self->window_rect, 0, 0, self->xsize, self->ysize);
+        }
+    }
+
     // 0x00403F30
     static int __stdcall init_all(Marni* self)
     {
@@ -604,8 +666,10 @@ namespace openre::marni
         self->ysize = r.height;
         self->bpp = r.depth;
         self->is_gpu_busy = 1;
-        gGameTable.error
-            = dd_set_coop_level((HWND)self->hWnd, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPDIRECTDRAW2)self->pDirectDraw2);
+        // Fullscreen is handled via the SDL3 borderless window, so DirectDraw
+        // always stays in windowed cooperative level (exclusive fullscreen with
+        // SetDisplayMode is unsupported on modern Windows).
+        gGameTable.error = dd_set_coop_level((HWND)self->hWnd, 0, (LPDIRECTDRAW2)self->pDirectDraw2);
         self->is_gpu_busy = 0;
         if (gGameTable.error)
         {
@@ -615,47 +679,27 @@ namespace openre::marni
             return 0;
         }
         get_z_buffer_caps(self);
-        invalidate_window(
-            (HWND)self->hWnd, self->xsize, self->ysize, self->gpu_flag & GpuFlags::GPU_FULLSCREEN, (LPRECT)&self->window_rect);
         if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
-            self->is_gpu_busy = 1;
-            gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)->SetDisplayMode(self->xsize, self->ysize, self->bpp, 0, 0);
-            self->is_gpu_busy = 0;
-            if (gGameTable.error)
-            {
-                out();
-                error(gGameTable.error);
-                self->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
-                return 0;
-            }
-
-            const auto& r2 = self->resolutions[self->modes];
-            switch (r2.fullscreen)
-            {
-            case 1: SetRect((LPRECT)&self->window_rect, 0, 0, r2.width, r2.height); break;
-            case 2:
-                self->xsize = self->render_w;
-                self->ysize = self->render_h;
-                SetRect(
-                    (LPRECT)&self->window_rect,
-                    (r2.width / 2) - (self->render_w / 2),
-                    (r2.height / 2) - (self->render_h / 2),
-                    (r2.width / 2) + (self->render_w / 2),
-                    (r2.height / 2) + (self->render_h / 2));
-                break;
-            case 3:
-                self->xsize = self->render_w;
-                self->ysize = self->render_h;
-                SetRect((LPRECT)&self->window_rect, 0, 0, r2.width, r2.height);
-                break;
-            }
+            // Borderless fullscreen: let SDL3 cover the display and render at the
+            // fullscreen mode's native resolution (a 4:3 mode sized for the
+            // display), then letterbox it into the window. Keeping xsize/ysize at
+            // the mode resolution is essential - overriding it with the window
+            // rect size made DirectDraw surface/D3D device creation fail, leaving
+            // a frozen black screen.
+            system::window::set_fullscreen(true);
+            compute_fullscreen_window_rect(self);
             gGameTable.dword_54413C = 1;
         }
-        else if (self->resolutions[self->modes].fullscreen == 0xFFFFFFFF)
+        else
         {
-            self->xsize = self->render_w;
-            self->ysize = self->render_h;
+            system::window::set_fullscreen(false);
+            if (self->resolutions[self->modes].fullscreen == 0xFFFFFFFF)
+            {
+                self->xsize = self->render_w;
+                self->ysize = self->render_h;
+            }
+            invalidate_window((HWND)self->hWnd, self->xsize, self->ysize, 0, (LPRECT)&self->window_rect);
         }
 
         DDSURFACEDESC desc;
@@ -664,79 +708,52 @@ namespace openre::marni
         self->aspect_x = (float)((double)self->xsize / self->render_w);
         self->aspect_y = (float)((double)self->ysize / self->render_h);
 
+        // Both windowed and borderless fullscreen use a window-attached primary
+        // surface plus an offscreen render surface. The original exclusive
+        // fullscreen flip chain is never used (it required SetDisplayMode).
+        desc.dwFlags = DDSD_CAPS;
+        desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+        gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                               ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
+        if (gGameTable.error != 0)
+        {
+            out();
+            return 0;
+        }
+        desc.dwWidth = self->xsize;
+        desc.ddsCaps.dwCaps
+            = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
+        desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+        desc.dwHeight = self->ysize;
+        gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)
+                               ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface, NULL);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+        gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)->CreateClipper(0, (LPDIRECTDRAWCLIPPER*)&self->pClipper, NULL);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+        gGameTable.error = ((LPDIRECTDRAWCLIPPER)self->pClipper)->SetHWnd(0, (HWND)self->hWnd);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+        gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
+        if (gGameTable.error)
+        {
+            out();
+            return 0;
+        }
+
         if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
-            auto fullscreen = self->resolutions[self->modes].fullscreen;
-            if (fullscreen == 1)
-            {
-                desc.dwBackBufferCount = 1;
-                desc.dwFlags = DDSD_BACKBUFFERCOUNT | DDSD_CAPS;
-                desc.ddsCaps.dwCaps = DDSCAPS_3DDEVICE | DDSCAPS_PRIMARYSURFACE | DDSCAPS_FLIP | DDSCAPS_COMPLEX;
-                gGameTable.error
-                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
-                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
-                if (gGameTable.error != 0)
-                {
-                    out();
-                    return 0;
-                }
-
-                DDSCAPS v55;
-                v55.dwCaps = DDSCAPS_BACKBUFFER;
-                gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)
-                                       ->GetAttachedSurface((LPDDSCAPS)&v55, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface);
-                if (gGameTable.error != 0)
-                {
-                    out();
-                    return 0;
-                }
-            }
-            else if (fullscreen > 1 && fullscreen <= 3)
-            {
-                desc.dwFlags = DDSD_CAPS;
-                desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-                gGameTable.error
-                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
-                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
-                if (gGameTable.error != 0)
-                {
-                    out();
-                    return 0;
-                }
-                desc.dwWidth = self->xsize;
-                desc.ddsCaps.dwCaps
-                    = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
-                desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-                desc.dwHeight = self->ysize;
-                gGameTable.error
-                    = ((LPDIRECTDRAW2)self->pDirectDraw2)
-                          ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface, NULL);
-                if (gGameTable.error)
-                {
-                    out();
-                    return 0;
-                }
-                gGameTable.error
-                    = ((LPDIRECTDRAW2)self->pDirectDraw2)->CreateClipper(0, (LPDIRECTDRAWCLIPPER*)&self->pClipper, NULL);
-                if (gGameTable.error)
-                {
-                    out();
-                    return 0;
-                }
-                gGameTable.error = ((LPDIRECTDRAWCLIPPER)self->pClipper)->SetHWnd(0, (HWND)self->hWnd);
-                if (gGameTable.error)
-                {
-                    out();
-                    return 0;
-                }
-                gGameTable.error
-                    = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
-                if (gGameTable.error)
-                {
-                    out();
-                    return 0;
-                }
-            }
+            // Black-fill the primary so the letterbox bars are clean.
             get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
             RECT rc;
             SetRect(&rc, 0, 0, desc.dwWidth, desc.dwHeight);
@@ -745,52 +762,6 @@ namespace openre::marni
             ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
             ddbltfx.dwSize = sizeof(DDBLTFX);
             ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->Blt(&rc, 0, 0, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
-        }
-        else
-        {
-            desc.dwFlags = DDSD_CAPS;
-            desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-            gGameTable.error
-                = ((LPDIRECTDRAW2)self->pDirectDraw2)
-                      ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface2.pDDsurface, NULL);
-            if (gGameTable.error != 0)
-            {
-                out();
-                return 0;
-            }
-            desc.dwWidth = self->xsize;
-            desc.ddsCaps.dwCaps
-                = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
-            desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-            desc.dwHeight = self->ysize;
-            gGameTable.error
-                = ((LPDIRECTDRAW2)self->pDirectDraw2)
-                      ->CreateSurface((LPDDSURFACEDESC)&desc, (LPDIRECTDRAWSURFACE*)&self->surface0.pDDsurface, NULL);
-            if (gGameTable.error)
-            {
-                out();
-                return 0;
-            }
-            gGameTable.error
-                = ((LPDIRECTDRAW2)self->pDirectDraw2)->CreateClipper(0, (LPDIRECTDRAWCLIPPER*)&self->pClipper, NULL);
-            if (gGameTable.error)
-            {
-                out();
-                return 0;
-            }
-            gGameTable.error = ((LPDIRECTDRAWCLIPPER)self->pClipper)->SetHWnd(0, (HWND)self->hWnd);
-            if (gGameTable.error)
-            {
-                out();
-                return 0;
-            }
-            gGameTable.error
-                = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
-            if (gGameTable.error)
-            {
-                out();
-                return 0;
-            }
         }
 
         gGameTable.error = get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface);
@@ -1356,28 +1327,49 @@ namespace openre::marni
             return self;
         }
 
-        for (size_t i = 0; i < numDisplayModes; i++)
+        // Build the display mode list. The original game only offered a single 640x480
+        // fullscreen mode (plus an optional 2x windowed mode), so F8 could never cycle
+        // between different resolutions and the DirectDraw exclusive fullscreen switch
+        // fails on modern systems. Instead we offer a set of windowed resolutions plus
+        // one fullscreen mode (rendered borderless via SDL3), all of which go through
+        // the same windowed rendering path.
+        constexpr uint32_t modeCount = 5;
+        struct ModeDef
         {
-            const auto& r = res[i];
-            if (r.depth == 16 && r.width == 640 && r.height == 480)
-            {
-                auto v26 = &self->resolutions[self->res_count];
-                v26->width = r.width;
-                v26->height = r.height;
-                v26->depth = r.depth;
-                v26->fullscreen = 1;
-                self->res_count++;
-            }
-        }
-
-        if ((self->gpu_flag & GpuFlags::INCLUDE_2X) != 0)
+            uint32_t width;
+            uint32_t height;
+            uint32_t depth;
+            int32_t fullscreen;
+        };
+        const ModeDef modes[modeCount] = {
+            { (uint32_t)(2 * self->render_w),
+              (uint32_t)(2 * self->render_h),
+              (uint32_t)self->desktop_bpp,
+              0 }, // 640x480 windowed
+            { (uint32_t)(3 * self->render_w),
+              (uint32_t)(3 * self->render_h),
+              (uint32_t)self->desktop_bpp,
+              0 }, // 960x720 windowed
+            { (uint32_t)(4 * self->render_w),
+              (uint32_t)(4 * self->render_h),
+              (uint32_t)self->desktop_bpp,
+              0 }, // 1280x960 windowed
+            { (uint32_t)(6 * self->render_w),
+              (uint32_t)(6 * self->render_h),
+              (uint32_t)self->desktop_bpp,
+              0 }, // 1920x1440 windowed
+            { (uint32_t)(6 * self->render_w),
+              (uint32_t)(6 * self->render_h),
+              (uint32_t)self->desktop_bpp,
+              1 }, // 1920x1440 fullscreen (borderless, native render res)
+        };
+        for (const auto& m : modes)
         {
             auto& r = self->resolutions[self->res_count];
-            r.width = 2 * self->render_w;
-            r.height = 2 * self->render_h;
-            r.depth = self->desktop_bpp;
-            r.fullscreen = 0;
-            self->modes = self->res_count;
+            r.width = m.width;
+            r.height = m.height;
+            r.depth = m.depth;
+            r.fullscreen = m.fullscreen;
             self->res_count++;
         }
 
@@ -1480,6 +1472,13 @@ namespace openre::marni
     // 0x00406450
     static void __stdcall move(Marni* marni)
     {
+        if (marni->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+        {
+            // Borderless fullscreen moves the window to the display origin; keep
+            // the letterboxed presentation rect instead of the full client area.
+            compute_fullscreen_window_rect(marni);
+            return;
+        }
         auto window = (HWND)marni->hWnd;
         POINT point0 = {};
         ClientToScreen(window, &point0);
@@ -1513,40 +1512,11 @@ namespace openre::marni
         auto gpu_flg = marni->gpu_flag;
         if (gpu_flg & GpuFlags::GPU_FULLSCREEN)
         {
+            // Borderless fullscreen: the SDL3 window already covers the display,
+            // so just recompute the letterboxed presentation rect.
             marni->is_gpu_busy = 1;
-            gGameTable.error = dd_set_coop_level((HWND)marni->hWnd, 1, (LPDIRECTDRAW2)marni->pDirectDraw2);
-            auto res = &marni->resolutions[marni->modes];
-            gGameTable.error = ((LPDIRECTDRAW2)marni->pDirectDraw2)->SetDisplayMode(res->width, res->height, res->depth, 0, 0);
+            compute_fullscreen_window_rect(marni);
             marni->is_gpu_busy = 0;
-
-            if (gGameTable.error)
-            {
-                out("SetDisplayMode failed", "MarniSystem Direct3D::WM_Size");
-                error(gGameTable.error);
-                marni->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
-                return 0;
-            }
-
-            if (res->fullscreen == 1 || res->fullscreen == 3)
-            {
-                if (res->fullscreen == 3)
-                {
-                    marni->xsize = marni->render_w;
-                    marni->ysize = marni->render_h;
-                }
-                SetRect((LPRECT)&marni->window_rect, 0, 0, res->width, res->height);
-            }
-            else if (res->fullscreen == 2)
-            {
-                marni->xsize = marni->render_w;
-                marni->ysize = marni->render_h;
-                SetRect(
-                    (LPRECT)&marni->window_rect,
-                    res->width / 2 - marni->render_w / 2,
-                    res->height / 2 - marni->render_h / 2,
-                    marni->render_w / 2 + res->width / 2,
-                    marni->render_h / 2 + res->height / 2);
-            }
 
             restore_surfaces(marni);
             marni->var_8C7EE0 = 0;
@@ -2499,13 +2469,12 @@ namespace openre::marni
     // 0x0040EE60
     static int invalidate_window(HWND hWnd, int width, int height, int /*fullscreen*/, LPRECT lpResRect)
     {
-        RECT rc;
-        SetRect(&rc, 0, 0, width, height);
-        BOOL hasMenu = GetMenu(hWnd) != 0;
-        DWORD style = GetWindowLongA(hWnd, GWL_STYLE);
-        AdjustWindowRectEx(&rc, style, hasMenu, 0);
-        SetWindowPos(hWnd, 0, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-        SetWindowPos(hWnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+        // SDL3 owns the Win32 window and ignores raw SetWindowPos size changes
+        // (the window is created non-resizable), so resize through SDL instead.
+        system::window::set_window_size(width, height);
+        // The original binary dropped the window to HWND_BOTTOM here to keep it
+        // behind the desktop, but on a modern OS that just hides the game behind
+        // other windows on every F8 press, so we skip the Z-order change.
 
         if (lpResRect)
         {
