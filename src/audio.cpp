@@ -1007,9 +1007,40 @@ namespace openre::audio
     // 0x00434140
     static int ss_unload_bgm(int type, int index)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x00434140;
-        return p(type, index);
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        if (type == 5)
+        {
+            if ((unsigned int)index <= 2 && ss_stop_group(5, index))
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferBgm[index];
+                if (!pDSB)
+                    return 1;
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferBgm[index] = 0;
+                return 1;
+            }
+        }
+        else
+        {
+            if (type != 6)
+                return 1;
+            if ((unsigned int)index <= 1 && ss_stop_group(6, -1))
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferSBgm[index];
+                if (pDSB)
+                {
+                    if (pDSB->Release())
+                        return 0;
+                    gGameTable.audio_BufferSBgm[index] = 0;
+                    return 1;
+                }
+                return 1;
+            }
+        }
+        return 0;
     }
 
     // 0x004341E0
@@ -1837,6 +1868,7 @@ namespace openre::audio
         interop::writeJmp(0x00433C40, &ss_stop_all);
         interop::writeJmp(0x00433DC0, &ss_shutdown);
         interop::writeJmp(0x00433F10, &ss_unload_group);
+        interop::writeJmp(0x00434140, &ss_unload_bgm);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
