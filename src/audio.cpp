@@ -21,6 +21,11 @@ namespace openre::audio
 {
     namespace
     {
+        // Standalone globals (not present in GameTable): set when a BGM/SBGM
+        // buffer's current position is non-zero (i.e. it has been started).
+        uint32_t* dword_689DCC = (uint32_t*)0x689DCC;
+        uint32_t* dword_689DD0 = (uint32_t*)0x689DD0;
+
         // Releases a memory block previously obtained from GlobalAlloc/GlobalLock.
         // Matches the original double GlobalHandle()/GlobalUnlock/GlobalFree idiom.
         void free_hglobal_pointer(void* p)
@@ -139,9 +144,81 @@ namespace openre::audio
     // 0x00433C40
     static int ss_stop_all()
     {
-        using sig = int (*)();
-        auto p = (sig)0x00433C40;
-        return p();
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        auto is_playing = [](uint32_t buf) {
+            auto pDSB = (LPDIRECTSOUNDBUFFER)buf;
+            DWORD status = 0;
+            pDSB->GetStatus(&status);
+            return (status & DSBSTATUS_PLAYING) != 0;
+        };
+
+        // BufferArms [32] — return 0 as soon as a playing buffer is found.
+        for (int i = 0; i < 32; i++)
+        {
+            if (gGameTable.audio_BufferArms[i] && is_playing(gGameTable.audio_BufferArms[i]))
+                return 0;
+        }
+        // BufferCore [22]
+        for (int i = 0; i < 22; i++)
+        {
+            if (gGameTable.audio_BufferCore[i] && is_playing(gGameTable.audio_BufferCore[i]))
+                return 0;
+        }
+        // BufferDoor [4]
+        for (int i = 0; i < 4; i++)
+        {
+            if (gGameTable.audio_BufferDoor[i] && is_playing(gGameTable.audio_BufferDoor[i]))
+                return 0;
+        }
+        // BufferEnemy [32]
+        for (int i = 0; i < 32; i++)
+        {
+            if (gGameTable.audio_BufferEnemy[i] && is_playing(gGameTable.audio_BufferEnemy[i]))
+                return 0;
+        }
+        // BufferRoom [48]
+        for (int i = 0; i < 48; i++)
+        {
+            if (gGameTable.audio_BufferRoom[i] && is_playing(gGameTable.audio_BufferRoom[i]))
+                return 0;
+        }
+        // BufferBgm [3] — also flag non-zero current positions.
+        for (int i = 0; i < 3; i++)
+        {
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferBgm[i];
+            if (pDSB)
+            {
+                DWORD v10 = 0;
+                pDSB->GetCurrentPosition((LPDWORD)&v10, nullptr);
+                if (v10)
+                    *dword_689DCC = 1;
+                if (is_playing(gGameTable.audio_BufferBgm[i]))
+                    return 0;
+            }
+        }
+        // BufferSBgm [2]
+        for (int i = 0; i < 2; i++)
+        {
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferSBgm[i];
+            if (pDSB)
+            {
+                DWORD v10 = 0;
+                pDSB->GetCurrentPosition((LPDWORD)&v10, nullptr);
+                if (v10)
+                    dword_689DD0[i] = 1;
+                if (is_playing(gGameTable.audio_BufferSBgm[i]))
+                    return 0;
+            }
+        }
+        // BufferVoice [2]
+        for (int i = 0; i < 2; i++)
+        {
+            if (gGameTable.audio_BufferVoice[i] && is_playing(gGameTable.audio_BufferVoice[i]))
+                return 0;
+        }
+        return 1;
     }
 
     // 0x00433DC0
@@ -1533,6 +1610,7 @@ namespace openre::audio
         interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
         interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x004338F0, &ss_play);
+        interop::writeJmp(0x00433C40, &ss_stop_all);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
