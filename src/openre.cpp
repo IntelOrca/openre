@@ -22,12 +22,11 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "system_window.h"
 #include "tim.h"
 #include "title.h"
 #include "window.h"
 #include <ddraw.h>
-
-#include <SDL3/SDL.h>
 
 #include <cstring>
 #include <windows.h>
@@ -101,7 +100,7 @@ namespace openre
     // 0x004427E0
     void update_timer()
     {
-        auto time = timeGetTime();
+        auto time = system::window::get_ticks();
         gGameTable.timer_current = time;
         gGameTable.timer_last = time;
         gGameTable.timer_10 = time * 10;
@@ -2379,107 +2378,70 @@ namespace openre
         }
     }
 
-    // 0x00441A00
-    LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+    // Handles a keyboard event delivered by the SDL window module.
+    // vk is a Win32 VK code, repeat is the key auto-repeat flag.
+    void handle_key(int vk, bool repeat)
     {
-        auto marni = gGameTable.pMarni;
-        if (marni != nullptr)
+        if (repeat) // last key state?
+            return;
+
+        gGameTable.byte_689ABC = 1;
+        gGameTable.vk_press |= 0x80;
+
+        auto hWnd = (HWND)system::window::get_hwnd();
+        switch (vk)
         {
-            auto result = marni::message(marni, hWnd, Msg, (void*)wParam, (void*)lParam);
-            if (result == 0)
-            {
-                return 0;
-            }
-        }
-        gGameTable.vk_press &= 0x1F;
-        switch (Msg)
-        {
-        case WM_CREATE: input_init(&gGameTable.input); break;
-        case WM_DESTROY:
-            gGameTable.hwnd = nullptr;
-            rsrc_release();
-            ssclose();
-            font_delete();
-            PostQuitMessage(0);
-            return 0;
-        case WM_ACTIVATE: wnd_activate(); break;
-        case WM_ACTIVATEAPP:
-            if (wParam)
-                wnd_activate();
-#ifndef DEBUG
-            else
-                wnd_deactivate();
-#endif
+        case VK_F11:
+        case VK_SNAPSHOT:
+            screenshot();
+            SetFocus(hWnd);
             break;
-        case WM_KILLFOCUS:
-#ifndef DEBUG
-            input_pause(&gGameTable.input);
-#endif
+        case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
+        case VK_F2:
+            g_speed_multiplier -= 1;
+            if (g_speed_multiplier < 1)
+                g_speed_multiplier = 1;
+            SetFocus(hWnd);
             break;
-        case WM_CLOSE: marni::kill(); return DefWindowProc(hWnd, Msg, wParam, lParam);
-        case WM_KEYUP: input_wmkeyup(&gGameTable.input, wParam); break;
-        case WM_KEYDOWN:
-            if (lParam & 0x40000000) // last key state?
-                break;
-            gGameTable.byte_689ABC = 1;
-            gGameTable.vk_press |= 0x80;
-            switch (wParam)
+        case VK_F3:
+            g_speed_multiplier += 1;
+            if (g_speed_multiplier > 5)
+                g_speed_multiplier = 5;
+            SetFocus(hWnd);
+            break;
+        case VK_F4:
+            gGameTable.vk_press |= 1; // inventory
+            SetFocus(hWnd);
+            break;
+        case VK_F5:
+            gGameTable.vk_press |= 2; // options
+            SetFocus(hWnd);
+            break;
+        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
+        case VK_F8:
+            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
             {
-            case VK_F11:
-            case VK_SNAPSHOT:
-                screenshot();
-                SetFocus(hWnd);
-                break;
-            case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
-            case VK_F2:
-                g_speed_multiplier -= 1;
-                if (g_speed_multiplier < 1)
-                    g_speed_multiplier = 1;
-                SetFocus(hWnd);
-                break;
-            case VK_F3:
-                g_speed_multiplier += 1;
-                if (g_speed_multiplier > 5)
-                    g_speed_multiplier = 5;
-                SetFocus(hWnd);
-                break;
-            case VK_F4:
-                gGameTable.vk_press |= 1; // inventory
-                SetFocus(hWnd);
-                break;
-            case VK_F5:
-                gGameTable.vk_press |= 2; // options
-                SetFocus(hWnd);
-                break;
-            case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
-            case VK_F8:
-                if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
+                if (marni::change_resolution(gGameTable.pMarni))
                 {
-                    if (marni::change_resolution(gGameTable.pMarni))
-                    {
-                        gGameTable.byte_680591 = 120;
-                        cursor_op();
-                        gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
-                        font_create();
-                    }
-                    else
-                    {
-                        marni::out("???", "winmain.cpp");
-                    }
+                    gGameTable.byte_680591 = 120;
+                    cursor_op();
+                    gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+                    font_create();
                 }
-                break;
-            case VK_F9:
-                gGameTable.vk_press |= 0x40; // exit to menu
-                break;
-            default:
-                input_wmkeydown(&gGameTable.input, wParam);
-                SetFocus(hWnd);
-                break;
+                else
+                {
+                    marni::out("???", "winmain.cpp");
+                }
             }
             break;
-        default: return DefWindowProc(hWnd, Msg, wParam, lParam);
+        case VK_F9:
+            gGameTable.vk_press |= 0x40; // exit to menu
+            break;
+        default:
+            input_wmkeydown(&gGameTable.input, vk);
+            SetFocus(hWnd);
+            break;
         }
-        return 0;
     }
 
     // 0x00441910
@@ -2636,51 +2598,14 @@ namespace openre
     // 0x00441DC0
     static bool init_instance(HINSTANCE hInstance, HINSTANCE hPrevInstance)
     {
-        gGameTable.hInstance = hInstance;
-        if (!hPrevInstance)
+        if (!system::window::init())
         {
-            WNDCLASSA wndClass = {};
-            wndClass.lpfnWndProc = WndProc;
-            wndClass.cbClsExtra = 0;
-            wndClass.cbWndExtra = 0;
-            wndClass.hInstance = hInstance;
-            wndClass.hIcon = LoadIconA(hInstance, (LPCSTR)0xA3);
-            wndClass.hCursor = LoadCursorA(0, (LPCSTR)0x7F00);
-            wndClass.hbrBackground = (HBRUSH)GetStockObject(4);
-            wndClass.lpszMenuName = 0;
-            wndClass.lpszClassName = windowTitle;
-            RegisterClassA(&wndClass);
+            return false;
         }
 
-        DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
-
-        RECT windowRect;
-        windowRect.left = 0;
-        windowRect.right = 640;
-        windowRect.top = 0;
-        windowRect.bottom = 480;
-        AdjustWindowRect(&windowRect, windowStyleFlags, 0);
-
-        gGameTable.hwnd = (void*)CreateWindowExA(
-            0,
-            windowTitle,
-            windowTitle,
-            windowStyleFlags,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            windowRect.right - windowRect.left,
-            windowRect.bottom - windowRect.top,
-            NULL,
-            NULL,
-            hInstance,
-            NULL);
-
-        auto window = (HWND)gGameTable.hwnd;
-
-        ShowWindow(window, SW_NORMAL);
-        SetForegroundWindow(window);
-        UpdateWindow(window);
-
+        gGameTable.hInstance = system::window::get_hinstance();
+        gGameTable.hwnd = system::window::get_hwnd();
+        gGameTable.window_active = 1; // SDL may not deliver a focus event if another window owns focus
         return true;
     }
 
@@ -2688,27 +2613,61 @@ namespace openre
 
     // ── Helper functions ──────────────────────────────────────────────────
 
-    // Returns false when WM_QUIT received (caller should exit immediately)
+    // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
+    static bool quit_cleanup()
+    {
+        marni::kill();
+        config_write();
+        if (gGameTable.byte_680592 == 1)
+        {
+            gGameTable.byte_680592 = 0;
+            ShowCursor(true);
+        }
+        SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
+        return false;
+    }
+
+    // Returns false when quit requested (caller should exit immediately)
     static bool process_messages()
     {
-        MSG msg;
-        while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+        system::window::Event ev;
+        while (system::window::poll_event(ev))
         {
-            if (msg.message == WM_QUIT)
+            auto marni = gGameTable.pMarni;
+            gGameTable.vk_press &= 0x1F;
+            switch (ev.type)
             {
-                timeEndPeriod(1);
+            case system::window::EventType::Quit: return quit_cleanup();
+            case system::window::EventType::CloseRequested:
                 marni::kill();
-                config_write();
-                if (gGameTable.byte_680592 == 1)
+                gGameTable.hwnd = nullptr;
+                rsrc_release();
+                ssclose();
+                font_delete();
+                return quit_cleanup();
+            case system::window::EventType::KeyDown: handle_key(ev.vk, ev.repeat); break;
+            case system::window::EventType::KeyUp: input_wmkeyup(&gGameTable.input, ev.vk); break;
+            case system::window::EventType::FocusGained: wnd_activate(); break;
+            case system::window::EventType::FocusLost:
+#ifndef DEBUG
+                wnd_deactivate();
+                input_pause(&gGameTable.input);
+#endif
+                break;
+            case system::window::EventType::Moved:
+            case system::window::EventType::Resized:
+                if (marni != nullptr)
                 {
-                    gGameTable.byte_680592 = 0;
-                    ShowCursor(true);
+                    marni::message(
+                        marni,
+                        system::window::get_hwnd(),
+                        ev.type == system::window::EventType::Moved ? WM_MOVE : WM_SIZE,
+                        (void*)0,
+                        (void*)MAKELPARAM(ev.data1, ev.data2));
                 }
-                SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
-                return false;
+                break;
+            default: break;
             }
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
         }
         return true;
     }
@@ -2842,13 +2801,6 @@ namespace openre
     // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
-        if (!SDL_Init(0))
-        {
-            logging::logError("[SDL3] SDL_Init failed: {}", SDL_GetError());
-            return 1;
-        }
-        logging::logInfo("[SDL3] Initialized");
-
         const char* mutexName = "bio2.658b45ea117473d4.game";
 
         gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
@@ -2876,15 +2828,17 @@ namespace openre
         if (init_instance(hInstance, hPrevInstance))
         {
             auto window = (HWND)gGameTable.hwnd;
-            ImmAssociateContext(window, NULL);
+            ImmAssociateContext(window, NULL); // disable IME for the game window
+
+            input_init(&gGameTable.input);
 
             auto marniPtr = (Marni*)operator_new(sizeof(Marni));
             gGameTable.pMarni = marni::init(marniPtr, window, 320, 240);
             if (!gGameTable.pMarni->is_gpu_active || !marni::request_display_mode_count(gGameTable.pMarni))
             {
                 win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);
-                DestroyWindow(window);
-                window = 0;
+                system::window::destroy();
+                return 0;
             }
 
             cursor_op();
@@ -2902,7 +2856,6 @@ namespace openre
 
             // Increase timer resolution for accurate Sleep(1)
             constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
-            timeBeginPeriod(1);
 
             uint32_t lastFrameTime = gGameTable.timer_last;
 
@@ -2915,19 +2868,19 @@ namespace openre
                 // 2. Window inactive → sleep until next message
                 if (!gGameTable.window_active)
                 {
-                    WaitMessage();
+                    system::window::wait_event();
                     continue;
                 }
 
                 // 3. Frame rate throttle
-                auto now = timeGetTime();
+                auto now = system::window::get_ticks();
                 auto budget = frameRateTable[gGameTable.vsync_rate / 2];
                 auto elapsed = 10 * (now - lastFrameTime);
 
                 if (elapsed < budget)
                 {
                     if (budget - elapsed >= 30) // >= 3ms margin
-                        Sleep(1);
+                        system::window::delay(1);
                     continue;
                 }
 
@@ -2968,7 +2921,6 @@ void onAttach()
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
     interop::writeJmp(0x00509CF0, ck_installkey);
-    interop::writeJmp(0x00441A00, WndProc);
     interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
     interop::writeJmp(0x004315D0, save_menu_draw);
@@ -3024,7 +2976,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
     case DLL_PROCESS_DETACH:
         // Perform any necessary cleanup.
-        SDL_Quit();
+        system::window::destroy();
         break;
     }
     return TRUE; // Successful DLL_PROCESS_ATTACH.
