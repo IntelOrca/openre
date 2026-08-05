@@ -1536,7 +1536,111 @@ namespace openre::audio
         return result;
     }
 
-    // 0x004348f0
+    // 0x004EF070
+    static int bgm_ck_room(int a, int b, int c)
+    {
+        using sig = int (*)(int, int, int);
+        auto p = (sig)0x004EF070;
+        return p(a, b, c);
+    }
+
+    // 0x004348F0
+    static LPDIRECTSOUNDBUFFER ss_set_pan(int type, unsigned int index, int pan)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return (LPDIRECTSOUNDBUFFER)1;
+
+        // Clamp pan to [-10000, 10000] (the original scales by 23 first).
+        int v4 = 23 * pan;
+        if (v4 >= -10000)
+        {
+            if (v4 > 10000)
+                v4 = 10000;
+        }
+        else
+        {
+            v4 = -10000;
+        }
+
+        // Mono speaker configuration forces pan to center.
+        if (gGameTable.audio_SpeakerConfig == 1)
+            v4 = 0;
+
+        uint32_t* v5 = nullptr;
+        switch (type)
+        {
+        case 0: // door (0..3)
+            if (index >= 4)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferDoor[index];
+            break;
+        case 1: // arms (0..0x1F)
+            if (index >= 0x20)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferArms[index];
+            break;
+        case 2: // room (0..0x2F)
+            if (index >= 0x30)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferRoom[index];
+            break;
+        case 3: // enemy (0..0x1F)
+            if (index >= 0x20)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferEnemy[index];
+            break;
+        case 4: // core (0..0x15)
+            if (index > 0x15)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferCore[index];
+            break;
+        case 5: // bgm (0..2)
+            if (index <= 2)
+            {
+                v5 = &gGameTable.audio_BufferBgm[index];
+                break;
+            }
+            if (bgm_ck_room(0, 8, -1) == 1)
+                return nullptr;
+            bgm_ck_room(0, 9, -1);
+            return nullptr;
+        case 6: // sbgm (0..1)
+            if (index > 1)
+            {
+                if (bgm_ck_room(3, 0, -1) == 1)
+                    return nullptr;
+                if (bgm_ck_room(0, 9, -1) != 1)
+                    return nullptr;
+                v5 = &gGameTable.audio_BufferSBgm[1];
+            }
+            else
+            {
+                v5 = &gGameTable.audio_BufferSBgm[index];
+            }
+            break;
+        case 7: // voice (0..1)
+            if (index > 1)
+                return nullptr;
+            v5 = &gGameTable.audio_BufferVoice[index];
+            break;
+        default:
+            return nullptr;
+        }
+
+        // Shared tail: all paths that resolve a buffer land here.
+        if (!v5)
+            return nullptr;
+
+        auto result = (LPDIRECTSOUNDBUFFER)*v5;
+        if (result)
+        {
+            // SetPan lives at vtable offset 0x40; S_OK (0) is returned as
+            // pointer value 1 so callers can test truthiness.
+            HRESULT hr = result->SetPan(v4);
+            result = (LPDIRECTSOUNDBUFFER)(hr == 0);
+        }
+        return result;
+    }
 
     // 0x00434AB0
     static int ss_set_vol(int type, int index, int vol)
@@ -2341,6 +2445,7 @@ namespace openre::audio
         interop::writeJmp(0x004341E0, &ss_stop_group);
         interop::writeJmp(0x004344A0, &ss_load_banks);
         interop::writeJmp(0x004347B0, &ss_get_status);
+        interop::writeJmp(0x004348F0, &ss_set_pan);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
