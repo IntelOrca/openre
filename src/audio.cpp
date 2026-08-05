@@ -152,6 +152,146 @@ namespace openre::audio
         return p();
     }
 
+    // 0x004EF0D0
+    static int room_ck_room70a()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x004EF0D0;
+        return p();
+    }
+
+    // 0x004EEF30
+    static int bgm_ck_room112()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x004EEF30;
+        return p();
+    }
+
+    // 0x004338F0
+    static void ss_play(int type, int id, int dwFlags)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return;
+
+        switch (type)
+        {
+        case 0: // door (0..3)
+        {
+            if ((unsigned int)id < 4)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferDoor[id];
+                if (pDSB)
+                {
+                    // GetStatus writes the DirectSound status bits back into `id`;
+                    // bit 0 (DSBSTATUS_PLAYING) decides whether to restart the buffer.
+                    pDSB->GetStatus((LPDWORD)&id);
+                    if ((id & 1) == 0 || (!pDSB->Stop() && !pDSB->SetCurrentPosition(0)))
+                        pDSB->Play(0, 0, dwFlags);
+                }
+            }
+            break;
+        }
+        case 1: // arms (0..0x1F)
+        {
+            if ((unsigned int)id < 0x20)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferArms[id];
+                if (pDSB)
+                {
+                    pDSB->GetStatus((LPDWORD)&id);
+                    if ((id & 1) == 0 || (!pDSB->Stop() && !pDSB->SetCurrentPosition(0)))
+                        pDSB->Play(0, 0, dwFlags);
+                }
+            }
+            break;
+        }
+        case 2: // room (0..0x2F)
+        {
+            int v7 = id;
+            if ((unsigned int)id < 0x30)
+            {
+                if (room_ck_room70a())
+                {
+                    if (v7 < 34)
+                        v7 += 6;
+                    if (v7 == 17)
+                        ss_play(2, 12, 0);
+                }
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferRoom[v7];
+                if (pDSB)
+                {
+                    pDSB->GetStatus((LPDWORD)&id);
+                    if ((id & 1) == 0 || (!pDSB->Stop() && !pDSB->SetCurrentPosition(0)))
+                        pDSB->Play(0, 0, dwFlags);
+                }
+            }
+            break;
+        }
+        case 3: // enemy (0..0x1F)
+        {
+            if ((unsigned int)id < 0x20)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferEnemy[id];
+                if (pDSB)
+                {
+                    pDSB->GetStatus((LPDWORD)&id);
+                    if ((id & 1) == 0 || (!pDSB->Stop() && !pDSB->SetCurrentPosition(0)))
+                        pDSB->Play(0, 0, dwFlags);
+                }
+                else
+                {
+                    bgm_ck_room112();
+                }
+            }
+            break;
+        }
+        case 4: // core (0..0x15)
+        {
+            if ((unsigned int)id <= 0x15)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferCore[id];
+                if (pDSB)
+                {
+                    pDSB->GetStatus((LPDWORD)&id);
+                    if ((id & 1) == 0 || (!pDSB->Stop() && !pDSB->SetCurrentPosition(0)))
+                        pDSB->Play(0, 0, dwFlags);
+                }
+            }
+            break;
+        }
+        case 5: // bgm (0..2)
+        {
+            if ((unsigned int)id <= 2)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferBgm[id];
+                if (pDSB)
+                    pDSB->Play(0, 0, dwFlags);
+            }
+            break;
+        }
+        case 6: // sbgm (0..1)
+        {
+            if ((unsigned int)id <= 1)
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferSBgm[id];
+                if (pDSB)
+                    pDSB->Play(0, 0, dwFlags);
+            }
+            break;
+        }
+        case 7: // voice (XA_idx)
+        {
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferVoice[gGameTable.XA_idx];
+            if (pDSB)
+                pDSB->Play(0, 0, 0);
+            break;
+        }
+        default:
+            return;
+        }
+    }
+
     // 0x00435930
     static int ss_create_buffer(HMMIO hmmio, DWORD type, DWORD sub)
     {
@@ -1392,6 +1532,7 @@ namespace openre::audio
     {
         interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
         interop::writeJmp(0x00433830, &ss_close);
+        interop::writeJmp(0x004338F0, &ss_play);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
