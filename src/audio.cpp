@@ -1046,9 +1046,142 @@ namespace openre::audio
     // 0x004341E0
     static int ss_stop_group(int type, int id)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x004341E0;
-        return p(type, id);
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        auto is_playing = [](uint32_t buf) {
+            auto pDSB = (LPDIRECTSOUNDBUFFER)buf;
+            DWORD status = 0;
+            pDSB->GetStatus(&status);
+            return (status & DSBSTATUS_PLAYING) != 0;
+        };
+
+        // Buffer selected by a valid specific Id (shared check below).
+        uint32_t buf = 0;
+
+        switch (type)
+        {
+        case 0: // door [4] — ends at BufferEnemy.
+            if (id == -1)
+            {
+                // Return 0 as soon as a playing buffer is found.
+                for (int i = 0; i < 4; i++)
+                {
+                    if (gGameTable.audio_BufferDoor[i] && is_playing(gGameTable.audio_BufferDoor[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id >= 4)
+                return 0;
+            buf = gGameTable.audio_BufferDoor[id];
+            break;
+        case 1: // arms [32] — ends at BufferVoice.
+            if (id == -1)
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    if (gGameTable.audio_BufferArms[i] && is_playing(gGameTable.audio_BufferArms[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id >= 0x20)
+                return 0;
+            buf = gGameTable.audio_BufferArms[id];
+            break;
+        case 2: // room [48] — ends at BufferCore.
+            if (id == -1)
+            {
+                for (int i = 0; i < 48; i++)
+                {
+                    if (gGameTable.audio_BufferRoom[i] && is_playing(gGameTable.audio_BufferRoom[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id >= 0x30)
+                return 0;
+            buf = gGameTable.audio_BufferRoom[id];
+            break;
+        case 3: // enemy [32] — ends at BufferBgm.
+            if (id == -1)
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    if (gGameTable.audio_BufferEnemy[i] && is_playing(gGameTable.audio_BufferEnemy[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id >= 0x20)
+                return 0;
+            buf = gGameTable.audio_BufferEnemy[id];
+            break;
+        case 4: // core [22] — ends at BufferArms.
+            if (id == -1)
+            {
+                for (int i = 0; i < 22; i++)
+                {
+                    if (gGameTable.audio_BufferCore[i] && is_playing(gGameTable.audio_BufferCore[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id > 0x15)
+                return 0;
+            buf = gGameTable.audio_BufferCore[id];
+            break;
+        case 5: // bgm [3] — ends at MarniSnd_Frequency.
+            if (id == -1)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gGameTable.audio_BufferBgm[i] && is_playing(gGameTable.audio_BufferBgm[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id > 2)
+                return 0;
+            buf = gGameTable.audio_BufferBgm[id];
+            break;
+        case 6: // sbgm [2] — ends at SpeakerConfig.
+            if (id == -1)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    if (gGameTable.audio_BufferSBgm[i] && is_playing(gGameTable.audio_BufferSBgm[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id > 1)
+                return 0;
+            buf = gGameTable.audio_BufferSBgm[id];
+            break;
+        case 7: // voice [2] — ends at MarniSnd_SoundDepth.
+            if (id == -1)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    if (gGameTable.audio_BufferVoice[i] && is_playing(gGameTable.audio_BufferVoice[i]))
+                        return 0;
+                }
+                return 1;
+            }
+            if ((unsigned int)id > 1)
+                return 0;
+            buf = gGameTable.audio_BufferVoice[id];
+            break;
+        default:
+            return 1;
+        }
+
+        // LABEL_67: a non-null buffer that is still playing blocks the group.
+        if (buf && is_playing(buf))
+            return 0;
+        return 1;
     }
 
     // 0x004344A0
@@ -1869,6 +2002,7 @@ namespace openre::audio
         interop::writeJmp(0x00433DC0, &ss_shutdown);
         interop::writeJmp(0x00433F10, &ss_unload_group);
         interop::writeJmp(0x00434140, &ss_unload_bgm);
+        interop::writeJmp(0x004341E0, &ss_stop_group);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
