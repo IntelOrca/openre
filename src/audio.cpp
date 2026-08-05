@@ -224,9 +224,101 @@ namespace openre::audio
     // 0x00433DC0
     static int ss_shutdown()
     {
-        using sig = int (*)();
-        auto p = (sig)0x00433DC0;
-        return p();
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        if (!ss_stop_all())
+            return 0;
+
+        // BufferArms [32] — ends at BufferVoice.
+        for (int i = 0; i < 32; i++)
+        {
+            if (gGameTable.audio_BufferArms[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferArms[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferArms[i] = 0;
+            }
+        }
+        // BufferCore [22] — ends at BufferArms.
+        for (int i = 0; i < 22; i++)
+        {
+            if (gGameTable.audio_BufferCore[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferCore[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferCore[i] = 0;
+            }
+        }
+        // BufferDoor [4] — ends at BufferEnemy.
+        for (int i = 0; i < 4; i++)
+        {
+            if (gGameTable.audio_BufferDoor[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferDoor[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferDoor[i] = 0;
+            }
+        }
+        // BufferEnemy [32] — ends at BufferBgm.
+        for (int i = 0; i < 32; i++)
+        {
+            if (gGameTable.audio_BufferEnemy[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferEnemy[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferEnemy[i] = 0;
+            }
+        }
+        // BufferRoom [48] — ends at BufferCore.
+        for (int i = 0; i < 48; i++)
+        {
+            if (gGameTable.audio_BufferRoom[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferRoom[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferRoom[i] = 0;
+            }
+        }
+        // BufferBgm [3] — ends at MarniSnd_Frequency.
+        for (int i = 0; i < 3; i++)
+        {
+            if (gGameTable.audio_BufferBgm[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferBgm[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferBgm[i] = 0;
+            }
+        }
+        // BufferSBgm [2] — ends at SpeakerConfig.
+        for (int i = 0; i < 2; i++)
+        {
+            if (gGameTable.audio_BufferSBgm[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferSBgm[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferSBgm[i] = 0;
+            }
+        }
+        // BufferVoice [2] — ends at MarniSnd_SoundDepth.
+        for (int i = 0; i < 2; i++)
+        {
+            if (gGameTable.audio_BufferVoice[i])
+            {
+                auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferVoice[i];
+                if (pDSB->Release())
+                    return 0;
+                gGameTable.audio_BufferVoice[i] = 0;
+            }
+        }
+        return 1;
     }
 
     // 0x004EF0D0
@@ -1611,6 +1703,7 @@ namespace openre::audio
         interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x004338F0, &ss_play);
         interop::writeJmp(0x00433C40, &ss_stop_all);
+        interop::writeJmp(0x00433DC0, &ss_shutdown);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);

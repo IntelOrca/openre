@@ -14,7 +14,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x00433830 SsClose (63)
 - [x] 0x004338F0 SsPlay (812)
 - [x] 0x00433C40 SsStopAll (370)
-- [ ] 0x00433DC0 SsShutdown (322)
+- [x] 0x00433DC0 SsShutdown (322)
 - [ ] 0x00433F10 SsUnloadGroup (528)
 - [ ] 0x00434140 SsUnloadBgm (160)
 - [ ] 0x004341E0 SsStopGroup (668)
