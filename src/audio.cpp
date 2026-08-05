@@ -26,6 +26,134 @@ namespace openre::audio
         uint32_t* dword_689DCC = (uint32_t*)0x689DCC;
         uint32_t* dword_689DD0 = (uint32_t*)0x689DD0;
 
+        // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
+        // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
+
+        // mainbmg_name_tbl @ 0x522470: 64 main-BGM names. Entries 50 and 58 are
+        // invalid (the original pointers reference a 0xFFFFFFFF sentinel at 0x669F4C).
+        constexpr const char* kMainBgmNameTbl[] = {
+            "main00_1", "main01", "main02", "main03", "main04", "main05", "main06", "main07",
+            "main08",   "main09", "main0a", "main00", "main0c", "main0d", "main0e", "main0f",
+            "main10",   "main11", "main12", "main13", "main14", "main15", "main16", "main17",
+            "main18",   "main19", "main1a", "main1b", "main1c", "main1d", "main1e", "main1f",
+            "main20",   "main21", "main22", "main23", "main24", "main25", "main26", "main27",
+            "main28",   "main29", "main2a", "main2b", "main2c", "main2d", "main2e", "main2f",
+            "main30",   "main31", nullptr, "main33", "main34", "main35", "main36", "main37",
+            "main38",   "main39", nullptr, "main00_2", "main04_1", "main0f_1", "main14_1", "main1b_1",
+        };
+
+        // subbgm_name_tbl @ 0x522628: 70 sub-BGM names. Entries 25 and 37 are invalid
+        // (0xFFFFFFFF sentinel at 0x669F4C); entry 69 is NULL.
+        constexpr const char* kSubBgmNameTbl[] = {
+            "sub00",    "sub01",  "sub02",  "sub03",  "sub04",  "sub05",  "sub2f_1", "main16",
+            "main04_1", "sub09",  "sub0a",  "sub0b",  "sub0c",  "sub0d",  "sub0e",   "sub0f",
+            "sub10",    "sub11",  "sub12",  "sub13",  "sub14",  "sub15",  "sub16",   "sub17",
+            "sub18",    nullptr,  "sub1a",  "sub1b",  "sub1c",  "main0f", "sub1e",   "sub1f",
+            "sub20",    "sub21",  "sub22",  "sub23",  "sub24",  nullptr,  "sub26",   "sub27",
+            "sub28",    "sub29",  "sub2a",  "main14", "main1b", "sub2d",  "sub2e",   "sub2f",
+            "sub30",    "main0a", "sub32",  "sub33",  "sub34",  "sub35",  "sub36",   "sub37",
+            "sub36",    "sub39",  "sub3a",  "sub3b",  "main12", "sub20",  "sub3e",   "sub3f",
+            "sub40",    "sub41",  "sub42",  "sub43",  "sub44",  nullptr,
+        };
+
+        // fs_name_tbl @ 0x522130: 54 footstep-set names.
+        constexpr const char* kFsNameTbl[] = {
+            "fs00", "fs01", "fs02", "fs03", "fs04", "fs05", "fs06", "fs07", "fs08", "fs09",
+            "fs10", "fs11", "fs12", "fs13", "fs14", "fs15", "fs16", "fs17", "fs18", "fs19",
+            "fs20", "fs21", "fs22", "fs23", "fs24", "fs25", "fs26", "fs27", "fs28", "fs29",
+            "fs30", "fs31", "fs32", "fs33", "fs34", "fs35", "fs36", "fs37", "fs38", "fs39",
+            "fs40", "fs41", "fs42", "fs43", "fs44", "fs45", "fs46", "fs47", "fs48", "fs49",
+            "fs50", "fs51", "fs52", "fs53",
+        };
+
+        // bgm_lut @ 0x522570: 61 main-BGM LUT entries (one per BGM slot), each 3
+        // signed bytes (BGM_MAIN_TBL) indexing kMainBgmNameTbl, or -1.
+        struct MainBgmLutEntry
+        {
+            int8_t field_0;
+            int8_t field_1;
+            int8_t field_2;
+        };
+        constexpr MainBgmLutEntry kMainBgmLut[] = {
+            {0, 11, 59}, {1, -1, -1}, {2, -1, -1}, {3, -1, -1}, {4, 60, -1}, {5, -1, -1},
+            {6, -1, -1}, {7, -1, -1}, {8, -1, -1}, {-1, -1, -1}, {10, -1, -1}, {0, 59, -1},
+            {12, -1, -1}, {13, -1, -1}, {14, -1, -1}, {15, 61, -1}, {16, -1, -1}, {17, -1, -1},
+            {18, -1, -1}, {19, -1, -1}, {20, 62, -1}, {21, -1, -1}, {22, -1, -1}, {23, -1, -1},
+            {24, -1, -1}, {25, -1, -1}, {26, -1, -1}, {27, -1, -1}, {28, -1, -1}, {29, -1, -1},
+            {30, -1, -1}, {31, -1, -1}, {32, -1, -1}, {33, -1, -1}, {34, -1, -1}, {35, -1, -1},
+            {36, -1, -1}, {37, -1, -1}, {38, -1, -1}, {39, -1, -1}, {40, -1, -1}, {41, -1, -1},
+            {42, -1, -1}, {43, -1, -1}, {44, -1, -1}, {45, -1, -1}, {46, -1, -1}, {47, -1, -1},
+            {48, -1, -1}, {49, -1, -1}, {50, -1, -1}, {51, -1, -1}, {52, -1, -1}, {53, -1, -1},
+            {54, -1, -1}, {55, -1, -1}, {56, -1, -1}, {57, -1, -1}, {58, -1, -1}, {0, 0, 0},
+            {0, 0, 0},
+        };
+
+        // sbgm_lut @ 0x522740: 56 sub-BGM LUT entries (one per SBGM slot), each 3
+        // signed bytes (BGM_LUT) indexing kSubBgmNameTbl, or -1.
+        struct SubBgmLutEntry
+        {
+            int8_t field_0[3];
+        };
+        constexpr SubBgmLutEntry kSubBgmLut[] = {
+            {{0, -1, -1}}, {{1, -1, -1}}, {{2, -1, -1}}, {{3, -1, -1}}, {{4, -1, -1}}, {{5, -1, -1}},
+            {{6, -1, -1}}, {{7, -1, -1}}, {{8, 9, -1}}, {{10, 11, -1}}, {{10, 12, -1}}, {{13, -1, -1}},
+            {{14, -1, -1}}, {{15, -1, -1}}, {{16, -1, -1}}, {{17, 18, -1}}, {{19, -1, -1}}, {{20, 21, -1}},
+            {{22, 23, -1}}, {{20, 24, -1}}, {{26, -1, -1}}, {{27, -1, -1}}, {{32, 28, 29}}, {{35, 43, -1}},
+            {{30, 31, -1}}, {{32, 33, -1}}, {{30, 34, -1}}, {{29, -1, -1}}, {{36, -1, -1}}, {{37, -1, -1}},
+            {{38, -1, -1}}, {{40, -1, -1}}, {{39, 46, -1}}, {{41, -1, -1}}, {{42, -1, -1}}, {{44, -1, -1}},
+            {{45, -1, -1}}, {{47, 48, 6}}, {{49, -1, -1}}, {{50, -1, -1}}, {{50, 51, -1}}, {{50, 52, -1}},
+            {{56, 53, -1}}, {{54, -1, -1}}, {{62, -1, -1}}, {{57, -1, -1}}, {{63, -1, -1}}, {{59, 55, -1}},
+            {{60, -1, -1}}, {{58, -1, -1}}, {{20, 64, -1}}, {{65, 66, -1}}, {{67, -1, -1}}, {{68, -1, -1}},
+            {{37, 11, -1}}, {{0, 0, 0}},
+        };
+
+        // footstep_tbl @ 0x522208: 205 footstep entries (FOOTSTEP_TBL), indexed as
+        // [Id * 29 + Bank] for room Id and sound bank 0..2. Each byte is an index
+        // into kFsNameTbl, or -1.
+        struct FootstepTblEntry
+        {
+            int8_t field_0;
+            int8_t field_1;
+            int8_t field_2;
+        };
+        constexpr FootstepTblEntry kFootstepTbl[] = {
+            {0, 1, 2}, {-1, -1, 3}, {-1, 4, 2}, {5, 6, 7}, {-1, 1, 2}, {-1, 8, 2},
+            {-1, 9, 10}, {-1, 11, 7}, {-1, 12, 10}, {-1, 14, 13}, {-1, 3, 18}, {-1, 15, 16},
+            {17, 16, 18}, {-1, 19, 3}, {-1, 16, 3}, {-1, -1, 16}, {-1, -1, 20}, {-1, 17, 21},
+            {-1, 17, 18}, {-1, -1, 22}, {-1, 23, 21}, {-1, 24, 25}, {12, 11, 7}, {-1, -1, 20},
+            {26, 27, 28}, {-1, -1, 2}, {-1, 23, 21}, {-1, 27, 2}, {-1, 12, 10}, {20, 29, 29},
+            {-1, -1, 25}, {-1, 30, 25}, {-1, 32, 31}, {-1, 30, 25}, {-1, 36, 33}, {18, 37, 25},
+            {-1, -1, 28}, {-1, 31, 3}, {-1, -1, 33}, {-1, -1, 38}, {-1, 12, 25}, {-1, 15, 16},
+            {39, 21, 10}, {-1, -1, 40}, {-1, 41, 40}, {-1, -1, 40}, {-1, -1, 28}, {-1, -1, 28},
+            {-1, 42, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, 28}, {0, 3, 33}, {-1, 16, 3}, {-1, -1, -1}, {-1, -1, 28}, {-1, -1, 28},
+            {-1, 49, 28}, {-1, 42, 28}, {42, 49, 28}, {7, 42, 28}, {42, 50, 28}, {42, 28, 6},
+            {-1, -1, 28}, {-1, -1, 26}, {0, 49, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, 28},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, 49, 28}, {-1, 42, 28}, {-1, 49, 28},
+            {-1, 42, 28}, {-1, 51, 42}, {-1, 52, 28}, {-1, -1, -1}, {-1, 52, 28}, {42, -1, 28},
+            {42, -1, 28}, {-1, 42, 28}, {-1, -1, 28}, {-1, 28, 42}, {-1, 53, 26}, {28, 53, 26},
+            {-1, -1, 28}, {-1, 52, 28}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, 34}, {-1, -1, 34}, {-1, 42, 34}, {-1, -1, 35},
+            {-1, 42, 34}, {-1, -1, 42}, {-1, 42, 34}, {-1, 42, 26}, {-1, 42, 34}, {-1, -1, 42},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, 42}, {-1, -1, 43}, {26, 42, 28}, {-1, -1, 42}, {26, 44, -1},
+            {26, 44, 42}, {-1, 42, 34}, {-1, -1, 35}, {-1, 26, 45}, {-1, -1, 43}, {-1, -1, 43},
+            {-1, -1, 28}, {-1, 44, 28}, {-1, -1, 46}, {-1, 26, -1}, {36, 0, 34}, {-1, -1, 28},
+            {-1, 26, 45}, {-1, -1, 47}, {-1, -1, 48}, {26, 42, 28}, {-1, 26, 28}, {28, 42, 47},
+            {-1, 26, 28}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {26, 42, 28}, {12, 42, 28}, {-1, 0, 28}, {26, 42, 28}, {-1, 42, 28}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
+            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {0, 0, 0},
+            {0, 0, 0},
+        };
+
         // Releases a memory block previously obtained from GlobalAlloc/GlobalLock.
         // Matches the original double GlobalHandle()/GlobalUnlock/GlobalFree idiom.
         void free_hglobal_pointer(void* p)
@@ -44,6 +172,9 @@ namespace openre::audio
     static int ss_stop_all();
     static int ss_stop_group(int type, int id);
     static int ss_shutdown();
+    static int ss_load_sap(DWORD type, int id, int bank, int player);
+    static int ss_load_steps(const char* name, int a2);
+    static int ss_load_bgm(const char* name, DWORD type, int sample);
     static BOOL CALLBACK acmDriverEnumCallback(HACMDRIVERID hadid, DWORD_PTR dwInstance, DWORD fdwSupport);
 
     static uint8_t get_bgm_slot(int index, int kind)
@@ -1184,12 +1315,157 @@ namespace openre::audio
         return 1;
     }
 
-    // 0x004344A0
-    static uint8_t ss_load_banks(int type, int id, int bank, int player)
+    // 0x00436370
+    static int ss_is_dual_bgm(int type, int id)
     {
-        using sig = int (*)(int, int, int, int);
-        auto p = (sig)0x004344A0;
-        return p(type, id, bank, player);
+        using sig = int (*)(int, int);
+        auto p = (sig)0x00436370;
+        return p(type, id);
+    }
+
+    // 0x00436420
+    static int ss_load_hack(int type, int id)
+    {
+        using sig = int (*)(int, int);
+        auto p = (sig)0x00436420;
+        return p(type, id);
+    }
+
+    // 0x004EEF70
+    static int room_fs_ck()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x004EEF70;
+        return p();
+    }
+
+    // 0x004344A0
+    static int ss_load_banks(int type, int id, int bank, int player)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        switch (type)
+        {
+        case 0: // ST_DOOR
+            return ss_load_sap(0, id, bank, 0);
+
+        case 1: // ST_ARMS
+            return ss_load_sap(1, id, bank, 0);
+
+        case 2: // ST_ROOM
+        {
+            int result = ss_load_sap(2, id, bank, 0);
+            if (!result)
+                return result;
+
+            // Load up to three footstep sets for this room/bank combination.
+            for (int i = 0; i < 3; i++)
+            {
+                int step = (&kFootstepTbl[id * 29 + bank].field_0)[i];
+                if (step != -1 && !ss_load_steps(kFsNameTbl[step], i))
+                    return 0;
+            }
+
+            if (room_fs_ck())
+                ss_load_sap(2, -1, 0, 0);
+            return 1;
+        }
+
+        case 3: // ST_ENEMY
+            return ss_load_sap(3, id, bank, 0);
+
+        case 4: // ST_CORE
+        {
+            int result = ss_load_sap(4, id, 0, 0);
+            if (!result)
+                return result;
+            return id == 21 || ss_load_sap(4, 22, 0, 0);
+        }
+
+        case 5: // ST_BGM
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                int v8 = (&kMainBgmLut[player].field_0)[i];
+                if (v8 == -1)
+                    continue;
+
+                int v11;
+                if (ss_is_dual_bgm(5, v8) == 1)
+                {
+                    int savedSpeaker = gGameTable.audio_SpeakerConfig;
+                    gGameTable.audio_SpeakerConfig = 1;
+                    if (ss_load_hack(5, v8) == 1)
+                    {
+                        int savedDepth = gGameTable.MarniSnd_SoundDepth;
+                        int savedFreq = gGameTable.MarniSnd_Frequency;
+                        gGameTable.MarniSnd_SoundDepth = 8;
+                        gGameTable.MarniSnd_Frequency = 11025; // 0x2B11
+                        v11 = ss_load_bgm(kMainBgmNameTbl[v8], 5, i);
+                        gGameTable.MarniSnd_Frequency = savedFreq;
+                        gGameTable.MarniSnd_SoundDepth = (uint16_t)savedDepth;
+                    }
+                    else
+                    {
+                        v11 = ss_load_bgm(kMainBgmNameTbl[v8], 5, i);
+                    }
+                    gGameTable.audio_SpeakerConfig = savedSpeaker;
+                }
+                else
+                {
+                    v11 = ss_load_bgm(kMainBgmNameTbl[v8], 5, i);
+                }
+
+                if (!v11)
+                    return 0;
+            }
+            return 1;
+        }
+
+        case 6: // ST_SBGM
+        {
+            int bankb = 0;
+            for (int i = 0; i < 2; i++)
+            {
+                int v13 = kSubBgmLut[id].field_0[i];
+                if (v13 == -1)
+                    continue;
+
+                int bgm;
+                if (ss_is_dual_bgm(6, v13) == 1)
+                {
+                    int savedSpeaker = gGameTable.audio_SpeakerConfig;
+                    if (ss_load_hack(6, v13) == 1)
+                    {
+                        int savedDepth = gGameTable.MarniSnd_SoundDepth;
+                        int savedFreq = gGameTable.MarniSnd_Frequency;
+                        bgm = ss_load_bgm(kSubBgmNameTbl[v13], 6, i);
+                        gGameTable.MarniSnd_Frequency = savedFreq;
+                        gGameTable.MarniSnd_SoundDepth = (uint16_t)savedDepth;
+                    }
+                    else
+                    {
+                        bgm = ss_load_bgm(kSubBgmNameTbl[v13], 6, i);
+                    }
+                    gGameTable.audio_SpeakerConfig = savedSpeaker;
+                }
+                else
+                {
+                    bgm = ss_load_bgm(kSubBgmNameTbl[v13], 6, i);
+                }
+
+                bankb += bgm << i;
+            }
+            return bankb;
+        }
+
+        case 7: // ST_VOICE
+            return ss_load_sap(7, id, bank, player);
+
+        default:
+            return 1;
+        }
     }
 
     // 0x004347B0
@@ -2003,6 +2279,7 @@ namespace openre::audio
         interop::writeJmp(0x00433F10, &ss_unload_group);
         interop::writeJmp(0x00434140, &ss_unload_bgm);
         interop::writeJmp(0x004341E0, &ss_stop_group);
+        interop::writeJmp(0x004344A0, &ss_load_banks);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
