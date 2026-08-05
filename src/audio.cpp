@@ -168,7 +168,7 @@ namespace openre::audio
     }
 
     // Forward declarations of functions defined later in this file.
-    static int ss_get_status(int type, int sub);
+    static LPDIRECTSOUNDBUFFER ss_get_status(int type, int sub);
     static int ss_stop_all();
     static int ss_stop_group(int type, int id);
     static int ss_shutdown();
@@ -1469,11 +1469,71 @@ namespace openre::audio
     }
 
     // 0x004347B0
-    static int ss_get_status(int type, int sub)
+    static LPDIRECTSOUNDBUFFER ss_get_status(int type, int sub)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x004347B0;
-        return p(type, sub);
+        if (!gGameTable.audio_pMarniSnd)
+            return nullptr;
+
+        uint32_t* pbuffer = nullptr;
+        switch (type)
+        {
+        case 0: // door (0..3)
+            if ((unsigned int)sub >= 4)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferDoor[sub];
+            break;
+        case 1: // arms (0..0x1F)
+            if ((unsigned int)sub >= 0x20)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferArms[sub];
+            break;
+        case 2: // room (0..0x2F)
+            if ((unsigned int)sub >= 0x30)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferRoom[sub];
+            break;
+        case 3: // enemy (0..0x1F)
+            if ((unsigned int)sub >= 0x20)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferEnemy[sub];
+            break;
+        case 4: // core (0..0x15)
+            if ((unsigned int)sub > 0x15)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferCore[sub];
+            break;
+        case 5: // bgm (0..2)
+            if ((unsigned int)sub > 2)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferBgm[sub];
+            break;
+        case 6: // sbgm (0..1)
+            if ((unsigned int)sub > 1)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferSBgm[sub];
+            break;
+        case 7: // voice (0..1)
+            if ((unsigned int)sub > 1)
+                return nullptr;
+            pbuffer = &gGameTable.audio_BufferVoice[sub];
+            break;
+        default:
+            return nullptr;
+        }
+
+        if (!pbuffer)
+            return nullptr;
+
+        auto result = (LPDIRECTSOUNDBUFFER)*pbuffer;
+        if (result)
+        {
+            // GetStatus writes the DirectSound status bits back into `sub`; on
+            // success (S_OK) that status value is returned cast to a pointer so
+            // callers can test the low bits (e.g. DSBSTATUS_PLAYING), else 0.
+            HRESULT hr = result->GetStatus((LPDWORD)&sub);
+            result = hr == 0 ? (LPDIRECTSOUNDBUFFER)sub : nullptr;
+        }
+        return result;
     }
 
     // 0x004348f0
@@ -2091,7 +2151,7 @@ namespace openre::audio
         {
             if (gGameTable.seq_ctr[0] != 0)
             {
-                auto uVar3 = ss_get_status(5, 0);
+                auto uVar3 = (DWORD)ss_get_status(5, 0);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(5, 0xffffffff);
@@ -2117,7 +2177,7 @@ namespace openre::audio
         {
             if (gGameTable.byte_693808 != 0)
             {
-                auto uVar3 = ss_get_status(5, 1);
+                auto uVar3 = (DWORD)ss_get_status(5, 1);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(6, 0);
@@ -2132,7 +2192,7 @@ namespace openre::audio
         {
             if (gGameTable.byte_693810 != 0)
             {
-                auto uVar3 = ss_get_status(5, 2);
+                auto uVar3 = (DWORD)ss_get_status(5, 2);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(6, 1);
@@ -2280,6 +2340,7 @@ namespace openre::audio
         interop::writeJmp(0x00434140, &ss_unload_bgm);
         interop::writeJmp(0x004341E0, &ss_stop_group);
         interop::writeJmp(0x004344A0, &ss_load_banks);
+        interop::writeJmp(0x004347B0, &ss_get_status);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
