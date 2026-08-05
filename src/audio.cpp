@@ -25,6 +25,9 @@ namespace openre::audio
         // buffer's current position is non-zero (i.e. it has been started).
         uint32_t* dword_689DCC = (uint32_t*)0x689DCC;
         uint32_t* dword_689DD0 = (uint32_t*)0x689DD0;
+        int* dword_693B30 = (int*)0x693B30;   // BGM per-slot volume cache, indexed 0..2
+        int* dword_6941C8 = (int*)0x6941C8;   // SBGM per-slot volume cache, indexed 0..1
+        int* dword_6941CC = (int*)0x6941CC;   // SBGM[1] volume cache
 
         // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
         // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
@@ -466,6 +469,14 @@ namespace openre::audio
     {
         using sig = int (*)();
         auto p = (sig)0x004EEF30;
+        return p();
+    }
+
+    // 0x004EEF50
+    static int bgm_ck_room115()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x004EEF50;
         return p();
     }
 
@@ -1643,11 +1654,129 @@ namespace openre::audio
     }
 
     // 0x00434AB0
-    static int ss_set_vol(int type, int index, int vol)
+    static int ss_set_vol(int type, unsigned int index, int vol)
     {
-        using sig = int (*)(int, int, int);
-        auto p = (sig)0x00434AB0;
-        return p(type, index, vol);
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        // Scale the requested volume by the master volume for the channel.
+        // BGM/SBGM channels additionally attenuate by 15 while room 115 is
+        // active (Bgm_ck_room115 returns non-zero).
+        int v4;
+        if (type == 5 || type == 6)
+        {
+            int v6 = vol;
+            if (bgm_ck_room115())
+            {
+                v6 = vol - 15;
+                if (vol - 15 < 0)
+                    v6 = 0;
+            }
+            v4 = v6 * (unsigned __int8)gGameTable.bgm_vol / 100;
+        }
+        else if (type == 7)
+        {
+            v4 = vol;
+        }
+        else
+        {
+            v4 = vol * (unsigned __int8)gGameTable.sfx_vol / 100;
+        }
+
+        // Convert the linear 0..255 volume into a DirectSound attenuation in
+        // hundredths of a decibel, clamped to [-10000, 0].
+        int v7;
+        if (v4 >= 32)
+            v7 = 2 * (9 * v4 - 1143);
+        else
+            v7 = 259 * v4 - 10000;
+        if (v7 >= -10000)
+        {
+            if (v7 > 0)
+                v7 = 0;
+        }
+        else
+        {
+            v7 = -10000;
+        }
+
+        uint32_t* v8 = nullptr;
+        switch (type)
+        {
+        case 0: // door (0..3)
+            if (index >= 4)
+                return 0;
+            v8 = &gGameTable.audio_BufferDoor[index];
+            break;
+        case 1: // arms (0..0x1F)
+            if (index >= 0x20)
+                return 0;
+            v8 = &gGameTable.audio_BufferArms[index];
+            break;
+        case 2: // room (0..0x2F)
+            if (index >= 0x30)
+                return 0;
+            v8 = &gGameTable.audio_BufferRoom[index];
+            break;
+        case 3: // enemy (0..0x1F)
+            if (index >= 0x20)
+                return 0;
+            v8 = &gGameTable.audio_BufferEnemy[index];
+            break;
+        case 4: // core (0..0x15)
+            if (index > 0x15)
+                return 0;
+            v8 = &gGameTable.audio_BufferCore[index];
+            break;
+        case 5: // bgm (0..2)
+            if (index <= 2)
+            {
+                dword_693B30[index] = v4;
+                v8 = &gGameTable.audio_BufferBgm[index];
+                break;
+            }
+            bgm_ck_room(0, 8, -1);
+            return 0;
+        case 6: // sbgm (0..1)
+            if (index > 1)
+            {
+                if (bgm_ck_room(3, 0, -1) == 1)
+                    return 0;
+                if (bgm_ck_room(0, 9, -1) != 1)
+                    return 0;
+                *dword_6941CC = v4;
+                v8 = &gGameTable.audio_BufferSBgm[1];
+            }
+            else
+            {
+                dword_6941C8[index] = v4;
+                v8 = &gGameTable.audio_BufferSBgm[index];
+            }
+            break;
+        case 7: // voice (0..1)
+            if (index > 1)
+                return 0;
+            v8 = &gGameTable.audio_BufferVoice[index];
+            break;
+        default:
+            return 0;
+        }
+
+        // Shared tail: all paths that resolve a buffer land here. The original
+        // NULL-checks v8 (LABEL_44); it can never be NULL for the fixed array
+        // slots above, but it is kept for fidelity.
+        if (!v8)
+            return 0;
+
+        auto result = (LPDIRECTSOUNDBUFFER)*v8;
+        if (result)
+        {
+            // SetVolume lives at vtable offset 0x3C; S_OK (0) is returned as
+            // value 1 so callers can test truthiness.
+            HRESULT hr = result->SetVolume(v7);
+            return hr == 0;
+        }
+        return 0;
     }
 
     // 0x00434EA0
@@ -2446,6 +2575,7 @@ namespace openre::audio
         interop::writeJmp(0x004344A0, &ss_load_banks);
         interop::writeJmp(0x004347B0, &ss_get_status);
         interop::writeJmp(0x004348F0, &ss_set_pan);
+        interop::writeJmp(0x00434AB0, &ss_set_vol);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
