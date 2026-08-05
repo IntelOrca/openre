@@ -86,10 +86,10 @@ namespace openre::system::config
         s_keyOrder.clear();
         s_loaded = true;
 
-        std::string resolvedPath;
-        if (!system::fs::exists("user://openre.ini", &resolvedPath))
+        auto info = system::fs::info("user://openre.ini");
+        if (info.kind == system::fs::FileKind::none)
         {
-            logging::logInfo("Config not found, creating new config at {}", resolvedPath);
+            logging::logInfo("Config not found, creating new config at {}", info.physicalPath);
             return;
         }
 
@@ -133,7 +133,7 @@ namespace openre::system::config
             }
         }
 
-        logging::logInfo("Config loaded from {}", resolvedPath);
+        logging::logInfo("Config loaded from {}", info.physicalPath);
     }
 
     void save()
@@ -205,12 +205,11 @@ namespace openre::system::config
         }
 
         auto content = out.str();
-        std::string resolvedPath;
-        system::fs::exists("user://openre.ini", &resolvedPath);
+        auto info = system::fs::info("user://openre.ini");
         auto result = system::fs::writeAllBytes("user://openre.ini", content.data(), content.size());
         if (result == 0)
         {
-            logging::logInfo("Config saved to {}", resolvedPath);
+            logging::logInfo("Config saved to {}", info.physicalPath);
         }
         else
         {

@@ -1,7 +1,6 @@
 #include "file.h"
 #include "gfx.h"
 #include "interop.hpp"
-#include "logger.h"
 #include "openre.h"
 #include "str.h"
 #include "stream.h"
@@ -9,7 +8,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include <windows.h>
 
 // Memory card save structures (forward-declared in file.h)
 // Must be packed to match the original binary's 1-byte alignment.
@@ -185,7 +183,7 @@ namespace openre::file
     // 0x00509780
     int file_read_save(void* buffer, const char* filename, size_t size)
     {
-        auto data = system::fs::readAllBytes((std::string("save://") + filename).c_str());
+        auto data = system::fs::readAllBytes((std::string("save://") + str::sjis_to_utf8(filename)).c_str());
         if (data.empty() || data.size() < size)
             return READ_SAVE_FILE_ERROR;
 
@@ -196,7 +194,7 @@ namespace openre::file
     // 0x005097E0
     size_t file_write_save(const char* filename, void* buffer, size_t size)
     {
-        auto result = system::fs::writeAllBytes((std::string("save://") + filename).c_str(), buffer, size);
+        auto result = system::fs::writeAllBytes((std::string("save://") + str::sjis_to_utf8(filename)).c_str(), buffer, size);
         if (result == 0)
         {
             update_timer();
@@ -208,16 +206,63 @@ namespace openre::file
     // 0x00432600
     bool remove_save(const char* path)
     {
-        return system::fs::remove((std::string("save://") + path).c_str());
+        return system::fs::remove((std::string("save://") + str::sjis_to_utf8(path)).c_str());
+    }
+
+    // 0x00435430
+    // Reads a chunk of a save file and returns its modification time. Called by
+    // the original Card_write to read save card metadata. The original used
+    // CreateFileA directly, which cannot open files stored with UTF-8 names by
+    // SDL when given a Shift-JIS filename on a non-Japanese system, so we route
+    // it through the SDL filesystem layer with codepage conversion.
+    static const char*
+    save_open_fp(const char* filename, void* buffer, uint32_t bytes, int32_t offset, uint32_t* timeHigh, uint32_t* timeLow)
+    {
+        auto utf8Path = str::sjis_to_utf8(filename);
+        // Card_write appends a backslash to the folder which already ends with
+        // one, producing a double separator SDL cannot open; collapse them.
+        std::string normalized;
+        normalized.reserve(utf8Path.size());
+        for (size_t i = 0; i < utf8Path.size(); ++i)
+        {
+            if (i > 0 && utf8Path[i] == '\\' && utf8Path[i - 1] == '\\')
+                continue;
+            normalized += utf8Path[i];
+        }
+        auto data = system::fs::readAllBytes((std::string("save://") + normalized).c_str());
+        *timeHigh = 0;
+        *timeLow = 0;
+        if (data.empty() || (size_t)offset + bytes > data.size())
+        {
+            // A zero timestamp would make Card_write's insertion loop run past
+            // the end of the card array; force insertion at the front instead.
+            *timeHigh = 0x7FFFFFFF;
+            *timeLow = 0xFFFFFFFF;
+            return nullptr;
+        }
+
+        std::memcpy(buffer, data.data() + offset, bytes);
+
+        auto info = system::fs::info((std::string("save://") + normalized).c_str());
+        if (info.kind == system::fs::FileKind::file)
+        {
+            // fs::FileInfo time is nanoseconds since 1970; FILETIME is 100ns
+            // since 1601.
+            uint64_t ft = info.lastModified / 100 + 116444736000000000ULL;
+            *timeHigh = static_cast<uint32_t>(ft >> 32);
+            *timeLow = static_cast<uint32_t>(ft & 0xFFFFFFFF);
+        }
+
+        update_timer();
+        return filename;
     }
 
     // 0x005095D0
     int file_exists(const char* path, int mode)
     {
-        std::string resolvedPath;
-        auto exists = system::fs::exists((std::string("data://") + path).c_str(), &resolvedPath);
-        str::string_assign_cstr(&gGameTable.ss_file_string, resolvedPath.c_str());
-        return exists ? 1 : 0;
+        auto info = system::fs::info((std::string("data://") + path).c_str());
+        str::string_assign_cstr(&gGameTable.ss_file_string, info.physicalPath.c_str());
+        return info.kind != system::fs::FileKind::none ? 1 : 0;
     }
 
     // 0x00441630
@@ -426,7 +471,7 @@ namespace openre::file
     // 0x00442D50
     int CreateSaveFolder(const char* path)
     {
-        return system::fs::createDirectory((std::string("save://") + path).c_str()) ? 1 : 0;
+        return system::fs::createDirectory((std::string("save://") + str::sjis_to_utf8(path)).c_str()) ? 1 : 0;
     }
 
     // 0x004326E0
@@ -441,13 +486,15 @@ namespace openre::file
         *cnt1 = 0;
         *cnt0 = 0;
 
-        auto entries = system::fs::getDirectoryContents((std::string("save://") + folder).c_str(), "*");
+        auto folderUtf8 = str::sjis_to_utf8(folder);
+        auto entries = system::fs::getDirectoryContents((std::string("save://") + folderUtf8).c_str(), "*");
         if (entries.empty())
             return -1;
 
         for (const auto& entry : entries)
         {
-            if (entry[0] != '.' && ck_valid_save(folder, (void*)entry.c_str()))
+            auto sjisEntry = str::utf8_to_sjis(entry);
+            if (sjisEntry[0] != '.' && ck_valid_save(folder, (void*)sjisEntry.c_str()))
                 ++*cnt0;
         }
 
@@ -488,43 +535,21 @@ namespace openre::file
                 return 0;
         }
 
-        // Build search pattern and enumerate files
-        char searchPath[MAX_PATH];
-        wsprintfA(searchPath, "%s*.*", file_name);
-
-        WIN32_FIND_DATAA findData;
-        HANDLE hFind = FindFirstFileA(searchPath, &findData);
-        if (hFind == INVALID_HANDLE_VALUE)
-        {
-            GetLastError();
+        // Enumerate save files and build the card list
+        auto fileUtf8 = str::sjis_to_utf8(file_name);
+        auto entries = system::fs::getDirectoryContents((std::string("save://") + fileUtf8).c_str(), "*");
+        if (entries.empty())
             return 0;
-        }
 
-        // Process first match
-        if (findData.cFileName[0] != '.' && ck_valid_save(file_name, findData.cFileName))
+        for (const auto& entry : entries)
         {
-            Card_write((SaveFile*)*cards, file_name, findData.cFileName);
-        }
-
-        // Process remaining matches
-        while (FindNextFileA(hFind, &findData))
-        {
-            if (ck_valid_save(file_name, findData.cFileName))
+            auto sjisEntry = str::utf8_to_sjis(entry);
+            if (sjisEntry[0] != '.' && ck_valid_save(file_name, (void*)sjisEntry.c_str()))
             {
-                Card_write((SaveFile*)*cards, file_name, findData.cFileName);
+                Card_write((SaveFile*)*cards, file_name, sjisEntry.c_str());
             }
         }
-
-        if (GetLastError() == ERROR_NO_MORE_FILES)
-        {
-            FindClose(hFind);
-            return 1;
-        }
-        else
-        {
-            FindClose(hFind);
-            return 0;
-        }
+        return 1;
     }
 
     void file_init_hooks()
@@ -536,6 +561,7 @@ namespace openre::file
         interop::writeJmp(0x0043C590, &load_adt);
         interop::writeJmp(0x0043C700, &load_adt_sub);
         interop::writeJmp(0x0043C890, &decompress_file_page);
+        interop::writeJmp(0x00435430, &save_open_fp);
         interop::writeJmp(0x00442D50, &CreateSaveFolder);
         interop::writeJmp(0x004DD360, &osp_read);
         interop::writeJmp(0x005094B0, &bufferize_file_0);

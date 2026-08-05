@@ -76,4 +76,12 @@ namespace openre::str
     // Returns the length (in characters) of the given C string, counting
     // Shift-JIS double-byte characters as a single character.
     int string_sjis_len_cstr(const char* s);
+
+    // Converts a Shift-JIS (CP932) encoded string to UTF-8. Returns the input
+    // unchanged if the conversion fails.
+    std::string sjis_to_utf8(const std::string& s);
+
+    // Converts a UTF-8 string to Shift-JIS (CP932). Returns the input
+    // unchanged if the conversion fails.
+    std::string utf8_to_sjis(const std::string& s);
 }

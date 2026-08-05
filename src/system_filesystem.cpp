@@ -67,9 +67,9 @@ namespace openre::system::fs
         SDL_IOStream* _stream;
     };
 
-    // --- resolve/exists/readAllBytes (unchanged) ---
+    // --- resolve (internal) / readAllBytes ---
 
-    std::string resolvePath(const char* path)
+    static std::string resolvePath(const char* path)
     {
         // Handle data:// prefix — game data files
         if (std::strncmp(path, "data://", 7) == 0)
@@ -121,15 +121,6 @@ namespace openre::system::fs
         // No recognized prefix — fail
         logging::logError("[system::fs::resolvePath] unknown path scheme: {}", path);
         return {};
-    }
-
-    bool exists(const char* path, std::string* resolvedPath)
-    {
-        auto resolvedPath2 = resolvePath(path);
-        auto exists = SDL_GetPathInfo(resolvedPath2.c_str(), nullptr);
-        if (resolvedPath != nullptr)
-            *resolvedPath = std::move(resolvedPath2);
-        return exists;
     }
 
     std::vector<uint8_t> readAllBytes(const char* path)
@@ -206,9 +197,28 @@ namespace openre::system::fs
         return 0;
     }
 
-    bool pathExists(const char* path)
+    FileInfo info(const char* path)
     {
-        return SDL_GetPathInfo(path, nullptr);
+        FileInfo result;
+        auto resolvedPath = resolvePath(path);
+        if (resolvedPath.empty())
+            return result;
+
+        result.physicalPath = std::move(resolvedPath);
+
+        SDL_PathInfo pathInfo;
+        if (!SDL_GetPathInfo(result.physicalPath.c_str(), &pathInfo))
+            return result;
+
+        switch (pathInfo.type)
+        {
+        case SDL_PATHTYPE_DIRECTORY: result.kind = FileKind::directory; break;
+        case SDL_PATHTYPE_FILE: result.kind = FileKind::file; break;
+        default: break;
+        }
+        result.size = pathInfo.size;
+        result.lastModified = pathInfo.modify_time;
+        return result;
     }
 
     bool remove(const char* path)

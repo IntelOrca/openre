@@ -3,7 +3,10 @@
 #include "interop.hpp"
 #include "re2.h"
 
+#include <windows.h>
+
 #include <cstring>
+#include <string>
 
 namespace openre::str
 {
@@ -120,5 +123,47 @@ namespace openre::str
         int len = string_sjis_len(&temp);
         string_dtor(&temp);
         return len;
+    }
+
+    std::string sjis_to_utf8(const std::string& s)
+    {
+        if (s.empty())
+            return {};
+
+        auto wideLength = MultiByteToWideChar(932, 0, s.c_str(), (int)s.size(), nullptr, 0);
+        if (wideLength <= 0)
+            return s;
+
+        std::wstring wide(wideLength, L'\0');
+        MultiByteToWideChar(932, 0, s.c_str(), (int)s.size(), wide.data(), wideLength);
+
+        auto utf8Length = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideLength, nullptr, 0, nullptr, nullptr);
+        if (utf8Length <= 0)
+            return s;
+
+        std::string utf8(utf8Length, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideLength, utf8.data(), utf8Length, nullptr, nullptr);
+        return utf8;
+    }
+
+    std::string utf8_to_sjis(const std::string& s)
+    {
+        if (s.empty())
+            return {};
+
+        auto wideLength = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+        if (wideLength <= 0)
+            return s;
+
+        std::wstring wide(wideLength, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), wide.data(), wideLength);
+
+        auto sjisLength = WideCharToMultiByte(932, 0, wide.c_str(), wideLength, nullptr, 0, nullptr, nullptr);
+        if (sjisLength <= 0)
+            return s;
+
+        std::string sjis(sjisLength, '\0');
+        WideCharToMultiByte(932, 0, wide.c_str(), wideLength, sjis.data(), sjisLength, nullptr, nullptr);
+        return sjis;
     }
 }
