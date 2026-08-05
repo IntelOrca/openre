@@ -36,6 +36,8 @@ namespace openre::audio
 
     // Forward declarations of functions defined later in this file.
     static int ss_get_status(int type, int sub);
+    static int ss_stop_all();
+    static int ss_shutdown();
     static BOOL CALLBACK acmDriverEnumCallback(HACMDRIVERID hadid, DWORD_PTR dwInstance, DWORD fdwSupport);
 
     static uint8_t get_bgm_slot(int index, int kind)
@@ -110,6 +112,44 @@ namespace openre::audio
         gGameTable.audio_BufferSBgm[1] = 0;
         gGameTable.audio_BufferVoice[1] = 0;
         return 1;
+    }
+
+    // 0x00433830
+    static int ss_close()
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        int result = ss_stop_all();
+        if (result)
+        {
+            result = ss_shutdown();
+            if (result)
+            {
+                auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
+                if (ds->Release())
+                    return 0;
+                gGameTable.audio_pMarniSnd = nullptr;
+                return 1;
+            }
+        }
+        return result;
+    }
+
+    // 0x00433C40
+    static int ss_stop_all()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x00433C40;
+        return p();
+    }
+
+    // 0x00433DC0
+    static int ss_shutdown()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x00433DC0;
+        return p();
     }
 
     // 0x00435930
@@ -1351,6 +1391,7 @@ namespace openre::audio
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
+        interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);

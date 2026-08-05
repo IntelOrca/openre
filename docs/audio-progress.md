@@ -11,7 +11,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 
 ## ss_* layer (core buffer/mixer API) — decompile first
 
-- [ ] 0x00433830 SsClose (63)
+- [x] 0x00433830 SsClose (63)
 - [ ] 0x004338F0 SsPlay (812)
 - [ ] 0x00433C40 SsStopAll (370)
 - [ ] 0x00433DC0 SsShutdown (322)
