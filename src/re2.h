@@ -1522,9 +1522,9 @@ struct GameTable
     uint8_t pad_692D65[601];            // 0x692D65
     uint16_t word_692FBE;               // 0x692FBE
     uint16_t word_692FC0;               // 0x692FC0
-    uint8_t pad_692FC2[51];             // 0x692FC2
-    uint8_t vab_id[16];                 // 0x692FF5
-    uint8_t pad_693005[59];             // 0x693005
+    uint8_t pad_692FC2[46];             // 0x692FC2
+    uint8_t vab_id[16];                 // 0x692FF0
+    uint8_t pad_693000[64];             // 0x693000
     char ss_name_step[780];             // 0x693040
     uint8_t pad_69334C[20];             // 0x69334C
     char ss_name_enemy[260];            // 0x693360

@@ -1170,7 +1170,7 @@ declare     word_691FBA             u16                     0x00691FBA
 declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
-declare     vab_id                  u8[16]                  0x00692FF5
+declare     vab_id                  u8[16]                  0x00692FF0
 declare     ss_name_step            char[780]               0x00693040
 declare     ss_name_enemy           char[260]               0x00693360
 declare     bgm_vol                 u8                      0x00693471
