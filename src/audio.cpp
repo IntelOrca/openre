@@ -1456,9 +1456,16 @@ namespace openre::audio
     // 0x00436420
     static int ss_load_hack(int type, int id)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x00436420;
-        return p(type, id);
+        if (type == 5 /* ST_BGM */)
+        {
+            if (id == 10 || id == 16 || id == 18)
+                return 1;
+        }
+        else if (type == 6 /* ST_SBGM */ && (id == 20 || (id > 50 && id <= 52)))
+        {
+            return 1;
+        }
+        return 0;
     }
 
     // 0x004EEF70
