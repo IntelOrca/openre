@@ -699,6 +699,18 @@ namespace openre::player
         }
     }
 
+    // Edge-triggered quick-turn shared by the movement routines. Returns true
+    // when the player pivots 180 degrees so callers can bail out immediately.
+    static bool try_quick_turn(PlayerEntity* player, uint32_t key_trg)
+    {
+        if (key_trg & input::KEY_TYPE_QUICK_TURN)
+        {
+            set_routine(Routine::QUICKTURN);
+            return true;
+        }
+        return false;
+    }
+
     // 0x004DA6C0
     static void pl_br_backward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
@@ -713,9 +725,14 @@ namespace openre::player
             {
                 player->cdir.y += yAxisRotationSpeed[player->d_life_u];
             }
+            // Legacy: the run key also quick-turns while walking backward.
             if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
             {
                 set_routine(Routine::QUICKTURN);
+                return;
+            }
+            if (try_quick_turn(player, key_trg))
+            {
                 return;
             }
             if ((key_trg & input::KEY_TYPE_128) != 0)
@@ -784,6 +801,10 @@ namespace openre::player
     void pl_br_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x28, 0x20, 0x16 };
+        if (try_quick_turn(player, key_trg))
+        {
+            return;
+        }
         if ((key & input::KEY_TYPE_FORWARD) == 0)
         {
             set_routine(Routine::IDLE);
@@ -842,6 +863,10 @@ namespace openre::player
     // 0x004D9D60
     void pl_br_idle(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
+        if (try_quick_turn(player, key_trg))
+        {
+            return;
+        }
         if (key & input::KEY_TYPE_ROTATE)
         {
             set_routine(Routine::ROTATE);
@@ -1223,7 +1248,10 @@ namespace openre::player
     void pl_br_run_forward(PlayerEntity* player, uint32_t key, uint32_t key_trg)
     {
         static uint8_t yAxisRotationSpeed[] = { 0x38, 0x30, 0x18 };
-        int result = player->routine_2;
+        if (try_quick_turn(player, key_trg))
+        {
+            return;
+        }
         if (key & input::KEY_TYPE_FORWARD && key & input::KEY_TYPE_RUN_AND_CANCEL)
         {
             if (player->spd.x > 50)

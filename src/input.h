@@ -7,7 +7,7 @@
 
 namespace openre::input
 {
-    // The game commands. Command state is a 19-bit mask: bit N == command N
+    // The game commands. Command state is a 20-bit mask: bit N == command N
     // active. Each command maps to one or more of the 6 legacy output values.
     enum Command : uint8_t
     {
@@ -30,6 +30,7 @@ namespace openre::input
         COMMAND_INTERACT,
         COMMAND_MAP,
         COMMAND_CHANGE_TARGET,
+        COMMAND_QUICK_TURN,
         COMMAND_COUNT,
     };
 
@@ -98,6 +99,7 @@ namespace openre::input
         KEY_TYPE_128 = 128,
         KEY_TYPE_AIM = 256,
         KEY_TYPE_RUN_AND_CANCEL = 512,
+        KEY_TYPE_QUICK_TURN = 1024, // 0x400: 180 degree turn (key_trg only)
         KEY_TYPE_4096 = 4096,
         KEY_TYPE_16384 = 16384,
     };

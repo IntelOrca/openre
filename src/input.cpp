@@ -83,7 +83,7 @@ namespace openre::input
 
     // ---- command state engine ----
 
-    // The command engine turns raw mouse/keyboard/gamepad input into a 19-bit
+    // The command engine turns raw mouse/keyboard/gamepad input into a 20-bit
     // command state via the [input] INI bindings, OR-merges the three devices,
     // computes the rising edge once on the merged state, and fans the result
     // out to the 6 legacy outputs (g_key, key_trg, dword_9885F4/word_9885FC,
@@ -99,7 +99,7 @@ namespace openre::input
 
         constexpr const char* kCommandIniNames[COMMAND_COUNT] = {
             "cancel", "accept", "up",   "down",   "left",      "right", "forward",  "backward", "turn_left",     "turn_right",
-            "aim",    "run",    "fire", "reload", "inventory", "menu",  "interact", "map",      "change_target",
+            "aim",    "run",    "fire", "reload", "inventory", "menu",  "interact", "map",      "change_target", "quick_turn",
         };
         static_assert(std::size(kCommandIniNames) == COMMAND_COUNT, "kCommandIniNames order must match Command enum");
 
@@ -121,23 +121,24 @@ namespace openre::input
             "kb:r,gp:west",                                // reload
             "kb:tab,kb:i,gp:north",                        // inventory
             "kb:escape,kb:p,gp:start",                     // menu
-            "kb:e,gp:south",                               // interact
-            "kb:m",                                        // map
+            "kb:f,gp:south",                               // interact
+            "kb:m,gp:mode",                                // map
             "gp:r_shoulder",                               // change_target
+            "kb:q",                                        // quick_turn
         };
         static_assert(std::size(kCommandDefaultTokens) == COMMAND_COUNT, "kCommandDefaultTokens order must match Command enum");
 
         // Bumped when the binding schema or default mappings change.
         // load_bindings wipes the [input] section when it mismatches so stale
         // user configs reset to the new defaults.
-        constexpr int32_t kBindingsVersion = 1;
+        constexpr int32_t kBindingsVersion = 2;
 
         // Legacy output bits each command contributes. rawState feeds
         // dword_9885F4/word_9885FC (state), rawEdgeF8 feeds dword_9885F8 and
         // rawEdgeFE feeds dword_9885FE (edges). key_trg is derived from the
         // g_key edge (key_trg = newKey & ~oldKey), so most commands only need
-        // gKey bits; a command that needs a key_trg bit without its g_key bit
-        // (change_target, which must not fire the weapon) puts it in
+        // gKey bits; a command that needs a key_trg bit without changing g_key
+        // (change_target, quick_turn) puts it in
         // keyTrgOnly and pad_set ORs it into key_trg on the command's edge.
         // Rows 2-9 (up/forward, down/backward, left/turn_left,
         // right/turn_right) intentionally repeat: movement and turning share
@@ -146,9 +147,14 @@ namespace openre::input
         // The original Pad_set wrote dword_9885F4/F8/FE unconditionally on
         // every path, so menu/UI commands (cancel, accept, fire, reload,
         // interact) carry identical bits in rawState and both edge outputs.
-        // Consumers: Title_main_wait tests dword_9885FE & 0x9FF, Computer200
-        // tests dword_9885FE & 0xF0 / & 0xF, and Config_main tests
-        // dword_9885F4 & 0x80 (interact) to drive the speaker/volume toggles.
+        // accept carries the interact bit 0x80 -- the same raw bit the
+        // original return/enter key produced -- so the title screen still
+        // advances on it (dword_9885FE & 0x9FF) while it never opens the
+        // in-game status screen (game_check_status_trigger only reads
+        // dword_9885FE & 0x800, which the inventory command emits). Consumers:
+        // Title_main_wait tests dword_9885FE & 0x9FF, Computer200 tests
+        // dword_9885FE & 0xF0 / & 0xF, and Config_main tests dword_9885F4
+        // & 0x80 (interact) to drive the speaker/volume toggles.
         struct CommandOutput
         {
             uint32_t gKey;
@@ -160,7 +166,7 @@ namespace openre::input
 
         constexpr CommandOutput kCommandOutput[COMMAND_COUNT] = {
             /* cancel     */ { 0x2000, 0, 0x2, 0x2, 0x2 },
-            /* accept     */ { 0x1000, 0, 0x800, 0x800, 0x800 },
+            /* accept     */ { 0x1000, 0, 0x80, 0x80, 0x80 },
             /* up         */ { 0x1, 0, 0x1001, 0x1001, 0x1001 },
             /* down       */ { 0x4, 0, 0x4004, 0x4004, 0x4004 },
             /* left       */ { 0x8, 0, 0x8008, 0x8008, 0x8008 },
@@ -171,13 +177,19 @@ namespace openre::input
             /* turn_right */ { 0x2, 0, 0x2002, 0x2002, 0x2002 },
             /* aim        */ { 0x100, 0, 0, 0, 0 },
             /* run        */ { 0x200, 0, 0, 0, 0 },
-            /* fire       */ { 0x30, 0, 0x10, 0x10, 0x10 },
+            // g_key = run (0x200) | weapon fire/change-target (0x20) | knife (0x10).
+            // The 0x20 bit deliberately re-enters key_trg on the shot's edge
+            // (same as the original fire key); raw keeps 0x10 only.
+            /* fire       */ { 0x230, 0, 0x10, 0x10, 0x10 },
             /* reload     */ { 0x40, 0, 0x40, 0x40, 0x40 },
-            /* inventory  */ { 0, 0, 0, 0, 0x800 },
+            // rawEdgeF8 0x800 lets the inventory key also confirm on the save
+            // screen and skip doors, matching the original Z key.
+            /* inventory  */ { 0, 0, 0, 0x800, 0x800 },
             /* menu       */ { 0, 0, 0, 0, 0x100 },
             /* interact   */ { 0x80, 0, 0x80, 0x80, 0x80 },
             /* map        */ { 0x4000, 0, 0, 0, 0 },
             /* change_target */ { 0, 0x20, 0, 0, 0 },
+            /* quick_turn */ { 0, 0x400, 0, 0, 0 },
         };
         static_assert(std::size(kCommandOutput) == COMMAND_COUNT, "kCommandOutput order must match Command enum");
 
@@ -907,7 +919,7 @@ namespace openre::input
 
         uint32_t rawTrigger = 0;  // edge value for dword_9885F8
         uint32_t feEdge = 0;      // edge value for dword_9885FE (low word)
-        uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target)
+        uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target, quick_turn)
 
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
         {
@@ -987,7 +999,7 @@ namespace openre::input
         // edge of g_key; commands with only a key_trg bit (e.g. menu dirs)
         // also carry that bit in gKey so the edge is produced here.
         // keyTrgExtra supplies bits that must NOT appear in g_key (e.g.
-        // change_target, which shares bit 0x20 with the weapon fire).
+        // change_target and quick_turn).
         uint32_t keyTrigger = rising_edge(newKey, oldKey) | keyTrgExtra;
 
         gGameTable.dword_9885FE = (gGameTable.dword_9885FE & 0xFFFF0000) | (feEdge & 0xFFFF);
