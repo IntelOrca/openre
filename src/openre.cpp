@@ -2429,10 +2429,17 @@ namespace openre
             break;
         case VK_F6:
             // Toggle the active render backend: 0 = D3D reference (DirectDraw
-            // primary surface Blt), 1 = GPU (SDL_GPU swapchain present). See
-            // docs/gfx-migration.md.
-            gfx::set_active_backend(gfx::active_backend() ? 0 : 1);
-            logging::logInfo("[gfx] active backend toggled to {}", gfx::active_backend());
+            // primary surface Blt), 1 = GPU (SDL_GPU swapchain present). Only
+            // available in gfx_mode "both"; see docs/gfx-migration.md.
+            if (gfx::backend_toggle_enabled())
+            {
+                gfx::set_active_backend(gfx::active_backend() ? 0 : 1);
+                logging::logInfo("[gfx] active backend toggled to {}", gfx::active_backend());
+            }
+            else
+            {
+                logging::logInfo("[gfx] F6 ignored: backend toggle only available in 'both' mode");
+            }
             SetFocus(hWnd);
             break;
         case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;

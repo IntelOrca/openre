@@ -763,12 +763,28 @@ the fresh-process runs):
 **Config flag.** Persistent `[video]` section in the INI config
 (`system::config`, `user://openre.ini` = `%APPDATA%\openre\openre.ini`):
 
-- `render_backend = d3d|gpu` (default `d3d`) — selects the startup backend.
-- `disable_d3d_reference = 0|1` (default `0`) — when `1` and the GPU backend is
-  active, the D3D reference backend stops its per-frame forwarding.
-- `OPENRE_GFX_BACKEND=1` env var still overrides the config for dev/automated
-  runs (highest precedence). F6 remains a live dev-only toggle and does not
-  persist.
+- `gfx_mode = both|d3d|gpu` (default `both`) — selects which backends are
+  created and may present:
+  - `both` (current behaviour): D3D reference **and** GPU backend both
+    initialised; the D3D reference forwards to real DirectDraw; F6 toggles the
+    presenter live. Startup presenter = `render_backend` (default `d3d`).
+  - `d3d`: **only D3D** — the GPU backend is not created at all (no SDL_GPU
+    device, no swapchain claim), active backend forced to D3D, F6 ignored.
+  - `gpu`: **only GPU** — the GPU backend presents (active=1) and the D3D
+    reference stops its per-frame forwarding (as if `disable_d3d_reference=1`);
+    its surface-layer forwards are still kept (original game code needs the
+    real DirectDraw surface state). F6 ignored. If the GPU backend fails to
+    initialise, it falls back to `both` (D3D active) with a logged error.
+  - `OPENRE_GFX_MODE=both|d3d|gpu` env var overrides `gfx_mode` (highest
+    precedence) for dev/automated runs.
+- `render_backend = d3d|gpu` (default `d3d`) — legacy; only used when
+  `gfx_mode` is unset (in `both` mode it picks the startup presenter).
+- `disable_d3d_reference = 0|1` (default `0`) — legacy; only used when
+  `gfx_mode` is unset. When `1` and the GPU backend is active, the D3D
+  reference backend stops its per-frame forwarding.
+- `OPENRE_GFX_BACKEND=1` env var still overrides the active backend within
+  `both` mode (dev/automated runs). F6 remains a live dev-only toggle (in
+  `both` mode) and does not persist.
 - Read once at startup in `gfx::init()`; the INI is written by the game's
   normal config save, so a manual edit survives. Startup log line reports the
   state, e.g. `[gfx] backends initialised (active=1, d3d reference disabled)`.

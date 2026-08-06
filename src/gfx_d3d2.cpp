@@ -705,6 +705,28 @@ namespace openre::gfx
         // D3D reference backend then skips its per-frame forwarding while the
         // GPU backend is the active one.
         bool g_referenceDisabled = false;
+
+        // Which backends are created and may present. Set from [video] gfx_mode
+        // (or the OPENRE_GFX_MODE env var) in init(); see docs/gfx-migration.md.
+        enum class GfxMode
+        {
+            Both, // current behaviour: D3D reference + GPU, live F6 toggle
+            D3D,  // only the D3D reference; the GPU backend is not created
+            GPU,  // only the GPU backend; the D3D reference stops per-frame forwarding
+        };
+        GfxMode g_mode = GfxMode::Both;
+        // True when backend_gpu()->init() succeeded, i.e. the GPU backend exists
+        // and may present.
+        bool g_gpuInitialized = false;
+
+        GfxMode parseMode(const std::string& value)
+        {
+            if (value == "d3d")
+                return GfxMode::D3D;
+            if (value == "gpu")
+                return GfxMode::GPU;
+            return GfxMode::Both;
+        }
     }
 
     void set_active_backend(int index)
@@ -722,27 +744,90 @@ namespace openre::gfx
         return !(g_referenceDisabled && active_backend() == 1);
     }
 
+    bool gpu_enabled()
+    {
+        return g_gpuInitialized;
+    }
+
+    bool backend_toggle_enabled()
+    {
+        return g_mode == GfxMode::Both && g_gpuInitialized;
+    }
+
     void init()
     {
-        backend_d3d()->init();
-        backend_gpu()->init();
-
-        // Persistent user-facing selection: [video] render_backend = d3d|gpu in
-        // the INI (user://openre.ini), default d3d. The OPENRE_GFX_BACKEND env
-        // var overrides it for dev / automated runs.
-        const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
-        if (renderBackend == "gpu")
-            set_active_backend(1);
-
-        g_referenceDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
-
-        if (const char* env = std::getenv("OPENRE_GFX_BACKEND"))
+        // Resolve the backend mode first: it decides which backends are created.
+        // Precedence: OPENRE_GFX_MODE env var > [video] gfx_mode > legacy
+        // [video] render_backend + disable_d3d_reference > "both".
+        GfxMode mode = GfxMode::Both;
+        if (const char* envMode = std::getenv("OPENRE_GFX_MODE"); envMode != nullptr && envMode[0] != '\0')
         {
-            if (env[0] == '1')
-                set_active_backend(1);
+            mode = parseMode(envMode);
         }
+        else if (const auto cfgMode = system::config::get<std::string>("video", "gfx_mode", ""); !cfgMode.empty())
+        {
+            mode = parseMode(cfgMode);
+        }
+        else
+        {
+            const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
+            const bool refDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
+            if (renderBackend == "gpu" && refDisabled)
+                mode = GfxMode::GPU;
+        }
+        g_mode = mode;
+
+        // The COM front-end needs the D3D reference's real DirectDraw surface
+        // state (the game's original surface code is still in place), so the
+        // D3D backend is always initialised. The GPU backend is only created in
+        // the modes that use it; "d3d" mode skips the SDL_GPU device entirely.
+        backend_d3d()->init();
+        g_gpuInitialized = g_mode != GfxMode::D3D && backend_gpu()->init();
+
+        switch (g_mode)
+        {
+        case GfxMode::GPU:
+            if (g_gpuInitialized)
+            {
+                // Only the GPU presents; the D3D reference's per-frame
+                // forwarding is disabled (its surface-layer forwards are kept).
+                set_active_backend(1);
+                g_referenceDisabled = true;
+            }
+            else
+            {
+                // GPU init failed (e.g. no SDL window / no driver): fall back to
+                // the D3D reference so the game still renders.
+                logging::logError("[gfx] gpu mode requested but the GPU backend failed to initialise; falling back to d3d");
+                g_mode = GfxMode::Both;
+                set_active_backend(0);
+                g_referenceDisabled = false;
+            }
+            break;
+        case GfxMode::D3D:
+            set_active_backend(0);
+            g_referenceDisabled = false;
+            break;
+        case GfxMode::Both:
+        default:
+        {
+            const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
+            if (renderBackend == "gpu")
+                set_active_backend(1);
+            g_referenceDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
+            if (const char* env = std::getenv("OPENRE_GFX_BACKEND"))
+            {
+                if (env[0] == '1')
+                    set_active_backend(1);
+            }
+            break;
+        }
+        }
+
+        const char* modeName = g_mode == GfxMode::D3D ? "d3d" : g_mode == GfxMode::GPU ? "gpu" : "both";
         logging::logInfo(
-            "[gfx] backends initialised (active={}, d3d reference {})",
+            "[gfx] backends initialised (mode={}, active={}, d3d reference {})",
+            modeName,
             active_backend(),
             reference_enabled() ? "enabled" : "disabled");
     }
@@ -750,7 +835,8 @@ namespace openre::gfx
     void shutdown()
     {
         backend_d3d()->shutdown();
-        backend_gpu()->shutdown();
+        if (g_gpuInitialized)
+            backend_gpu()->shutdown();
         registry::clear();
     }
 

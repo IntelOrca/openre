@@ -97,6 +97,13 @@ namespace openre::gfx
     // every COM call; only the reference's forwarding is skipped).
     bool reference_enabled();
 
+    // True when the GPU backend initialised successfully and can present.
+    bool gpu_enabled();
+
+    // True when a live F6 backend toggle is available (mode "both" and the GPU
+    // backend is present). In "d3d"/"gpu" single-backend modes F6 is ignored.
+    bool backend_toggle_enabled();
+
     // Called from marni.cpp.
     void init();
     void shutdown();
