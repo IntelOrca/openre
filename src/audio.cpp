@@ -545,9 +545,9 @@ namespace openre::audio
     // 0x004EF0D0
     static int room_ck_room70a()
     {
-        using sig = int (*)();
-        auto p = (sig)0x004EF0D0;
-        return p();
+        return gGameTable.current_stage == 6 && !gGameTable.current_room &&
+               gGameTable.current_cut == 10 &&
+               check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE);
     }
 
     // 0x004EEF30
