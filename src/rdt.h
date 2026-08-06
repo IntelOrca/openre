@@ -37,4 +37,20 @@ namespace openre::rdt
     }
 
     template<> void* rdt_get_offset(RdtOffsetKind kind);
+
+    // A spawn point used for command-line room warps (-p/-r). Positions and
+    // cut numbers are taken from the game's new game and demo definitions.
+    struct RoomSpawnPoint
+    {
+        uint8_t stage;
+        uint8_t room;
+        int16_t x;
+        int16_t y;
+        int16_t z;
+        int16_t cdir;
+        uint8_t cut;
+    };
+
+    // Returns the spawn point for a room, or nullptr if none is known.
+    const RoomSpawnPoint* rdt_get_spawn_point(int stage, int room);
 }

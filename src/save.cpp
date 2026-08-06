@@ -6,6 +6,7 @@
 #include "input.h"
 #include "interop.hpp"
 #include "item.h"
+#include "logger.h"
 #include "marni.h"
 #include "openre.h"
 #include "player.h"
@@ -1896,6 +1897,49 @@ namespace openre::save
         if (str::string_ne_cstr(save_path_string(), saveFolder.c_str()))
             str::string_copy(save_path_string(), saveFolder.c_str());
         return save_path_string()->data;
+    }
+
+    // Loads a save file specified on the command line before entering gameplay.
+    // Mirrors the CARD_STATE_LOAD recipe: read the 0x800-byte save image, copy the
+    // first 0x798 bytes into the global table, then restore the saved state.
+    // Returns false (and leaves the game state untouched) when the file is unreadable.
+    bool cmdline_load_save(const char* path)
+    {
+        if (!path || !path[0])
+            return false;
+
+        // Resolve the path to absolute so relative paths are interpreted
+        // against the current directory rather than the savedata folder.
+        char absPath[MAX_PATH];
+        if (GetFullPathNameA(path, MAX_PATH, absPath, nullptr) == 0)
+        {
+            logging::logError("[cmdline] Failed to resolve save path: {}", path);
+            return false;
+        }
+
+        gGameTable.p_card_work = gGameTable.card_work;
+        auto result = file_read_save(gGameTable.p_card_work + 500, absPath, 0x800);
+        if (result != 0)
+        {
+            logging::logError("[cmdline] Failed to load save file: {}", absPath);
+            return false;
+        }
+        std::memcpy(&gGameTable.table_start, gGameTable.p_card_work + 500, 0x798);
+        load_pop();
+        if (gGameTable.byte_98EF2E != 0)
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE, true);
+            gGameTable.fg_status = gGameTable.dword_98E9B0 | 0x4000;
+        }
+        else
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE, false);
+            gGameTable.fg_status = gGameTable.dword_98E9B0 & ~0x4000u;
+        }
+        gGameTable.dword_989EC4 = gGameTable.dword_98EF20;
+        gGameTable.dword_989EC8 = gGameTable.dword_98EF24;
+        gGameTable.dword_989ECC = gGameTable.dword_98EF28;
+        return true;
     }
 
     void save_init_hooks()

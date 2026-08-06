@@ -2815,6 +2815,10 @@ namespace openre
         {
             gGameTable.ushinabe = 1;
         }
+
+        // Command-line start options: first positional argument is a save file,
+        // -p sets the player id, -r the room to warp to and -s the scenario.
+        cmdline_parse(lpCmdLine);
         SystemParametersInfoA(SPI_GETSCREENSAVEACTIVE, FALSE, &gGameTable.byte_680590, 0);
         if (gGameTable.byte_680590)
         {

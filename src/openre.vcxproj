@@ -73,6 +73,7 @@
   <ItemGroup>
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="door.cpp" />
     <ClCompile Include="em_dog.cpp" />
     <ClCompile Include="em_spider.cpp" />
