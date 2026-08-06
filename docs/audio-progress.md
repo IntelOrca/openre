@@ -44,7 +44,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x004EDF40 Snd_se_walk (1032) — implement in `src/player.cpp` (wrapper is there)
 - [x] 0x004EE350 Snd_se_call (230)
 - [x] 0x004EE440 Snd_bgm_fade (814)
-- [ ] 0x004EE780 Snd_se_3D (1067)
+- [x] 0x004EE780 Snd_se_3D (1067)
 - [ ] 0x004EEBD0 Snd_se_dir_ck (82)
 - [ ] 0x004EEC30 Xa_play (145)
 - [ ] 0x004EECD0 Xa_stop (36)

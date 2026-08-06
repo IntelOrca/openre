@@ -6,6 +6,7 @@
 #include "scheduler.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <dsound.h>
 #include <malloc.h>
@@ -63,6 +64,10 @@ namespace openre::audio
         int16_t* vol_3d_l = (int16_t*)0x693C44;
         int16_t* vol_3d_r = (int16_t*)0x693C46;
         int16_t* vol_3d_pan = (int16_t*)0x689DE4;
+
+        // Standalone globals used by Snd_se_3D (0x004EE780).
+        int32_t* sesz = (int32_t*)0x693818;        // SE 3D distance-scaled value
+        uint16_t* word_693B3C = (uint16_t*)0x693B3C; // SE 3D direction delta
 
         // Standalone globals used by Snd_se_call (0x004EE350).
         int* ss_timer = (int*)0x6934C0;          // SE fade countdown timers (3 entries)
@@ -3721,12 +3726,162 @@ namespace openre::audio
         gGameTable.bgm_table[tableIndex] = arg0 & 0xFFFF;
     }
 
+    // 0x451780
+    static unsigned int square_root0(int a1)
+    {
+        using sig = unsigned int (*)(int);
+        auto p = (sig)0x451780;
+        return p(a1);
+    }
+
+    // 0x4E3440
+    static int sca_ck_line(int* a1, int* a2, unsigned int a3, int a4)
+    {
+        using sig = int (*)(int*, int*, unsigned int, int);
+        auto p = (sig)0x4E3440;
+        return p(a1, a2, a3, a4);
+    }
+
+    // 0x004EEBD0 (Snd_se_dir_ck - temp thunk, will be replaced by the next agent)
+    static int16_t snd_se_dir_ck(int a1, int a2, int a3, int a4)
+    {
+        using sig = int16_t (*)(int, int, int, int);
+        auto p = (sig)0x004EEBD0;
+        return p(a1, a2, a3, a4);
+    }
+
     // 0x004EE780
     static int snd_se_3d(const Vec32* pos, int a2)
     {
-        using sig = int (*)(const Vec32*, int);
-        auto p = (sig)0x004EE780;
-        return p(pos, a2);
+        if (!gGameTable.enable_dsound)
+            return 0;
+
+        int32_t* v4 = (int32_t*)((uint8_t*)gGameTable.rdt->offsets[7] + 32 * (int)(int16_t)gGameTable.current_cut);
+        int32_t* v5 = v4 + 1;
+
+        int v35 = std::abs(v4[1] - pos->x);
+        int v36 = std::abs(v4[2] - pos->y);
+        int v37 = std::abs(v4[3] - pos->z);
+
+        // Function-scope variables used by both branches; declared here so the
+        // mono-branch `goto label_31` does not skip their initialization.
+        int v17, v18, v19, v20, v21, v22, v23, v24, v25;
+
+        if (gGameTable.audio_SpeakerConfig == 1)
+        {
+            unsigned int v11 = square_root0(v35 * v35 + v37 * v37);
+            unsigned int v12 = square_root0(v35 * v35 + v37 * v37);
+            int v13 = (int)square_root0(v36 * v36 + v12 * v11) / 250;
+            *sesz = v13;
+            if (v13 > 127)
+            {
+                v13 = 127;
+                *sesz = 127;
+            }
+            *vol_3d_pan = 0;
+            int64_t v13wide = 166658258613LL * (int64_t)v13;
+            int v14 = (int)(((uint64_t)v13wide) >> 32) >> 6;
+            *vol_3d_l = (int16_t)(127 - ((v14 >> 31) + v14));
+            *vol_3d_r = *vol_3d_l;
+
+            int point[3];
+            point[0] = pos->x;
+            point[1] = pos->y - 1500;
+            point[2] = pos->z;
+            if (a2 == 2 || !sca_ck_line(v5, point, 0x8400, 1))
+                goto label_31;
+
+            v17 = 65 * (uint16_t)*vol_3d_l / 100;
+            v18 = 65 * *vol_3d_r; // NOTE: signed Vol_3D_r here, NOT uint16 cast
+            *vol_3d_l = (int16_t)v17;
+            *vol_3d_r = (int16_t)(v18 / 100);
+            goto label_31;
+        }
+
+        *sesz = (int)square_root0((unsigned int)(v36 * v36 + v37 * v37)) / 250;
+        if (*sesz > 127)
+            *sesz = 127;
+
+        v19 = snd_se_dir_ck(*v5, v4[3], pos->x, pos->z);
+        v20 = snd_se_dir_ck(*v5, v4[3], v4[4], v4[6]);
+        v21 = snd_se_dir_ck(0, 0, *v5, v4[3]);
+        v22 = v4[3];
+        v23 = 0;
+        v24 = v19 - v21;
+        v25 = v20 - snd_se_dir_ck(0, 0, *v5, v22);
+        int16_t v26;
+        if (v24 >= v25)
+            v26 = (int16_t)(v24 - v25);
+        else
+            v26 = (int16_t)(v24 - v25 + 4096);
+        *word_693B3C = (uint16_t)v26;
+
+        if (!v26 || v26 == 4096 || v26 == 2048)
+        {
+            *vol_3d_pan = 0;
+        }
+        else
+        {
+            int v27, v28, v29, v30;
+            if ((v26 & 0x800) != 0)
+            {
+                v27 = 1;
+            }
+            else
+            {
+                v27 = 0;
+                v23 = 1;
+            }
+            v28 = v26 & 0x7FF;
+            v29 = 1;
+            if ((v28 & 0x400) != 0)
+            {
+                v29 = 0;
+                v28 = 2048 - v28;
+            }
+            v30 = v28 / 8;
+            *word_693B3C = (uint16_t)v30;
+
+            double angle = (128.0 - (double)v30) * 0.6666666865348816 * 0.01745329238474369;
+            double factor;
+            switch (v27 + 2 * (v23 + 2 * v29))
+            {
+            case 1:
+            case 5:
+                factor = -std::cos(angle);
+                break;
+            case 2:
+            case 6:
+                factor = std::cos(angle);
+                break;
+            default:
+                factor = *(float*)&a2; // unreachable
+                break;
+            }
+            *vol_3d_pan = (int16_t)((int)(*sesz * factor));
+        }
+
+        *vol_3d_l = (int16_t)(127 - (int16_t)(77 * *sesz) / 127);
+        *vol_3d_r = *vol_3d_l;
+
+        int point[3];
+        point[0] = pos->x;
+        point[1] = pos->y - 1500;
+        point[2] = pos->z;
+        if (a2 == 2 || !sca_ck_line(v5, point, 0x8400, 1))
+            goto label_31;
+
+        v17 = 85 * (uint16_t)*vol_3d_l / 100;
+        v18 = 85 * *vol_3d_r; // signed Vol_3D_r
+        *vol_3d_l = (int16_t)v17;
+        *vol_3d_r = (int16_t)(v18 / 100);
+
+    label_31:
+        if ((uint16_t)*vol_3d_l > 0x7F)
+            *vol_3d_l = 127;
+        if ((uint16_t)*vol_3d_r > 0x7F)
+            *vol_3d_r = 127;
+        return 127;
     }
 
     // 0x004ED950
@@ -4165,5 +4320,6 @@ namespace openre::audio
         interop::writeJmp(0x004ED950, &snd_se_on_impl);
         interop::writeJmp(0x004EE350, &snd_se_call);
         interop::writeJmp(0x004EE440, &snd_bgm_fade);
+        interop::writeJmp(0x004EE780, &snd_se_3d);
     }
 }
