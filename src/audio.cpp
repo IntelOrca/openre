@@ -369,41 +369,39 @@ namespace openre::audio
         if (!gGameTable.audio_pMarniSnd)
             return 1;
 
-        auto is_playing = [](uint32_t buf) {
-            auto pDSB = (LPDIRECTSOUNDBUFFER)buf;
-            DWORD status = 0;
-            pDSB->GetStatus(&status);
-            return (status & DSBSTATUS_PLAYING) != 0;
-        };
-
-        // BufferArms [32] — return 0 as soon as a playing buffer is found.
+        // BufferArms [32] — stop every non-null buffer; return 0 if Stop() fails.
         for (int i = 0; i < 32; i++)
         {
-            if (gGameTable.audio_BufferArms[i] && is_playing(gGameTable.audio_BufferArms[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferArms[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         // BufferCore [22]
         for (int i = 0; i < 22; i++)
         {
-            if (gGameTable.audio_BufferCore[i] && is_playing(gGameTable.audio_BufferCore[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferCore[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         // BufferDoor [4]
         for (int i = 0; i < 4; i++)
         {
-            if (gGameTable.audio_BufferDoor[i] && is_playing(gGameTable.audio_BufferDoor[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferDoor[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         // BufferEnemy [32]
         for (int i = 0; i < 32; i++)
         {
-            if (gGameTable.audio_BufferEnemy[i] && is_playing(gGameTable.audio_BufferEnemy[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferEnemy[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         // BufferRoom [48]
         for (int i = 0; i < 48; i++)
         {
-            if (gGameTable.audio_BufferRoom[i] && is_playing(gGameTable.audio_BufferRoom[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferRoom[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         // BufferBgm [3] — also flag non-zero current positions.
@@ -416,7 +414,7 @@ namespace openre::audio
                 pDSB->GetCurrentPosition((LPDWORD)&v10, nullptr);
                 if (v10)
                     *dword_689DCC = 1;
-                if (is_playing(gGameTable.audio_BufferBgm[i]))
+                if (pDSB->Stop())
                     return 0;
             }
         }
@@ -430,14 +428,15 @@ namespace openre::audio
                 pDSB->GetCurrentPosition((LPDWORD)&v10, nullptr);
                 if (v10)
                     dword_689DD0[i] = 1;
-                if (is_playing(gGameTable.audio_BufferSBgm[i]))
+                if (pDSB->Stop())
                     return 0;
             }
         }
         // BufferVoice [2]
         for (int i = 0; i < 2; i++)
         {
-            if (gGameTable.audio_BufferVoice[i] && is_playing(gGameTable.audio_BufferVoice[i]))
+            auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferVoice[i];
+            if (pDSB && pDSB->Stop())
                 return 0;
         }
         return 1;
@@ -1274,13 +1273,6 @@ namespace openre::audio
         if (!gGameTable.audio_pMarniSnd)
             return 1;
 
-        auto is_playing = [](uint32_t buf) {
-            auto pDSB = (LPDIRECTSOUNDBUFFER)buf;
-            DWORD status = 0;
-            pDSB->GetStatus(&status);
-            return (status & DSBSTATUS_PLAYING) != 0;
-        };
-
         // Buffer selected by a valid specific Id (shared check below).
         uint32_t buf = 0;
 
@@ -1289,10 +1281,11 @@ namespace openre::audio
         case 0: // door [4] — ends at BufferEnemy.
             if (id == -1)
             {
-                // Return 0 as soon as a playing buffer is found.
+                // Stop every non-null buffer; return 0 if Stop() fails.
                 for (int i = 0; i < 4; i++)
                 {
-                    if (gGameTable.audio_BufferDoor[i] && is_playing(gGameTable.audio_BufferDoor[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferDoor[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1306,7 +1299,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 32; i++)
                 {
-                    if (gGameTable.audio_BufferArms[i] && is_playing(gGameTable.audio_BufferArms[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferArms[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1320,7 +1314,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 48; i++)
                 {
-                    if (gGameTable.audio_BufferRoom[i] && is_playing(gGameTable.audio_BufferRoom[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferRoom[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1334,7 +1329,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 32; i++)
                 {
-                    if (gGameTable.audio_BufferEnemy[i] && is_playing(gGameTable.audio_BufferEnemy[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferEnemy[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1348,7 +1344,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 22; i++)
                 {
-                    if (gGameTable.audio_BufferCore[i] && is_playing(gGameTable.audio_BufferCore[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferCore[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1362,7 +1359,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 3; i++)
                 {
-                    if (gGameTable.audio_BufferBgm[i] && is_playing(gGameTable.audio_BufferBgm[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferBgm[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1376,7 +1374,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 2; i++)
                 {
-                    if (gGameTable.audio_BufferSBgm[i] && is_playing(gGameTable.audio_BufferSBgm[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferSBgm[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1390,7 +1389,8 @@ namespace openre::audio
             {
                 for (int i = 0; i < 2; i++)
                 {
-                    if (gGameTable.audio_BufferVoice[i] && is_playing(gGameTable.audio_BufferVoice[i]))
+                    auto pDSB = (LPDIRECTSOUNDBUFFER)gGameTable.audio_BufferVoice[i];
+                    if (pDSB && pDSB->Stop())
                         return 0;
                 }
                 return 1;
@@ -1403,8 +1403,8 @@ namespace openre::audio
             return 1;
         }
 
-        // LABEL_67: a non-null buffer that is still playing blocks the group.
-        if (buf && is_playing(buf))
+        // LABEL_67: stop the specific buffer; return 0 if Stop() fails.
+        if (buf && ((LPDIRECTSOUNDBUFFER)buf)->Stop())
             return 0;
         return 1;
     }
