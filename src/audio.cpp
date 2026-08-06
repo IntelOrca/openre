@@ -86,6 +86,12 @@ namespace openre::audio
         int32_t* dword_6934A8 = (int32_t*)0x6934A8; // room VAB data ptr (same value as rdt->offsets[1])
         uint8_t* byte_6941D0 = (uint8_t*)0x6941D0;  // room reverb level cache
 
+        // Standalone globals used by Snd_load_em (0x004EC8A0). The byte
+        // buffer holds the loaded enemy .edh data (used aligned);
+        // dword_6934AC points to the decoded voice/sample data inside it.
+        uint8_t* byte_6DD31C = (uint8_t*)0x6DD31C;  // enemy .edh buffer
+        int32_t* dword_6934AC = (int32_t*)0x6934AC; // decoded enemy data ptr
+
         // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
         // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
 
@@ -2853,10 +2859,69 @@ namespace openre::audio
         snd_room_load_impl();
     }
 
-    // 0x004EC8A0
+    namespace
+    {
+        // 0x004EC8A0
+        static void snd_load_em()
+        {
+            char mem[32];
+            std::strcpy(mem, "common\\sound\\enemy\\enem00.   ");
+
+            if (!gGameTable.enable_dsound)
+                return;
+
+            auto v0 = gGameTable.pad_98E543[0];
+            ss_unload_group(3);
+            gGameTable.ss_name_enemy[0] = 0;
+            gGameTable.vab_id[3] = 0;
+            if (v0 == 0xFF)
+                return;
+
+            // The .edh buffer is used aligned: byte_6DD31C = 0x6DD31C, so the
+            // aligned base is 0x6DD310. mem[23]/mem[24] are the two hex digits
+            // of the enemy id in "enem00.   ", and mem[26..28] get "edh" to
+            // form "enemXY.edh".
+            auto buffer = (uint8_t*)((uintptr_t)byte_6DD31C & 0xFFFFFFF0);
+            auto v1 = v0 & 0xF;
+            pEdt_adr[3] = (int32_t)buffer;
+            mem[23] = (char)((v0 >> 4) + 48);
+            char v2;
+            if (v1 >= 0xA)
+                v2 = (char)(v1 + 87);
+            else
+                v2 = (char)(v1 + 48);
+            mem[24] = v2;
+            std::memcpy(&mem[26], "edh", 3);
+
+            auto v3 = read_file_into_buffer(mem, (char*)buffer, 1);
+            if (v3)
+            {
+                // Unusual enemy ids 37/38 ("enem37.edh"/"enem38.edh") reuse a
+                // single set of 61 extra banks when the room reverb level is 4.
+                if ((v0 == 37 || v0 == 38) && *byte_6941D0 == 4)
+                    v0 += 61;
+                *dword_6934AC = (int32_t)(buffer + *(int32_t*)(buffer + v3 - 8));
+                gGameTable.vab_id[3] = ss_load_banks(3 /* ST_ENEMY */, v0, 0, 0);
+            }
+            else
+            {
+                file_error();
+            }
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // the public audio.h wrapper for this slot is `snd_load_enemy`, so an
+        // unqualified reference from openre::audio would find that wrapper
+        // rather than this function.
+        void (*const snd_load_enemy_impl)() = &snd_load_em;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (room.cpp). Original-binary callers reach the
+    // implementation above via the hook on 0x004EC8A0.
     void snd_load_enemy()
     {
-        interop::call(0x004EC8A0);
+        snd_load_enemy_impl();
     }
 
     // 0x004ec990
@@ -3110,6 +3175,10 @@ namespace openre::audio
         interop::writeJmp(0x004EC450, snd_load_core_impl);
         interop::writeJmp(0x004EC6D0, &snd_load_arms);
         interop::writeJmp(0x004EC7D0, snd_room_load_impl);
+        // snd_load_enemy_impl: the hook targets the static implementation via
+        // its handle, since the name snd_load_enemy is the public audio.h
+        // wrapper in this scope.
+        interop::writeJmp(0x004EC8A0, snd_load_enemy_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
