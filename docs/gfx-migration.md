@@ -120,6 +120,59 @@ A/B every scene (title, menus, rooms, items, inventory, doors) with the toggle;
 fix diffs. Then: config flag to disable the D3D reference backend, compile it
 out on non-Windows, and drop the DirectDraw dependencies in vcxproj/CMake.
 
+## Progress
+
+### M0 — Audit (done)
+Static audit of every DirectDraw/D3D COM method the MARNI renderer touches.
+Deliverable: `docs/com-coverage-report.md` (full interface × method coverage
+matrix, decompiled originals for the still-original functions).
+
+Key findings:
+- **The game's COM vtables are the standard SDK layouts.** The game's binary was
+  compiled against headers whose `IDirectDraw`, `IDirectDraw2`,
+  `IDirectDrawSurface`, `IDirect3D2`, `IDirect3DDevice2` (33 entries),
+  `IDirect3DViewport2`, `IDirect3DMaterial2` and `IDirect3DTexture2` vtable
+  offsets match the modern Windows SDK `ddraw.h`/`d3d.h` exactly (verified
+  against SDK headers + IDA disasm), so a front-end can hook standard slots.
+- The **D3DRENDERSTATETYPE values** (DX3-era numbering: 17/18 =
+  TEXTUREMAG/TEXTUREMIN, 19/20 = SRCBLEND/DESTBLEND, 27 = ALPHABLENDENABLE, 41 =
+  COLORKEYENABLE, etc.) also match the SDK `d3d.h` enum. SetRenderState is called
+  at 44 sites with these values.
+- Interfaces used (deduped): IDirectDraw (QI/GetCaps/Release),
+  IDirectDraw2 (QI/CreateSurface/CreatePalette/CreateClipper/EnumDisplayModes/
+  GetCaps/SetCooperativeLevel/RestoreDisplayMode), IDirectDrawSurface
+  (QI/Release/AddAttachedSurface/Blt/GetSurfaceDesc/IsLost/Lock/Restore/
+  SetColorKey/SetPalette/SetClipper/Unlock), IDirectDrawPalette
+  (Release/GetEntries/SetEntries), IDirect3D2 (EnumDevices/CreateDevice/
+  CreateViewport/CreateMaterial), IDirect3DDevice2 (Begin/End/BeginScene/
+  EndScene/SetRenderState/GetStats/DrawPrimitive/DrawIndexedPrimitive/
+  SetCurrentViewport/SetRenderTarget/SwapTextureHandles/SetTransform/
+  MultiplyTransform/EnumTextureFormats/GetCaps), IDirect3DViewport2
+  (Clear/SetViewport2/SetBackground), IDirect3DMaterial2 (GetHandle/SetMaterial),
+  IDirect3DTexture2 (GetHandle/Load/Release).
+- Most surface method offsets match the standard layout, so both our C++ code and
+  the still-original game code hit the same vtable slots on the objects we swap.
+- The z-buffer is created at 16-bit via original `create_zbuffer` 0x00407020; the
+  D3D device (HAL or RGB) is created by original `create_device` 0x00406D90
+  against `surface0`. These need no decompilation because they operate through
+  the COM objects we replace.
+
+### M1 — Seam: front-end COM objects + backend plumbing (in progress)
+Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
+- **Vtable-swap**: allocate a new vtable array, copy the real object's vtable
+  (forward-by-default), override the slots we intercept, and swap the object's
+  vtable pointer. `this` in hooks is the real object; a side table maps it to its
+  saved original vtable. All objects created after `DirectDrawCreate` (surfaces,
+  palettes, clipper, device, viewport, material, textures) get wrapped
+  automatically via the QI/Create hooks, so `create_ddraw` is the single explicit
+  wrap point.
+- Hooks dispatch to `GfxBackendD3D` (reference, calls original vtable entries)
+  and `GfxBackendGPU` (stub) for: CreateSurface, Lock/Unlock, Blt,
+  BeginScene/EndScene, SetRenderState, DrawPrimitive, SetCurrentViewport,
+  SetViewport2, SetBackground, Clear. Everything else forwards unchanged.
+- New files: `gfx_backend.h`, `gfx_backend_d3d.cpp`, `gfx_backend_gpu.cpp`,
+  `gfx_d3d2.h/cpp`.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
