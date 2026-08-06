@@ -37,6 +37,7 @@ namespace openre::audio
         uint32_t* main_vol = (uint32_t*)0x69334C;   // SND_VOL {int16 left; int16 right;}
         uint32_t* cd_vol = (uint32_t*)0x6934CC;     // SND_VOL {int16 left; int16 right;}
         int8_t* fade_rtn = (int8_t*)0x693E8C;
+        int8_t* byte_693E8D = (int8_t*)0x693E8D; // byte right after fade_rtn (0x693E8C)
         int8_t* fade_time = (int8_t*)0x69346F;
         int32_t* pEdt_adr = (int32_t*)0x693480;     // 6 ints
         int32_t* dword_693B24 = (int32_t*)0x693B24; // SEQ channel table base
@@ -3144,11 +3145,27 @@ namespace openre::audio
         void (*const snd_bgm_set_impl)() = &snd_bgm_set;
 
         // 0x004ED260
-        static void snd_bgm_fade_on(int a, int b)
+        static char snd_bgm_fade_on(uint8_t a1, char a2)
         {
-            using sig = void (*)(int, int);
-            auto p = (sig)0x004ED260;
-            p(a, b);
+            char result = (char)gGameTable.enable_dsound;
+            if (gGameTable.enable_dsound)
+            {
+                result = (char)gGameTable.fg_system;
+                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                {
+                    *byte_693E8D = a2;
+                    *fade_rtn = 1;
+                    *fade_time = (int8_t)a1;
+                    if (gGameTable.seq_ctr[0] == 1)
+                        ss_seq_set_decrescendo(0, 127, a1);
+                    if (gGameTable.byte_693808 == 1)
+                        ss_seq_set_decrescendo(1, 127, (uint8_t)*fade_time);
+                    result = (char)gGameTable.byte_693810;
+                    if (gGameTable.byte_693810 == 1)
+                        ss_seq_set_decrescendo(2, 127, (uint8_t)*fade_time);
+                }
+            }
+            return result;
         }
 
         // 0x004ECBE0
@@ -3505,6 +3522,7 @@ namespace openre::audio
         interop::writeJmp(0x004ECCE0, snd_bgm_play_ck_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED050, &snd_bgm_sub);
+        interop::writeJmp(0x004ED260, &snd_bgm_fade_on);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
     }
