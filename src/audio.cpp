@@ -42,6 +42,31 @@ namespace openre::audio
         uint16_t* word_693030 = (uint16_t*)0x693030;
         uint16_t* se_pri = (uint16_t*)0x693000;     // 48-byte array (24 words); loop end sentinel
 
+        // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
+        // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
+        // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
+        // addressed here via a standalone pointer.
+        struct SoundVolume
+        {
+            int16_t left;
+            int16_t right;
+        };
+        struct SeqCtr
+        {
+            int8_t flg;      // +0
+            int8_t ctrl;     // +1
+            int8_t seq_no;   // +2
+            int8_t vab_id;   // +3
+            SoundVolume vol; // +4
+        };
+
+        // Standalone globals used by Snd_sys_init_sub2 (0x004EC410). All fall
+        // in GameTable pad regions.
+        uint32_t* dword_693B20 = (uint32_t*)0x693B20;
+        uint8_t* bgm_main = (uint8_t*)0x693498;    // Bgm.Main byte
+        uint8_t* bgm_sub = (uint8_t*)0x693499;     // Bgm.Sub byte
+        SeqCtr* seq_ctr_table = (SeqCtr*)0x69381C; // SEQCTR table base (3 entries)
+
         // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
         // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
 
@@ -2541,10 +2566,48 @@ namespace openre::audio
         pEdt_adr[2] = 0;
     }
 
-    // 0x004EC410
+    namespace
+    {
+        // 0x004EC410
+        static SeqCtr* snd_sys_init_sub2()
+        {
+            if (!gGameTable.enable_dsound)
+                return nullptr;
+
+            *dword_693B20 = 0;
+            gGameTable.dword_693C4C = 0;
+
+            *bgm_sub = 0xFF;   // Bgm.Sub = -1
+            *bgm_main = 0xFF;  // Bgm.Main = -1
+
+            // Walk the SEQCTR table backwards from 0x69381C down to 0x693804
+            // (compare happens BEFORE the writes, so the entry at 0x693804 is
+            // still written). Each iteration stores a Vol dword (0xFFFFFF00)
+            // at [result-8+4] and a Flg dword (0x006E006E) at [result].
+            // 3 iterations: entries at bases 0x693800, 0x693808, 0x693810.
+            auto result = seq_ctr_table; // 0x69381C
+            do
+            {
+                result -= 1; // -8 bytes
+                *(uint32_t*)&result[-1].vol = 0xFFFFFF00;
+                *(uint32_t*)&result->flg = 0x006E006E;
+            } while ((char*)result != (char*)0x693804);
+            return result;
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_sys_init_sub2` is also the name of the public wrapper declared
+        // in audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        SeqCtr* (*const snd_sys_init_sub2_impl)() = &snd_sys_init_sub2;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (title.cpp). Original-binary callers (Title_game_init)
+    // reach the implementation above via the hook on 0x004EC410.
     void snd_sys_init_sub2()
     {
-        interop::call(0x004EC410);
+        snd_sys_init_sub2_impl();
     }
 
     // 0x004EC450
@@ -2808,6 +2871,10 @@ namespace openre::audio
         // public audio.h wrapper in this scope.
         interop::writeJmp(0x004EC250, snd_sys_init2_impl);
         interop::writeJmp(0x004EC350, &snd_sys_init_sub);
+        // snd_sys_init_sub2_impl: the hook targets the static implementation
+        // via its handle, since the name snd_sys_init_sub2 is the public
+        // audio.h wrapper in this scope.
+        interop::writeJmp(0x004EC410, snd_sys_init_sub2_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
