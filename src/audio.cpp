@@ -3798,6 +3798,19 @@ namespace openre::audio
         }
     }
 
+    // 0x004EECD0
+    static uint8_t xa_stop()
+    {
+        uint8_t result = gGameTable.enable_dsound;
+        if (gGameTable.enable_dsound)
+        {
+            ss_stop_group(7, -1);
+            result = xa_set_volume();
+            *byte_69346E = 3;
+        }
+        return result;
+    }
+
     // 0x004EE780
     static int snd_se_3d(const Vec32* pos, int a2)
     {
@@ -4371,5 +4384,6 @@ namespace openre::audio
         interop::writeJmp(0x004EE780, &snd_se_3d);
         interop::writeJmp(0x004EEBD0, &snd_se_dir_ck);
         interop::writeJmp(0x004EEC30, &xa_play);
+        interop::writeJmp(0x004EECD0, &xa_stop);
     }
 }
