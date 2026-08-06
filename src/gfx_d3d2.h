@@ -26,6 +26,7 @@ namespace openre::gfx
         constexpr int SURF_Unlock = 32;
 
         // IDirect3D2
+        constexpr int D3D2_EnumDevices = 3;
         constexpr int D3D2_CreateViewport = 6;
         constexpr int D3D2_CreateDevice = 8;
 
@@ -47,15 +48,18 @@ namespace openre::gfx
         constexpr int VP_SetViewport2 = 17;
     }
 
-    // Number of vtable slots to copy per wrapped interface. These are the
-    // exact SDK interface sizes (Win10 SDK d3d.h/ddraw.h) - the maximum slot
-    // count the game can legally dispatch through these objects, so the copy
-    // never reads past the real vtable.
-    constexpr int kDDrawVtblSlots = 24;   // IDirectDraw2 (IDirectDraw has 23)
-    constexpr int kSurfaceVtblSlots = 42; // IDirectDrawSurface2
-    constexpr int kD3D2VtblSlots = 9;
-    constexpr int kDeviceVtblSlots = 33;   // IDirect3DDevice2
-    constexpr int kViewportVtblSlots = 18; // IDirect3DViewport2
+    // Number of vtable slots to copy per wrapped interface. The real DDraw
+    // objects implement several interfaces on one shared vtable, so the actual
+    // vtable is much larger than the interface we wrap (confirmed at runtime:
+    // IDirect3D2's real vtable has 64+ valid entries). We copy a generous
+    // fixed size so internal DDraw code that dispatches through `this->lpVtbl`
+    // at higher slots still finds a valid pointer. The over-read stays within
+    // ddraw.dll's readable data segment.
+    constexpr int kDDrawVtblSlots = 64;
+    constexpr int kSurfaceVtblSlots = 64;
+    constexpr int kD3D2VtblSlots = 64;
+    constexpr int kDeviceVtblSlots = 64;
+    constexpr int kViewportVtblSlots = 64;
 
     // Wrap entry points (implemented in gfx_d3d2.cpp; only gfx_d3d2.cpp
     // wraps objects).

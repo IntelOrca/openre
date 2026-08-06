@@ -59,6 +59,31 @@ namespace openre::gfx
             return hr;
         }
 
+        static HRESULT STDMETHODCALLTYPE
+        hook_ddraw_create_surface(IDirectDraw* self, LPDDSURFACEDESC desc, LPDIRECTDRAWSURFACE* surface, IUnknown* outer)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDraw*, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE*, IUnknown*);
+            // ddraw.dll's CreateSurface validates the object's vtable pointer and
+            // creates a surface that later fails (e.g. GetSurfaceDesc returns
+            // E_INVALIDARG) when a foreign (our wrapped) vtable is present. Swap
+            // the original vtable back for the duration of the real call.
+            auto** vpp = reinterpret_cast<void***>(self);
+            auto* orig = *vpp;
+            *vpp = e->origVtbl;
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::DD_CreateSurface])(self, desc, surface, outer);
+            *vpp = orig;
+            if (SUCCEEDED(hr) && surface != nullptr && *surface != nullptr)
+            {
+                backend_d3d()->create_surface(*surface, desc);
+                backend_gpu()->create_surface(*surface, desc);
+                wrap_surface(*surface);
+            }
+            return hr;
+        }
+
         // ------------------------------------------------------------------
         // IDirectDraw2 hooks
         // ------------------------------------------------------------------
@@ -87,7 +112,14 @@ namespace openre::gfx
             if (e == nullptr)
                 return E_UNEXPECTED;
             using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDraw2*, LPDDSURFACEDESC, LPDIRECTDRAWSURFACE*, IUnknown*);
+            // See hook_ddraw_create_surface: ddraw.dll's CreateSurface validates
+            // this->lpVtbl and misbehaves with our wrapped vtable, so restore the
+            // original for the duration of the real call.
+            auto** vpp = reinterpret_cast<void***>(self);
+            auto* orig = *vpp;
+            *vpp = e->origVtbl;
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::DD_CreateSurface])(self, desc, surface, outer);
+            *vpp = orig;
             if (SUCCEEDED(hr) && surface != nullptr && *surface != nullptr)
             {
                 backend_d3d()->create_surface(*surface, desc);
@@ -176,6 +208,16 @@ namespace openre::gfx
         // ------------------------------------------------------------------
         // IDirect3D2 hooks
         // ------------------------------------------------------------------
+
+        static HRESULT STDMETHODCALLTYPE
+        hook_d3d2_enum_devices(IDirect3D2* self, LPVOID callback, LPVOID context)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3D2*, LPVOID, LPVOID);
+            return reinterpret_cast<Fn>(e->origVtbl[slots::D3D2_EnumDevices])(self, callback, context);
+        }
 
         static HRESULT STDMETHODCALLTYPE
         hook_d3d2_create_viewport(IDirect3D2* self, LPDIRECT3DVIEWPORT2* viewport, IUnknown* outer)
@@ -333,6 +375,7 @@ namespace openre::gfx
         auto* newVtbl = new void*[kDDrawVtblSlots];
         std::memcpy(newVtbl, orig, kDDrawVtblSlots * sizeof(void*));
         newVtbl[slots::DD_QueryInterface] = reinterpret_cast<void*>(&hook_ddraw_query_interface);
+        newVtbl[slots::DD_CreateSurface] = reinterpret_cast<void*>(&hook_ddraw_create_surface);
         registry::set(dd, orig, newVtbl);
         *reinterpret_cast<void***>(dd) = newVtbl;
     }
@@ -384,6 +427,7 @@ namespace openre::gfx
         auto** orig = *reinterpret_cast<void***>(d3d2);
         auto* newVtbl = new void*[kD3D2VtblSlots];
         std::memcpy(newVtbl, orig, kD3D2VtblSlots * sizeof(void*));
+        newVtbl[slots::D3D2_EnumDevices] = reinterpret_cast<void*>(&hook_d3d2_enum_devices);
         newVtbl[slots::D3D2_CreateViewport] = reinterpret_cast<void*>(&hook_d3d2_create_viewport);
         newVtbl[slots::D3D2_CreateDevice] = reinterpret_cast<void*>(&hook_d3d2_create_device);
         registry::set(d3d2, orig, newVtbl);

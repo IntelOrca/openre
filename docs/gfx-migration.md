@@ -187,6 +187,22 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   (`TreatWarningAsError`); the game launches, logs `[gfx] backends initialised
   (active=0)` + `[gfx:gpu] init (stub)`, reaches the title screen, and runs
   without crashing or visual regression.
+- **M1 regression + fix (CreateSurface vtable validation)**: initial runs after
+  wrapping crashed during `EnumDevices` (fixed by raising all wrapped vtable
+  allocations to 64 slots), then `init_all` failed with
+  `get_surface_desc surface0 err=2147942487` (`E_INVALIDARG`) and dropped into
+  the blocking `win_exit(13)` message box. Root cause: **ddraw.dll's real
+  `CreateSurface` validates `this->lpVtbl`** — when our swapped vtable is in
+  place, it creates surfaces that later fail `GetSurfaceDesc` with
+  `E_INVALIDARG` (a `DDSURFACEDESC` with `dwSize=108` is correct; size was not
+  the issue). Fix: in both `hook_ddraw2_create_surface` (IDirectDraw2) and the
+  new `hook_ddraw_create_surface` (IDirectDraw — required because the original
+  `create_zbuffer` 0x00407020 calls the IDirectDraw slot directly), the real
+  CreateSurface is invoked with the **original vtable temporarily restored**, then
+  swapped back and the returned surface is wrapped. Verified: game re-initialises
+  (`init_all ok`), creates surfaces/textures (16x16 bpp=16, 256x256 bpp=32),
+  renders continuous frames, window "BIOHAZARD(R) 2 PC" present, process stays
+  running. All temporary diagnostic trace logging was removed afterwards.
 
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
