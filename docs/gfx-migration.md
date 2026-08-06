@@ -857,6 +857,50 @@ strip's alternating winding is not culled. Scene pipelines are unchanged
 **Verified.** `build.bat` 0 warnings / 0 errors. Requires a visual run to
 confirm the full window shows the game frame.
 
+### Post-M8 fixes — F8/alt-enter freeze, load screen, GPU inventory, near-camera shards (done)
+
+Four follow-up bugs found after the M8 sign-off, each fixed and committed
+separately:
+
+1. **F8 / Alt+Enter rendering freeze** (`d59e70f`). A mode change tears down and
+   re-creates the primary DirectDraw surface; `wrap_surface`'s wrapped vtable
+   made ddraw.dll's destruction path skip releasing the primary/window
+   association, so the next `CreateSurface(primary)` failed with
+   `DDERR_PRIMARYSURFACEALREADYEXISTS` and every clear/draw/flip early-returned
+   (window resized, image froze). Fixed by hooking `IDirectDrawSurface::Release`
+   (`src/gfx_d3d2.cpp`) to restore the original vtable for the real call and
+   drop the backends' surface registries on destruction. Affected both backends.
+
+2. **Load screen loading the first level → instant death** (`02e6ba8`). The
+   surface teardown half was already fixed by (1). A separate decompile bug
+   remained: `Game_loop` case 9 (return from the load/save mem-card menu) in
+   `src/openre.cpp` cleared `FG_SYSTEM_20` (0x800); the original at `0x4BFFFD`
+   does `and ch, 0FBh`, clearing bit 10 = 0x400 = `FG_SYSTEM_21` (the
+   card/load-mode flag). The stale flag left the game starting the first level
+   with garbage state. Verified against the IDA decompilation.
+
+3. **GPU inventory sluggish + missing heartbeat/health line** (`b770a70`).
+   (a) `submitAndReset` (`src/gfx_backend_gpu.cpp`) did a full
+   `SDL_WaitForGPUIdle` every present, serialising CPU and GPU; it now submits
+   with `SDL_SubmitGPUCommandBufferAndAcquireFence` and waits only on the
+   previous frame's fence before remapping the shared vertex transfer buffer,
+   giving one frame of CPU/GPU overlap. (b) `draw_primitive`/
+   `draw_indexed_primitive` collapsed every non-triangle-strip primitive to
+   `TRIANGLELIST`, so `D3DPT_LINELIST`/`D3DPT_LINESTRIP` rasterised nothing and
+   the heartbeat line never drew. All `D3DPRIMITIVETYPE` values now map to
+   their true `SDL_GPU_PRIMITIVETYPE_*`, and `D3DPT_TRIANGLEFAN` is expanded
+   into a triangle list (SDL_GPU has no fan topology).
+
+4. **GPU near-camera mesh shards** (`cea8fe7`). When geometry goes behind the
+   camera its CPU-projected `D3DTLVERTEX` values get `rhw <= 0` (reciprocal of
+   homogeneous w) and `sx/sy` explode to huge/NaN values; D3D clips at the near
+   plane but the backend ignored `rhw`. Added software Sutherland-Hodgman
+   clipping against the `rhw = 0` plane (interpolating all vertex fields at the
+   crossing) in the GPU draw path, for triangle lists/strips (decomposed by
+   strip winding) and line/point primitives; fully-behind primitives are
+   skipped. Confirmed at runtime with identical dump counters: the buggy build
+   showed fullscreen wedges exactly where `rhw <= 0` vertices appeared.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
