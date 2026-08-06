@@ -1,4 +1,5 @@
 #include "marni.h"
+#include "gfx_backend.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "marni_movie.h"
@@ -462,6 +463,7 @@ namespace openre::marni
         ddbltfx.dwDDFX = DDBLTFX_NOTEARING;
 
         dst->Blt(&dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
+        gfx::notify_present();
     }
 
     // 0x00402A80
@@ -1113,6 +1115,8 @@ namespace openre::marni
         ot_dtor(&self->otag[0]);
 
         cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
+
+        gfx::shutdown();
     }
 
     // 0x00405310
@@ -1144,6 +1148,7 @@ namespace openre::marni
         self->field_8C8410 = 0;
         exception = 9;
         std::memset(self, 0, 0x1800);
+        gfx::init();
         for (auto i = 0; i < 256; i++)
         {
             self->textures[i].var_00 = 0;
@@ -2626,6 +2631,7 @@ namespace openre::marni
             *lpIsDefault = 0;
         }
         *lplpDD = lpDD;
+        gfx::wrap_ddraw(lpDD);
 
         return 0;
     }

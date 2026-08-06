@@ -157,7 +157,7 @@ Key findings:
   against `surface0`. These need no decompilation because they operate through
   the COM objects we replace.
 
-### M1 — Seam: front-end COM objects + backend plumbing (in progress)
+### M1 — Seam: front-end COM objects + backend plumbing (done)
 Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
 - **Vtable-swap**: allocate a new vtable array, copy the real object's vtable
   (forward-by-default), override the slots we intercept, and swap the object's
@@ -168,10 +168,25 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   wrap point.
 - Hooks dispatch to `GfxBackendD3D` (reference, calls original vtable entries)
   and `GfxBackendGPU` (stub) for: CreateSurface, Lock/Unlock, Blt,
-  BeginScene/EndScene, SetRenderState, DrawPrimitive, SetCurrentViewport,
-  SetViewport2, SetBackground, Clear. Everything else forwards unchanged.
+  GetSurfaceDesc, IsLost, Restore, AddAttachedSurface, SetColorKey, SetPalette,
+  SetClipper, CreateDevice, BeginScene/EndScene, SetRenderState, SetTransform,
+  MultiplyTransform, DrawPrimitive, DrawIndexedPrimitive, GetStats,
+  SetCurrentViewport, SetRenderTarget, SetViewport2, SetBackground, Clear.
+  Everything else forwards unchanged.
 - New files: `gfx_backend.h`, `gfx_backend_d3d.cpp`, `gfx_backend_gpu.cpp`,
   `gfx_d3d2.h/cpp`.
+- **What was implemented in M1**: the five files above were added and wired into
+  `marni.cpp` (`gfx::init()` in `init`, `gfx::wrap_ddraw(lpDD)` in `create_ddraw`,
+  `gfx::shutdown()` in `dtor`, `gfx::notify_present()` in `flip_blt`) and the
+  vcxproj. Slot tables were verified against the Win10 SDK `ddraw.h`/`d3d.h`
+  (including the 3-arg `Viewport2::Clear` and `CreateSurface`'s out-param).
+- **Active backend selection API**: `gfx::set_active_backend(0|1)` /
+  `gfx::active_backend()`; 0 = D3D reference (default), 1 = GPU. Hotkey wired in
+  M2.
+- **Build/run verification**: `build.bat` succeeds with 0 warnings/0 errors
+  (`TreatWarningAsError`); the game launches, logs `[gfx] backends initialised
+  (active=0)` + `[gfx:gpu] init (stub)`, reaches the title screen, and runs
+  without crashing or visual regression.
 
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.

@@ -81,6 +81,9 @@
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="gfxadt.cpp" />
+    <ClCompile Include="gfx_backend_d3d.cpp" />
+    <ClCompile Include="gfx_backend_gpu.cpp" />
+    <ClCompile Include="gfx_d3d2.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -119,6 +122,8 @@
     <ClInclude Include="error.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="gfx.h" />
+    <ClInclude Include="gfx_backend.h" />
+    <ClInclude Include="gfx_d3d2.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="interop.hpp" />
