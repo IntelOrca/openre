@@ -29,6 +29,19 @@ namespace openre::audio
         int* dword_6941C8 = (int*)0x6941C8;   // SBGM per-slot volume cache, indexed 0..1
         int* dword_6941CC = (int*)0x6941CC;   // SBGM[1] volume cache
 
+        // Standalone globals used by Snd_sys_init_sub (0x004EC350). All fall
+        // in GameTable pad regions.
+        uint32_t* rev_vol = (uint32_t*)0x6940A8;    // SND_VOL {int16 left; int16 right;}
+        uint32_t* revd_vol = (uint32_t*)0x693350;   // SND_VOL {int16 left; int16 right;}
+        uint32_t* main_vol = (uint32_t*)0x69334C;   // SND_VOL {int16 left; int16 right;}
+        uint32_t* cd_vol = (uint32_t*)0x6934CC;     // SND_VOL {int16 left; int16 right;}
+        int8_t* fade_rtn = (int8_t*)0x693E8C;
+        int8_t* fade_time = (int8_t*)0x69346F;
+        int32_t* pEdt_adr = (int32_t*)0x693480;     // 6 ints
+        int32_t* dword_693B24 = (int32_t*)0x693B24; // SEQ channel table base
+        uint16_t* word_693030 = (uint16_t*)0x693030;
+        uint16_t* se_pri = (uint16_t*)0x693000;     // 48-byte array (24 words); loop end sentinel
+
         // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
         // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
 
@@ -2482,7 +2495,51 @@ namespace openre::audio
 
     // 0x004ec340
 
-    // 0x004ec350
+    // 0x004EC350
+    static void snd_sys_init_sub()
+    {
+        if (!gGameTable.enable_dsound)
+            return;
+
+        *rev_vol = 0x400040;   // SND_VOL { left = 0x40, right = 0x40 }
+        *revd_vol = 0x400040;
+        *main_vol = 0x7F007F;  // SND_VOL { left = 0x7F, right = 0x7F }
+        *cd_vol = 0x7F007F;
+
+        gGameTable.vab_id[3] = gGameTable.vab_id[2] = gGameTable.vab_id[1] = gGameTable.vab_id[0] =
+            gGameTable.vab_id[6] = gGameTable.vab_id[5] = gGameTable.vab_id[4] = 0xFF;
+
+        *fade_rtn = 0;
+        *fade_time = 0;
+
+        // Zero the SEQ/VAB channel tables. v1 steps from 0x693030 down by 2
+        // (24 words) while v0 steps from 0x693B24 down by 0x20 (32 bytes),
+        // writing one word plus eight dwords per iteration. The compare
+        // happens BEFORE the writes, so when v1 reaches Se_pri (0x693000) the
+        // writes are skipped.
+        auto v0 = dword_693B24;  // int32_t*
+        auto v1 = word_693030;   // uint16_t*
+        do
+        {
+            v1 -= 1;
+            v0 -= 8;
+            *v1 = 0;
+            *(v0 - 1) = 0;       // [eax-4]
+            v0[0] = 0;
+            v0[1] = 0;
+            v0[2] = 0;
+            v0[3] = 0;
+            v0[4] = 0;
+            v0[5] = 0;
+            v0[6] = 0;
+        } while (v1 != se_pri);
+
+        pEdt_adr[0] = (int32_t)0x6DFC0C;
+        pEdt_adr[1] = (int32_t)0x6DEF0C;
+        pEdt_adr[5] = 0;
+        pEdt_adr[3] = 0;
+        pEdt_adr[2] = 0;
+    }
 
     // 0x004EC410
     void snd_sys_init_sub2()
@@ -2750,6 +2807,7 @@ namespace openre::audio
         // (snd_sys_init2) via its handle, since the name snd_sys_init2 is the
         // public audio.h wrapper in this scope.
         interop::writeJmp(0x004EC250, snd_sys_init2_impl);
+        interop::writeJmp(0x004EC350, &snd_sys_init_sub);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);

@@ -27,7 +27,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 ## Game-logic layer (Snd_* / Xa_* / bgm_*)
 
 - [x] 0x004EC250 Snd_sys_init2 (238)
-- [ ] 0x004EC350 Snd_sys_init_sub (185)
+- [x] 0x004EC350 Snd_sys_init_sub (185)
 - [ ] 0x004EC410 Snd_sys_init_sub2 (64)
 - [ ] 0x004EC450 Snd_load_core (639)
 - [ ] 0x004EC6D0 Snd_load_arms (252)
