@@ -2425,7 +2425,13 @@ namespace openre::gfx
                 mBlitSwapchainFormat = swapchainFormat;
                 PipelineKey key{};
                 key.textured = true;
-                key.primType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+                // The blit quad is 4 vertices appended in appendBlitQuad();
+                // with TRIANGLELIST only triangle (0,1,2) would rasterize and
+                // the bottom-right half of the screen would stay black. A
+                // triangle strip covers the whole quad ((0,1,2) and (1,2,3));
+                // cull mode is NONE (PipelineKey default) so winding is
+                // irrelevant.
+                key.primType = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
                 mBlitPipeline = createPipeline(key, swapchainFormat, false);
                 if (mBlitPipeline != nullptr)
                     logging::logInfo(
