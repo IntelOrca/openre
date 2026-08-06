@@ -3915,12 +3915,112 @@ namespace openre::audio
         snd_se_on_impl(a0, nullptr);
     }
 
-    // 0x004EE440 (temp thunk — real implementation comes later)
+    // 0x004EE440
     static void snd_bgm_fade()
     {
-        using sig = void (*)();
-        auto p = (sig)0x004EE440;
-        p();
+        if (gGameTable.enable_dsound && !check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+        {
+            if (*fade_rtn)
+            {
+                if (*fade_rtn == 1)
+                {
+                    --*fade_time;
+                    auto* mv = (SoundVolume*)main_vol;
+                    if (*byte_693E8D == 24)
+                    {
+                        mv->left = (int16_t)((int16_t)(98 * mv->left) / 100);
+                        int v2 = 0;
+                        mv->right = (int16_t)((int16_t)(98 * mv->right) / 100);
+                        do
+                        {
+                            ss_set_vol(5, v2, ((uint16_t)mv->left + (uint16_t)mv->right) / 2);
+                            ++v2;
+                        } while (v2 < 3);
+                        ss_set_vol(6, 0, ((uint16_t)mv->left + (uint16_t)mv->right) / 2);
+                        ss_set_vol(6, 1, ((uint16_t)mv->left + (uint16_t)mv->right) / 2);
+                    }
+                    if (*fade_time == 1)
+                    {
+                        if (gGameTable.seq_ctr[0])
+                        {
+                            gGameTable.seq_ctr[0] = 0;
+                            for (int i = 0; i < 3; ++i)
+                            {
+                                if (((DWORD)ss_get_status(5, i) & 1) != 0)
+                                    ss_stop_group(5, i);
+                            }
+                        }
+                        uint8_t* p693808 = (uint8_t*)&gGameTable.byte_693808;
+                        for (int j = 0; j < 2; ++j)
+                        {
+                            if (p693808[8 * j])
+                            {
+                                p693808[8 * j] = 0;
+                                if (((DWORD)ss_get_status(6, j) & 1) != 0)
+                                    ss_stop_group(6, j);
+                            }
+                        }
+                        if (*byte_693E8D == 24)
+                        {
+                            uint16_t left = 127;
+                            int v6 = 0;
+                            *main_vol = 8323199;  // 0x7F007F: left=0x7F, right=0x7F
+                            do
+                            {
+                                ss_set_vol(5, v6, (left + (uint16_t)mv->right) / 2);
+                                left = mv->left;
+                                ++v6;
+                            } while (v6 < 3);
+                            ss_set_vol(6, 0, ((uint16_t)mv->left + (uint16_t)mv->right) / 2);
+                            ss_set_vol(6, 1, ((uint16_t)mv->left + (uint16_t)mv->right) / 2);
+                        }
+                        *fade_rtn = 2;
+                    }
+                }
+                else if (*fade_rtn == 2)
+                {
+                    ss_unload_group(5);
+                    for (char* v0 = (char*)gGameTable.ss_name_bgm; (uintptr_t)v0 < 0x6937ECu; v0 += 260)
+                        *v0 = 0;
+                    ss_unload_group(6);
+                    for (char* v1 = (char*)gGameTable.ss_name_sbgm; (uintptr_t)v1 < (uintptr_t)rev_vol; v1 += 260)
+                        *v1 = 0;
+                    *fade_time = 0;
+                    *fade_rtn = 0;
+                }
+            }
+            else
+            {
+                if ((uint8_t)gGameTable.seq_ctr[0] > 5 && --gGameTable.seq_ctr[0] == 5)
+                {
+                    gGameTable.seq_ctr[0] = 0;
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        if (((DWORD)ss_get_status(5, k) & 1) != 0)
+                            ss_stop_group(5, k);
+                        *dword_689DD8 = 0;
+                    }
+                }
+                if (gGameTable.byte_693808 > 5 && --gGameTable.byte_693808 == 5)
+                {
+                    gGameTable.byte_693808 = 0;
+                    if (((DWORD)ss_get_status(6, 0) & 1) != 0)
+                    {
+                        ss_stop_group(6, 0);
+                        *dword_689DDC = 0;
+                    }
+                }
+                if ((uint8_t)gGameTable.byte_693810 > 5 && --gGameTable.byte_693810 == 5)
+                {
+                    gGameTable.byte_693810 = 0;
+                    if (((DWORD)ss_get_status(6, 1) & 1) != 0)
+                    {
+                        ss_stop_group(6, 1);
+                        *dword_689DE0 = 0;
+                    }
+                }
+            }
+        }
     }
 
     // 0x004EE350
@@ -4064,5 +4164,6 @@ namespace openre::audio
         interop::writeJmp(0x004ED920, bgm_set_entry);
         interop::writeJmp(0x004ED950, &snd_se_on_impl);
         interop::writeJmp(0x004EE350, &snd_se_call);
+        interop::writeJmp(0x004EE440, &snd_bgm_fade);
     }
 }
