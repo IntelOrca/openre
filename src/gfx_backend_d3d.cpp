@@ -2,6 +2,10 @@
 #include "gfx_d3d2.h"
 #include "logger.h"
 
+#include <cstdio>
+#include <fstream>
+#include <vector>
+
 namespace openre::gfx
 {
     namespace
@@ -30,12 +34,163 @@ namespace openre::gfx
         public:
             bool init() override
             {
+                // Debug aid (OPENRE_D3D_DUMP=<N>): every N-th present, read the
+                // reference render target back and write d3d_dump_<counter>.bmp.
+                // Mirrors the GPU backend's OPENRE_GPU_DUMP so both backends
+                // can be captured at the same present for a frame-aligned A/B.
+                const char* dumpEnv = std::getenv("OPENRE_D3D_DUMP");
+                mDumpInterval = dumpEnv != nullptr ? static_cast<DWORD>(std::atoi(dumpEnv)) : 0;
+                if (mDumpInterval != 0)
+                    logging::logInfo("[gfx:d3d] scene dump enabled (every {} frames)", mDumpInterval);
                 return true;
             }
 
             void shutdown() override {}
 
-            void present() override {}
+            void present() override
+            {
+                if (mDumpInterval == 0 || mRenderTarget == nullptr)
+                    return;
+                if (++mDumpCounter % mDumpInterval != 0)
+                    return;
+
+                // Lock the render target through the real DirectDraw surface
+                // (the reference renders into it via the original D3D2 device)
+                // and write the pixels as a 32bpp top-down BMP.
+                DDSURFACEDESC desc = {};
+                desc.dwSize = sizeof(desc);
+                const auto lockHr = lock(mRenderTarget, nullptr, &desc, DDLOCK_READONLY | DDLOCK_WAIT, nullptr);
+                if (FAILED(lockHr) || desc.lpSurface == nullptr || desc.dwWidth == 0 || desc.dwHeight == 0)
+                {
+                    logging::logError(
+                        "[gfx:d3d] dump lock failed: hr={:#010x} surface={} w={} h={}",
+                        static_cast<unsigned long>(lockHr),
+                        static_cast<void*>(mRenderTarget),
+                        desc.dwWidth,
+                        desc.dwHeight);
+                    return;
+                }
+                // Diagnose the locked surface: format and a sample pixel so we
+                // can tell whether the reference is rendering (a black dump in
+                // GPU-active mode previously masked the real content).
+                {
+                    const auto* sampleRow = static_cast<const uint8_t*>(desc.lpSurface);
+                    uint32_t sample = 0;
+                    const auto sampleBpp = desc.ddpfPixelFormat.dwRGBBitCount;
+                    if (sampleBpp <= 8)
+                        sample = sampleRow[0];
+                    else if (sampleBpp <= 16)
+                        std::memcpy(&sample, sampleRow, 2);
+                    else
+                        std::memcpy(&sample, sampleRow, 4);
+                    logging::logInfo(
+                        "[gfx:d3d] dump surface: {}x{} bpp={} pitch={} sample(0,0)={:#010x}",
+                        desc.dwWidth,
+                        desc.dwHeight,
+                        sampleBpp,
+                        desc.lPitch,
+                        sample);
+                }
+
+                const auto* src = static_cast<const uint8_t*>(desc.lpSurface);
+                const auto pitch = static_cast<size_t>(desc.lPitch);
+                const auto width = static_cast<uint32_t>(desc.dwWidth);
+                const auto height = static_cast<uint32_t>(desc.dwHeight);
+                const auto bytes = static_cast<size_t>(width) * height * 4;
+
+                std::vector<uint8_t> bmp(14 + 40 + bytes);
+                const auto pixelOffset = static_cast<uint32_t>(14 + 40);
+                const uint32_t fileSize = static_cast<uint32_t>(bmp.size());
+                bmp[0] = 'B';
+                bmp[1] = 'M';
+                std::memcpy(bmp.data() + 2, &fileSize, 4);
+                std::memcpy(bmp.data() + 10, &pixelOffset, 4);
+                const uint32_t headerSize = 40;
+                std::memcpy(bmp.data() + 14, &headerSize, 4);
+                std::memcpy(bmp.data() + 18, &width, 4);
+                const int32_t negHeight = -static_cast<int32_t>(height);
+                std::memcpy(bmp.data() + 22, &negHeight, 4);
+                const uint16_t planes = 1;
+                std::memcpy(bmp.data() + 26, &planes, 2);
+                const uint16_t bitCount = 32;
+                std::memcpy(bmp.data() + 28, &bitCount, 2);
+                const uint32_t compression = 0;
+                std::memcpy(bmp.data() + 30, &compression, 4);
+                std::memcpy(bmp.data() + 34, &bytes, 4);
+                const uint32_t ppm = 2835;
+                std::memcpy(bmp.data() + 38, &ppm, 4);
+                std::memcpy(bmp.data() + 42, &ppm, 4);
+                const uint32_t zero = 0;
+                std::memcpy(bmp.data() + 46, &zero, 4);
+                std::memcpy(bmp.data() + 50, &zero, 4);
+
+                // Convert the surface's native format (16/24/32bpp RGB) to 32bpp
+                // BGRA for the BMP, honoring the pixel format masks.
+                const auto bpp = desc.ddpfPixelFormat.dwRGBBitCount;
+                const auto maskR = desc.ddpfPixelFormat.dwRBitMask;
+                const auto maskG = desc.ddpfPixelFormat.dwGBitMask;
+                const auto maskB = desc.ddpfPixelFormat.dwBBitMask;
+                for (uint32_t y = 0; y < height; y++)
+                {
+                    auto* dst = bmp.data() + pixelOffset + static_cast<size_t>(y) * static_cast<size_t>(width) * 4;
+                    const auto* row = src + static_cast<size_t>(y) * pitch;
+                    for (uint32_t x = 0; x < width; x++)
+                    {
+                        uint32_t px = 0;
+                        if (bpp <= 8)
+                        {
+                            px = row[x];
+                        }
+                        else if (bpp <= 16)
+                        {
+                            uint16_t v;
+                            std::memcpy(&v, row + static_cast<size_t>(x) * 2, 2);
+                            px = v;
+                        }
+                        else if (bpp <= 24)
+                        {
+                            px = row[x * 3] | (row[x * 3 + 1] << 8) | (row[x * 3 + 2] << 16);
+                        }
+                        else
+                        {
+                            std::memcpy(&px, row + static_cast<size_t>(x) * 4, 4);
+                        }
+                        // Decode the largest channel to a byte by shifting right
+                        // until it fits 8 bits (a 5-bit channel -> 8 bits).
+                        auto expand = [](uint32_t v, uint32_t mask) -> uint8_t {
+                            if (mask == 0)
+                                return 0;
+                            uint32_t m = mask;
+                            uint32_t vv = v & mask;
+                            while (m > 0xFF)
+                            {
+                                vv >>= 1;
+                                m >>= 1;
+                            }
+                            return static_cast<uint8_t>(vv);
+                        };
+                        dst[x * 4 + 0] = expand(px, maskB);
+                        dst[x * 4 + 1] = expand(px, maskG);
+                        dst[x * 4 + 2] = expand(px, maskR);
+                        dst[x * 4 + 3] = 0xFF;
+                    }
+                }
+
+                unlock(mRenderTarget, nullptr);
+
+                char path[64] = {};
+                std::snprintf(path, sizeof(path), "d3d_dump_%05llu.bmp", static_cast<unsigned long long>(mDumpCounter));
+                std::ofstream file(path, std::ios::binary);
+                if (file)
+                {
+                    file.write(reinterpret_cast<const char*>(bmp.data()), static_cast<std::streamsize>(bmp.size()));
+                    logging::logInfo("[gfx:d3d] scene dump written: {} ({}x{})", path, width, height);
+                }
+                else
+                {
+                    logging::logError("[gfx:d3d] scene dump write failed: {}", path);
+                }
+            }
 
             // ---- surface layer ----
 
@@ -182,6 +337,9 @@ namespace openre::gfx
 
             HRESULT set_render_target(IUnknown* device, IUnknown* surface, DWORD flags) override
             {
+                // Track the reference's render target so present() can dump it
+                // (OPENRE_D3D_DUMP) at the same frame as the GPU scene dump.
+                mRenderTarget = surface;
                 if (!reference_enabled())
                     return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
@@ -368,6 +526,14 @@ namespace openre::gfx
                 }
                 return E_UNEXPECTED;
             }
+
+        private:
+            // Reference render target surface (surface0), tracked from
+            // set_render_target so present() can dump it for A/B comparison.
+            IUnknown* mRenderTarget = nullptr;
+            // OPENRE_D3D_DUMP=<N>: dump the render target every N-th present.
+            DWORD mDumpInterval = 0;
+            DWORD mDumpCounter = 0;
         };
     }
 

@@ -27,6 +27,28 @@ namespace openre::gfx
             static std::unordered_map<void*, void*> map;
             return map;
         }
+
+        // Maps versioned surface interfaces (the separate IDirectDrawSurface2/3/4
+        // wrapper objects ddraw returns from QueryInterface) back to the base
+        // IDirectDrawSurface object the game created with CreateSurface. The
+        // GPU backends key their registries on the base surface pointer, so a
+        // texture obtained through a versioned interface must be attributed to
+        // its base surface.
+        std::unordered_map<void*, void*>& versionedSurfaceToBase()
+        {
+            static std::unordered_map<void*, void*> map;
+            return map;
+        }
+
+        // Follows the versionedSurfaceToBase chain to the canonical base
+        // surface pointer; returns `surface` unchanged when it is not a
+        // registered versioned wrapper.
+        void* baseSurface(void* surface)
+        {
+            auto& map = versionedSurfaceToBase();
+            const auto it = map.find(surface);
+            return it == map.end() ? surface : baseSurface(it->second);
+        }
     }
 
     namespace registry
@@ -220,6 +242,25 @@ namespace openre::gfx
                 backend_d3d()->destroy_surface(self);
                 backend_gpu()->destroy_surface(self);
                 registry::erase(self);
+
+                // Versioned interface wrappers (IDirectDrawSurface2/3/4) die
+                // with the surface. Drop their registry entries so a recycled
+                // wrapper pointer is not mistaken for an already-wrapped object;
+                // keep the newVtbl allocated because the wrapper object's lpVtbl
+                // may still point at it if the game holds a live reference.
+                auto& vmap = versionedSurfaceToBase();
+                for (auto it = vmap.begin(); it != vmap.end();)
+                {
+                    if (it->second == self)
+                    {
+                        registryMap().erase(it->first);
+                        it = vmap.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
             }
             else
             {
@@ -238,7 +279,11 @@ namespace openre::gfx
 
         // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
         // DirectDraw surface; remember the owning surface and wrap the texture
-        // so its GetHandle can be broadcast to the backends.
+        // so its GetHandle can be broadcast to the backends. The game usually
+        // holds IDirectDrawSurface2/3/4 interfaces (obtained by QI-ing the
+        // wrapped surface) and QIs for the texture through THOSE, so every
+        // versioned surface returned here also gets its QueryInterface slot
+        // wrapped to keep the chain intercepted.
         static HRESULT STDMETHODCALLTYPE hook_surface_query_interface(IDirectDrawSurface* self, REFIID riid, void** ppv)
         {
             const auto* e = registry::find(self);
@@ -246,11 +291,37 @@ namespace openre::gfx
                 return E_UNEXPECTED;
             using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, REFIID, void**);
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::SURF_QueryInterface])(self, riid, ppv);
-            if (SUCCEEDED(hr) && ppv != nullptr && *ppv != nullptr && IsEqualGUID(riid, IID_IDirect3DTexture2))
+            if (FAILED(hr) || ppv == nullptr || *ppv == nullptr)
+                return hr;
+            if (IsEqualGUID(riid, IID_IDirect3DTexture2))
             {
                 auto* texture = reinterpret_cast<IDirect3DTexture2*>(*ppv);
-                textureToSurface()[texture] = self;
+                textureToSurface()[texture] = baseSurface(self);
                 wrap_texture2(texture);
+            }
+            else if (
+                IsEqualGUID(riid, IID_IDirectDrawSurface) || IsEqualGUID(riid, IID_IDirectDrawSurface2)
+                || IsEqualGUID(riid, IID_IDirectDrawSurface3) || IsEqualGUID(riid, IID_IDirectDrawSurface4))
+            {
+                // ddraw returns a versioned surface interface. When it is a
+                // distinct wrapper object (unwrapped vtable), patch only its
+                // vtable slot 0 (QueryInterface, the first entry of every COM
+                // vtable): the Blt/Lock/etc. slots live at different offsets
+                // across the surface versions, so they must be left alone. A
+                // later QI(IID_IDirect3DTexture2) through this interface is
+                // then intercepted too. If ddraw shares the base surface's
+                // pointer/vtable, it is already registered and we skip.
+                void* surface = *ppv;
+                if (registry::find(surface) == nullptr)
+                {
+                    auto** orig = *reinterpret_cast<void***>(surface);
+                    auto* newVtbl = new void*[kSurfaceVtblSlots];
+                    std::memcpy(newVtbl, orig, kSurfaceVtblSlots * sizeof(void*));
+                    newVtbl[slots::SURF_QueryInterface] = reinterpret_cast<void*>(&hook_surface_query_interface);
+                    registry::set(surface, orig, newVtbl);
+                    *reinterpret_cast<void***>(surface) = newVtbl;
+                    versionedSurfaceToBase()[surface] = baseSurface(self);
+                }
             }
             return hr;
         }

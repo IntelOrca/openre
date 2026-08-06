@@ -857,7 +857,7 @@ strip's alternating winding is not culled. Scene pipelines are unchanged
 **Verified.** `build.bat` 0 warnings / 0 errors. Requires a visual run to
 confirm the full window shows the game frame.
 
-### Post-M8 fixes — F8/alt-enter freeze, load screen, GPU inventory, near-camera shards (done)
+### Post-M8 fixes — F8/alt-enter freeze, load screen, GPU inventory, near-camera shards, in-game untextured primitives (done)
 
 Four follow-up bugs found after the M8 sign-off, each fixed and committed
 separately:
@@ -900,6 +900,32 @@ separately:
    strip winding) and line/point primitives; fully-behind primitives are
    skipped. Confirmed at runtime with identical dump counters: the buggy build
    showed fullscreen wedges exactly where `rhw <= 0` vertices appeared.
+
+5. **GPU most primitives untextured (white boxes) in game** (`9b8d2f4`). Two
+   independent defects in the texture-handle path, both fixed:
+   - **Handle mappings were purged on surface destroy.** `releaseSurfaceEntry`
+     (`src/gfx_backend_gpu.cpp`) erased every `mTextureHandles` entry pointing
+     at a destroyed surface, but the game caches `texture_handle` on its own
+     surface objects and keeps drawing with them (via
+     `SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE)`) across room loads. After a
+     room transition the cached handles no longer resolved, so the whole scene
+     drew untextured. Handles are now treated as game-lifetime-stable tokens:
+     the purge loop was removed. `resolveTexture` already degrades gracefully
+     when the handle's surface is gone or has no texture yet, and the next
+     `GetHandle` on a recycled surface pointer re-registers the mapping, so
+     stale entries are safe and self-healing.
+   - **Textures obtained through unwrapped surface vtables never registered.**
+     The game holds `IDirectDrawSurface2/3/4` interfaces and QIs for
+     `IID_IDirect3DTexture2` *through those*, so `hook_surface_query_interface`
+     (which only wrapped v1 `IDirectDrawSurface`) never fired, the texture was
+     never wrapped, and its `GetHandle` never broadcast the handle. Now every
+     versioned surface returned by QI gets its vtable slot 0 (QueryInterface)
+     wrapped so a later texture QI through it is intercepted; the texture is
+     attributed to the *base* surface the backends key on (new
+     `versionedSurfaceToBase` map in `src/gfx_d3d2.cpp`). Verified with
+     per-frame draw stats: the in-game phase went from `textured=156
+     untextured=25666` to `textured=37980 untextured=0`, and `CreateTextureHandle`
+     registrations rose from 15 to 76.
 
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.

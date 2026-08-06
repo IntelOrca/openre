@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -597,6 +598,18 @@ namespace openre::gfx
                 {
                     logging::logDebug("[gfx:gpu] present skipped (device/window not ready)");
                     return;
+                }
+
+                // Per-frame texture-content diagnostics: throttled summary so we
+                // can see whether "textured" draws are binding empty textures.
+                if (++mStatLogCounter % 60 == 0)
+                {
+                    logging::logInfo(
+                        "[gfx:gpu] draw stats: textured+content={} textured-no-content={} untextured={}",
+                        mStatTexturedContent,
+                        mStatTexturedNoContent,
+                        mStatUntextured);
+                    mStatTexturedContent = mStatTexturedNoContent = mStatUntextured = 0;
                 }
 
                 // Wait for the previous frame's fence before reusing the shared
@@ -1290,11 +1303,15 @@ namespace openre::gfx
                 // SetRenderState(TEXTUREHANDLE, h) can resolve to the texture.
                 if (handle != 0)
                     mTextureHandles[handle] = surface;
-                logging::logDebug(
-                    "[gfx:gpu] CreateTextureHandle device={} handle={} surface={}",
-                    static_cast<void*>(device),
-                    handle,
-                    static_cast<void*>(surface));
+                {
+                    char buf[16];
+                    std::snprintf(buf, sizeof(buf), "%#010lx", static_cast<unsigned long>(handle));
+                    logging::logInfo(
+                        "[gfx:gpu] CreateTextureHandle device={} handle={} surface={}",
+                        static_cast<void*>(device),
+                        buf,
+                        static_cast<void*>(surface));
+                }
             }
 
             // Replays IDirect3DTexture2::Load(dst, src): the game fills an
@@ -1395,7 +1412,15 @@ namespace openre::gfx
             {
                 switch (static_cast<int>(state))
                 {
-                case RS_TEXTUREHANDLE: mDeviceState.texHandle = value; break;
+                case RS_TEXTUREHANDLE:
+                    if (mDeviceState.texHandle != value)
+                    {
+                        char buf[16];
+                        std::snprintf(buf, sizeof(buf), "%#010lx", static_cast<unsigned long>(value));
+                        logging::logDebug("[gfx:gpu] SetRenderState TEXTUREHANDLE -> {}", buf);
+                    }
+                    mDeviceState.texHandle = value;
+                    break;
                 case RS_ZENABLE: mDeviceState.zEnable = value != 0; break;
                 case RS_ZWRITEENABLE: mDeviceState.zWrite = value != 0; break;
                 case RS_ZFUNC: mDeviceState.zFunc = value; break;
@@ -1583,9 +1608,15 @@ namespace openre::gfx
             }
 
             // Frees the GPU resources of the entry stored under `key` and
-            // removes it from mSurfaces. Also purges any texture-handle entry
-            // that resolves to the surface so a stale handle can never resolve
-            // to a freed texture. Used by destroy_surface (backend API for
+            // removes it from mSurfaces. Texture-handle mappings are NOT
+            // purged: the game treats D3D texture handles as stable tokens it
+            // caches on its surface objects and keeps drawing with (via
+            // SetRenderState(TEXTUREHANDLE)) across surface destruction, so a
+            // stale handle must still resolve. resolveTexture already degrades
+            // gracefully when the handle's surface is gone or has no texture
+            // yet, and when ddraw recycles the surface pointer the next
+            // GetHandle re-registers the mapping, so keeping stale entries is
+            // safe and self-healing. Used by destroy_surface (backend API for
             // surface destruction), create_surface (recycled pointer) and
             // create_device (previous render target replaced by a mode change).
             void releaseSurfaceEntry(void* key)
@@ -1593,13 +1624,6 @@ namespace openre::gfx
                 const auto it = mSurfaces.find(key);
                 if (it == mSurfaces.end())
                     return;
-                for (auto h = mTextureHandles.begin(); h != mTextureHandles.end();)
-                {
-                    if (h->second == key)
-                        h = mTextureHandles.erase(h);
-                    else
-                        ++h;
-                }
                 releaseSurface(it->second);
                 mSurfaces.erase(it);
             }
@@ -2334,6 +2358,13 @@ namespace openre::gfx
             Uint64 mDumpCounter = 0;
             SDL_GPUTransferBuffer* mDumpTransfer = nullptr;
 
+            // Per-frame draw-content diagnostics (queueDraw).
+            Uint64 mStatTexturedContent = 0;
+            Uint64 mStatTexturedNoContent = 0;
+            Uint64 mStatUntextured = 0;
+            Uint32 mStatLogCounter = 0;
+            std::unordered_set<DWORD> mLoggedNoContent;
+
             // ---- deferred draw helpers ----
 
             // True when the mirrored TEXTUREMAG/TEXTUREMIN render states select
@@ -2374,7 +2405,47 @@ namespace openre::gfx
                 const bool textured = resolveTexture(mDeviceState.texHandle, texture);
                 SDL_GPUSampler* sampler = nullptr;
                 if (textured)
+                {
                     sampler = wantsLinearFilter() ? mSamplerLinear : mSamplerNearest;
+
+                    // Diagnose content: a resolved texture with no uploaded
+                    // pixels renders white/empty even though the draw is
+                    // "textured". Track per-frame counters plus a one-time
+                    // description of each empty entry.
+                    SurfaceEntry* entry = nullptr;
+                    const auto hit = mTextureHandles.find(mDeviceState.texHandle);
+                    if (hit != mTextureHandles.end())
+                        entry = findSurface(hit->second);
+                    if (entry != nullptr && entry->hasContent)
+                    {
+                        mStatTexturedContent++;
+                    }
+                    else
+                    {
+                        mStatTexturedNoContent++;
+                        if (mLoggedNoContent.find(mDeviceState.texHandle) == mLoggedNoContent.end())
+                        {
+                            mLoggedNoContent.insert(mDeviceState.texHandle);
+                            const auto* e = entry != nullptr ? entry : nullptr;
+                            char hbuf[16];
+                            std::snprintf(hbuf, sizeof(hbuf), "%#010lx", static_cast<unsigned long>(mDeviceState.texHandle));
+                            logging::logInfo(
+                                "[gfx:gpu] textured draw with NO content: handle={} entry={} bpp={} w={} h={} paletted={} "
+                                "created={}",
+                                hbuf,
+                                static_cast<const void*>(e),
+                                e != nullptr ? e->bpp : 0,
+                                e != nullptr ? e->width : 0,
+                                e != nullptr ? e->height : 0,
+                                e != nullptr ? e->paletted : false,
+                                e != nullptr ? e->textureCreated : false);
+                        }
+                    }
+                }
+                else
+                {
+                    mStatUntextured++;
+                }
 
                 PipelineKey key{};
                 key.textured = textured;
@@ -2433,7 +2504,9 @@ namespace openre::gfx
                     // visible without spamming the debug log every draw.
                     if (mLastUnknownHandle != handle)
                     {
-                        logging::logDebug("[gfx:gpu] unhandled texture handle {} (draw untextured)", handle);
+                        char buf[16];
+                        std::snprintf(buf, sizeof(buf), "%#010lx", static_cast<unsigned long>(handle));
+                        logging::logDebug("[gfx:gpu] unhandled texture handle {} (draw untextured)", buf);
                         mLastUnknownHandle = handle;
                     }
                     return false;
