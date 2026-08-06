@@ -64,6 +64,13 @@ namespace openre::audio
         int16_t* vol_3d_r = (int16_t*)0x693C46;
         int16_t* vol_3d_pan = (int16_t*)0x689DE4;
 
+        // Standalone globals used by Snd_se_call (0x004EE350).
+        int* ss_timer = (int*)0x6934C0;          // SE fade countdown timers (3 entries)
+        int* ss_vol = (int*)0x693468;            // SE base volume table (indexed 0..2)
+        uint32_t* dword_689DD8 = (uint32_t*)0x689DD8; // set when the BGM fade completes
+        uint32_t* dword_689DDC = (uint32_t*)0x689DDC; // set when the SBGM[0] fade completes
+        uint32_t* dword_689DE0 = (uint32_t*)0x689DE0; // set when the SBGM[1] fade completes
+
         // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
         // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
         // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
@@ -3908,6 +3915,61 @@ namespace openre::audio
         snd_se_on_impl(a0, nullptr);
     }
 
+    // 0x004EE440 (temp thunk — real implementation comes later)
+    static void snd_bgm_fade()
+    {
+        using sig = void (*)();
+        auto p = (sig)0x004EE440;
+        p();
+    }
+
+    // 0x004EE350
+    static void snd_se_call()
+    {
+        if (gGameTable.enable_dsound)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                int v1 = ss_timer[i];
+                if (v1)
+                {
+                    ss_timer[i] = v1 - 1;
+                    if (i)
+                    {
+                        if (i == 1)
+                        {
+                            int v3 = ss_get_volume(6, 0) - ss_vol[1];
+                            if (v3 < 0)
+                                v3 = 0;
+                            if (ss_set_vol(6, 0, v3) == 1)
+                                *dword_689DDC = 1;
+                        }
+                        else if (i == 2)
+                        {
+                            int v2 = ss_get_volume(6, 1) - ss_vol[2];
+                            if (v2 < 0)
+                                v2 = 0;
+                            if (ss_set_vol(6, 1, v2) == 1)
+                                *dword_689DE0 = 1;
+                        }
+                    }
+                    else
+                    {
+                        for (int j = 0; j < 3; ++j)
+                        {
+                            int v5 = ss_get_volume(5, j) - ss_vol[0];
+                            if (v5 < 0)
+                                v5 = 0;
+                            ss_set_vol(5, j, v5);
+                        }
+                        *dword_689DD8 = 1;
+                    }
+                }
+            }
+            snd_bgm_fade();
+        }
+    }
+
     // 0x004329B0
     static BOOL __stdcall acmDriverEnumCallback(HACMDRIVERID hadid, DWORD dwInstance, DWORD fdwSupport)
     {
@@ -4001,5 +4063,6 @@ namespace openre::audio
         interop::writeJmp(0x004ED2F0, bgm_set_control_impl);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         interop::writeJmp(0x004ED950, &snd_se_on_impl);
+        interop::writeJmp(0x004EE350, &snd_se_call);
     }
 }
