@@ -3811,6 +3811,60 @@ namespace openre::audio
         return result;
     }
 
+    // 0x004EED10 (Xa_control_stop - temp thunk, will be replaced by a later agent)
+    static char xa_control_stop()
+    {
+        using sig = char (*)();
+        auto p = (sig)0x004EED10;
+        return p();
+    }
+
+    // 0x004EED30 (Xa_control_init - temp thunk, will be replaced by a later agent)
+    static void xa_control_init()
+    {
+        using sig = void (*)();
+        auto p = (sig)0x004EED30;
+        return p();
+    }
+
+    // 0x004EED40 (Xa_control_play - temp thunk, will be replaced by a later agent)
+    static int xa_control_play()
+    {
+        using sig = int (*)();
+        auto p = (sig)0x004EED40;
+        return p();
+    }
+
+    // 0x004EED80 (Xa_control_end - temp thunk, will be replaced by a later agent)
+    static char xa_control_end()
+    {
+        using sig = char (*)();
+        auto p = (sig)0x004EED80;
+        return p();
+    }
+
+    // 0x004EED00
+    static int xa_control()
+    {
+        int result = 0;
+        switch (*byte_69346E)
+        {
+        case 0:
+            result = (uint8_t)xa_control_stop();
+            break;
+        case 1:
+            xa_control_init();
+            break;
+        case 2:
+            result = (uint8_t)xa_control_play();
+            break;
+        case 3:
+            result = (uint8_t)xa_control_end();
+            break;
+        }
+        return result;
+    }
+
     // 0x004EE780
     static int snd_se_3d(const Vec32* pos, int a2)
     {
@@ -4385,5 +4439,6 @@ namespace openre::audio
         interop::writeJmp(0x004EEBD0, &snd_se_dir_ck);
         interop::writeJmp(0x004EEC30, &xa_play);
         interop::writeJmp(0x004EECD0, &xa_stop);
+        interop::writeJmp(0x004EED00, &xa_control);
     }
 }
