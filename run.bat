@@ -1,6 +1,7 @@
 @echo off
 set OPENRE_LOG_VERBOSITY=debug
 set OPENRE_RE2_DATA=F:\games\openre\data
+set OPENRE_SAVE_PATH=M:\git\openre\bin\Debug\savedata\
 set OPENRE_GFX_BACKEND=1
 set OPENRE_GFX_MODE=gpu
 
