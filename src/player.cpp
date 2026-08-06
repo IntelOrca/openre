@@ -582,20 +582,205 @@ namespace openre::player
         return (*player->pNow_seq >> 13) & 1;
     }
 
-    // 0x004EDF40
-    static void snd_se_walk(int a0, int floor_sound, PlayerEntity* player)
+    // Standalone globals used by snd_se_walk (0x004EDF40).
+    static int32_t* pEdt_adr = (int32_t*)0x693480;     // 6-int table of .edh buffers
+    static int32_t* dword_6934B0 = (int32_t*)0x6934B0; // decoded core data ptr (buffer 2)
+    static int32_t* dword_6934A8 = (int32_t*)0x6934A8; // room VAB data ptr
+    static uint8_t* byte_6941D0 = (uint8_t*)0x6941D0;  // room reverb level cache
+    static int16_t* vol_3d_l = (int16_t*)0x693C44;
+    static int16_t* vol_3d_r = (int16_t*)0x693C46;
+    static int16_t* vol_3d_pan = (int16_t*)0x689DE4;
+
+    // 0x004EE780 (temp thunk; Snd_se_3D not yet decompiled)
+    static int snd_se_3d(const Vec32* pos, int a2)
     {
-        using sig = void (*)(int, int, PlayerEntity*);
-        auto p = (sig)0x004EDF40;
-        return p(a0, floor_sound, player);
+        using sig = int (*)(const Vec32*, int);
+        auto p = (sig)0x004EE780;
+        return p(pos, a2);
+    }
+
+    // 0x004EA2B0 (temp thunk; Floor_check not yet decompiled)
+    static int floor_check(int x, int z, int floor)
+    {
+        using sig = int (*)(int, int, int);
+        auto p = (sig)0x004EA2B0;
+        return p(x, z, floor);
+    }
+
+    // 0x00434AB0 (hooked to openre::audio::ss_set_vol)
+    static void ss_set_vol_pl(int type, int index, int vol)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x00434AB0;
+        p(type, index, vol);
+    }
+
+    // 0x004348F0 (hooked to openre::audio::ss_set_pan)
+    static void ss_set_pan_pl(int type, int index, int pan)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004348F0;
+        p(type, index, pan);
+    }
+
+    // 0x004338F0 (hooked to openre::audio::ss_play)
+    static void ss_play_pl(int type, int id, int dwFlags)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004338F0;
+        p(type, id, dwFlags);
     }
 
     // 0x004B8470
-    static int esp_call(int a0, int a1, Mat16 matrix, Vec16p vec)
+    static int esp_call(uint32_t a1, int16_t a2, const Mat16* pMat, const Vec16p* pVec)
     {
-        using sig = int (*)(int, int, Mat16, Vec16p);
+        using sig = int (*)(uint32_t, int16_t, const Mat16*, const Vec16p*);
         auto p = (sig)0x004B8470;
-        return p(a0, a1, matrix, vec);
+        return p(a1, a2, pMat, pVec);
+    }
+
+    // 0x004EDF40
+    static void snd_se_walk(int a0, int floor_sound, PlayerEntity* player)
+    {
+        int v3 = floor_sound;
+        int v5;
+        char v6;
+        int v17 = 0;
+        int a2 = 0;
+        int a3 = 0;
+        Vec16p pVec{ 0, 0, 0 };
+
+        if (gGameTable.enable_dsound)
+        {
+            if (player->id == 13)
+            {
+                v5 = pEdt_adr[4];
+                if (!pEdt_adr[4])
+                    return;
+                a2 = (int8_t)gGameTable.vab_id[4];
+                a3 = *dword_6934B0;
+                v17 = v3 != 4;
+                v6 = 11;
+            }
+            else
+            {
+                char v7 = (char)floor_check(player->m.pos.x, player->m.pos.z, player->nFloor);
+                v5 = pEdt_adr[2];
+                v6 = v7;
+                if (!pEdt_adr[2])
+                    return;
+                a2 = (int8_t)gGameTable.vab_id[2];
+                a3 = *dword_6934A8;
+                if (player->id <= 0x0F)
+                    v17 = v3 != 4;
+                else
+                    v17 = (v3 != 4) + 2;
+            }
+        }
+        else
+        {
+            v5 = v3;
+            v6 = (char)v3;
+        }
+
+        int16_t v8 = player->water;
+        if (v8 != 0)
+        {
+            if (gGameTable.enable_dsound)
+            {
+                v5 = pEdt_adr[2];
+                if (!pEdt_adr[2])
+                    return;
+                a2 = (int8_t)gGameTable.vab_id[2];
+                a3 = *dword_6934A8;
+                v6 = 26;
+            }
+
+            uint8_t* pSinParts = (uint8_t*)player->pSin_parts_ptr;
+            pVec.y = (int16_t)(v8 - *(uint16_t*)(pSinParts + 0x10C));
+            bool v10 = player->id == 15;
+            pVec.z = (v3 != 4) ? 160 : -160;
+
+            Mat16* pMat = (Mat16*)(pSinParts + 0xF4);
+            int16_t pPl_cdir = gGameTable.pl.cdir.y;
+
+            if (v10)
+            {
+                pVec.y += 100;
+                if (a0)
+                {
+                    if (a0 == 1)
+                    {
+                        pVec.x = 300;
+                        esp_call(0x1A001200, pPl_cdir, pMat, &pVec);
+                        pVec.x = 0;
+                        esp_call(0x1A000E00, pPl_cdir + 1024, pMat, &pVec);
+                        esp_call(0x1A000E00, pPl_cdir + 3072, pMat, &pVec);
+                    }
+                    goto label_24;
+                }
+                pVec.x = 100;
+            }
+            else
+            {
+                if (a0)
+                {
+                    if (a0 == 1)
+                    {
+                        pVec.x = 600;
+                        esp_call(0x1A001600, pPl_cdir, pMat, &pVec);
+                        pVec.x = 0;
+                        esp_call(0x1A001100, pPl_cdir + 1024, pMat, &pVec);
+                        esp_call(0x1A001100, pPl_cdir + 3072, pMat, &pVec);
+                    }
+                    goto label_24;
+                }
+                pVec.x = 200;
+            }
+            esp_call(0x1A000E00, pPl_cdir, pMat, &pVec);
+            pVec.x = 0;
+            esp_call(0x1A000C00, pPl_cdir + 1024, pMat, &pVec);
+            esp_call(0x1A000C00, pPl_cdir + 3072, pMat, &pVec);
+        }
+
+    label_24:
+        if (gGameTable.enable_dsound)
+        {
+            uint16_t v19 = player->pOn_om ? 6 : (uint16_t)((v6 & 0x7F) + a0);
+            if (*(int32_t*)((uint8_t*)v5 + 4 * v19) != -1 && a2 != -1)
+            {
+                uint8_t* v14 = (uint8_t*)(a3 + 32 * (16 * (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 1) & 0x7F) + (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 2) >> 4) + 0x41));
+                if (*byte_6941D0)
+                    v14[1] |= *byte_6941D0;
+                else
+                    v14[1] &= ~4u;
+
+                if (player->id != 13 || player->water != 0)
+                {
+                    snd_se_3d(&player->m.pos, 1);
+                    if (gGameTable.sfx_vol)
+                    {
+                        int v16 = ((uint16_t)*vol_3d_r <= (uint16_t)*vol_3d_l) ? (uint16_t)*vol_3d_l : (uint16_t)*vol_3d_r;
+                        ss_set_vol_pl(2, v19, v16);
+                        ss_set_pan_pl(2, v19, *vol_3d_pan);
+                        ss_play_pl(2, v19, 0);
+                    }
+                }
+                else
+                {
+                    snd_se_3d(&player->m.pos, 1);
+                    if (gGameTable.sfx_vol)
+                    {
+                        if (v17)
+                            v19 += 2;
+                        int v15 = ((uint16_t)*vol_3d_r <= (uint16_t)*vol_3d_l) ? (uint16_t)*vol_3d_l : (uint16_t)*vol_3d_r;
+                        ss_set_vol_pl(4, v19, v15);
+                        ss_set_pan_pl(4, v19, *vol_3d_pan);
+                        ss_play_pl(4, v19, 0);
+                    }
+                }
+            }
+        }
     }
 
     // 0x004DAE70
@@ -639,14 +824,14 @@ namespace openre::player
             if (player->water < static_cast<int32_t>(sinParts[24]) + 300)
             {
                 auto matrix = *reinterpret_cast<Mat16*>(sinParts[72]);
-                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, matrix, pVec);
+                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, &matrix, &pVec);
             }
 
             sinParts = reinterpret_cast<uint8_t*>(player->pSin_parts_ptr);
             if (player->water < static_cast<int32_t>(sinParts[626]) + 300)
             {
                 auto matrix = *reinterpret_cast<Mat16*>(sinParts[672]);
-                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, matrix, pVec);
+                esp_call((4 * rnd() + 1548) | 0x1A000000, player->cdir.y, &matrix, &pVec);
             }
         }
     }
@@ -1495,11 +1680,11 @@ namespace openre::player
 
             if (player->water < part11.workm.pos.y + 300)
             {
-                esp_call((4 * rnd() + 0x60C) | 0x1A000000, player->cdir.y, part11.workm, vec);
+                esp_call((4 * rnd() + 0x60C) | 0x1A000000, player->cdir.y, &part11.workm, &vec);
             }
             if (player->water < part14.workm.pos.y + 300)
             {
-                esp_call((4 * rnd() + 0x60C) | 0x1A000000, player->cdir.y, part14.workm, vec);
+                esp_call((4 * rnd() + 0x60C) | 0x1A000000, player->cdir.y, &part14.workm, &vec);
             }
         }
 
@@ -1672,12 +1857,13 @@ namespace openre::player
 
     void player_init_hooks()
     {
+        interop::writeJmp(0x004EDF40, &snd_se_walk);
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
-        interop::writeJmp(0x4FC3CE, itembox_prev_slot);
         interop::writeJmp(0x4D97B0, player_move);
         interop::writeJmp(0x4D9D20, pl_move);
         interop::writeJmp(0x4DC130, pl_mv_damage);
+        interop::writeJmp(0x4FC3CE, itembox_prev_slot);
 
         init_move_tables();
     }
