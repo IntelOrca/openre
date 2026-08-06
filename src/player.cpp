@@ -705,13 +705,13 @@ namespace openre::player
         static uint8_t yAxisRotationSpeed[] = { 0x28, 0x10, 0x10 };
         if (key & input::KEY_TYPE_BACKWARD)
         {
-            if (key & input::KEY_TYPE_LEFT)
-            {
-                player->cdir.y += yAxisRotationSpeed[player->d_life_u];
-            }
-            if (key & input::KEY_TYPE_RIGHT)
+            if (key & input::KEY_TYPE_TURN_LEFT)
             {
                 player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
+            }
+            if (key & input::KEY_TYPE_TURN_RIGHT)
+            {
+                player->cdir.y += yAxisRotationSpeed[player->d_life_u];
             }
             if (key_trg & input::KEY_TYPE_RUN_AND_CANCEL)
             {
@@ -800,13 +800,13 @@ namespace openre::player
 
             return;
         }
-        if (key & input::KEY_TYPE_LEFT)
-        {
-            player->cdir.y += yAxisRotationSpeed[player->d_life_u];
-        }
-        if (key & input::KEY_TYPE_RIGHT)
+        if (key & input::KEY_TYPE_TURN_LEFT)
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
+        }
+        if (key & input::KEY_TYPE_TURN_RIGHT)
+        {
+            player->cdir.y += yAxisRotationSpeed[player->d_life_u];
         }
         if (key & input::KEY_TYPE_RUN_AND_CANCEL)
         {
@@ -894,13 +894,13 @@ namespace openre::player
         {
             set_routine(Routine::FORWARD);
         }
-        if (key & input::KEY_TYPE_LEFT)
-        {
-            player->cdir.y += yAxisRotationSpeed[player->d_life_u];
-        }
-        if (key & input::KEY_TYPE_RIGHT)
+        if (key & input::KEY_TYPE_TURN_LEFT)
         {
             player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
+        }
+        if (key & input::KEY_TYPE_TURN_RIGHT)
+        {
+            player->cdir.y += yAxisRotationSpeed[player->d_life_u];
         }
         if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
         {
@@ -1228,13 +1228,13 @@ namespace openre::player
         {
             if (player->spd.x > 50)
             {
-                if (key & input::KEY_TYPE_LEFT)
-                {
-                    player->cdir.y += yAxisRotationSpeed[player->d_life_u];
-                }
-                if (key & input::KEY_TYPE_RIGHT)
+                if (key & input::KEY_TYPE_TURN_LEFT)
                 {
                     player->cdir.y -= yAxisRotationSpeed[player->d_life_u];
+                }
+                if (key & input::KEY_TYPE_TURN_RIGHT)
+                {
+                    player->cdir.y += yAxisRotationSpeed[player->d_life_u];
                 }
             }
             if (key & input::KEY_TYPE_128 || key_trg & input::KEY_TYPE_128)
@@ -1500,13 +1500,13 @@ namespace openre::player
             player->timer3 = 1;
         }
 
-        if (key & KEY_TYPE_RIGHT)
-        {
-            player->cdir.y -= 32;
-        }
-        if (key & KEY_TYPE_LEFT)
+        if (key & input::KEY_TYPE_TURN_RIGHT)
         {
             player->cdir.y += 32;
+        }
+        if (key & input::KEY_TYPE_TURN_LEFT)
+        {
+            player->cdir.y -= 32;
         }
         player->routine_3 += joint_move(player, emr, edd, 512);
 

@@ -1133,6 +1133,7 @@ namespace openre
         {
             gGameTable.input.mapping[i] = input_mapping[i];
         }
+        input::load_bindings();
     }
 
     // 0x004C3F10
