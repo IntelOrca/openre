@@ -3899,6 +3899,13 @@ namespace openre::audio
         return result;
     }
 
+    // 0x004EEDF0
+    static void cd_system_control()
+    {
+        if (*byte_693470 == 1)
+            xa_control();
+    }
+
     // 0x004EE780
     static int snd_se_3d(const Vec32* pos, int a2)
     {
@@ -4479,5 +4486,6 @@ namespace openre::audio
         interop::writeJmp(0x004EED40, &xa_control_play);
         interop::writeJmp(0x004EED80, &xa_control_end);
         interop::writeJmp(0x004EEDD0, &xa_set_volume);
+        interop::writeJmp(0x004EEDF0, &cd_system_control);
     }
 }
