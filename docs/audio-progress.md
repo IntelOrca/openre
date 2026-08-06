@@ -49,7 +49,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x004EEC30 Xa_play (145)
 - [x] 0x004EECD0 Xa_stop (36)
 - [x] 0x004EED00 Xa_control (14)
-- [ ] 0x004EED10 Xa_control_stop (25)
+- [x] 0x004EED10 Xa_control_stop (25)
 - [ ] 0x004EED30 Xa_control_init (8)
 - [ ] 0x004EED40 Xa_control_play (59)
 - [ ] 0x004EED80 Xa_control_end (71)

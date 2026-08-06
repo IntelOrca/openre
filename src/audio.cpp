@@ -3811,12 +3811,14 @@ namespace openre::audio
         return result;
     }
 
-    // 0x004EED10 (Xa_control_stop - temp thunk, will be replaced by a later agent)
+    // 0x004EED10
     static char xa_control_stop()
     {
-        using sig = char (*)();
-        auto p = (sig)0x004EED10;
-        return p();
+        *byte_693470 = 0;
+        *byte_69346E = 0;
+        uint32_t v0 = gGameTable.fg_status;
+        gGameTable.fg_status = v0 & ~0x20u; // clear XA voice playing flag in low byte
+        return (char)v0;
     }
 
     // 0x004EED30 (Xa_control_init - temp thunk, will be replaced by a later agent)
@@ -4440,5 +4442,6 @@ namespace openre::audio
         interop::writeJmp(0x004EEC30, &xa_play);
         interop::writeJmp(0x004EECD0, &xa_stop);
         interop::writeJmp(0x004EED00, &xa_control);
+        interop::writeJmp(0x004EED10, &xa_control_stop);
     }
 }
