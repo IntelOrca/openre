@@ -42,6 +42,14 @@ namespace openre::audio
         uint16_t* word_693030 = (uint16_t*)0x693030;
         uint16_t* se_pri = (uint16_t*)0x693000;     // 48-byte array (24 words); loop end sentinel
 
+        // Standalone globals used by Snd_load_core (0x004EC450). The byte
+        // buffers hold the loaded core .edh data; dword_6934A0/B0 point to the
+        // decoded voice/sample data inside them.
+        uint8_t* byte_6DFC0C = (uint8_t*)0x6DFC0C;  // core .edh buffer 1 (pEdt_adr[0])
+        uint8_t* byte_6DE21C = (uint8_t*)0x6DE21C;  // core .edh buffer 2 (pEdt_adr[4])
+        int32_t* dword_6934A0 = (int32_t*)0x6934A0; // decoded core data ptr (buffer 1)
+        int32_t* dword_6934B0 = (int32_t*)0x6934B0; // decoded core data ptr (buffer 2)
+
         // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
         // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
         // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
@@ -2610,10 +2618,112 @@ namespace openre::audio
         snd_sys_init_sub2_impl();
     }
 
-    // 0x004EC450
+    namespace
+    {
+        // 0x004EC450
+        static void snd_load_core(uint8_t id, int a2)
+        {
+            // Core-id LUT: maps a logical core slot id to the .edh file number
+            // (high nibble) / sub-bank id (low nibble). Slots 0-10 alternate
+            // between core files 0 and 1; slots 11-21 map to files 11-21.
+            // The original also did a dead strcpy of " !\"#$%&" into a local
+            // v12 buffer that was never read again, so it is omitted here.
+            const uint8_t core_id_lut[24] = {
+                0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                0, 0,
+            };
+
+            char mem[32];
+            std::strcpy(mem, "common\\sound\\core\\core00.   ");
+
+            if (!gGameTable.enable_dsound)
+                return;
+
+            // v2 is the .edh file index; mem[22]/mem[23] (the "00" in
+            // "core00") are overwritten with its two hex digits, and
+            // mem[25..27] (spaces) with "edh" to form "coreXY.edh".
+            auto v2 = core_id_lut[id];
+            if (a2 == 2)
+            {
+                ss_unload_group(0);
+                gGameTable.ss_name_door[0] = 0;
+                ss_unload_group(4);
+                auto v3 = v2 & 0xF;
+                gGameTable.ss_name_core[0] = 0;
+                pEdt_adr[0] = (int32_t)(((uintptr_t)byte_6DFC0C + 16) & 0xFFFFFFF0);
+                gGameTable.vab_id[0] = 0;
+                gGameTable.vab_id[4] = 0;
+                mem[22] = (char)((v2 >> 4) + 48);
+                char v4;
+                if ((v2 & 0xF) >= 0xA)
+                    v4 = (char)(v3 + 87);
+                else
+                    v4 = (char)(v3 + 48);
+                mem[23] = v4;
+                std::memcpy(&mem[25], "edh", 3);
+
+                auto buffer = (uint8_t*)(((uintptr_t)byte_6DFC0C + 16) & 0xFFFFFFF0);
+                auto v7 = read_file_into_buffer(mem, (char*)buffer, 1);
+                if (v7 == 0)
+                {
+                    file_error();
+                    return;
+                }
+                if (v7 != (size_t)-1)
+                {
+                    *dword_6934A0 = (int32_t)(buffer + *(int32_t*)(buffer + v7 - 8));
+                    gGameTable.vab_id[0] = ss_load_banks(4, v2, 0, 0);
+                }
+            }
+            else
+            {
+                ss_unload_group(4);
+                auto v5 = v2 & 0xF;
+                gGameTable.ss_name_core[0] = 0;
+                pEdt_adr[4] = (int32_t)((uintptr_t)byte_6DE21C & 0xFFFFFFF0);
+                gGameTable.vab_id[4] = 0;
+                mem[22] = (char)((v2 >> 4) + 48);
+                char v6;
+                if ((v2 & 0xF) >= 0xA)
+                    v6 = (char)(v5 + 87);
+                else
+                    v6 = (char)(v5 + 48);
+                mem[23] = v6;
+                std::memcpy(&mem[25], "edh", 3);
+
+                auto buffer = (uint8_t*)((uintptr_t)byte_6DE21C & 0xFFFFFFF0);
+                auto v8 = read_file_into_buffer(mem, (char*)buffer, 1);
+                if (v8 == 0)
+                {
+                    file_error();
+                    return;
+                }
+                if (v8 != (size_t)-1)
+                {
+                    auto v9 = buffer + *(int32_t*)(buffer + v8 - 8);
+                    *dword_6934B0 = (int32_t)v9;
+                    // Skip the load when this is a door-core (a2 == 1) whose
+                    // decoded data size exceeds the expected range.
+                    if (a2 != 1 || ((*(uint32_t*)(v9 + 12) - (*(uint16_t*)(v9 + 18) << 9) - 2576) & 0xFFFFFFF0) <= 0xA780)
+                        gGameTable.vab_id[4] = ss_load_banks(4, v2, 0, 0);
+                }
+            }
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_load_core` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        void (*const snd_load_core_impl)(uint8_t, int) = &snd_load_core;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (room.cpp, title.cpp). Original-binary callers reach
+    // the implementation above via the hook on 0x004EC450.
     void snd_load_core(uint8_t a0, uint8_t a1)
     {
-        interop::call<void, uint8_t, uint8_t>(0x004EC450, a0, a1);
+        snd_load_core_impl(a0, a1);
     }
 
     // 0x004ec6d0
@@ -2875,6 +2985,10 @@ namespace openre::audio
         // via its handle, since the name snd_sys_init_sub2 is the public
         // audio.h wrapper in this scope.
         interop::writeJmp(0x004EC410, snd_sys_init_sub2_impl);
+        // snd_load_core_impl: the hook targets the static implementation via
+        // its handle, since the name snd_load_core is the public audio.h
+        // wrapper in this scope.
+        interop::writeJmp(0x004EC450, snd_load_core_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
