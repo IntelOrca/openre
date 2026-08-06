@@ -27,8 +27,16 @@ namespace openre::gfx
 
         // IDirect3D2
         constexpr int D3D2_EnumDevices = 3;
+        constexpr int D3D2_CreateMaterial = 5;
         constexpr int D3D2_CreateViewport = 6;
         constexpr int D3D2_CreateDevice = 8;
+
+        // IDirect3DMaterial2
+        constexpr int MAT_SetMaterial = 3;
+
+        // IDirect3DTexture2
+        constexpr int TEX_GetHandle = 3;
+        constexpr int TEX_Load = 5;
 
         // IDirect3DDevice2
         constexpr int DEV_GetStats = 5;
@@ -60,6 +68,8 @@ namespace openre::gfx
     constexpr int kD3D2VtblSlots = 64;
     constexpr int kDeviceVtblSlots = 64;
     constexpr int kViewportVtblSlots = 64;
+    constexpr int kMaterialVtblSlots = 64;
+    constexpr int kTextureVtblSlots = 64;
 
     // Wrap entry points (implemented in gfx_d3d2.cpp; only gfx_d3d2.cpp
     // wraps objects).
@@ -68,4 +78,6 @@ namespace openre::gfx
     void wrap_d3d2(IDirect3D2* d3d2);
     void wrap_device2(IDirect3DDevice2* device);
     void wrap_viewport2(IDirect3DViewport2* viewport);
+    void wrap_material2(IDirect3DMaterial2* material);
+    void wrap_texture2(IDirect3DTexture2* texture);
 }

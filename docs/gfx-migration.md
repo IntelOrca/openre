@@ -356,6 +356,117 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   - Lock with a non-null rect ignores the rect (locks the whole surface);
     the game locks whole surfaces in practice.
 
+### M4 — GPU draw pipeline (done)
+- **What was implemented** (`gfx_backend_gpu.cpp`; small front-end additions in
+  `gfx_d3d2.cpp/h`):
+  - **Shader tooling — embedded bytecode.** Three HLSL sources under
+    `src/shaders/` (`tl_vertex.hlsl`, `tl_textured_fragment.hlsl`,
+    `tl_untextured_fragment.hlsl`) are compiled once with DXC
+    (`tools/gen_shaders.ps1`, looks up `dxc.exe` in the Vulkan SDK then the
+    Windows Kits) to DXIL (`-T vs_6_0/ps_6_0`) and SPIR-V (`-spirv
+    -fvk-use-dx-layout`), and the bytecode is embedded as C arrays in
+    `src/gfx_shaders.h/.cpp` which are committed. The build has no
+    shader-compilation step (robust across the MSVC `build.bat` and CMake
+    builds); re-run the script only when a shader changes. Resource layout
+    follows SDL_GPU's conventions: vertex uniforms in `register(b0, space1)`,
+    textures/samplers in `(t0/s0, space2)`; `-fvk-use-dx-layout` maps those
+    spaces to the descriptor sets SDL's Vulkan backend expects.
+  - **TL vertex pipeline.** `D3DTLVERTEX` is actually **32 bytes**
+    (pos `FLOAT3`@0, D3DCOLOR `UBYTE4_NORM`@16 in memory order B,G,R,A,
+    uv `FLOAT2`@24) — the `rhw`/`specular` fields are consumed by nothing. The
+    vertex shader converts screen-space (top-left origin) coords to NDC
+    `(x-vp.x)/vp.w*2-1`, `1-(y-vp.y)/vp.h*2` (Y flipped for SDL_GPU's
+    bottom-left origin), passes the swizzled RGBA color and UVs; the textured
+    fragment multiplies the sampled texel by the vertex color, the untextured
+    one outputs the vertex color.
+  - **Render-state mapping** (the game uses the DX2-era custom numbering, see
+    `RenderStateId`): `ZENABLE`/`ZWRITEENABLE`/`ZFUNC` → SDL depth
+    test/write/compare (ZFUNC=4 = `D3DCMP_LESSEQUAL` — the game's z-in-[0,1]
+    semantics, matching the D3D reference); `ALPHABLENDENABLE` +
+    `SRCBLEND`/`DESTBLEND` → `SDL_GPU_BLENDFACTOR` (ZERO=1, ONE=2, SRCCOLOR=3,
+    INVSRCCOLOR=4, SRCALPHA=5, INVSRCALPHA=6, DSTCOLOR/DSTALPHA variants too);
+    `CULLMODE` → `SDL_GPU_CULLMODE` (NONE=1, CW=2→BACK, CCW=3→FRONT);
+    `TEXTUREMAG`/`TEXTUREMIN` pick the linear/nearest sampler. `SHADEMODE=2`
+    (Gouraud) needs nothing (per-vertex interpolation is natural);
+    `TEXTUREADDRESS`, `ANISOTROPY`, `LASTPIXEL`, `SUBPIXEL`, `EDGEANTIALIAS`,
+    `SPECULARENABLE`, `TEXTUREMAPBLEND` are ignored with a debug log for
+    unknowns.
+  - **Cached pipelines.** SDL_GPU pipelines are immutable, so pipelines are
+    created lazily keyed by `PipelineKey` (textured, alphaBlend,
+    src/dst blend factor, zTest/zWrite/zFunc, cull, primitive type) — the
+    game uses a small handful of combinations. Scene pipelines target
+    `R8G8B8A8_UNORM` + a `D16_UNORM` depth-stencil target; a separate blit
+    pipeline targets the swapchain format.
+  - **Deferred draws / render pass.** `DrawPrimitive`/
+    `DrawIndexedPrimitive` (TL only; indexed draws are reordered through the
+    WORD indices, the game does not use them) copy the raw vertices into a
+    per-frame CPU pool and record the pipeline/texture/offset/count. `present`
+    (when active==1) uploads the pool into a growable vertex buffer, runs the
+    **scene pass** on the render target texture (the `SurfaceEntry` of the
+    game's surface0) with the D16 depth texture, `load_op` CLEAR/LOAD per the
+    frame's `Clear` flags (target and/or z; clear color = the ambient material
+    tracked via `set_material`/`SetBackground`), then the **present pass**
+    blits the render target letterboxed (aspect preserved) into the swapchain
+    with the blit pipeline. One push of the viewport rect serves all draws.
+  - **Render-target adoption fix (root cause of black frames).** surface0 is
+    created with dimensions but no pixel format, and while loading rooms the
+    game never Locks/queries it — so its GPU texture stayed deferred and every
+    present cleared a black swapchain. `set_render_target` now force-adopts
+    the render-target entry as 32bpp (pitch = width·4) and creates the
+    texture, so the scene pass can begin immediately.
+  - **Texture content (TEXTUREHANDLE → texture).** `IDirect3DTexture2::GetHandle`
+    is hooked in the front-end (`hook_texture_get_handle` →
+    `create_texture_handle`), recording `handle → surface` in
+    `mTextureHandles`. Texture *content* arrives through
+    `IDirect3DTexture2::Load(dst, src)` (the game fills an internal surface
+    through the lock path, then the D3D driver copies into the texture's
+    backing surface behind our back) — the front-end now hooks `TEX_Load`
+    (`hook_texture_load`, vtable slot 5) and the backend `texture_load`
+    performs an `SDL_CopyGPUTextureToTexture` of the source texture into the
+    destination. `SetRenderState(TEXTUREHANDLE, h)` then resolves to the
+    surface's GPU texture (textured pipeline) or falls back to untextured.
+  - `get_stats`: when the GPU backend is active, replaces
+    `dwTrianglesDrawn`/`dwVerticesProcessed` with what the GPU actually drew
+    (per-frame accumulated counters) so the game's per-frame deltas keep
+    working.
+- **Verification evidence** (all at `OPENRE_LOG_VERBOSITY=debug`,
+  `OPENRE_RE2_DATA=F:\games\openre\data`):
+  - `build.bat`: 0 warnings, 0 errors (`TreatWarningAsError`).
+  - Default run (active=0): D3D path unchanged — init ok, window shows the
+    title screen, process alive; zero `[gfx:gpu]` error/fail lines (the GPU
+    backend only logs idle-broadcast traces like `(inactive)`).
+  - GPU run (`OPENRE_GFX_BACKEND=1`): **real graphics** — the game reaches
+    the demo/room mode, `present: 33 draws, 3392 bytes verts, triangles=8xxx`
+    every frame, `created pipeline (textured=1 ... zTest=1 ...)` for the
+    handful of state combos, and a `PrintWindow` capture of the game window
+    shows the room content (≈590-750 unique sampled colors; dominant room
+    red `(206,4,16)` and cyan `(0,153,188)` elements, ~2647 red / ~1464 cyan
+    sampled pixels) matching the D3D reference capture pixel-for-pixel on the
+    colored elements. An `OPENRE_GPU_DUMP` scene readback of the offscreen
+    render target showed 1866 unique colors (room content, not black).
+  - F6 toggle test both ways (synthetic `WM_KEYDOWN` VK_F6): window captures
+    before/after show `[gfx] active backend toggled to 0` → D3D frame
+    (2643 red / 1464 cyan) and back `to 1` → GPU frame (2647 red / 1464
+    cyan) — both backends produce a visible frame; content matches.
+  - Depth is enabled and works: pipelines are created with `zTest=1
+    zWrite=0` (the game's ZWRITEENABLE=0 for these draws) and the render is
+    unchanged vs the earlier depth-disabled experiment.
+- **Known limitations**:
+  - Texture content depends on the `IDirect3DTexture2::Load` interception;
+    textures the game fills another way (if any) render as the untextured
+    pipeline would (vertex color only).
+  - Blend factors outside the observed set map to `SDL_GPU_BLENDFACTOR_ONE`
+    (default) rather than failing; the observed set (ZERO/ONE/SRCCOLOR/
+    INVSRCCOLOR/SRCALPHA/INVSRCALPHA) is covered.
+  - Untransformed (`D3DVT_VERTEX`) draws are logged and skipped — the game
+    only draws TL vertices on this path.
+  - `TEXTUREADDRESS`, `ANISOTROPY`, `TEXTUREMAPBLEND`, specular and color-key
+    states are ignored (color key is M5 work); the game's observed values
+    don't need them.
+  - Present letterboxes the 4:3 render target into whatever the window is;
+    fullscreen/resolution changes are M7.
+  - 24bpp surfaces remain untracked (M3 limitation); Blt scaling remains 1:1.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
@@ -365,8 +476,9 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
 - **Window sharing** (DD primary vs SDL_GPU swapchain) — validated at M2: they
   coexist cleanly on the same window (see Progress M2); the readback fallback
   was not needed.
-- **Shader tooling**: need DXC in the build (HLSL → DXIL + SPIR-V); SDL 3.4.12
-  bundled already supports both formats plus MSL/METALLIB.
+- **Shader tooling**: done for M4 — HLSL → DXIL + SPIR-V via DXC, bytecode
+  embedded in `src/gfx_shaders.h/.cpp` (regenerate with
+  `tools\gen_shaders.ps1`); MSL/METALLIB deferred (macOS not a target yet).
 - **COM ABI**: front-end vtable layouts must exactly match d3d.h/ddraw.h.
 - **Undiscovered COM calls** in original code — mitigated by forward-by-default
   and the M0 audit.

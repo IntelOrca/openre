@@ -1,11 +1,15 @@
 #include "gfx_backend.h"
+#include "gfx_shaders.h"
 #include "logger.h"
 #include "system_window.h"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -14,12 +18,187 @@ namespace openre::gfx
 {
     namespace
     {
+        // Render-state ids the game passes to SetRenderState. The game uses the
+        // DX2-era D3DRENDERSTATE numbering (identical to the Win10 SDK values),
+        // see docs/com-coverage-report.md §9.1.
+        enum RenderStateId
+        {
+            RS_TEXTUREHANDLE = 1,
+            RS_ANTIALIAS = 2,
+            RS_TEXTUREADDRESS = 3,
+            RS_TEXTUREPERSPECTIVE = 4,
+            RS_ZENABLE = 7,
+            RS_SHADEMODE = 9,
+            RS_ZWRITEENABLE = 14,
+            RS_LASTPIXEL = 16,
+            RS_TEXTUREMAG = 17,
+            RS_TEXTUREMIN = 18,
+            RS_SRCBLEND = 19,
+            RS_DESTBLEND = 20,
+            RS_TEXTUREMAPBLEND = 21,
+            RS_CULLMODE = 22,
+            RS_ZFUNC = 23,
+            RS_ALPHABLENDENABLE = 27,
+            RS_SPECULARENABLE = 29,
+            RS_SUBPIXEL = 31,
+            RS_EDGEANTIALIAS = 40,
+            RS_COLORKEYENABLE = 41,
+            RS_ANISOTROPY = 49,
+        };
+
+        // Raw D3DBLEND values the game passes (d3dtypes.h: ZERO=1, ONE=2,
+        // SRCCOLOR=3, INVSRCCOLOR=4, SRCALPHA=5, INVSRCALPHA=6, ...).
+        SDL_GPUBlendFactor mapBlendFactor(DWORD value)
+        {
+            switch (value)
+            {
+            case 1: return SDL_GPU_BLENDFACTOR_ZERO;
+            case 2: return SDL_GPU_BLENDFACTOR_ONE;
+            case 3: return SDL_GPU_BLENDFACTOR_SRC_COLOR;
+            case 4: return SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR;
+            case 5: return SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+            case 6: return SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            case 7: return SDL_GPU_BLENDFACTOR_DST_COLOR;
+            case 8: return SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_COLOR;
+            case 9: return SDL_GPU_BLENDFACTOR_DST_ALPHA;
+            case 10: return SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_ALPHA;
+            default: return SDL_GPU_BLENDFACTOR_ONE;
+            }
+        }
+
+        // Raw D3DCMPFUNC values the game passes (NEVER=1 ... ALWAYS=8).
+        SDL_GPUCompareOp mapCompareOp(DWORD value)
+        {
+            switch (value)
+            {
+            case 1: return SDL_GPU_COMPAREOP_NEVER;
+            case 2: return SDL_GPU_COMPAREOP_LESS;
+            case 3: return SDL_GPU_COMPAREOP_EQUAL;
+            case 4: return SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+            case 5: return SDL_GPU_COMPAREOP_GREATER;
+            case 6: return SDL_GPU_COMPAREOP_NOT_EQUAL;
+            case 7: return SDL_GPU_COMPAREOP_GREATER_OR_EQUAL;
+            case 8: return SDL_GPU_COMPAREOP_ALWAYS;
+            default: return SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+            }
+        }
+
+        // Raw D3DCULL values (NONE=1, CW=2, CCW=3). D3D's default front face is
+        // counter-clockwise; SDL_GPU_CULLMODE_BACK/FRONT are relative to the
+        // pipeline's front_face setting, so CW->BACK and CCW->FRONT.
+        SDL_GPUCullMode mapCullMode(DWORD value)
+        {
+            switch (value)
+            {
+            case 2: return SDL_GPU_CULLMODE_BACK;
+            case 3: return SDL_GPU_CULLMODE_FRONT;
+            default: return SDL_GPU_CULLMODE_NONE;
+            }
+        }
+
+        // Vertex attribute layout matching D3DTLVERTEX (32 bytes, see d3dtypes.h):
+        // float sx, sy, sz, rhw; D3DCOLOR color, specular; float tu, tv. The
+        // rhw and specular fields are not consumed.
+        constexpr int kTLVertexStride = 32;
+        constexpr int kTLVertexPosOffset = 0;
+        constexpr int kTLVertexColorOffset = 16;
+        constexpr int kTLVertexUvOffset = 24;
+
+        // One frame of deferred draw data (see the class comment for why draws
+        // are queued and executed in present()).
+        struct QueuedDraw
+        {
+            SDL_GPUGraphicsPipeline* pipeline = nullptr;
+            SDL_GPUTexture* texture = nullptr; // nullptr = untextured draw
+            SDL_GPUSampler* sampler = nullptr;
+            Uint32 vertexOffset = 0; // byte offset into the frame vertex buffer
+            Uint32 vertexCount = 0;
+            SDL_GPUPrimitiveType primType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        };
+
+        // The subset of D3D render/draw state that changes the SDL_GPU
+        // pipeline. SDL_GPU pipelines are immutable, so pipelines are cached
+        // keyed by the combinations the game actually uses (a handful).
+        struct PipelineKey
+        {
+            bool textured = false;
+            bool alphaBlend = false;
+            SDL_GPUBlendFactor srcFactor = SDL_GPU_BLENDFACTOR_ONE;
+            SDL_GPUBlendFactor dstFactor = SDL_GPU_BLENDFACTOR_ZERO;
+            bool zTest = false;
+            bool zWrite = false;
+            SDL_GPUCompareOp zFunc = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+            SDL_GPUCullMode cull = SDL_GPU_CULLMODE_NONE;
+            SDL_GPUPrimitiveType primType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+
+            bool operator==(const PipelineKey& o) const
+            {
+                return textured == o.textured && alphaBlend == o.alphaBlend && srcFactor == o.srcFactor
+                    && dstFactor == o.dstFactor && zTest == o.zTest && zWrite == o.zWrite && zFunc == o.zFunc && cull == o.cull
+                    && primType == o.primType;
+            }
+        };
+
+        struct PipelineKeyHash
+        {
+            size_t operator()(const PipelineKey& k) const
+            {
+                size_t h = 0;
+                h = h * 31 + (k.textured ? 1u : 0u);
+                h = h * 31 + (k.alphaBlend ? 1u : 0u);
+                h = h * 31 + static_cast<size_t>(k.srcFactor);
+                h = h * 31 + static_cast<size_t>(k.dstFactor);
+                h = h * 31 + (k.zTest ? 1u : 0u);
+                h = h * 31 + (k.zWrite ? 1u : 0u);
+                h = h * 31 + static_cast<size_t>(k.zFunc);
+                h = h * 31 + static_cast<size_t>(k.cull);
+                h = h * 31 + static_cast<size_t>(k.primType);
+                return h;
+            }
+        };
+
+        // Per-device D3D state the GPU backend mirrors (the game has one device,
+        // so a single instance is stored on the backend).
+        struct DeviceState
+        {
+            void* renderTarget = nullptr; // IDirectDrawSurface* key into mSurfaces
+            void* viewport = nullptr;     // current IDirect3DViewport2*
+            D3DVIEWPORT2 viewport2 = {};
+            bool haveViewport = false;
+
+            // Mirrored render states (raw D3D values where applicable).
+            DWORD texHandle = 0;
+            bool alphaBlend = false;
+            DWORD srcBlend = 2; // D3DBLEND_ONE
+            DWORD dstBlend = 1; // D3DBLEND_ZERO
+            bool zEnable = false;
+            bool zWrite = true;
+            DWORD zFunc = 4;    // D3DCMP_LESSEQUAL
+            DWORD cullMode = 1; // D3DCULL_NONE
+            DWORD texMag = 1;
+            DWORD texMin = 1;
+
+            // Clear request (consumed by the next frame's scene pass).
+            bool pendingClearTarget = false;
+            bool pendingClearDepth = false;
+            SDL_FColor clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+            // Cumulative draw statistics (get_stats deltas).
+            Uint64 totalTriangles = 0;
+            Uint64 totalVertices = 0;
+        };
+
         // GPU backend: creates an SDL_GPU device, claims the game window and
         // presents a cleared swapchain (M2). The surface layer (M3) tracks
         // DirectDraw surfaces as SDL_GPU textures with CPU staging buffers and
-        // handles CreateSurface/Lock/Unlock/Blt/GetSurfaceDesc. Device/scene/
-        // draw methods arrive in later milestones and stay as stubs. Present
-        // only runs while the GPU backend is the active backend, so the
+        // handles CreateSurface/Lock/Unlock/Blt/GetSurfaceDesc. M4 adds the draw
+        // pipeline: render states are mirrored, TL vertices are queued per frame
+        // and executed in present() as one render pass on the offscreen render
+        // target (with a depth texture), followed by a letterboxed blit of that
+        // target into the swapchain. Draws are deferred to present() so vertex
+        // uploads (copy passes) never have to be interleaved with the render
+        // pass, and so the frame's Clear lands on the first pass exactly once.
+        // Present only runs while the GPU backend is the active backend, so the
         // DirectDraw primary surface keeps showing when the D3D reference
         // backend (0) is selected.
         class GfxBackendGPU final : public GfxBackend
@@ -43,6 +222,7 @@ namespace openre::gfx
                 bool textureCreated = false;
                 bool hasContent = false; // texture written at least once
                 bool locked = false;
+                void* lockedPtr = nullptr; // shadow pointer handed out by the last Lock
             };
 
         public:
@@ -74,6 +254,11 @@ namespace openre::gfx
                 const auto format = SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow);
                 logging::logInfo(
                     "[gfx:gpu] window claimed, swapchain format={} (M2: swapchain ready)", static_cast<int>(format));
+
+                const char* dumpEnv = SDL_getenv("OPENRE_GPU_DUMP");
+                mDumpInterval = dumpEnv != nullptr ? static_cast<Uint32>(std::atoi(dumpEnv)) : 0;
+                if (mDumpInterval != 0)
+                    logging::logInfo("[gfx:gpu] scene dump enabled (every {} frames)", mDumpInterval);
                 return true;
             }
 
@@ -85,6 +270,7 @@ namespace openre::gfx
                     // so no command buffer can still reference the resources;
                     // wait once anyway to be safe before releasing them.
                     SDL_WaitForGPUIdle(mDevice);
+                    releaseSceneResources();
                     for (auto& pair : mSurfaces)
                         releaseSurface(pair.second);
                     mSurfaces.clear();
@@ -94,16 +280,21 @@ namespace openre::gfx
                     mDevice = nullptr;
                 }
                 mWindow = nullptr;
-                logging::logInfo("[gfx:gpu] shutdown (surfaces released, swapchain released, device destroyed)");
+                logging::logInfo("[gfx:gpu] shutdown (resources released, device destroyed)");
             }
 
             void present() override
             {
                 // While the D3D reference backend is active the DirectDraw
                 // primary surface (the game's Blt in flip_blt) owns the window;
-                // do not acquire/present the swapchain in that case.
+                // do not acquire/present the swapchain in that case, and drop
+                // any queued GPU work so a mid-frame toggle never renders stale
+                // draws later.
                 if (active_backend() != 1)
+                {
+                    resetFrameState();
                     return;
+                }
                 if (mDevice == nullptr || mWindow == nullptr)
                 {
                     logging::logDebug("[gfx:gpu] present skipped (device/window not ready)");
@@ -114,16 +305,18 @@ namespace openre::gfx
                 if (commandBuffer == nullptr)
                 {
                     logging::logError("[gfx:gpu] SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
+                    resetFrameState();
                     return;
                 }
 
                 SDL_GPUTexture* swapchainTexture = nullptr;
-                Uint32 width = 0;
-                Uint32 height = 0;
-                if (!SDL_AcquireGPUSwapchainTexture(commandBuffer, mWindow, &swapchainTexture, &width, &height))
+                Uint32 winW = 0;
+                Uint32 winH = 0;
+                if (!SDL_AcquireGPUSwapchainTexture(commandBuffer, mWindow, &swapchainTexture, &winW, &winH))
                 {
                     logging::logError("[gfx:gpu] SDL_AcquireGPUSwapchainTexture failed: {}", SDL_GetError());
                     SDL_CancelGPUCommandBuffer(commandBuffer);
+                    resetFrameState();
                     return;
                 }
                 if (swapchainTexture == nullptr)
@@ -132,26 +325,176 @@ namespace openre::gfx
                     // nothing to render into this frame, just drop it.
                     logging::logDebug("[gfx:gpu] swapchain texture unavailable (minimized/resized), skipping frame");
                     SDL_CancelGPUCommandBuffer(commandBuffer);
+                    resetFrameState();
                     return;
                 }
 
-                SDL_GPUColorTargetInfo target = {};
-                target.texture = swapchainTexture;
-                target.mip_level = 0;
-                target.layer_or_depth_plane = 0;
-                target.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f }; // solid black until M3 content
-                target.load_op = SDL_GPU_LOADOP_CLEAR;
-                target.store_op = SDL_GPU_STOREOP_STORE;
-
-                auto* renderPass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
-                SDL_EndGPURenderPass(renderPass);
-
-                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+                if (!ensureSceneResources())
                 {
-                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
+                    logging::logDebug("[gfx:gpu] present: scene resources unavailable, showing cleared swapchain");
+                    SDL_GPUColorTargetInfo clearTarget = {};
+                    clearTarget.texture = swapchainTexture;
+                    clearTarget.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    clearTarget.load_op = SDL_GPU_LOADOP_CLEAR;
+                    clearTarget.store_op = SDL_GPU_STOREOP_STORE;
+                    auto* pass = SDL_BeginGPURenderPass(commandBuffer, &clearTarget, 1, nullptr);
+                    SDL_EndGPURenderPass(pass);
+                    submitAndReset(commandBuffer);
                     return;
                 }
-                logging::logDebug("[gfx:gpu] present (swapchain cleared)");
+
+                // The render target the D3D device draws into (surface0).
+                auto* rtEntry = findSurface(mDeviceState.renderTarget);
+                SDL_GPUTexture* sceneTexture = rtEntry != nullptr && rtEntry->textureCreated ? rtEntry->texture : nullptr;
+                const auto rtW = rtEntry != nullptr ? rtEntry->width : 0u;
+                const auto rtH = rtEntry != nullptr ? rtEntry->height : 0u;
+                logging::logDebug(
+                    "[gfx:gpu] present: rtKey={} rtEntry={} tex={} rt={}x{} vp={}x{} pendingClearT={} clear={}",
+                    static_cast<void*>(mDeviceState.renderTarget),
+                    static_cast<void*>(rtEntry),
+                    static_cast<void*>(sceneTexture),
+                    rtW,
+                    rtH,
+                    mDeviceState.viewport2.dwWidth,
+                    mDeviceState.viewport2.dwHeight,
+                    mDeviceState.pendingClearTarget,
+                    mDeviceState.pendingClearDepth);
+
+                if (sceneTexture != nullptr && rtW != 0 && rtH != 0)
+                {
+                    // Append the letterboxed blit quad (swapchain pixel space)
+                    // to this frame's vertex pool so the single upload below
+                    // covers both the scene and the present blit.
+                    appendBlitQuad(winW, winH, rtW, rtH);
+
+                    // Grow the vertex pool if this frame needs more room. The
+                    // previous present waited for idle, so releasing/recreating
+                    // buffers here cannot race in-flight work.
+                    if (mFrameVertices.size() > mVertexBufferCapacity)
+                        ensureVertexBuffer(static_cast<Uint32>(mFrameVertices.size()));
+
+                    if (mVertexBuffer != nullptr && !mFrameVertices.empty())
+                    {
+                        void* mapped = SDL_MapGPUTransferBuffer(mDevice, mVertexTransfer, false);
+                        if (mapped == nullptr)
+                        {
+                            logging::logError("[gfx:gpu] SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
+                        }
+                        else
+                        {
+                            std::memcpy(mapped, mFrameVertices.data(), mFrameVertices.size());
+                            SDL_UnmapGPUTransferBuffer(mDevice, mVertexTransfer);
+
+                            auto* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                            SDL_GPUTransferBufferLocation source = {};
+                            source.transfer_buffer = mVertexTransfer;
+                            SDL_GPUBufferRegion destination = {};
+                            destination.buffer = mVertexBuffer;
+                            destination.offset = 0;
+                            destination.size = static_cast<Uint32>(mFrameVertices.size());
+                            SDL_UploadToGPUBuffer(copyPass, &source, &destination, false);
+                            SDL_EndGPUCopyPass(copyPass);
+                        }
+                    }
+
+                    // Scene pass: render into the offscreen target, clearing it
+                    // (and/or the depth buffer) once per frame as the game's
+                    // viewport Clear requested.
+                    SDL_GPUColorTargetInfo colorTarget = {};
+                    colorTarget.texture = sceneTexture;
+                    colorTarget.mip_level = 0;
+                    colorTarget.layer_or_depth_plane = 0;
+                    colorTarget.clear_color = mDeviceState.clearColor;
+                    colorTarget.load_op = mDeviceState.pendingClearTarget ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+                    colorTarget.store_op = SDL_GPU_STOREOP_STORE;
+
+                    SDL_GPUDepthStencilTargetInfo depthTarget = {};
+                    depthTarget.texture = mDepthTexture;
+                    depthTarget.clear_depth = 1.0f;
+                    depthTarget.load_op = mDeviceState.pendingClearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+                    depthTarget.store_op = SDL_GPU_STOREOP_STORE;
+                    depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+                    depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+
+                    auto* scenePass = SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1, &depthTarget);
+                    SDL_GPUViewport viewport = {};
+                    viewport.x = static_cast<float>(mDeviceState.viewport2.dwX);
+                    viewport.y = static_cast<float>(mDeviceState.viewport2.dwY);
+                    viewport.w = static_cast<float>(mDeviceState.haveViewport ? mDeviceState.viewport2.dwWidth : rtW);
+                    viewport.h = static_cast<float>(mDeviceState.haveViewport ? mDeviceState.viewport2.dwHeight : rtH);
+                    viewport.min_depth = 0.0f;
+                    viewport.max_depth = 1.0f;
+                    SDL_SetGPUViewport(scenePass, &viewport);
+
+                    // The TL vertex shader converts screen coords to NDC using
+                    // the viewport rect (SDL_PushGPUVertexUniformData is scoped
+                    // to the command buffer, so one push serves every draw).
+                    const float vpSize[4] = { viewport.x, viewport.y, viewport.w, viewport.h };
+                    SDL_PushGPUVertexUniformData(commandBuffer, 0, vpSize, sizeof(vpSize));
+
+                    for (const auto& draw : mQueuedDraws)
+                    {
+                        if (draw.pipeline == nullptr || draw.vertexCount == 0)
+                            continue;
+                        SDL_BindGPUGraphicsPipeline(scenePass, draw.pipeline);
+                        if (draw.texture != nullptr && draw.sampler != nullptr)
+                        {
+                            SDL_GPUTextureSamplerBinding binding = { draw.texture, draw.sampler };
+                            SDL_BindGPUFragmentSamplers(scenePass, 0, &binding, 1);
+                        }
+                        SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, draw.vertexOffset };
+                        SDL_BindGPUVertexBuffers(scenePass, 0, &vertexBinding, 1);
+                        SDL_DrawGPUPrimitives(scenePass, draw.vertexCount, 1, 0, 0);
+                    }
+                    SDL_EndGPURenderPass(scenePass);
+
+                    // Present pass: letterbox the render target into the
+                    // swapchain (the blit quad was appended to the vertex pool).
+                    ensureBlitPipeline(SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow));
+                    if (mBlitPipeline != nullptr)
+                    {
+                        SDL_GPUColorTargetInfo target = {};
+                        target.texture = swapchainTexture;
+                        target.mip_level = 0;
+                        target.layer_or_depth_plane = 0;
+                        target.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+                        target.load_op = SDL_GPU_LOADOP_CLEAR;
+                        target.store_op = SDL_GPU_STOREOP_STORE;
+
+                        auto* presentPass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
+                        SDL_GPUViewport presentVp
+                            = { 0.0f, 0.0f, static_cast<float>(winW), static_cast<float>(winH), 0.0f, 1.0f };
+                        SDL_SetGPUViewport(presentPass, &presentVp);
+                        const float presentVpSize[4] = { 0.0f, 0.0f, static_cast<float>(winW), static_cast<float>(winH) };
+                        SDL_PushGPUVertexUniformData(commandBuffer, 0, presentVpSize, sizeof(presentVpSize));
+                        SDL_BindGPUGraphicsPipeline(presentPass, mBlitPipeline);
+                        SDL_GPUTextureSamplerBinding binding = { sceneTexture, mSamplerLinear };
+                        SDL_BindGPUFragmentSamplers(presentPass, 0, &binding, 1);
+                        SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, mBlitQuadOffset };
+                        SDL_BindGPUVertexBuffers(presentPass, 0, &vertexBinding, 1);
+                        SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
+                        SDL_EndGPURenderPass(presentPass);
+                    }
+                }
+                else
+                {
+                    // No render target yet (pre-init frame): clear the swapchain.
+                    SDL_GPUColorTargetInfo clearTarget = {};
+                    clearTarget.texture = swapchainTexture;
+                    clearTarget.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    clearTarget.load_op = SDL_GPU_LOADOP_CLEAR;
+                    clearTarget.store_op = SDL_GPU_STOREOP_STORE;
+                    auto* pass = SDL_BeginGPURenderPass(commandBuffer, &clearTarget, 1, nullptr);
+                    SDL_EndGPURenderPass(pass);
+                }
+
+                logging::logDebug(
+                    "[gfx:gpu] present: {} draws, {} bytes verts, triangles={}",
+                    mQueuedDraws.size(),
+                    mFrameVertices.size(),
+                    mDeviceState.totalTriangles);
+                submitAndReset(commandBuffer);
+                maybeDumpSceneTexture(sceneTexture, rtW, rtH);
             }
 
             // ---- surface layer ----
@@ -211,6 +554,15 @@ namespace openre::gfx
                     return;
                 }
                 logging::logDebug("[gfx:gpu] DestroySurface {}", static_cast<void*>(surface));
+                // Drop texture-handle entries that reference this surface so a
+                // stale handle can never resolve to a freed texture.
+                for (auto h = mTextureHandles.begin(); h != mTextureHandles.end();)
+                {
+                    if (h->second == surface)
+                        h = mTextureHandles.erase(h);
+                    else
+                        ++h;
+                }
                 releaseSurface(it->second);
                 mSurfaces.erase(it);
             }
@@ -255,6 +607,7 @@ namespace openre::gfx
                     // pointer again rather than re-downloading.
                     desc->lpSurface = entry->shadow.data();
                     desc->lPitch = static_cast<LONG>(entry->pitch);
+                    entry->lockedPtr = desc->lpSurface;
                     return S_OK;
                 }
 
@@ -267,6 +620,7 @@ namespace openre::gfx
                 entry->locked = true;
                 desc->lpSurface = entry->shadow.data();
                 desc->lPitch = static_cast<LONG>(entry->pitch);
+                entry->lockedPtr = desc->lpSurface;
                 logging::logDebug(
                     "[gfx:gpu] Lock surface={} {}x{} bpp={} pitch={} ptr={}",
                     static_cast<void*>(surface),
@@ -294,11 +648,12 @@ namespace openre::gfx
                     entry->hasContent = true;
                 entry->locked = false;
                 logging::logDebug(
-                    "[gfx:gpu] Unlock surface={} {}x{} bpp={}",
+                    "[gfx:gpu] Unlock surface={} {}x{} bpp={} ptrSame={}",
                     static_cast<void*>(surface),
                     entry->width,
                     entry->height,
-                    entry->bpp);
+                    entry->bpp,
+                    entry->lockedPtr == entry->shadow.data());
                 return S_OK;
             }
 
@@ -437,22 +792,42 @@ namespace openre::gfx
 
             void create_device(IUnknown* device) override
             {
-                logging::logInfo("[gfx:gpu] CreateDevice device={} (stub)", static_cast<void*>(device));
+                mDeviceState = {};
+                logging::logInfo("[gfx:gpu] CreateDevice device={}", static_cast<void*>(device));
             }
 
             HRESULT set_render_target(IUnknown* device, IUnknown* surface, DWORD flags) override
             {
+                mDeviceState.renderTarget = surface;
                 logging::logDebug(
-                    "[gfx:gpu] SetRenderTarget device={} surface={} (stub)",
+                    "[gfx:gpu] SetRenderTarget device={} surface={} flags={}",
                     static_cast<void*>(device),
-                    static_cast<void*>(surface));
+                    static_cast<void*>(surface),
+                    flags);
+                // The device's render target is the game's offscreen surface0
+                // (640x480 32bpp), which the game may never Lock or query via
+                // GetSurfaceDesc (e.g. while loading rooms it just draws). If
+                // the entry is still deferred (bpp unknown), force-adopt the
+                // render target as 32bpp so the scene pass can begin.
+                auto* entry = findSurface(surface);
+                if (entry != nullptr && entry->width != 0 && entry->height != 0 && entry->bpp == 0)
+                {
+                    entry->bpp = 32;
+                    entry->pitch = entry->width * (entry->bpp / 8);
+                    if (ensureTexture(*entry))
+                    {
+                        logging::logInfo(
+                            "[gfx:gpu] render target surface adopted as {}x{} bpp=32", entry->width, entry->height);
+                    }
+                }
                 return S_OK;
             }
 
             HRESULT set_current_viewport(IUnknown* device, IUnknown* viewport) override
             {
+                mDeviceState.viewport = viewport;
                 logging::logDebug(
-                    "[gfx:gpu] SetCurrentViewport device={} viewport={} (stub)",
+                    "[gfx:gpu] SetCurrentViewport device={} viewport={}",
                     static_cast<void*>(device),
                     static_cast<void*>(viewport));
                 return S_OK;
@@ -460,44 +835,203 @@ namespace openre::gfx
 
             HRESULT set_viewport(IUnknown* viewport, const D3DVIEWPORT2* vp) override
             {
+                if (vp != nullptr)
+                {
+                    mDeviceState.viewport2 = *vp;
+                    mDeviceState.haveViewport = true;
+                }
                 logging::logDebug(
-                    "[gfx:gpu] SetViewport2 viewport={} dwX={} dwY={} (stub)", static_cast<void*>(viewport), vp->dwX, vp->dwY);
+                    "[gfx:gpu] SetViewport2 viewport={} size={}x{}",
+                    static_cast<void*>(viewport),
+                    vp != nullptr ? vp->dwWidth : 0,
+                    vp != nullptr ? vp->dwHeight : 0);
                 return S_OK;
             }
 
             HRESULT set_background(IUnknown* viewport, D3DMATERIALHANDLE materialHandle) override
             {
+                // The ambient clear color arrives via set_material (the game
+                // SetMaterials the background material right before this).
                 logging::logDebug(
-                    "[gfx:gpu] SetBackground viewport={} handle={} (stub)", static_cast<void*>(viewport), materialHandle);
+                    "[gfx:gpu] SetBackground viewport={} handle={}", static_cast<void*>(viewport), materialHandle);
                 return S_OK;
+            }
+
+            void set_material(const D3DMATERIAL* material) override
+            {
+                if (material != nullptr)
+                {
+                    mDeviceState.clearColor.r = material->ambient.r;
+                    mDeviceState.clearColor.g = material->ambient.g;
+                    mDeviceState.clearColor.b = material->ambient.b;
+                    mDeviceState.clearColor.a = 1.0f;
+                }
+                logging::logDebug(
+                    "[gfx:gpu] SetMaterial ambient=({}, {}, {})",
+                    mDeviceState.clearColor.r,
+                    mDeviceState.clearColor.g,
+                    mDeviceState.clearColor.b);
+            }
+
+            void create_texture_handle(IUnknown* device, DWORD handle, IUnknown* surface) override
+            {
+                // The game obtains D3D texture handles via
+                // IDirect3DTexture2::GetHandle (hooked in the COM front-end);
+                // remember the owning DirectDraw surface so a later
+                // SetRenderState(TEXTUREHANDLE, h) can resolve to the texture.
+                if (handle != 0)
+                    mTextureHandles[handle] = surface;
+                logging::logDebug(
+                    "[gfx:gpu] CreateTextureHandle device={} handle={} surface={}",
+                    static_cast<void*>(device),
+                    handle,
+                    static_cast<void*>(surface));
+            }
+
+            // Replays IDirect3DTexture2::Load(dst, src): the game fills an
+            // internal surface (src) through the lock/upload path, then the
+            // D3D driver copies those pixels into the texture's backing
+            // surface (dst) behind our back. Copy the source's GPU texture
+            // into the destination's so handle-bound textures get content.
+            void texture_load(IUnknown* surface, IUnknown* srcSurface) override
+            {
+                if (mDevice == nullptr)
+                    return;
+
+                auto* dstEntry = findSurface(surface);
+                auto* srcEntry = findSurface(srcSurface);
+                if (dstEntry == nullptr || srcEntry == nullptr)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] texture_load surface={} src={} (unknown surface)",
+                        static_cast<void*>(surface),
+                        static_cast<void*>(srcSurface));
+                    return;
+                }
+                if (!ensureTexture(*dstEntry) || !ensureTexture(*srcEntry))
+                {
+                    logging::logDebug("[gfx:gpu] texture_load (no GPU texture)");
+                    return;
+                }
+                if (dstEntry->width != srcEntry->width || dstEntry->height != srcEntry->height
+                    || dstEntry->format != srcEntry->format)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] texture_load size/format mismatch {}x{} fmt={} vs {}x{} fmt={}",
+                        dstEntry->width,
+                        dstEntry->height,
+                        static_cast<int>(dstEntry->format),
+                        srcEntry->width,
+                        srcEntry->height,
+                        static_cast<int>(srcEntry->format));
+                    return;
+                }
+
+                // GPU texture-to-texture copy (fast path; same format/size).
+                auto* commandBuffer = SDL_AcquireGPUCommandBuffer(mDevice);
+                if (commandBuffer == nullptr)
+                {
+                    logging::logError("[gfx:gpu] SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
+                    return;
+                }
+                auto* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                SDL_GPUTextureLocation srcLoc = {};
+                srcLoc.texture = srcEntry->texture;
+                srcLoc.layer = 0;
+                srcLoc.mip_level = 0;
+                srcLoc.x = 0;
+                srcLoc.y = 0;
+                srcLoc.z = 0;
+                SDL_GPUTextureLocation dstLoc = {};
+                dstLoc.texture = dstEntry->texture;
+                dstLoc.layer = 0;
+                dstLoc.mip_level = 0;
+                dstLoc.x = 0;
+                dstLoc.y = 0;
+                dstLoc.z = 0;
+                SDL_CopyGPUTextureToTexture(copyPass, &srcLoc, &dstLoc, dstEntry->width, dstEntry->height, 1, false);
+                SDL_EndGPUCopyPass(copyPass);
+                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+                {
+                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
+                    return;
+                }
+                SDL_WaitForGPUIdle(mDevice);
+                dstEntry->hasContent = true;
+                logging::logDebug(
+                    "[gfx:gpu] texture_load surface={} <- src={} {}x{} fmt={}",
+                    static_cast<void*>(surface),
+                    static_cast<void*>(srcSurface),
+                    dstEntry->width,
+                    dstEntry->height,
+                    static_cast<int>(dstEntry->format));
             }
 
             HRESULT begin_scene(IUnknown* device) override
             {
-                logging::logDebug("[gfx:gpu] BeginScene device={} (stub)", static_cast<void*>(device));
+                // Draws are deferred to present(), so a scene has no immediate
+                // GPU work; begin_scene just marks the device active.
+                logging::logDebug("[gfx:gpu] BeginScene device={}", static_cast<void*>(device));
                 return S_OK;
             }
 
             HRESULT end_scene(IUnknown* device) override
             {
-                logging::logDebug("[gfx:gpu] EndScene device={} (stub)", static_cast<void*>(device));
+                logging::logDebug("[gfx:gpu] EndScene device={}", static_cast<void*>(device));
                 return S_OK;
             }
 
             HRESULT set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value) override
             {
-                logging::logDebug(
-                    "[gfx:gpu] SetRenderState device={} state={} value={:#x} (stub)",
-                    static_cast<void*>(device),
-                    static_cast<int>(state),
-                    value);
+                switch (static_cast<int>(state))
+                {
+                case RS_TEXTUREHANDLE: mDeviceState.texHandle = value; break;
+                case RS_ZENABLE: mDeviceState.zEnable = value != 0; break;
+                case RS_ZWRITEENABLE: mDeviceState.zWrite = value != 0; break;
+                case RS_ZFUNC: mDeviceState.zFunc = value; break;
+                case RS_SHADEMODE: break; // gouraud/flat: per-vertex colors interpolate naturally
+                case RS_CULLMODE: mDeviceState.cullMode = value; break;
+                case RS_ALPHABLENDENABLE: mDeviceState.alphaBlend = value != 0; break;
+                case RS_SRCBLEND: mDeviceState.srcBlend = value; break;
+                case RS_DESTBLEND: mDeviceState.dstBlend = value; break;
+                case RS_TEXTUREMAG: mDeviceState.texMag = value; break;
+                case RS_TEXTUREMIN: mDeviceState.texMin = value; break;
+                case RS_SPECULARENABLE: break;  // specular ignored
+                case RS_TEXTUREMAPBLEND: break; // always MODULATE in practice
+                case RS_COLORKEYENABLE: break;  // color keying is an M5 concern
+                case RS_TEXTUREADDRESS:
+                case RS_TEXTUREPERSPECTIVE:
+                case RS_ANTIALIAS:
+                case RS_LASTPIXEL:
+                case RS_SUBPIXEL:
+                case RS_EDGEANTIALIAS:
+                case RS_ANISOTROPY: break; // ignored: no effect on the SDL_GPU pipeline used here
+                default:
+                    logging::logDebug("[gfx:gpu] SetRenderState state={} value={} (unhandled)", static_cast<int>(state), value);
+                    break;
+                }
                 return S_OK;
             }
 
             HRESULT clear(IUnknown* viewport, DWORD count, const D3DRECT* rects, DWORD flags) override
             {
+                // Record what the next frame's scene pass must clear. The D3D
+                // target clear color is the background material's ambient color
+                // (tracked via set_material); the depth buffer clears to 1.0.
+                mDeviceState.pendingClearTarget = (flags & D3DCLEAR_TARGET) != 0;
+                mDeviceState.pendingClearDepth = (flags & D3DCLEAR_ZBUFFER) != 0;
                 logging::logDebug(
-                    "[gfx:gpu] Clear viewport={} count={} flags={:#x} (stub)", static_cast<void*>(viewport), count, flags);
+                    "[gfx:gpu] Clear viewport={} count={} flags={} (target={}, zbuffer={})",
+                    static_cast<void*>(viewport),
+                    count,
+                    flags,
+                    mDeviceState.pendingClearTarget,
+                    mDeviceState.pendingClearDepth);
+                if (rects != nullptr && count > 0)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] Clear rect=({}, {}, {}, {})", rects[0].x1, rects[0].y1, rects[0].x2, rects[0].y2);
+                }
                 return S_OK;
             }
 
@@ -505,11 +1039,24 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 DWORD flags) override
             {
-                logging::logDebug(
-                    "[gfx:gpu] DrawPrimitive device={} type={} verts={} (stub)",
-                    static_cast<void*>(device),
-                    static_cast<int>(primType),
-                    vertexCount);
+                if (active_backend() != 1)
+                    return S_OK;
+                if (vertices == nullptr || vertexCount == 0)
+                    return S_OK;
+                if (vertexType != D3DVT_TLVERTEX)
+                {
+                    // Untransformed vertices would need the transform pipeline;
+                    // the game only draws TL vertices on this path.
+                    logging::logDebug(
+                        "[gfx:gpu] DrawPrimitive type={} vertexType={} (unhandled, not TL)",
+                        static_cast<int>(primType),
+                        static_cast<int>(vertexType));
+                    return S_OK;
+                }
+
+                const auto prim = primType == D3DPT_TRIANGLESTRIP ? SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP
+                                                                  : SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+                queueDraw(prim, static_cast<const uint8_t*>(vertices), vertexCount);
                 return S_OK;
             }
 
@@ -517,39 +1064,70 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 const void* indices, DWORD indexCount, DWORD flags) override
             {
-                logging::logDebug(
-                    "[gfx:gpu] DrawIndexedPrimitive device={} type={} verts={} idx={} (stub)",
-                    static_cast<void*>(device),
-                    static_cast<int>(primType),
-                    vertexCount,
-                    indexCount);
+                if (active_backend() != 1)
+                    return S_OK;
+                if (vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0)
+                    return S_OK;
+                if (vertexType != D3DVT_TLVERTEX)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] DrawIndexedPrimitive type={} vertexType={} (unhandled, not TL)",
+                        static_cast<int>(primType),
+                        static_cast<int>(vertexType));
+                    return S_OK;
+                }
+
+                // The game does not use indexed draws on this path, but handle
+                // them by reordering the TL vertices through the WORD indices so
+                // the draw pipeline stays identical.
+                const auto* src = static_cast<const uint8_t*>(vertices);
+                const auto* idx = static_cast<const WORD*>(indices);
+                std::vector<uint8_t> reordered(static_cast<size_t>(indexCount) * kTLVertexStride);
+                for (DWORD i = 0; i < indexCount; i++)
+                {
+                    if (idx[i] >= vertexCount)
+                        continue;
+                    std::memcpy(
+                        reordered.data() + static_cast<size_t>(i) * kTLVertexStride,
+                        src + static_cast<size_t>(idx[i]) * kTLVertexStride,
+                        kTLVertexStride);
+                }
+                const auto prim = primType == D3DPT_TRIANGLESTRIP ? SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP
+                                                                  : SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+                queueDraw(prim, reordered.data(), indexCount);
                 return S_OK;
             }
 
             HRESULT set_transform(IUnknown* device, D3DTRANSFORMSTATETYPE state, const D3DMATRIX* matrix) override
             {
-                logging::logDebug(
-                    "[gfx:gpu] SetTransform device={} state={} (stub)", static_cast<void*>(device), static_cast<int>(state));
+                // TL vertices are already transformed; nothing to apply.
+                logging::logDebug("[gfx:gpu] SetTransform state={} (ignored, TL pipeline)", static_cast<int>(state));
                 return S_OK;
             }
 
             HRESULT multiply_transform(IUnknown* device, D3DTRANSFORMSTATETYPE state, const D3DMATRIX* matrix) override
             {
-                logging::logDebug(
-                    "[gfx:gpu] MultiplyTransform device={} state={} (stub)",
-                    static_cast<void*>(device),
-                    static_cast<int>(state));
+                logging::logDebug("[gfx:gpu] MultiplyTransform state={} (ignored, TL pipeline)", static_cast<int>(state));
                 return S_OK;
             }
 
-            HRESULT get_stats(IUnknown* /*device*/, D3DSTATS* /*stats*/) override
+            HRESULT get_stats(IUnknown* /*device*/, D3DSTATS* stats) override
             {
+                // The D3D reference backend fills stats from the real device
+                // first; when the GPU backend is active, replace them with the
+                // counts of what the GPU actually drew so the game's per-frame
+                // deltas keep working.
+                if (stats != nullptr && active_backend() == 1)
+                {
+                    stats->dwTrianglesDrawn = static_cast<DWORD>(mDeviceState.totalTriangles);
+                    stats->dwVerticesProcessed = static_cast<DWORD>(mDeviceState.totalVertices);
+                }
                 return S_OK;
             }
 
             // ---- surface layer helpers ----
 
-            SurfaceEntry* findSurface(IUnknown* surface)
+            SurfaceEntry* findSurface(void* surface)
             {
                 const auto it = mSurfaces.find(surface);
                 return it == mSurfaces.end() ? nullptr : &it->second;
@@ -999,9 +1577,625 @@ namespace openre::gfx
 
         private:
             std::unordered_map<void*, SurfaceEntry> mSurfaces;
+            std::unordered_map<DWORD, void*> mTextureHandles; // D3D texture handle -> surface key
+            DeviceState mDeviceState;
 
             SDL_GPUDevice* mDevice = nullptr;
             SDL_Window* mWindow = nullptr;
+
+            // Scene resources (created lazily by ensureSceneResources once the
+            // render target surface exists).
+            SDL_GPUShader* mVertexShader = nullptr;
+            SDL_GPUShader* mTexturedFrag = nullptr;
+            SDL_GPUShader* mUntexturedFrag = nullptr;
+            SDL_GPUSampler* mSamplerLinear = nullptr;
+            SDL_GPUSampler* mSamplerNearest = nullptr;
+            SDL_GPUTexture* mDepthTexture = nullptr; // D16_UNORM, render-target sized
+            Uint32 mDepthW = 0;
+            Uint32 mDepthH = 0;
+
+            // Per-frame vertex pool: CPU staging + GPU vertex buffer + upload
+            // transfer buffer. Grows on demand; released at shutdown.
+            std::vector<uint8_t> mFrameVertices;
+            std::vector<QueuedDraw> mQueuedDraws;
+            SDL_GPUBuffer* mVertexBuffer = nullptr;
+            SDL_GPUTransferBuffer* mVertexTransfer = nullptr;
+            Uint32 mVertexBufferCapacity = 0;
+
+            // Pipelines: scene pipelines are cached per PipelineKey; the blit
+            // pipeline presents the render target into the swapchain.
+            std::unordered_map<PipelineKey, SDL_GPUGraphicsPipeline*, PipelineKeyHash> mPipelineCache;
+            SDL_GPUGraphicsPipeline* mBlitPipeline = nullptr;
+            Uint32 mBlitQuadOffset = 0;
+
+            // Debug aid (OPENRE_GPU_DUMP=<N>): every N-th frame, read back the
+            // scene render target after the scene pass and write it as a BMP so
+            // the GPU-rendered image can be verified without depending on the
+            // DirectDraw primary surface that owns the window. Disabled unless
+            // the environment variable is set.
+            Uint32 mDumpInterval = 0;
+            Uint64 mDumpCounter = 0;
+            SDL_GPUTransferBuffer* mDumpTransfer = nullptr;
+
+            // ---- deferred draw helpers ----
+
+            void queueDraw(SDL_GPUPrimitiveType primType, const uint8_t* vertices, Uint32 vertexCount)
+            {
+                if (mDevice == nullptr)
+                    return;
+
+                SDL_GPUTexture* texture = nullptr;
+                const bool textured = resolveTexture(mDeviceState.texHandle, texture);
+                SDL_GPUSampler* sampler = nullptr;
+                if (textured)
+                {
+                    const bool linear = mDeviceState.texMag == 2 || mDeviceState.texMin == 2 || mDeviceState.texMin == 6;
+                    sampler = linear ? mSamplerLinear : mSamplerNearest;
+                }
+
+                PipelineKey key{};
+                key.textured = textured;
+                key.alphaBlend = mDeviceState.alphaBlend;
+                key.srcFactor = mapBlendFactor(mDeviceState.srcBlend);
+                key.dstFactor = mapBlendFactor(mDeviceState.dstBlend);
+                key.zTest = mDeviceState.zEnable;
+                key.zWrite = mDeviceState.zWrite;
+                key.zFunc = mapCompareOp(mDeviceState.zFunc);
+                key.cull = mapCullMode(mDeviceState.cullMode);
+                key.primType = primType;
+
+                auto* pipeline = getOrCreatePipeline(key);
+                if (pipeline == nullptr)
+                {
+                    logging::logDebug("[gfx:gpu] DrawPrimitive dropped (no pipeline)");
+                    return;
+                }
+
+                const auto vertexBytes = static_cast<size_t>(vertexCount) * kTLVertexStride;
+                const auto vertexOffset = static_cast<Uint32>(mFrameVertices.size());
+                mFrameVertices.insert(mFrameVertices.end(), vertices, vertices + vertexBytes);
+                mQueuedDraws.push_back(QueuedDraw{ pipeline, texture, sampler, vertexOffset, vertexCount, primType });
+
+                mDeviceState.totalVertices += vertexCount;
+                switch (primType)
+                {
+                case SDL_GPU_PRIMITIVETYPE_TRIANGLELIST: mDeviceState.totalTriangles += vertexCount / 3; break;
+                case SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP:
+                    mDeviceState.totalTriangles += vertexCount >= 3 ? vertexCount - 2 : 0;
+                    break;
+                default: break;
+                }
+                logging::logDebug(
+                    "[gfx:gpu] queued draw prim={} verts={} textured={} blend={} z={}",
+                    static_cast<int>(primType),
+                    vertexCount,
+                    textured,
+                    mDeviceState.alphaBlend,
+                    mDeviceState.zEnable);
+            }
+
+            // Resolves a D3D texture handle (SetRenderState TEXTUREHANDLE) to
+            // the SDL_GPU texture of the surface the game associated with it
+            // via IDirect3DTexture2::GetHandle. Returns false when the handle
+            // is unknown or not backed by a texture yet (draw untextured).
+            bool resolveTexture(DWORD handle, SDL_GPUTexture*& outTexture)
+            {
+                outTexture = nullptr;
+                if (handle == 0)
+                    return false;
+                const auto it = mTextureHandles.find(handle);
+                if (it == mTextureHandles.end())
+                    return false;
+                auto* entry = findSurface(it->second);
+                if (entry == nullptr || !entry->textureCreated)
+                    return false;
+                outTexture = entry->texture;
+                return true;
+            }
+
+            // ---- pipelines / resources ----
+
+            // Lazily creates shaders, samplers and the depth texture once the
+            // render target surface exists. Returns false until then.
+            bool ensureSceneResources()
+            {
+                if (mDevice == nullptr)
+                    return false;
+                auto* rtEntry = findSurface(mDeviceState.renderTarget);
+                if (rtEntry == nullptr || !rtEntry->textureCreated || rtEntry->width == 0 || rtEntry->height == 0)
+                    return false;
+
+                if (mVertexShader == nullptr)
+                {
+                    const auto formats = SDL_GetGPUShaderFormats(mDevice);
+                    const bool dxil = (formats & SDL_GPU_SHADERFORMAT_DXIL) != 0;
+                    const SDL_GPUShaderFormat format = dxil ? SDL_GPU_SHADERFORMAT_DXIL : SDL_GPU_SHADERFORMAT_SPIRV;
+                    logging::logInfo(
+                        "[gfx:gpu] creating shaders (format={})",
+                        dxil ? static_cast<int>(SDL_GPU_SHADERFORMAT_DXIL) : static_cast<int>(SDL_GPU_SHADERFORMAT_SPIRV));
+                    mVertexShader = createShader(
+                        dxil ? gTLVertexDxil : gTLVertexSpirv,
+                        dxil ? gTLVertexDxilSize : gTLVertexSpirvSize,
+                        format,
+                        SDL_GPU_SHADERSTAGE_VERTEX,
+                        0,
+                        1);
+                    mTexturedFrag = createShader(
+                        dxil ? gTLTexturedFragDxil : gTLTexturedFragSpirv,
+                        dxil ? gTLTexturedFragDxilSize : gTLTexturedFragSpirvSize,
+                        format,
+                        SDL_GPU_SHADERSTAGE_FRAGMENT,
+                        1,
+                        0);
+                    mUntexturedFrag = createShader(
+                        dxil ? gTLUntexturedFragDxil : gTLUntexturedFragSpirv,
+                        dxil ? gTLUntexturedFragDxilSize : gTLUntexturedFragSpirvSize,
+                        format,
+                        SDL_GPU_SHADERSTAGE_FRAGMENT,
+                        0,
+                        0);
+                    if (mVertexShader == nullptr || mTexturedFrag == nullptr || mUntexturedFrag == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] shader creation failed: {}", SDL_GetError());
+                        releaseSceneResources();
+                        return false;
+                    }
+                }
+
+                if (mSamplerLinear == nullptr || mSamplerNearest == nullptr)
+                {
+                    SDL_GPUSamplerCreateInfo samplerInfo = {};
+                    samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+                    samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+                    samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+                    samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+                    samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+                    samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+                    if (mSamplerLinear == nullptr)
+                        mSamplerLinear = SDL_CreateGPUSampler(mDevice, &samplerInfo);
+                    samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+                    samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+                    if (mSamplerNearest == nullptr)
+                        mSamplerNearest = SDL_CreateGPUSampler(mDevice, &samplerInfo);
+                    if (mSamplerLinear == nullptr || mSamplerNearest == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] sampler creation failed: {}", SDL_GetError());
+                        releaseSceneResources();
+                        return false;
+                    }
+                }
+
+                if (mDepthTexture == nullptr || mDepthW != rtEntry->width || mDepthH != rtEntry->height)
+                {
+                    if (mDepthTexture != nullptr)
+                    {
+                        SDL_ReleaseGPUTexture(mDevice, mDepthTexture);
+                        mDepthTexture = nullptr;
+                    }
+                    mDepthW = rtEntry->width;
+                    mDepthH = rtEntry->height;
+                    if (!SDL_GPUTextureSupportsFormat(
+                            mDevice,
+                            SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+                            SDL_GPU_TEXTURETYPE_2D,
+                            SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+                    {
+                        logging::logError("[gfx:gpu] D16_UNORM depth format unsupported");
+                        return false;
+                    }
+                    SDL_GPUTextureCreateInfo depthInfo = {};
+                    depthInfo.type = SDL_GPU_TEXTURETYPE_2D;
+                    depthInfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+                    depthInfo.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+                    depthInfo.width = mDepthW;
+                    depthInfo.height = mDepthH;
+                    depthInfo.layer_count_or_depth = 1;
+                    depthInfo.num_levels = 1;
+                    depthInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+                    mDepthTexture = SDL_CreateGPUTexture(mDevice, &depthInfo);
+                    if (mDepthTexture == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] depth texture creation failed: {}", SDL_GetError());
+                        return false;
+                    }
+                    logging::logInfo("[gfx:gpu] depth texture created ({}x{} D16)", mDepthW, mDepthH);
+                }
+                return true;
+            }
+
+            void releaseSceneResources()
+            {
+                if (mDevice == nullptr)
+                    return;
+                for (auto& pair : mPipelineCache)
+                    SDL_ReleaseGPUGraphicsPipeline(mDevice, pair.second);
+                mPipelineCache.clear();
+                if (mBlitPipeline != nullptr)
+                {
+                    SDL_ReleaseGPUGraphicsPipeline(mDevice, mBlitPipeline);
+                    mBlitPipeline = nullptr;
+                }
+                if (mVertexShader != nullptr)
+                {
+                    SDL_ReleaseGPUShader(mDevice, mVertexShader);
+                    mVertexShader = nullptr;
+                }
+                if (mTexturedFrag != nullptr)
+                {
+                    SDL_ReleaseGPUShader(mDevice, mTexturedFrag);
+                    mTexturedFrag = nullptr;
+                }
+                if (mUntexturedFrag != nullptr)
+                {
+                    SDL_ReleaseGPUShader(mDevice, mUntexturedFrag);
+                    mUntexturedFrag = nullptr;
+                }
+                if (mSamplerLinear != nullptr)
+                {
+                    SDL_ReleaseGPUSampler(mDevice, mSamplerLinear);
+                    mSamplerLinear = nullptr;
+                }
+                if (mSamplerNearest != nullptr)
+                {
+                    SDL_ReleaseGPUSampler(mDevice, mSamplerNearest);
+                    mSamplerNearest = nullptr;
+                }
+                if (mDepthTexture != nullptr)
+                {
+                    SDL_ReleaseGPUTexture(mDevice, mDepthTexture);
+                    mDepthTexture = nullptr;
+                }
+                mDepthW = 0;
+                mDepthH = 0;
+                if (mVertexBuffer != nullptr)
+                {
+                    SDL_ReleaseGPUBuffer(mDevice, mVertexBuffer);
+                    mVertexBuffer = nullptr;
+                }
+                if (mVertexTransfer != nullptr)
+                {
+                    SDL_ReleaseGPUTransferBuffer(mDevice, mVertexTransfer);
+                    mVertexTransfer = nullptr;
+                }
+                if (mDumpTransfer != nullptr)
+                {
+                    SDL_ReleaseGPUTransferBuffer(mDevice, mDumpTransfer);
+                    mDumpTransfer = nullptr;
+                }
+                mVertexBufferCapacity = 0;
+                resetFrameState();
+            }
+
+            SDL_GPUShader* createShader(
+                const uint8_t* code, Uint32 codeSize, SDL_GPUShaderFormat format, SDL_GPUShaderStage stage, Uint32 numSamplers,
+                Uint32 numUniformBuffers)
+            {
+                SDL_GPUShaderCreateInfo info = {};
+                info.code_size = codeSize;
+                info.code = code;
+                info.entrypoint = "main";
+                info.format = format;
+                info.stage = stage;
+                info.num_samplers = numSamplers;
+                info.num_uniform_buffers = numUniformBuffers;
+                return SDL_CreateGPUShader(mDevice, &info);
+            }
+
+            // Fetches (or lazily creates) the pipeline for a state key. Scene
+            // pipelines render into the offscreen target (surface0, 32bpp)
+            // with a depth target; the blit pipeline targets the swapchain.
+            SDL_GPUGraphicsPipeline* getOrCreatePipeline(const PipelineKey& key)
+            {
+                const auto it = mPipelineCache.find(key);
+                if (it != mPipelineCache.end())
+                    return it->second;
+
+                auto* pipeline = createPipeline(key, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, true);
+                if (pipeline == nullptr)
+                    return nullptr;
+                mPipelineCache[key] = pipeline;
+                logging::logInfo(
+                    "[gfx:gpu] created pipeline (textured={} blend={} zTest={} zWrite={} cull={} prim={})",
+                    key.textured,
+                    key.alphaBlend,
+                    key.zTest,
+                    key.zWrite,
+                    static_cast<int>(key.cull),
+                    static_cast<int>(key.primType));
+                return pipeline;
+            }
+
+            SDL_GPUGraphicsPipeline* createPipeline(const PipelineKey& key, SDL_GPUTextureFormat targetFormat, bool withDepth)
+            {
+                if (mVertexShader == nullptr || mTexturedFrag == nullptr || mUntexturedFrag == nullptr)
+                    return nullptr;
+
+                const SDL_GPUVertexBufferDescription vbDesc[] = {
+                    { 0, kTLVertexStride, SDL_GPU_VERTEXINPUTRATE_VERTEX, 0 },
+                };
+                const SDL_GPUVertexAttribute attrs[] = {
+                    { 0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, kTLVertexPosOffset },
+                    { 1, 0, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, kTLVertexColorOffset },
+                    { 2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, kTLVertexUvOffset },
+                };
+                SDL_GPUVertexInputState vertexInput = {};
+                vertexInput.vertex_buffer_descriptions = vbDesc;
+                vertexInput.num_vertex_buffers = 1;
+                vertexInput.vertex_attributes = attrs;
+                vertexInput.num_vertex_attributes = 3;
+
+                SDL_GPUGraphicsPipelineCreateInfo info = {};
+                info.vertex_shader = mVertexShader;
+                info.fragment_shader = key.textured ? mTexturedFrag : mUntexturedFrag;
+                info.vertex_input_state = vertexInput;
+                info.primitive_type = key.primType;
+
+                info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+                info.rasterizer_state.cull_mode = key.cull;
+                info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+                info.rasterizer_state.enable_depth_clip = true;
+
+                info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+                info.depth_stencil_state.compare_op = key.zFunc;
+                info.depth_stencil_state.enable_depth_test = key.zTest;
+                info.depth_stencil_state.enable_depth_write = key.zWrite;
+
+                SDL_GPUColorTargetDescription target = {};
+                target.format = targetFormat;
+                if (key.alphaBlend)
+                {
+                    target.blend_state.enable_blend = true;
+                    target.blend_state.src_color_blendfactor = key.srcFactor;
+                    target.blend_state.dst_color_blendfactor = key.dstFactor;
+                    target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+                    target.blend_state.src_alpha_blendfactor = key.srcFactor;
+                    target.blend_state.dst_alpha_blendfactor = key.dstFactor;
+                    target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+                }
+                const SDL_GPUColorTargetDescription targets[] = { target };
+                info.target_info.color_target_descriptions = targets;
+                info.target_info.num_color_targets = 1;
+                if (withDepth)
+                {
+                    info.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+                    info.target_info.has_depth_stencil_target = true;
+                }
+
+                auto* pipeline = SDL_CreateGPUGraphicsPipeline(mDevice, &info);
+                if (pipeline == nullptr)
+                    logging::logError("[gfx:gpu] SDL_CreateGPUGraphicsPipeline failed: {}", SDL_GetError());
+                return pipeline;
+            }
+
+            void ensureBlitPipeline(SDL_GPUTextureFormat swapchainFormat)
+            {
+                if (mBlitPipeline != nullptr)
+                    return;
+                PipelineKey key{};
+                key.textured = true;
+                key.primType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+                mBlitPipeline = createPipeline(key, swapchainFormat, false);
+                if (mBlitPipeline != nullptr)
+                    logging::logInfo(
+                        "[gfx:gpu] blit pipeline created (swapchain format={})", static_cast<int>(swapchainFormat));
+                else
+                    logging::logError("[gfx:gpu] blit pipeline creation failed: {}", SDL_GetError());
+            }
+
+            // Grows the per-frame vertex pool. Called from present() after the
+            // previous frame was submitted and waited on, so releasing and
+            // recreating the buffers cannot race in-flight work.
+            void ensureVertexBuffer(Uint32 capacity)
+            {
+                if (mDevice == nullptr)
+                    return;
+                if (mVertexBuffer != nullptr && mVertexBufferCapacity >= capacity)
+                    return;
+                if (mVertexBuffer != nullptr)
+                {
+                    SDL_ReleaseGPUBuffer(mDevice, mVertexBuffer);
+                    mVertexBuffer = nullptr;
+                }
+                if (mVertexTransfer != nullptr)
+                {
+                    SDL_ReleaseGPUTransferBuffer(mDevice, mVertexTransfer);
+                    mVertexTransfer = nullptr;
+                }
+                mVertexBufferCapacity = std::max(capacity, 4096u);
+
+                SDL_GPUBufferCreateInfo bufferInfo = {};
+                bufferInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+                bufferInfo.size = mVertexBufferCapacity;
+                mVertexBuffer = SDL_CreateGPUBuffer(mDevice, &bufferInfo);
+
+                SDL_GPUTransferBufferCreateInfo transferInfo = {};
+                transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                transferInfo.size = mVertexBufferCapacity;
+                mVertexTransfer = SDL_CreateGPUTransferBuffer(mDevice, &transferInfo);
+
+                if (mVertexBuffer == nullptr || mVertexTransfer == nullptr)
+                {
+                    logging::logError("[gfx:gpu] vertex buffer creation failed: {}", SDL_GetError());
+                    if (mVertexBuffer != nullptr)
+                    {
+                        SDL_ReleaseGPUBuffer(mDevice, mVertexBuffer);
+                        mVertexBuffer = nullptr;
+                    }
+                    if (mVertexTransfer != nullptr)
+                    {
+                        SDL_ReleaseGPUTransferBuffer(mDevice, mVertexTransfer);
+                        mVertexTransfer = nullptr;
+                    }
+                    mVertexBufferCapacity = 0;
+                    return;
+                }
+                logging::logInfo("[gfx:gpu] vertex pool grown to {} bytes", mVertexBufferCapacity);
+            }
+
+            // Appends the letterboxed fullscreen blit quad (in swapchain pixel
+            // space) to the frame vertex pool; returns the byte offset where
+            // the quad starts so the present pass can bind exactly it.
+            void appendBlitQuad(Uint32 winW, Uint32 winH, Uint32 rtW, Uint32 rtH)
+            {
+                if (winW == 0 || winH == 0 || rtW == 0 || rtH == 0)
+                    return;
+                const float scale = std::min(static_cast<float>(winW) / rtW, static_cast<float>(winH) / rtH);
+                const float outW = rtW * scale;
+                const float outH = rtH * scale;
+                const float x0 = (static_cast<float>(winW) - outW) * 0.5f;
+                const float y0 = (static_cast<float>(winH) - outH) * 0.5f;
+
+                mBlitQuadOffset = static_cast<Uint32>(mFrameVertices.size());
+                // D3DTLVERTEX layout (32 bytes): sx, sy, sz, rhw, color, spec, tu, tv.
+                // Color is D3DCOLOR white (0xFFFFFFFF, little-endian FF FF FF FF).
+                const float pos[4][4] = {
+                    { x0, y0, 0.0f, 1.0f },               // top-left
+                    { x0, y0 + outH, 0.0f, 1.0f },        // bottom-left
+                    { x0 + outW, y0, 0.0f, 1.0f },        // top-right
+                    { x0 + outW, y0 + outH, 0.0f, 1.0f }, // bottom-right
+                };
+                const float uv[4][2] = {
+                    { 0.0f, 0.0f },
+                    { 0.0f, 1.0f },
+                    { 1.0f, 0.0f },
+                    { 1.0f, 1.0f },
+                };
+                for (int i = 0; i < 4; i++)
+                {
+                    uint8_t vertex[kTLVertexStride] = {};
+                    std::memcpy(vertex + 0, pos[i], sizeof(pos[i]));
+                    vertex[kTLVertexColorOffset + 0] = 0xFF;
+                    vertex[kTLVertexColorOffset + 1] = 0xFF;
+                    vertex[kTLVertexColorOffset + 2] = 0xFF;
+                    vertex[kTLVertexColorOffset + 3] = 0xFF;
+                    std::memcpy(vertex + kTLVertexUvOffset, uv[i], sizeof(uv[i]));
+                    mFrameVertices.insert(mFrameVertices.end(), vertex, vertex + kTLVertexStride);
+                }
+            }
+
+            void submitAndReset(SDL_GPUCommandBuffer* commandBuffer)
+            {
+                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
+                // The frame vertex transfer buffer is remapped by the next
+                // present; wait so the copy pass is done before mapping.
+                SDL_WaitForGPUIdle(mDevice);
+                resetFrameState();
+            }
+
+            void resetFrameState()
+            {
+                mQueuedDraws.clear();
+                mFrameVertices.clear();
+                mBlitQuadOffset = 0;
+                mDeviceState.pendingClearTarget = false;
+                mDeviceState.pendingClearDepth = false;
+            }
+
+            // Debug aid: dumps the scene render target (after the scene pass
+            // executed) to gpu_dump_<counter>.bmp every OPENRE_GPU_DUMP frames.
+            void maybeDumpSceneTexture(SDL_GPUTexture* texture, Uint32 width, Uint32 height)
+            {
+                if (mDevice == nullptr || texture == nullptr || width == 0 || height == 0)
+                    return;
+                if (mDumpInterval == 0)
+                    return;
+                if (++mDumpCounter % mDumpInterval != 0)
+                    return;
+
+                const auto bytes = static_cast<Uint32>(width) * height * 4;
+                if (mDumpTransfer == nullptr)
+                {
+                    SDL_GPUTransferBufferCreateInfo info = {};
+                    info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+                    info.size = bytes;
+                    mDumpTransfer = SDL_CreateGPUTransferBuffer(mDevice, &info);
+                    if (mDumpTransfer == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] dump transfer buffer creation failed: {}", SDL_GetError());
+                        return;
+                    }
+                }
+
+                auto* commandBuffer = SDL_AcquireGPUCommandBuffer(mDevice);
+                if (commandBuffer == nullptr)
+                {
+                    logging::logError("[gfx:gpu] dump acquire command buffer failed: {}", SDL_GetError());
+                    return;
+                }
+                auto* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                SDL_GPUTextureRegion source = {};
+                source.texture = texture;
+                source.w = width;
+                source.h = height;
+                source.d = 1;
+                SDL_GPUTextureTransferInfo destination = {};
+                destination.transfer_buffer = mDumpTransfer;
+                destination.pixels_per_row = width;
+                destination.rows_per_layer = height;
+                SDL_DownloadFromGPUTexture(copyPass, &source, &destination);
+                SDL_EndGPUCopyPass(copyPass);
+                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+                {
+                    logging::logError("[gfx:gpu] dump submit failed: {}", SDL_GetError());
+                    return;
+                }
+                SDL_WaitForGPUIdle(mDevice);
+
+                void* mapped = SDL_MapGPUTransferBuffer(mDevice, mDumpTransfer, false);
+                if (mapped == nullptr)
+                {
+                    logging::logError("[gfx:gpu] dump map failed: {}", SDL_GetError());
+                    return;
+                }
+                const auto* pixels = static_cast<const uint8_t*>(mapped);
+
+                // Write a 32bpp top-down BMP (rows arrive top-first from the
+                // texture; a negative biHeight stores them top-down).
+                std::vector<uint8_t> bmp(14 + 40 + bytes);
+                const auto pixelOffset = static_cast<uint32_t>(14 + 40);
+                const uint32_t fileSize = static_cast<uint32_t>(bmp.size());
+                bmp[0] = 'B';
+                bmp[1] = 'M';
+                std::memcpy(bmp.data() + 2, &fileSize, 4);
+                std::memcpy(bmp.data() + 10, &pixelOffset, 4);
+                const uint32_t headerSize = 40;
+                std::memcpy(bmp.data() + 14, &headerSize, 4);
+                std::memcpy(bmp.data() + 18, &width, 4);
+                const int32_t negHeight = -static_cast<int32_t>(height);
+                std::memcpy(bmp.data() + 22, &negHeight, 4);
+                const uint16_t planes = 1;
+                std::memcpy(bmp.data() + 26, &planes, 2);
+                const uint16_t bitCount = 32;
+                std::memcpy(bmp.data() + 28, &bitCount, 2);
+                const uint32_t compression = 0;
+                std::memcpy(bmp.data() + 30, &compression, 4);
+                std::memcpy(bmp.data() + 34, &bytes, 4);
+                const uint32_t ppm = 2835; // 72 DPI, cosmetic
+                std::memcpy(bmp.data() + 38, &ppm, 4);
+                std::memcpy(bmp.data() + 42, &ppm, 4);
+                const uint32_t zero = 0;
+                std::memcpy(bmp.data() + 46, &zero, 4);
+                std::memcpy(bmp.data() + 50, &zero, 4);
+                const auto rowBytes = static_cast<size_t>(width) * 4;
+                for (Uint32 y = 0; y < height; y++)
+                    std::memcpy(bmp.data() + pixelOffset + y * rowBytes, pixels + y * rowBytes, rowBytes);
+
+                char path[64] = {};
+                std::snprintf(path, sizeof(path), "gpu_dump_%05llu.bmp", static_cast<unsigned long long>(mDumpCounter));
+                std::ofstream file(path, std::ios::binary);
+                if (file)
+                {
+                    file.write(reinterpret_cast<const char*>(bmp.data()), static_cast<std::streamsize>(bmp.size()));
+                    logging::logInfo("[gfx:gpu] scene dump written: {} ({}x{})", path, width, height);
+                }
+                else
+                {
+                    logging::logError("[gfx:gpu] scene dump write failed: {}", path);
+                }
+                SDL_UnmapGPUTransferBuffer(mDevice, mDumpTransfer);
+            }
         };
     }
 

@@ -44,6 +44,17 @@ namespace openre::gfx
         virtual HRESULT set_current_viewport(IUnknown* device, IUnknown* viewport) = 0;
         virtual HRESULT set_viewport(IUnknown* viewport, const D3DVIEWPORT2* vp) = 0;
         virtual HRESULT set_background(IUnknown* viewport, D3DMATERIALHANDLE materialHandle) = 0;
+
+        // Optional notifications with a no-op default: the game SetMaterial's
+        // the background material (its ambient color drives the target clear
+        // color) and asks textures for D3D handles via GetHandle (the handle
+        // -> surface mapping lets the GPU backend resolve TEXTUREHANDLE).
+        virtual void set_material(const D3DMATERIAL* /*material*/) {}
+        virtual void create_texture_handle(IUnknown* /*device*/, DWORD /*handle*/, IUnknown* /*surface*/) {}
+        // IDirect3DTexture2::Load(dst, src): the D3D driver copies the pixels
+        // between the two surfaces' backing textures; the GPU backend replays
+        // that copy on its own textures so handle-bound textures get content.
+        virtual void texture_load(IUnknown* /*surface*/, IUnknown* /*srcSurface*/) {}
         virtual HRESULT begin_scene(IUnknown* device) = 0;
         virtual HRESULT end_scene(IUnknown* device) = 0;
         virtual HRESULT set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value) = 0;

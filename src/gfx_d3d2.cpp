@@ -16,6 +16,15 @@ namespace openre::gfx
             static std::unordered_map<void*, registry::Entry> map;
             return map;
         }
+
+        // Maps IDirect3DTexture2 objects to the DirectDraw surface they were
+        // obtained from via QueryInterface(IID_IDirect3DTexture2), so a later
+        // GetHandle call can resolve the handle back to its owning surface.
+        std::unordered_map<void*, void*>& textureToSurface()
+        {
+            static std::unordered_map<void*, void*> map;
+            return map;
+        }
     }
 
     namespace registry
@@ -141,6 +150,25 @@ namespace openre::gfx
             return hr;
         }
 
+        // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
+        // DirectDraw surface; remember the owning surface and wrap the texture
+        // so its GetHandle can be broadcast to the backends.
+        static HRESULT STDMETHODCALLTYPE hook_surface_query_interface(IDirectDrawSurface* self, REFIID riid, void** ppv)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, REFIID, void**);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::SURF_QueryInterface])(self, riid, ppv);
+            if (SUCCEEDED(hr) && ppv != nullptr && *ppv != nullptr && IsEqualGUID(riid, IID_IDirect3DTexture2))
+            {
+                auto* texture = reinterpret_cast<IDirect3DTexture2*>(*ppv);
+                textureToSurface()[texture] = self;
+                wrap_texture2(texture);
+            }
+            return hr;
+        }
+
         static HRESULT STDMETHODCALLTYPE hook_surface_blt(
             IDirectDrawSurface* self, LPRECT dstRect, LPDIRECTDRAWSURFACE src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
         {
@@ -220,6 +248,19 @@ namespace openre::gfx
         }
 
         static HRESULT STDMETHODCALLTYPE
+        hook_d3d2_create_material(IDirect3D2* self, LPDIRECT3DMATERIAL2* material, IUnknown* outer)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3D2*, LPDIRECT3DMATERIAL2*, IUnknown*);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::D3D2_CreateMaterial])(self, material, outer);
+            if (SUCCEEDED(hr) && material != nullptr && *material != nullptr)
+                wrap_material2(*material);
+            return hr;
+        }
+
+        static HRESULT STDMETHODCALLTYPE
         hook_d3d2_create_viewport(IDirect3D2* self, LPDIRECT3DVIEWPORT2* viewport, IUnknown* outer)
         {
             const auto* e = registry::find(self);
@@ -244,6 +285,11 @@ namespace openre::gfx
             {
                 backend_d3d()->create_device(*device);
                 backend_gpu()->create_device(*device);
+                // The game creates the device against the render target surface
+                // (surface0) and never calls SetRenderTarget afterwards, so
+                // broadcast the CreateDevice surface as the render target.
+                backend_d3d()->set_render_target(*device, surface, 0);
+                backend_gpu()->set_render_target(*device, surface, 0);
                 wrap_device2(*device);
             }
             return hr;
@@ -358,6 +404,69 @@ namespace openre::gfx
             backend_gpu()->set_viewport(self, vp);
             return hr;
         }
+
+        // ------------------------------------------------------------------
+        // IDirect3DMaterial2 / IDirect3DTexture2 hooks
+        // ------------------------------------------------------------------
+
+        // The background material's ambient color is the render target clear
+        // color; forward SetMaterial so the GPU backend can track it.
+        static HRESULT STDMETHODCALLTYPE hook_material_set_material(IDirect3DMaterial2* self, LPD3DMATERIAL material)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DMaterial2*, LPD3DMATERIAL);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::MAT_SetMaterial])(self, material);
+            backend_d3d()->set_material(material);
+            backend_gpu()->set_material(material);
+            return hr;
+        }
+
+        // The game asks textures for a D3D handle (opaque DWORD) that it later
+        // binds via SetRenderState(TEXTUREHANDLE); broadcast the handle along
+        // with the owning surface so the GPU backend can resolve it.
+        static HRESULT STDMETHODCALLTYPE
+        hook_texture_get_handle(IDirect3DTexture2* self, LPDIRECT3DDEVICE2 device, LPD3DTEXTUREHANDLE handle)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DTexture2*, LPDIRECT3DDEVICE2, LPD3DTEXTUREHANDLE);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::TEX_GetHandle])(self, device, handle);
+            if (SUCCEEDED(hr) && handle != nullptr)
+            {
+                const auto it = textureToSurface().find(self);
+                backend_gpu()->create_texture_handle(
+                    device, *handle, reinterpret_cast<IUnknown*>(it != textureToSurface().end() ? it->second : nullptr));
+            }
+            return hr;
+        }
+
+        // The game fills an internal surface and then calls
+        // IDirect3DTexture2::Load(texture, srcTexture) to copy the pixels into
+        // the texture's backing surface; the D3D driver does the copy, so the
+        // GPU backend must replay it on its own textures.
+        static HRESULT STDMETHODCALLTYPE hook_texture_load(IDirect3DTexture2* self, IDirect3DTexture2* srcTexture)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DTexture2*, IDirect3DTexture2*);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::TEX_Load])(self, srcTexture);
+            if (SUCCEEDED(hr))
+            {
+                const auto& map = textureToSurface();
+                const auto it = map.find(self);
+                const auto sit = map.find(srcTexture);
+                if (it != map.end() && sit != map.end())
+                {
+                    backend_gpu()->texture_load(
+                        reinterpret_cast<IUnknown*>(it->second), reinterpret_cast<IUnknown*>(sit->second));
+                }
+            }
+            return hr;
+        }
     }
 
     // ----------------------------------------------------------------------
@@ -404,6 +513,7 @@ namespace openre::gfx
         auto** orig = *reinterpret_cast<void***>(surface);
         auto* newVtbl = new void*[kSurfaceVtblSlots];
         std::memcpy(newVtbl, orig, kSurfaceVtblSlots * sizeof(void*));
+        newVtbl[slots::SURF_QueryInterface] = reinterpret_cast<void*>(&hook_surface_query_interface);
         newVtbl[slots::SURF_Blt] = reinterpret_cast<void*>(&hook_surface_blt);
         newVtbl[slots::SURF_Lock] = reinterpret_cast<void*>(&hook_surface_lock);
         newVtbl[slots::SURF_Unlock] = reinterpret_cast<void*>(&hook_surface_unlock);
@@ -428,6 +538,7 @@ namespace openre::gfx
         auto* newVtbl = new void*[kD3D2VtblSlots];
         std::memcpy(newVtbl, orig, kD3D2VtblSlots * sizeof(void*));
         newVtbl[slots::D3D2_EnumDevices] = reinterpret_cast<void*>(&hook_d3d2_enum_devices);
+        newVtbl[slots::D3D2_CreateMaterial] = reinterpret_cast<void*>(&hook_d3d2_create_material);
         newVtbl[slots::D3D2_CreateViewport] = reinterpret_cast<void*>(&hook_d3d2_create_viewport);
         newVtbl[slots::D3D2_CreateDevice] = reinterpret_cast<void*>(&hook_d3d2_create_device);
         registry::set(d3d2, orig, newVtbl);
@@ -471,6 +582,35 @@ namespace openre::gfx
         newVtbl[slots::VP_SetViewport2] = reinterpret_cast<void*>(&hook_viewport_set_viewport2);
         registry::set(viewport, orig, newVtbl);
         *reinterpret_cast<void***>(viewport) = newVtbl;
+    }
+
+    void wrap_material2(IDirect3DMaterial2* material)
+    {
+        if (material == nullptr)
+            return;
+        if (registry::find(material) != nullptr)
+            return; // already wrapped
+        auto** orig = *reinterpret_cast<void***>(material);
+        auto* newVtbl = new void*[kMaterialVtblSlots];
+        std::memcpy(newVtbl, orig, kMaterialVtblSlots * sizeof(void*));
+        newVtbl[slots::MAT_SetMaterial] = reinterpret_cast<void*>(&hook_material_set_material);
+        registry::set(material, orig, newVtbl);
+        *reinterpret_cast<void***>(material) = newVtbl;
+    }
+
+    void wrap_texture2(IDirect3DTexture2* texture)
+    {
+        if (texture == nullptr)
+            return;
+        if (registry::find(texture) != nullptr)
+            return; // already wrapped
+        auto** orig = *reinterpret_cast<void***>(texture);
+        auto* newVtbl = new void*[kTextureVtblSlots];
+        std::memcpy(newVtbl, orig, kTextureVtblSlots * sizeof(void*));
+        newVtbl[slots::TEX_GetHandle] = reinterpret_cast<void*>(&hook_texture_get_handle);
+        newVtbl[slots::TEX_Load] = reinterpret_cast<void*>(&hook_texture_load);
+        registry::set(texture, orig, newVtbl);
+        *reinterpret_cast<void***>(texture) = newVtbl;
     }
 
     // ----------------------------------------------------------------------
