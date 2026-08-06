@@ -3742,12 +3742,19 @@ namespace openre::audio
         return p(a1, a2, a3, a4);
     }
 
-    // 0x004EEBD0 (Snd_se_dir_ck - temp thunk, will be replaced by the next agent)
+    // 0x450930 (catan - pure math atan2, implemented inline; not on the checklist)
+    static int64_t catan(int a1)
+    {
+        return (int64_t)(atan2((double)a1 * 0.000244140625, 1.0) * 2048.0 * 0.3184713375796178);
+    }
+
+    // 0x004EEBD0
     static int16_t snd_se_dir_ck(int a1, int a2, int a3, int a4)
     {
-        using sig = int16_t (*)(int, int, int, int);
-        auto p = (sig)0x004EEBD0;
-        return p(a1, a2, a3, a4);
+        int v4 = a4 - a2;
+        if (a3 == a1)
+            return (int16_t)(((v4 > 0) << 11) + 1024);
+        return (int16_t)((-(int16_t)catan((v4 << 12) / (a3 - a1)) - ((a3 - a1 < 0) << 11)) & 0xFFF);
     }
 
     // 0x004EE780
@@ -4321,5 +4328,6 @@ namespace openre::audio
         interop::writeJmp(0x004EE350, &snd_se_call);
         interop::writeJmp(0x004EE440, &snd_bgm_fade);
         interop::writeJmp(0x004EE780, &snd_se_3d);
+        interop::writeJmp(0x004EEBD0, &snd_se_dir_ck);
     }
 }
