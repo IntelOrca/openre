@@ -3821,12 +3821,10 @@ namespace openre::audio
         return (char)v0;
     }
 
-    // 0x004EED30 (Xa_control_init - temp thunk, will be replaced by a later agent)
+    // 0x004EED30
     static void xa_control_init()
     {
-        using sig = void (*)();
-        auto p = (sig)0x004EED30;
-        return p();
+        *byte_69346E = 2;
     }
 
     // 0x004EED40 (Xa_control_play - temp thunk, will be replaced by a later agent)
@@ -4443,5 +4441,6 @@ namespace openre::audio
         interop::writeJmp(0x004EECD0, &xa_stop);
         interop::writeJmp(0x004EED00, &xa_control);
         interop::writeJmp(0x004EED10, &xa_control_stop);
+        interop::writeJmp(0x004EED30, &xa_control_init);
     }
 }
