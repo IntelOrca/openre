@@ -10,7 +10,12 @@ namespace openre::gfx
     {
         // IDirectDraw / IDirectDraw2
         constexpr int DD_QueryInterface = 0;
+        constexpr int DD_CreatePalette = 5;
         constexpr int DD_CreateSurface = 6;
+
+        // IDirectDrawPalette
+        constexpr int PAL_GetEntries = 4;
+        constexpr int PAL_SetEntries = 6;
 
         // IDirectDrawSurface (also IDirectDrawSurface2)
         constexpr int SURF_QueryInterface = 0;
@@ -65,6 +70,7 @@ namespace openre::gfx
     // ddraw.dll's readable data segment.
     constexpr int kDDrawVtblSlots = 64;
     constexpr int kSurfaceVtblSlots = 64;
+    constexpr int kPaletteVtblSlots = 64;
     constexpr int kD3D2VtblSlots = 64;
     constexpr int kDeviceVtblSlots = 64;
     constexpr int kViewportVtblSlots = 64;
@@ -75,6 +81,7 @@ namespace openre::gfx
     // wraps objects).
     void wrap_ddraw2(IDirectDraw2* dd2);
     void wrap_surface(IDirectDrawSurface* surface);
+    void wrap_palette(IDirectDrawPalette* palette);
     void wrap_d3d2(IDirect3D2* d3d2);
     void wrap_device2(IDirect3DDevice2* device);
     void wrap_viewport2(IDirect3DViewport2* viewport);

@@ -467,6 +467,87 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
     fullscreen/resolution changes are M7.
   - 24bpp surfaces remain untracked (M3 limitation); Blt scaling remains 1:1.
 
+### M5 — GPU textures (done)
+- **16bpp format decision — the game's textures are ARGB1555, not RGB565.**
+  The GPU backend records the DirectDraw channel masks from the
+  `DDSURFACEDESC.ddpfPixelFormat` (`adoptPixelFormat`, fed by the first
+  `GetSurfaceDesc`/`Lock` after creation — the game passes no masks in the
+  `CreateSurface` desc) and logs them on first adoption. Runtime evidence
+  (title/menu/demo runs, `OPENRE_GFX_BACKEND=1`):
+  `[gfx:gpu] 16bpp masks R=0x7c00 G=0x3e0 B=0x1f A=0x8000` — i.e. ARGB1555
+  (5-5-5 with the top bit as 1-bit alpha), matching the Marni 16bpp desc from
+  `MarniSurface2::CreateWork` (0x414750) and the classic RE2-era texture
+  format. `pickTextureFormat` centralises the decision: RGB565
+  (0xF800/0x07E0/0x001F) → `B5G6R5_UNORM` (byte-identical); any other mask
+  layout (ARGB1555/RGB555/…) → `R8G8B8A8_UNORM` with per-channel mask
+  expansion (`convertShadowToTexture`/`convertTextureToShadow` round-tripping
+  through the recorded masks; the 0x8000 alpha bit becomes real alpha).
+  Because the masks arrive only after texture creation, the runtime path for
+  this game is 16bpp → R8G8B8A8 (the B5G6R5 fast path is kept for descs that
+  do carry RGB565 masks). Verified pixel-identical to the D3D reference on the
+  title screen (window captures, 0/111069 differing pixels).
+- **Paletted (8bpp) path.** The game creates palettes via
+  `IDirectDraw::CreatePalette` (slot 5, now wrapped in `gfx_d3d2.cpp` —
+  vtable restored around the real call like CreateSurface), attaches them via
+  `IDirectDrawSurface::SetPalette` and fills them via
+  `IDirectDrawPalette::SetEntries` (slot 6, now wrapped); the front-end
+  broadcasts `create_palette` / `set_palette_entries` to both backends (default
+  no-ops in `GfxBackend` keep the D3D path untouched). The GPU backend records
+  a 256-entry RGBA table per palette (entries expanded opaque — the game
+  always writes `peFlags=0`, transparency is colour-keyed, deferred) and
+  expands 8bpp index shadows to R8G8B8A8 on upload / re-quantises on download
+  (nearest-index when a palette is missing). A `SetEntries` that lands right
+  after the surface's own unlock re-uploads paletted surfaces whose content
+  came from the shadow (`contentFromShadow`), so the next draw shows the new
+  colours. **Runtime finding: the game never creates 8bpp surfaces on the
+  tested paths** (0 `CreatePalette`, 0 `bpp=8`, 0 `paletted` events across all
+  title/menu/demo runs; the M0 audit §17 shows palettes are only created for
+  `DDPF_PALETTEINDEXED*` descs, and the texture-format table advertises only
+  non-paletted formats). The conversion path is implemented and documented
+  but untested-if-unused.
+- **Filtering.** `TEXTUREMAG` (17) / `TEXTUREMIN` (18) render states are
+  mirrored (`DeviceState.texMag/texMin`, debug-logged on change) and
+  `wantsLinearFilter()` maps the game's values (bilinear = MAG 2 / MIN 6,
+  nearest = 1/1, set by `Marni::SetFiltering` gated on `marni_config.Bilinear`,
+  F7) to the SDL_GPU sampler per draw (`mSamplerLinear`/`mSamplerNearest`).
+  Samplers are separate objects in SDL_GPU, so no pipeline rebuild is needed.
+  Verified: the game's startup `SetRenderState(TEXTUREMAG/MIN)` calls reach the
+  mirror (`filter MAG -> 1 (nearest)`), the F7 toggle runs without a crash on
+  the GPU path, and the title/menu renders pixel-identical to D3D. Note: the
+  intro/menu/demo paths draw through the immediate `set_filtering(self, 0)`
+  path (nearest regardless of config), so the bilinear→nearest switch itself
+  is only exercised when a filter=1 draw op (batched 3D rooms) runs — the
+  wiring is code-verified and the mirror/sampler path is log-verified.
+- **TEXTUREHANDLE resolution.** Every texture goes through the hooked
+  `IDirect3DTexture2::GetHandle` (vtable slot 4) → `create_texture_handle`
+  records `handle → SurfaceEntry`; `SetRenderState(TEXTUREHANDLE, h)` →
+  `resolveTexture` maps it to the entry's GPU texture (untextured fallback).
+  0 "unhandled texture handle" events across all runs; 23 handle registrations
+  observed in a menu/demo run. Coverage is complete on the exercised paths.
+- **Colour key** (`COLORKEYENABLE`) remains ignored as in M4 (deferred; M8
+  parity can revisit). Unknown pixel formats log at debug with the `[gfx:gpu]`
+  prefix and never crash (unsupported bpp → `SDL_GPU_TEXTUREFORMAT_INVALID` →
+  warning + untracked).
+- **Verification evidence.**
+  - `build.bat`: 0 warnings / 0 errors.
+  - Default run (active=0): D3D path unchanged, game renders, no GPU errors.
+  - GPU run (`OPENRE_GFX_BACKEND=1`): real graphics render — title screen,
+    animated main menu (250–660+ unique sampled colours) and the intro demo;
+    window capture of the title screen is **pixel-identical to the D3D
+    reference** (PrintWindow, 369×301, 0/111069 differing pixels; same 25
+    unique colours, same counts incl. the 0,153,188 title band).
+  - `OPENRE_GPU_DUMP=1` scene readback wrote 190 gpu_dump BMPs (640×480) with
+    correct per-frame content (title/intro colours match the window captures).
+  - Log evidence: `16bpp masks R=0x7c00 G=0x3e0 B=0x1f A=0x8000`,
+    `CreateSurface 16x16/256x256 bpp=16 format=4` (R8G8B8A8 for ARGB1555),
+    `texture_load`, `CreateTextureHandle`, `filter MAG/MIN -> …` lines.
+  - F7 toggled twice on the GPU path: game keeps rendering, no crash.
+  - No `[gfx:gpu]` errors in any run; game killed and log files cleaned up.
+- **Known limitations.** Paletted (8bpp) textures are implemented but unused by
+  the game on the tested paths (see above). The bilinear sampler is selected by
+  the mirror but the immediate 2D paths always request nearest. 24bpp surfaces
+  remain untracked (M3). Colour keying deferred to M8.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.

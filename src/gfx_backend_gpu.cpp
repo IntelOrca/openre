@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -175,8 +176,8 @@ namespace openre::gfx
             bool zWrite = true;
             DWORD zFunc = 4;    // D3DCMP_LESSEQUAL
             DWORD cullMode = 1; // D3DCULL_NONE
-            DWORD texMag = 1;
-            DWORD texMin = 1;
+            DWORD texMag = 2;   // D3DFILTER_LINEAR (matches the game's default)
+            DWORD texMin = 6;   // D3DFILTER_LINEARMIPLINEAR (game default when bilinear)
 
             // Clear request (consumed by the next frame's scene pass).
             bool pendingClearTarget = false;
@@ -216,13 +217,37 @@ namespace openre::gfx
                 std::vector<uint8_t> shadow;                     // CPU copy in the game's pixel format
                 Uint32 width = 0;
                 Uint32 height = 0;
-                Uint32 bpp = 0;   // 16 or 32
-                Uint32 pitch = 0; // width * bpp / 8 (DirectDraw row pitch)
+                Uint32 bpp = 0;   // 8, 16 or 32
+                Uint32 pitch = 0; // DirectDraw row pitch (width * bpp / 8)
                 SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
                 bool textureCreated = false;
                 bool hasContent = false; // texture written at least once
                 bool locked = false;
                 void* lockedPtr = nullptr; // shadow pointer handed out by the last Lock
+
+                // DirectDraw pixel-format layout, adopted from the
+                // DDSURFACEDESC ddpfPixelFormat masks (0 = unknown). Governs
+                // the 16bpp RGB565 vs RGB555/ARGB1555 conversion and, via
+                // paletted, the 8bpp palette expansion. The shifts/bit counts
+                // are derived from the masks by decodeMask.
+                Uint32 rMask = 0, gMask = 0, bMask = 0, aMask = 0;
+                Uint32 rShift = 0, gShift = 0, bShift = 0, aShift = 0;
+                Uint32 rBits = 0, gBits = 0, bBits = 0, aBits = 0;
+                bool paletted = false;   // 8bpp indexed surface
+                void* palette = nullptr; // IDirectDrawPalette* key into mPalettes
+
+                // True when the shadow was written by the game through its own
+                // Lock/Unlock (or a Blt). Paletted surfaces whose content
+                // arrived via texture_load must not be re-expanded from their
+                // (empty) shadow when their palette changes.
+                bool contentFromShadow = false;
+            };
+
+            // Per-palette state: 256 RGBA entries (0xAARRGGBB, matching
+            // D3DCOLOR). PALETTEENTRYs are converted in set_palette_entries.
+            struct PaletteData
+            {
+                std::array<uint32_t, 256> rgba = {};
             };
 
         public:
@@ -509,6 +534,7 @@ namespace openre::gfx
                 entry.height = desc->dwHeight;
                 entry.bpp = desc->ddpfPixelFormat.dwRGBBitCount;
                 entry.pitch = entry.width * (entry.bpp / 8);
+                adoptPixelFormat(entry, &desc->ddpfPixelFormat);
 
                 // The primary surface is created with DDSD_CAPS only (width,
                 // height and pixel format all zero) and the offscreen render
@@ -537,11 +563,12 @@ namespace openre::gfx
                     return;
                 }
                 logging::logInfo(
-                    "[gfx:gpu] CreateSurface {}x{} bpp={} format={}",
+                    "[gfx:gpu] CreateSurface {}x{} bpp={} format={}{}",
                     entry.width,
                     entry.height,
                     entry.bpp,
-                    static_cast<int>(entry.format));
+                    static_cast<int>(entry.format),
+                    entry.paletted ? " paletted" : "");
                 mSurfaces[surface] = std::move(entry);
             }
 
@@ -645,7 +672,10 @@ namespace openre::gfx
                 }
 
                 if (uploadFromShadow(*entry, nullptr))
+                {
                     entry->hasContent = true;
+                    entry->contentFromShadow = true;
+                }
                 entry->locked = false;
                 logging::logDebug(
                     "[gfx:gpu] Unlock surface={} {}x{} bpp={} ptrSame={}",
@@ -771,11 +801,61 @@ namespace openre::gfx
 
             HRESULT set_palette(IUnknown* surface, IUnknown* palette) override
             {
-                // Paletted surfaces are not used by the GPU backend yet.
+                auto* entry = findSurface(surface);
+                if (entry != nullptr)
+                    entry->palette = palette;
                 logging::logDebug(
-                    "[gfx:gpu] SetPalette surface={} palette={} (stub)",
-                    static_cast<void*>(surface),
-                    static_cast<void*>(palette));
+                    "[gfx:gpu] SetPalette surface={} palette={}", static_cast<void*>(surface), static_cast<void*>(palette));
+                return S_OK;
+            }
+
+            void create_palette(IUnknown* palette, DWORD flags) override
+            {
+                // The game creates palettes with a zeroed color table and fills
+                // them later via SetEntries; just register the object.
+                mPalettes.try_emplace(palette);
+                logging::logDebug("[gfx:gpu] CreatePalette palette={} flags={}", static_cast<void*>(palette), flags);
+            }
+
+            HRESULT
+            set_palette_entries(IUnknown* palette, DWORD flags, DWORD base, DWORD count, const PALETTEENTRY* entries) override
+            {
+                if (entries == nullptr || count == 0)
+                    return S_OK;
+                auto& data = mPalettes[palette];
+                const auto start = std::min(static_cast<Uint32>(base), 256u);
+                const auto n = std::min(static_cast<Uint32>(count), 256u - start);
+                // The game always writes peFlags = 0 (MarniSurfaceX::vUnlock /
+                // vPalUnlock), which the D3D reference renders as an opaque
+                // palette (transparency is handled by colour keying, deferred
+                // to a later milestone), so expand every entry to opaque RGBA.
+                for (Uint32 i = 0; i < n; i++)
+                {
+                    data.rgba[start + i] = 0xFF000000u | (static_cast<uint32_t>(entries[i].peRed) << 16)
+                        | (static_cast<uint32_t>(entries[i].peGreen) << 8) | static_cast<uint32_t>(entries[i].peBlue);
+                }
+                logging::logDebug(
+                    "[gfx:gpu] SetEntries palette={} base={} count={} flags={}",
+                    static_cast<void*>(palette),
+                    base,
+                    count,
+                    flags);
+
+                // A SetEntries may land right after the surface's own Unlock
+                // (MarniSurfaceX::vUnlock unlocks first, then pushes the
+                // palette), so the texture was expanded with stale entries.
+                // Re-expand any surface whose shadow content was written by
+                // the game itself (contentFromShadow) so the next draw sees
+                // the new colours.
+                for (auto& pair : mSurfaces)
+                {
+                    auto& entry = pair.second;
+                    if (entry.paletted && entry.palette == palette && entry.textureCreated && entry.contentFromShadow)
+                    {
+                        if (uploadFromShadow(entry, nullptr))
+                            entry.hasContent = true;
+                    }
+                }
                 return S_OK;
             }
 
@@ -958,6 +1038,7 @@ namespace openre::gfx
                 }
                 SDL_WaitForGPUIdle(mDevice);
                 dstEntry->hasContent = true;
+                dstEntry->contentFromShadow = false; // content arrived via GPU copy
                 logging::logDebug(
                     "[gfx:gpu] texture_load surface={} <- src={} {}x{} fmt={}",
                     static_cast<void*>(surface),
@@ -994,8 +1075,20 @@ namespace openre::gfx
                 case RS_ALPHABLENDENABLE: mDeviceState.alphaBlend = value != 0; break;
                 case RS_SRCBLEND: mDeviceState.srcBlend = value; break;
                 case RS_DESTBLEND: mDeviceState.dstBlend = value; break;
-                case RS_TEXTUREMAG: mDeviceState.texMag = value; break;
-                case RS_TEXTUREMIN: mDeviceState.texMin = value; break;
+                case RS_TEXTUREMAG:
+                    if (mDeviceState.texMag != value)
+                    {
+                        logging::logDebug("[gfx:gpu] filter MAG -> {} ({})", value, value == 2 ? "bilinear" : "nearest");
+                        mDeviceState.texMag = value;
+                    }
+                    break;
+                case RS_TEXTUREMIN:
+                    if (mDeviceState.texMin != value)
+                    {
+                        logging::logDebug("[gfx:gpu] filter MIN -> {} ({})", value, value == 6 ? "bilinear" : "nearest");
+                        mDeviceState.texMin = value;
+                    }
+                    break;
                 case RS_SPECULARENABLE: break;  // specular ignored
                 case RS_TEXTUREMAPBLEND: break; // always MODULATE in practice
                 case RS_COLORKEYENABLE: break;  // color keying is an M5 concern
@@ -1133,6 +1226,71 @@ namespace openre::gfx
                 return it == mSurfaces.end() ? nullptr : &it->second;
             }
 
+            // Derives shift/bit-count for each channel from its mask.
+            static void decodeMask(Uint32 mask, Uint32& shift, Uint32& bits)
+            {
+                shift = 0;
+                bits = 0;
+                if (mask == 0)
+                    return;
+                while ((mask & 1) == 0)
+                {
+                    mask >>= 1;
+                    ++shift;
+                }
+                while ((mask & 1) != 0)
+                {
+                    mask >>= 1;
+                    ++bits;
+                }
+            }
+
+            static std::string hexWord(Uint32 v)
+            {
+                std::ostringstream oss;
+                oss << "0x" << std::hex << v;
+                return oss.str();
+            }
+
+            // Adopts the DirectDraw pixel-format layout (channel masks plus the
+            // paletted flag) from a DDSURFACEDESC pixel format. Masks are only
+            // recorded once; zero masks keep the previous value.
+            void adoptPixelFormat(SurfaceEntry& entry, const DDPIXELFORMAT* pf)
+            {
+                if (pf == nullptr)
+                    return;
+                if (entry.rMask == 0 && pf->dwRBitMask != 0)
+                    entry.rMask = pf->dwRBitMask;
+                if (entry.gMask == 0 && pf->dwGBitMask != 0)
+                    entry.gMask = pf->dwGBitMask;
+                if (entry.bMask == 0 && pf->dwBBitMask != 0)
+                    entry.bMask = pf->dwBBitMask;
+                if (entry.aMask == 0 && pf->dwRGBAlphaBitMask != 0)
+                    entry.aMask = pf->dwRGBAlphaBitMask;
+                if ((pf->dwFlags & (DDPF_PALETTEINDEXED8 | DDPF_PALETTEINDEXED4)) != 0)
+                    entry.paletted = true;
+                if (entry.rBits == 0 || entry.gBits == 0 || entry.bBits == 0 || entry.aBits == 0)
+                {
+                    decodeMask(entry.rMask, entry.rShift, entry.rBits);
+                    decodeMask(entry.gMask, entry.gShift, entry.gBits);
+                    decodeMask(entry.bMask, entry.bShift, entry.bBits);
+                    decodeMask(entry.aMask, entry.aShift, entry.aBits);
+                }
+                // Evidence for the 16bpp format decision (M5): the game does not
+                // pass channel masks in the CreateSurface desc (they arrive with
+                // the first GetSurfaceDesc/Lock), so log them the first time a
+                // real pixel format is seen.
+                if (entry.bpp == 16 && (pf->dwRBitMask | pf->dwGBitMask | pf->dwBBitMask) != 0)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] 16bpp masks R={} G={} B={} A={}",
+                        hexWord(entry.rMask),
+                        hexWord(entry.gMask),
+                        hexWord(entry.bMask),
+                        hexWord(entry.aMask));
+                }
+            }
+
             // Records the real width/height/bit depth into the entry from a
             // DDSURFACEDESC the D3D reference backend just filled (GetSurfaceDesc
             // or Lock). Returns true when anything changed. The row pitch is
@@ -1156,6 +1314,12 @@ namespace openre::gfx
                     entry.bpp = desc->ddpfPixelFormat.dwRGBBitCount;
                     changed = true;
                 }
+                if (entry.bpp != 0 && (entry.rMask == 0 || entry.gMask == 0 || entry.bMask == 0 || entry.aMask == 0))
+                {
+                    const auto before = entry.rMask | entry.gMask | entry.bMask | entry.aMask;
+                    adoptPixelFormat(entry, &desc->ddpfPixelFormat);
+                    changed |= (entry.rMask | entry.gMask | entry.bMask | entry.aMask) != before;
+                }
                 if (entry.width != 0 && entry.bpp != 0)
                 {
                     const auto pitch = entry.width * (entry.bpp / 8);
@@ -1166,6 +1330,40 @@ namespace openre::gfx
                     }
                 }
                 return changed;
+            }
+
+            // Chooses the SDL_GPU texture format for a surface based on its
+            // bit depth and (for 16bpp) the DirectDraw channel masks:
+            //  - 32bpp RGBX8888 -> R8G8B8A8 (converted during transfers)
+            //  - 16bpp RGB565 (0xF800/0x07E0/0x001F) -> B5G6R5, byte-identical
+            //  - 16bpp RGB555/ARGB1555 or any other mask layout -> R8G8B8A8
+            //    (expanded per-pixel from the masks)
+            //  - 8bpp paletted -> R8G8B8A8 (indices expanded through the
+            //    surface's palette during transfers)
+            static SDL_GPUTextureFormat pickTextureFormat(const SurfaceEntry& entry)
+            {
+                switch (entry.bpp)
+                {
+                case 8: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+                case 16:
+                    if (entry.rMask == 0xF800 && entry.gMask == 0x07E0 && entry.bMask == 0x001F)
+                        return SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM;
+                    return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+                case 32: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+                default: return SDL_GPU_TEXTUREFORMAT_INVALID;
+                }
+            }
+
+            // Bytes per pixel of a GPU texture format used by the backend
+            // (SDL3.4 has no SDL_GPUTextureFormatTexelSize helper).
+            static Uint32 textureTexelBytes(SDL_GPUTextureFormat format)
+            {
+                switch (format)
+                {
+                case SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM: return 2;
+                case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM: return 4;
+                default: return 4;
+                }
             }
 
             // Lazily creates the GPU texture (plus staging transfer buffers and
@@ -1181,19 +1379,8 @@ namespace openre::gfx
                 if (entry.width == 0 || entry.height == 0 || entry.bpp == 0)
                     return false;
 
-                if (entry.bpp == 16)
-                {
-                    // DirectDraw RGB565 shares the classic 5-6-5 bit layout of
-                    // SDL's B5G6R5_UNORM, so the pixels transfer byte-for-byte.
-                    entry.format = SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM;
-                }
-                else if (entry.bpp == 32)
-                {
-                    // DirectDraw RGBX8888 (memory order B,G,R,X) is converted
-                    // to R8G8B8A8 during the shadow <-> texture transfers.
-                    entry.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-                }
-                else
+                entry.format = pickTextureFormat(entry);
+                if (entry.format == SDL_GPU_TEXTUREFORMAT_INVALID)
                 {
                     logging::logWarning(
                         "[gfx:gpu] unsupported surface bpp={} ({}x{} not tracked)", entry.bpp, entry.width, entry.height);
@@ -1239,9 +1426,13 @@ namespace openre::gfx
                     return false;
                 }
 
-                const auto size = static_cast<Uint32>(entry.pitch) * entry.height;
+                // The shadow holds the game's pixels (pitch * height); the
+                // transfer buffers hold the texture layout (width * texel *
+                // height), which differs for paletted 8bpp (1 vs 4 bytes).
+                const auto shadowSize = static_cast<Uint32>(entry.pitch) * entry.height;
+                const auto textureBytes = static_cast<Uint32>(entry.width) * textureTexelBytes(entry.format) * entry.height;
                 SDL_GPUTransferBufferCreateInfo transferInfo = {};
-                transferInfo.size = size;
+                transferInfo.size = textureBytes;
                 transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
                 entry.downloadBuffer = SDL_CreateGPUTransferBuffer(mDevice, &transferInfo);
                 transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
@@ -1253,7 +1444,7 @@ namespace openre::gfx
                     return false;
                 }
 
-                entry.shadow.assign(size, 0);
+                entry.shadow.assign(shadowSize, 0);
                 entry.textureCreated = true;
                 return true;
             }
@@ -1282,6 +1473,8 @@ namespace openre::gfx
                 entry.textureCreated = false;
                 entry.hasContent = false;
                 entry.locked = false;
+                entry.contentFromShadow = false;
+                entry.palette = nullptr;
             }
 
             // Downloads the current GPU texture content into the CPU shadow so
@@ -1329,7 +1522,7 @@ namespace openre::gfx
                     logging::logError("[gfx:gpu] SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
                     return false;
                 }
-                convertTextureToShadow(static_cast<const uint8_t*>(mapped), entry.shadow.data(), entry);
+                convertTextureToShadow(entry, static_cast<const uint8_t*>(mapped), entry.shadow.data());
                 SDL_UnmapGPUTransferBuffer(mDevice, entry.downloadBuffer);
                 return true;
             }
@@ -1338,6 +1531,8 @@ namespace openre::gfx
             // surface) into the GPU texture. Used by Unlock and Blt colorfill.
             bool uploadFromShadow(SurfaceEntry& entry, const RECT* region)
             {
+                if (mDevice == nullptr)
+                    return false;
                 RECT full = { 0, 0, static_cast<LONG>(entry.width), static_cast<LONG>(entry.height) };
                 const RECT* r = region != nullptr ? region : &full;
                 const auto left = std::clamp(r->left, 0L, static_cast<LONG>(entry.width));
@@ -1356,17 +1551,17 @@ namespace openre::gfx
                     return false;
                 }
                 auto* dst = static_cast<uint8_t*>(mapped);
-                const auto texel = entry.bpp / 8;
+                const auto srcTexel = entry.bpp / 8;
+                // The texture row may be wider than the shadow row: paletted
+                // 8bpp surfaces expand 1 byte per pixel into 4 bytes of RGBA.
+                const auto dstTexel = textureTexelBytes(entry.format);
                 const auto rowPixels = static_cast<size_t>(entry.width);
                 for (auto row = top; row < bottom; row++)
                 {
                     const auto* srcRow
-                        = entry.shadow.data() + static_cast<size_t>(row) * entry.pitch + static_cast<size_t>(left) * texel;
-                    auto* dstRow = dst + (static_cast<size_t>(row) * rowPixels + left) * texel;
-                    if (entry.format == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM)
-                        convertShadowToTexture(srcRow, dstRow, w);
-                    else
-                        std::memcpy(dstRow, srcRow, static_cast<size_t>(w) * texel);
+                        = entry.shadow.data() + static_cast<size_t>(row) * entry.pitch + static_cast<size_t>(left) * srcTexel;
+                    auto* dstRow = dst + (static_cast<size_t>(row) * rowPixels + left) * dstTexel;
+                    convertShadowToTexture(entry, srcRow, dstRow, w);
                 }
                 SDL_UnmapGPUTransferBuffer(mDevice, entry.uploadBuffer);
 
@@ -1529,6 +1724,7 @@ namespace openre::gfx
                 if (!uploadFromShadow(dstEntry, region))
                     return false;
                 dstEntry.hasContent = true;
+                dstEntry.contentFromShadow = true;
                 logging::logDebug(
                     "[gfx:gpu] Blt colorfill color={} rect=({},{} - {},{})",
                     color,
@@ -1539,45 +1735,183 @@ namespace openre::gfx
                 return true;
             }
 
-            // 32bpp: converts DirectDraw RGBX8888 pixels (memory order
-            // B,G,R,X) to the R8G8B8A8 texture layout, forcing alpha opaque.
-            static void convertShadowToTexture(const uint8_t* src, uint8_t* dst, Uint32 pixelCount)
+            // Scales an N-bit channel value (0..(1<<bits)-1) to 8 bits,
+            // rounding to the nearest 8-bit level.
+            static uint8_t scaleTo8(Uint32 value, Uint32 bits)
             {
-                for (Uint32 i = 0; i < pixelCount; i++)
-                {
-                    dst[0] = src[2]; // R
-                    dst[1] = src[1]; // G
-                    dst[2] = src[0]; // B
-                    dst[3] = 0xFF;   // A (DirectDraw RGBX carries no alpha)
-                    src += 4;
-                    dst += 4;
-                }
+                if (bits == 0)
+                    return 0;
+                if (bits >= 8)
+                    return static_cast<uint8_t>(value);
+                const Uint32 max = (1u << bits) - 1;
+                return static_cast<uint8_t>((value * 255u + max / 2u) / max);
             }
 
-            // 32bpp: converts R8G8B8A8 texture pixels back to DirectDraw
-            // RGBX8888 for the CPU shadow. 16bpp copies byte-for-byte.
-            static void convertTextureToShadow(const uint8_t* src, uint8_t* dst, const SurfaceEntry& entry)
+            // Quantizes an 8-bit channel value to an N-bit field.
+            static Uint32 unscaleToBits(Uint32 value, Uint32 bits)
             {
-                if (entry.format != SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM)
+                if (bits == 0)
+                    return 0;
+                if (bits >= 8)
+                    return value;
+                const Uint32 max = (1u << bits) - 1;
+                return (value * max + 127u) / 255u;
+            }
+
+            // Converts `pixelCount` shadow pixels (the game's native DirectDraw
+            // layout) into the texture layout of the entry's GPU format. The
+            // per-row source/destination strides are the caller's concern.
+            void convertShadowToTexture(const SurfaceEntry& entry, const uint8_t* src, uint8_t* dst, Uint32 pixelCount)
+            {
+                if (entry.paletted)
                 {
-                    std::memcpy(dst, src, entry.shadow.size());
+                    // 8bpp indexed: expand each index through the surface's
+                    // palette to opaque RGBA (no palette yet = black).
+                    const auto it = mPalettes.find(entry.palette);
+                    const auto* pal = it != mPalettes.end() ? it->second.rgba.data() : nullptr;
+                    for (Uint32 i = 0; i < pixelCount; i++)
+                    {
+                        const auto c = pal != nullptr ? pal[*src] : 0xFF000000u;
+                        dst[0] = static_cast<uint8_t>((c >> 16) & 0xFF);
+                        dst[1] = static_cast<uint8_t>((c >> 8) & 0xFF);
+                        dst[2] = static_cast<uint8_t>(c & 0xFF);
+                        dst[3] = static_cast<uint8_t>((c >> 24) & 0xFF);
+                        ++src;
+                        dst += 4;
+                    }
                     return;
                 }
+                if (entry.format == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM)
+                {
+                    if (entry.bpp == 32)
+                    {
+                        // DirectDraw RGBX8888 memory order is B,G,R,X; the
+                        // standard layout (or unknown masks) byte-swaps to RGBA.
+                        for (Uint32 i = 0; i < pixelCount; i++)
+                        {
+                            dst[0] = src[2]; // R
+                            dst[1] = src[1]; // G
+                            dst[2] = src[0]; // B
+                            dst[3] = 0xFF;   // A (DirectDraw RGBX carries no alpha)
+                            src += 4;
+                            dst += 4;
+                        }
+                        return;
+                    }
+                    // 16bpp RGB555/ARGB1555 (or any other mask layout):
+                    // expand each channel from the recorded bit masks.
+                    for (Uint32 i = 0; i < pixelCount; i++)
+                    {
+                        const auto p = static_cast<uint16_t>(src[0]) | (static_cast<uint16_t>(src[1]) << 8);
+                        dst[0] = scaleTo8((p >> entry.rShift) & ((1u << entry.rBits) - 1u), entry.rBits);
+                        dst[1] = scaleTo8((p >> entry.gShift) & ((1u << entry.gBits) - 1u), entry.gBits);
+                        dst[2] = scaleTo8((p >> entry.bShift) & ((1u << entry.bBits) - 1u), entry.bBits);
+                        dst[3]
+                            = entry.aMask != 0 ? scaleTo8((p >> entry.aShift) & ((1u << entry.aBits) - 1u), entry.aBits) : 0xFF;
+                        src += 2;
+                        dst += 4;
+                    }
+                    return;
+                }
+                // 16bpp RGB565 -> B5G6R5 is byte-identical; unknown layouts
+                // also land here so the pixels keep passing through untouched.
+                std::memcpy(dst, src, static_cast<size_t>(pixelCount) * 2);
+            }
+
+            // Converts a full texture (width*height pixels in the entry's GPU
+            // layout) back into the CPU shadow (pitch-stride rows in the game's
+            // DirectDraw layout). Used by downloadToShadow.
+            void convertTextureToShadow(const SurfaceEntry& entry, const uint8_t* src, uint8_t* dst)
+            {
                 const auto pixelCount = static_cast<size_t>(entry.width) * entry.height;
+                if (entry.paletted)
+                {
+                    // RGBA -> nearest palette index per pixel.
+                    const auto it = mPalettes.find(entry.palette);
+                    const auto* pal = it != mPalettes.end() ? it->second.rgba.data() : nullptr;
+                    if (pal == nullptr)
+                    {
+                        std::memset(dst, 0, entry.shadow.size());
+                        return;
+                    }
+                    for (size_t i = 0; i < pixelCount; i++)
+                    {
+                        const auto r = src[i * 4 + 0];
+                        const auto g = src[i * 4 + 1];
+                        const auto b = src[i * 4 + 2];
+                        Uint32 bestDist = 0xFFFFFFFFu;
+                        uint8_t best = 0;
+                        for (Uint32 pi = 0; pi < 256; pi++)
+                        {
+                            const auto c = pal[pi];
+                            const int dr = static_cast<int>(r) - static_cast<int>((c >> 16) & 0xFF);
+                            const int dg = static_cast<int>(g) - static_cast<int>((c >> 8) & 0xFF);
+                            const int db = static_cast<int>(b) - static_cast<int>(c & 0xFF);
+                            const auto d = static_cast<Uint32>(dr * dr + dg * dg + db * db);
+                            if (d < bestDist)
+                            {
+                                bestDist = d;
+                                best = static_cast<uint8_t>(pi);
+                                if (d == 0)
+                                    break;
+                            }
+                        }
+                        const auto row = i / entry.width;
+                        const auto col = i % entry.width;
+                        dst[row * entry.pitch + col] = best;
+                    }
+                    return;
+                }
+                if (entry.format == SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM)
+                {
+                    // 16bpp RGB565 <-> B5G6R5 is byte-identical, row by row.
+                    for (Uint32 row = 0; row < entry.height; row++)
+                    {
+                        std::memcpy(
+                            dst + static_cast<size_t>(row) * entry.pitch,
+                            src + static_cast<size_t>(row) * entry.width * 2,
+                            static_cast<size_t>(entry.width) * 2);
+                    }
+                    return;
+                }
+                if (entry.bpp == 32)
+                {
+                    // R8G8B8A8 -> DirectDraw RGBX8888 (memory order B,G,R,X).
+                    for (size_t i = 0; i < pixelCount; i++)
+                    {
+                        dst[i * 4 + 0] = src[i * 4 + 2]; // B
+                        dst[i * 4 + 1] = src[i * 4 + 1]; // G
+                        dst[i * 4 + 2] = src[i * 4 + 0]; // R
+                        dst[i * 4 + 3] = 0;              // X
+                    }
+                    return;
+                }
+                // 16bpp RGB555/ARGB1555: quantize RGBA back into the masks.
                 for (size_t i = 0; i < pixelCount; i++)
                 {
-                    dst[0] = src[2]; // B
-                    dst[1] = src[1]; // G
-                    dst[2] = src[0]; // R
-                    dst[3] = 0;      // X
-                    src += 4;
-                    dst += 4;
+                    const auto r = src[i * 4 + 0];
+                    const auto g = src[i * 4 + 1];
+                    const auto b = src[i * 4 + 2];
+                    const auto a = src[i * 4 + 3];
+                    uint16_t p = 0;
+                    p |= static_cast<uint16_t>(unscaleToBits(r, entry.rBits)) << entry.rShift;
+                    p |= static_cast<uint16_t>(unscaleToBits(g, entry.gBits)) << entry.gShift;
+                    p |= static_cast<uint16_t>(unscaleToBits(b, entry.bBits)) << entry.bShift;
+                    if (entry.aMask != 0)
+                        p |= static_cast<uint16_t>(unscaleToBits(a, entry.aBits)) << entry.aShift;
+                    const auto row = i / entry.width;
+                    const auto col = i % entry.width;
+                    auto* out = dst + row * entry.pitch + col * 2;
+                    out[0] = static_cast<uint8_t>(p & 0xFF);
+                    out[1] = static_cast<uint8_t>(p >> 8);
                 }
             }
 
         private:
             std::unordered_map<void*, SurfaceEntry> mSurfaces;
             std::unordered_map<DWORD, void*> mTextureHandles; // D3D texture handle -> surface key
+            std::unordered_map<void*, PaletteData> mPalettes; // IDirectDrawPalette* -> RGBA entries
+            DWORD mLastUnknownHandle = 0;                     // last unresolved handle logged
             DeviceState mDeviceState;
 
             SDL_GPUDevice* mDevice = nullptr;
@@ -1619,6 +1953,18 @@ namespace openre::gfx
 
             // ---- deferred draw helpers ----
 
+            // True when the mirrored TEXTUREMAG/TEXTUREMIN render states select
+            // bilinear sampling (D3DFILTER_*: 1=NEAREST, 2=LINEAR, 3/4/5/6 are
+            // mip variants; this backend has no mipmaps, so any non-NEAREST
+            // value maps to linear). The game sets MAG=2/MIN=6 when bilinear
+            // (Marni::SetFiltering) and 1/1 when nearest.
+            bool wantsLinearFilter() const
+            {
+                const auto mag = mDeviceState.texMag;
+                const auto min = mDeviceState.texMin;
+                return (mag != 1 && mag != 0) || (min != 1 && min != 0);
+            }
+
             void queueDraw(SDL_GPUPrimitiveType primType, const uint8_t* vertices, Uint32 vertexCount)
             {
                 if (mDevice == nullptr)
@@ -1628,10 +1974,7 @@ namespace openre::gfx
                 const bool textured = resolveTexture(mDeviceState.texHandle, texture);
                 SDL_GPUSampler* sampler = nullptr;
                 if (textured)
-                {
-                    const bool linear = mDeviceState.texMag == 2 || mDeviceState.texMin == 2 || mDeviceState.texMin == 6;
-                    sampler = linear ? mSamplerLinear : mSamplerNearest;
-                }
+                    sampler = wantsLinearFilter() ? mSamplerLinear : mSamplerNearest;
 
                 PipelineKey key{};
                 key.textured = textured;
@@ -1685,10 +2028,26 @@ namespace openre::gfx
                     return false;
                 const auto it = mTextureHandles.find(handle);
                 if (it == mTextureHandles.end())
+                {
+                    // Log a handle only when it changes so coverage gaps stay
+                    // visible without spamming the debug log every draw.
+                    if (mLastUnknownHandle != handle)
+                    {
+                        logging::logDebug("[gfx:gpu] unhandled texture handle {} (draw untextured)", handle);
+                        mLastUnknownHandle = handle;
+                    }
                     return false;
+                }
                 auto* entry = findSurface(it->second);
                 if (entry == nullptr || !entry->textureCreated)
+                {
+                    if (mLastUnknownHandle != handle)
+                    {
+                        logging::logDebug("[gfx:gpu] texture handle {} has no GPU texture yet", handle);
+                        mLastUnknownHandle = handle;
+                    }
                     return false;
+                }
                 outTexture = entry->texture;
                 return true;
             }

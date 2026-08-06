@@ -69,6 +69,34 @@ namespace openre::gfx
             return hr;
         }
 
+        // The game creates a palette for every paletted surface
+        // (DirectDrawSurface::CreateWork); wrap the palette and register it
+        // with the GPU backend so its SetEntries can feed the 8bpp -> RGBA
+        // expansion. Same slot in the IDirectDraw and IDirectDraw2 vtables.
+        template<typename T>
+        static HRESULT STDMETHODCALLTYPE
+        hook_ddraw_create_palette(T* self, DWORD flags, LPPALETTEENTRY table, LPDIRECTDRAWPALETTE* palette, IUnknown* outer)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(T*, DWORD, LPPALETTEENTRY, LPDIRECTDRAWPALETTE*, IUnknown*);
+            // ddraw.dll validates the object's vtable pointer (see
+            // hook_ddraw_create_surface); restore the original for the call.
+            auto** vpp = reinterpret_cast<void***>(self);
+            auto* orig = *vpp;
+            *vpp = e->origVtbl;
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::DD_CreatePalette])(self, flags, table, palette, outer);
+            *vpp = orig;
+            if (SUCCEEDED(hr) && palette != nullptr && *palette != nullptr)
+            {
+                backend_d3d()->create_palette(*palette, flags);
+                backend_gpu()->create_palette(*palette, flags);
+                wrap_palette(*palette);
+            }
+            return hr;
+        }
+
         static HRESULT STDMETHODCALLTYPE
         hook_ddraw_create_surface(IDirectDraw* self, LPDDSURFACEDESC desc, LPDIRECTDRAWSURFACE* surface, IUnknown* outer)
         {
@@ -224,6 +252,30 @@ namespace openre::gfx
         {
             const auto hr = backend_d3d()->set_palette(self, palette);
             backend_gpu()->set_palette(self, palette);
+            return hr;
+        }
+
+        // ------------------------------------------------------------------
+        // IDirectDrawPalette hooks
+        // ------------------------------------------------------------------
+
+        // The game fills a surface's palette through SetEntries (e.g.
+        // MarniSurfaceX::vPalUnlock after a palette blit, MarniSurfaceX::vUnlock
+        // after a paletted lock); forward the entries so the GPU backend can
+        // expand 8bpp surfaces through their palette.
+        static HRESULT STDMETHODCALLTYPE
+        hook_palette_set_entries(IDirectDrawPalette* self, DWORD flags, DWORD base, DWORD count, LPPALETTEENTRY entries)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawPalette*, DWORD, DWORD, DWORD, LPPALETTEENTRY);
+            const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::PAL_SetEntries])(self, flags, base, count, entries);
+            if (SUCCEEDED(hr))
+            {
+                backend_gpu()->set_palette_entries(
+                    reinterpret_cast<IUnknown*>(self), flags, base, count, static_cast<const PALETTEENTRY*>(entries));
+            }
             return hr;
         }
 
@@ -484,6 +536,7 @@ namespace openre::gfx
         auto* newVtbl = new void*[kDDrawVtblSlots];
         std::memcpy(newVtbl, orig, kDDrawVtblSlots * sizeof(void*));
         newVtbl[slots::DD_QueryInterface] = reinterpret_cast<void*>(&hook_ddraw_query_interface);
+        newVtbl[slots::DD_CreatePalette] = reinterpret_cast<void*>(&hook_ddraw_create_palette<IDirectDraw>);
         newVtbl[slots::DD_CreateSurface] = reinterpret_cast<void*>(&hook_ddraw_create_surface);
         registry::set(dd, orig, newVtbl);
         *reinterpret_cast<void***>(dd) = newVtbl;
@@ -499,6 +552,7 @@ namespace openre::gfx
         auto* newVtbl = new void*[kDDrawVtblSlots];
         std::memcpy(newVtbl, orig, kDDrawVtblSlots * sizeof(void*));
         newVtbl[slots::DD_QueryInterface] = reinterpret_cast<void*>(&hook_ddraw2_query_interface);
+        newVtbl[slots::DD_CreatePalette] = reinterpret_cast<void*>(&hook_ddraw_create_palette<IDirectDraw2>);
         newVtbl[slots::DD_CreateSurface] = reinterpret_cast<void*>(&hook_ddraw2_create_surface);
         registry::set(dd2, orig, newVtbl);
         *reinterpret_cast<void***>(dd2) = newVtbl;
@@ -526,6 +580,20 @@ namespace openre::gfx
         newVtbl[slots::SURF_SetClipper] = reinterpret_cast<void*>(&hook_surface_set_clipper);
         registry::set(surface, orig, newVtbl);
         *reinterpret_cast<void***>(surface) = newVtbl;
+    }
+
+    void wrap_palette(IDirectDrawPalette* palette)
+    {
+        if (palette == nullptr)
+            return;
+        if (registry::find(palette) != nullptr)
+            return; // already wrapped
+        auto** orig = *reinterpret_cast<void***>(palette);
+        auto* newVtbl = new void*[kPaletteVtblSlots];
+        std::memcpy(newVtbl, orig, kPaletteVtblSlots * sizeof(void*));
+        newVtbl[slots::PAL_SetEntries] = reinterpret_cast<void*>(&hook_palette_set_entries);
+        registry::set(palette, orig, newVtbl);
+        *reinterpret_cast<void***>(palette) = newVtbl;
     }
 
     void wrap_d3d2(IDirect3D2* d3d2)

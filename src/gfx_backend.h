@@ -55,6 +55,16 @@ namespace openre::gfx
         // between the two surfaces' backing textures; the GPU backend replays
         // that copy on its own textures so handle-bound textures get content.
         virtual void texture_load(IUnknown* /*surface*/, IUnknown* /*srcSurface*/) {}
+        // Palette observation hooks: the game creates palettes via
+        // IDirectDraw::CreatePalette, attaches them with SetPalette and fills
+        // them with SetEntries. The GPU backend expands paletted (8bpp)
+        // surfaces through their palette, so it needs these notifications.
+        virtual void create_palette(IUnknown* /*palette*/, DWORD /*flags*/) {}
+        virtual HRESULT set_palette_entries(
+            IUnknown* /*palette*/, DWORD /*flags*/, DWORD /*base*/, DWORD /*count*/, const PALETTEENTRY* /*entries*/)
+        {
+            return S_OK;
+        }
         virtual HRESULT begin_scene(IUnknown* device) = 0;
         virtual HRESULT end_scene(IUnknown* device) = 0;
         virtual HRESULT set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value) = 0;
