@@ -3050,11 +3050,13 @@ namespace openre::audio
         }
 
         // 0x004EEE00
-        static void ss_seq_set_decrescendo(int index, int a, int b)
+        static void ss_seq_set_decrescendo(int seq_no, int vol, int time)
         {
-            using sig = void (*)(int, int, int);
-            auto p = (sig)0x004EEE00;
-            p(index, a, b);
+            int v3 = vol / time;
+            ss_timer[seq_no] = time;
+            ss_vol[seq_no] = v3;
+            if ((v3 & 0xFFFF) == 0)
+                ss_vol[seq_no] = 1;
         }
 
         // 0x004EC9C0
@@ -4487,5 +4489,6 @@ namespace openre::audio
         interop::writeJmp(0x004EED80, &xa_control_end);
         interop::writeJmp(0x004EEDD0, &xa_set_volume);
         interop::writeJmp(0x004EEDF0, &cd_system_control);
+        interop::writeJmp(0x004EEE00, &ss_seq_set_decrescendo);
     }
 }
