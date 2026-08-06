@@ -560,9 +560,7 @@ namespace openre::audio
     // 0x004EEF50
     static int bgm_ck_room115()
     {
-        using sig = int (*)();
-        auto p = (sig)0x004EEF50;
-        return p();
+        return gGameTable.current_stage == 0 && gGameTable.current_room == 21;
     }
 
     // 0x004338F0
@@ -4527,5 +4525,6 @@ namespace openre::audio
         interop::writeJmp(0x004EEE00, &ss_seq_set_decrescendo);
         interop::writeJmp(0x004EEE40, &sub_4eee40);
         interop::writeJmp(0x004EEF30, &bgm_ck_room112);
+        interop::writeJmp(0x004EEF50, &bgm_ck_room115);
     }
 }
