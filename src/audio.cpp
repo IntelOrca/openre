@@ -2149,7 +2149,7 @@ namespace openre::audio
         if (!hmmio)
         {
             mmioClose(0, 0);
-            interop::call<void>(0x004DBFD0, "mmioOpen ERROR!", "dsound.cpp");
+            logging::logInfo("[AUDIO] mmioOpen ERROR: dsound.cpp");
             return 0;
         }
 
@@ -2429,7 +2429,7 @@ namespace openre::audio
         if (!hmmio)
         {
             mmioClose(0, 0);
-            interop::call<void>(0x004DBFD0, "mmioOpen ERROR!", "dsound.cpp");
+            logging::logInfo("[AUDIO] mmioOpen ERROR: dsound.cpp");
             return 0;
         }
 
@@ -4543,13 +4543,6 @@ namespace openre::audio
         return FALSE;
     }
 
-    // 0x00436810
-    static void bgm_channels_init()
-    {
-        interop::call<void>(0x00436820);
-        atexit([] { interop::call<void>(0x004368A0); });
-    }
-
     void bgm_init_hooks()
     {
         interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
@@ -4573,7 +4566,6 @@ namespace openre::audio
         interop::writeJmp(0x00435930, &ss_create_buffer);
         interop::writeJmp(0x00436470, &ss_voice_load);
         interop::writeJmp(0x00436590, &ss_voice_parse);
-        interop::writeJmp(0x00436810, &bgm_channels_init);
         // snd_sys_init2_impl: the hook targets the static implementation
         // (snd_sys_init2) via its handle, since the name snd_sys_init2 is the
         // public audio.h wrapper in this scope.
