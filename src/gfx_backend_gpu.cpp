@@ -119,10 +119,13 @@ namespace openre::gfx
 
         // Vertex attribute layout matching D3DTLVERTEX (32 bytes, see d3dtypes.h):
         // float sx, sy, sz, rhw; D3DCOLOR color, specular; float tu, tv. The
-        // rhw and specular fields are not consumed.
+        // rhw field drives near-plane clipping (see clipTlPrimitive); specular
+        // is not consumed.
         constexpr int kTLVertexStride = 32;
         constexpr int kTLVertexPosOffset = 0;
+        constexpr int kTLVertexRhwOffset = 12;
         constexpr int kTLVertexColorOffset = 16;
+        constexpr int kTLVertexSpecularOffset = 20;
         constexpr int kTLVertexUvOffset = 24;
 
         // SDL_GPU has no triangle-fan topology, so a fan of N TL vertices
@@ -146,6 +149,227 @@ namespace openre::gfx
                     vertices + static_cast<size_t>(i + 1) * kTLVertexStride);
             }
             return out;
+        }
+
+        // ---- near-plane (rhw = 0) clipping for TL primitives ----
+        //
+        // The game CPU-projects its world geometry into D3DTLVERTEX screen
+        // space and hands it straight to DrawPrimitive. A vertex at or behind
+        // the camera plane gets rhw (the reciprocal of homogeneous w) <= 0,
+        // which makes its projected sx/sy explode (or become NaN). Feeding
+        // those coordinates to the rasterizer draws giant triangular shards
+        // across the screen; the real D3D device clips such primitives against
+        // the near plane (rhw = 0) so only the in-front portion rasterises.
+        // These helpers reproduce that clip on the CPU before queueing.
+
+        // Reads/writes a float field of a D3DTLVERTEX (offsets above).
+        float tlVertexFloat(const uint8_t* v, int offset)
+        {
+            float f = 0.0f;
+            std::memcpy(&f, v + offset, sizeof(f));
+            return f;
+        }
+
+        void tlVertexSetFloat(uint8_t* v, int offset, float value)
+        {
+            std::memcpy(v + offset, &value, sizeof(value));
+        }
+
+        // Linearly interpolates every D3DTLVERTEX field between a and b at
+        // parameter t (0 -> a, 1 -> b), writing a fresh 32-byte vertex to out.
+        // Color/specular interpolate per byte channel.
+        void tlVertexLerp(const uint8_t* a, const uint8_t* b, float t, uint8_t* out)
+        {
+            constexpr int floatOffsets[] = { 0, 4, 8, kTLVertexRhwOffset, kTLVertexUvOffset, kTLVertexUvOffset + 4 };
+            for (const int offset : floatOffsets)
+            {
+                const float va = tlVertexFloat(a, offset);
+                const float vb = tlVertexFloat(b, offset);
+                tlVertexSetFloat(out, offset, va + (vb - va) * t);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                const float ca = static_cast<float>(a[kTLVertexColorOffset + i]);
+                const float cb = static_cast<float>(b[kTLVertexColorOffset + i]);
+                out[kTLVertexColorOffset + i] = static_cast<uint8_t>(ca + (cb - ca) * t + 0.5f);
+                const float sa = static_cast<float>(a[kTLVertexSpecularOffset + i]);
+                const float sb = static_cast<float>(b[kTLVertexSpecularOffset + i]);
+                out[kTLVertexSpecularOffset + i] = static_cast<uint8_t>(sa + (sb - sa) * t + 0.5f);
+            }
+        }
+
+        // Clips one triangle against the near plane (rhw = 0) and appends the
+        // surviving 1-2 triangles (triangle-list order) to out; fully-behind
+        // triangles append nothing. Sutherland-Hodgman clips the triangle as a
+        // polygon against the rhw > 0 half-space and the result is fanned back
+        // into triangles, preserving winding.
+        void clipTriangleToPlane(const uint8_t* v0, const uint8_t* v1, const uint8_t* v2, std::vector<uint8_t>& out)
+        {
+            const uint8_t* input[3] = { v0, v1, v2 };
+            uint8_t polygon[4 * kTLVertexStride];
+            int polygonCount = 0;
+            for (int i = 0; i < 3; i++)
+            {
+                const uint8_t* cur = input[i];
+                const uint8_t* next = input[(i + 1) % 3];
+                const float rhwCur = tlVertexFloat(cur, kTLVertexRhwOffset);
+                const float rhwNext = tlVertexFloat(next, kTLVertexRhwOffset);
+                const bool curInside = rhwCur > 0.0f;
+                const bool nextInside = rhwNext > 0.0f;
+                if (nextInside)
+                {
+                    if (!curInside)
+                    {
+                        float t = -rhwCur / (rhwNext - rhwCur);
+                        if (!(t >= 0.0f && t <= 1.0f))
+                            t = 1.0f; // inf/NaN rhw (vertex on the camera plane): snap to the inside vertex
+                        tlVertexLerp(cur, next, t, polygon + static_cast<size_t>(polygonCount) * kTLVertexStride);
+                        polygonCount++;
+                    }
+                    std::memcpy(polygon + static_cast<size_t>(polygonCount) * kTLVertexStride, next, kTLVertexStride);
+                    polygonCount++;
+                }
+                else if (curInside)
+                {
+                    float t = -rhwCur / (rhwNext - rhwCur);
+                    if (!(t >= 0.0f && t <= 1.0f))
+                        t = 0.0f; // inf/NaN rhw: snap to the inside vertex
+                    tlVertexLerp(cur, next, t, polygon + static_cast<size_t>(polygonCount) * kTLVertexStride);
+                    polygonCount++;
+                }
+            }
+            if (polygonCount < 3)
+                return;
+            const uint8_t* p = polygon;
+            out.insert(out.end(), p, p + 3 * kTLVertexStride);
+            if (polygonCount >= 4)
+                out.insert(out.end(), p + 2 * kTLVertexStride, p + 4 * kTLVertexStride);
+        }
+
+        // Clips one line segment against the near plane (rhw = 0): both
+        // endpoints inside -> the original segment; one inside -> the inside
+        // endpoint plus the crossing point; both behind -> nothing.
+        void clipLineToPlane(const uint8_t* a, const uint8_t* b, std::vector<uint8_t>& out)
+        {
+            const float rhwA = tlVertexFloat(a, kTLVertexRhwOffset);
+            const float rhwB = tlVertexFloat(b, kTLVertexRhwOffset);
+            const bool aInside = rhwA > 0.0f;
+            const bool bInside = rhwB > 0.0f;
+            if (aInside && bInside)
+            {
+                out.insert(out.end(), a, a + kTLVertexStride);
+                out.insert(out.end(), b, b + kTLVertexStride);
+                return;
+            }
+            if (!aInside && !bInside)
+                return;
+            uint8_t cross[kTLVertexStride];
+            float t = -rhwA / (rhwB - rhwA);
+            if (!(t >= 0.0f && t <= 1.0f))
+                t = aInside ? 0.0f : 1.0f; // inf/NaN rhw: snap to the inside endpoint
+            tlVertexLerp(a, b, t, cross);
+            if (aInside)
+            {
+                out.insert(out.end(), a, a + kTLVertexStride);
+                out.insert(out.end(), cross, cross + kTLVertexStride);
+            }
+            else
+            {
+                out.insert(out.end(), cross, cross + kTLVertexStride);
+                out.insert(out.end(), b, b + kTLVertexStride);
+            }
+        }
+
+        // Near-plane (rhw = 0) clip for TL primitives, called before a draw is
+        // queued. Returns a negative sentinel (SDL_GPU_PRIMITIVETYPE_INVALID is
+        // absent from this SDL3 header) when everything is behind the plane
+        // (the caller skips the draw); otherwise the topology the output must
+        // be drawn with (unchanged for point/line primitives, TRIANGLELIST for
+        // triangles). outVertices is left empty when no vertex needed clipping
+        // (the caller draws the original data untouched) and filled otherwise.
+        SDL_GPUPrimitiveType clipTlPrimitive(
+            SDL_GPUPrimitiveType primType, const uint8_t* vertices, Uint32 vertexCount, std::vector<uint8_t>& outVertices)
+        {
+            outVertices.clear();
+            bool anyClipped = false;
+            for (Uint32 i = 0; i < vertexCount; i++)
+            {
+                if (tlVertexFloat(vertices + static_cast<size_t>(i) * kTLVertexStride, kTLVertexRhwOffset) <= 0.0f)
+                {
+                    anyClipped = true;
+                    break;
+                }
+            }
+            if (!anyClipped)
+                return primType;
+
+            switch (primType)
+            {
+            case SDL_GPU_PRIMITIVETYPE_TRIANGLELIST:
+                for (Uint32 i = 0; i + 2 < vertexCount; i += 3)
+                {
+                    clipTriangleToPlane(
+                        vertices + static_cast<size_t>(i) * kTLVertexStride,
+                        vertices + static_cast<size_t>(i + 1) * kTLVertexStride,
+                        vertices + static_cast<size_t>(i + 2) * kTLVertexStride,
+                        outVertices);
+                }
+                break;
+            case SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP:
+                // Decompose the strip into triangles (even i: (i, i+1, i+2),
+                // odd i: (i+1, i, i+2) to keep the strip's winding), clip each
+                // and re-emit as a triangle list.
+                for (Uint32 i = 0; i + 2 < vertexCount; i++)
+                {
+                    const uint8_t* a = vertices + static_cast<size_t>(i) * kTLVertexStride;
+                    const uint8_t* b = vertices + static_cast<size_t>(i + 1) * kTLVertexStride;
+                    const uint8_t* c = vertices + static_cast<size_t>(i + 2) * kTLVertexStride;
+                    if (i % 2 == 0)
+                        clipTriangleToPlane(a, b, c, outVertices);
+                    else
+                        clipTriangleToPlane(b, a, c, outVertices);
+                }
+                break;
+            case SDL_GPU_PRIMITIVETYPE_LINELIST:
+                for (Uint32 i = 0; i + 1 < vertexCount; i += 2)
+                {
+                    clipLineToPlane(
+                        vertices + static_cast<size_t>(i) * kTLVertexStride,
+                        vertices + static_cast<size_t>(i + 1) * kTLVertexStride,
+                        outVertices);
+                }
+                break;
+            case SDL_GPU_PRIMITIVETYPE_LINESTRIP:
+                for (Uint32 i = 0; i + 1 < vertexCount; i++)
+                {
+                    clipLineToPlane(
+                        vertices + static_cast<size_t>(i) * kTLVertexStride,
+                        vertices + static_cast<size_t>(i + 1) * kTLVertexStride,
+                        outVertices);
+                }
+                break;
+            case SDL_GPU_PRIMITIVETYPE_POINTLIST:
+                for (Uint32 i = 0; i < vertexCount; i++)
+                {
+                    const uint8_t* v = vertices + static_cast<size_t>(i) * kTLVertexStride;
+                    if (tlVertexFloat(v, kTLVertexRhwOffset) > 0.0f)
+                        outVertices.insert(outVertices.end(), v, v + kTLVertexStride);
+                }
+                break;
+            default:
+                // Unknown topology: leave outVertices empty so the caller draws
+                // the original data unchanged.
+                return primType;
+            }
+            if (outVertices.empty())
+                return static_cast<SDL_GPUPrimitiveType>(-1); // fully behind the plane
+            switch (primType)
+            {
+            case SDL_GPU_PRIMITIVETYPE_LINELIST:
+            case SDL_GPU_PRIMITIVETYPE_LINESTRIP:
+            case SDL_GPU_PRIMITIVETYPE_POINTLIST: return primType;
+            default: return SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+            }
         }
 
         // One frame of deferred draw data (see the class comment for why draws
@@ -1259,13 +1483,13 @@ namespace openre::gfx
                     const auto expanded = expandTriangleFan(fanVertices, vertexCount);
                     if (expanded.empty())
                         return S_OK;
-                    queueDraw(
+                    queueClippedDraw(
                         SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
                         expanded.data(),
                         static_cast<Uint32>(expanded.size() / kTLVertexStride));
                     return S_OK;
                 }
-                queueDraw(mapPrimitiveType(primType), static_cast<const uint8_t*>(vertices), vertexCount);
+                queueClippedDraw(mapPrimitiveType(primType), static_cast<const uint8_t*>(vertices), vertexCount);
                 return S_OK;
             }
 
@@ -1307,13 +1531,13 @@ namespace openre::gfx
                     const auto expanded = expandTriangleFan(reordered.data(), indexCount);
                     if (expanded.empty())
                         return S_OK;
-                    queueDraw(
+                    queueClippedDraw(
                         SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
                         expanded.data(),
                         static_cast<Uint32>(expanded.size() / kTLVertexStride));
                     return S_OK;
                 }
-                queueDraw(mapPrimitiveType(primType), reordered.data(), indexCount);
+                queueClippedDraw(mapPrimitiveType(primType), reordered.data(), indexCount);
                 return S_OK;
             }
 
@@ -2122,6 +2346,23 @@ namespace openre::gfx
                 const auto mag = mDeviceState.texMag;
                 const auto min = mDeviceState.texMin;
                 return (mag != 1 && mag != 0) || (min != 1 && min != 0);
+            }
+
+            // Near-plane-clips the TL vertices (see clipTlPrimitive) and queues
+            // the surviving portion. Primitives fully behind the camera are
+            // dropped; the in-front portion of partially-behind primitives is
+            // queued (triangles as a TRIANGLELIST) instead of feeding the raw
+            // exploded screen coordinates to the rasterizer.
+            void queueClippedDraw(SDL_GPUPrimitiveType primType, const uint8_t* vertices, Uint32 vertexCount)
+            {
+                std::vector<uint8_t> clipped;
+                const auto drawType = clipTlPrimitive(primType, vertices, vertexCount, clipped);
+                if (static_cast<int>(drawType) < 0)
+                    return;
+                if (!clipped.empty())
+                    queueDraw(drawType, clipped.data(), static_cast<Uint32>(clipped.size() / kTLVertexStride));
+                else
+                    queueDraw(primType, vertices, vertexCount);
             }
 
             void queueDraw(SDL_GPUPrimitiveType primType, const uint8_t* vertices, Uint32 vertexCount)
