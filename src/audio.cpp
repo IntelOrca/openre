@@ -50,6 +50,13 @@ namespace openre::audio
         int32_t* dword_6934A0 = (int32_t*)0x6934A0; // decoded core data ptr (buffer 1)
         int32_t* dword_6934B0 = (int32_t*)0x6934B0; // decoded core data ptr (buffer 2)
 
+        // Standalone globals used by Snd_load_arms (0x004EC6D0). The byte
+        // buffer holds the loaded arms .edh data; dword_6934A4 points to the
+        // decoded voice/sample data inside it. Unlike the core buffers, this
+        // one is used unaligned (directly, no & 0xFFFFFFF0).
+        uint8_t* byte_6DEF0C = (uint8_t*)0x6DEF0C;  // arms .edh buffer
+        int32_t* dword_6934A4 = (int32_t*)0x6934A4; // decoded arms data ptr
+
         // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
         // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
         // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
@@ -2726,7 +2733,54 @@ namespace openre::audio
         snd_load_core_impl(a0, a1);
     }
 
-    // 0x004ec6d0
+    namespace
+    {
+        // 0x004EC6D0
+        static void snd_load_arms(uint8_t id)
+        {
+            char mem[32];
+            std::strcpy(mem, "common\\sound\\arms\\arms00.   ");
+
+            if (!gGameTable.enable_dsound)
+                return;
+
+            ss_unload_group(1);
+            gGameTable.ss_name_arms[0] = 0;
+            gGameTable.vab_id[1] = 0xFF;
+            if (!id)
+            {
+                id = 1;
+            }
+            // mem[22] is the '0' in "arms00"; adding the tens digit to it (and
+            // writing the ones hex digit below) forms "armsXY.edh".
+            mem[22] += id >> 4;
+            char v3;
+            if ((id & 0xF) >= 0xA)
+                v3 = (char)((id & 0xF) + 87);
+            else
+                v3 = (char)((id & 0xF) + 48);
+            mem[23] = v3;
+            std::memcpy(&mem[25], "edh", 3);
+
+            auto v4 = read_file_into_buffer(mem, (char*)byte_6DEF0C, 1);
+            if (v4)
+            {
+                if (v4 != (size_t)-1)
+                {
+                    auto v9 = byte_6DEF0C + *(int32_t*)(byte_6DEF0C + v4 - 8);
+                    *dword_6934A4 = (int32_t)v9;
+                    // Skip the load when the decoded data size exceeds the
+                    // expected range (threshold 0x8CA0 for arms).
+                    if (((*(uint32_t*)(v9 + 12) - (*(uint16_t*)(v9 + 18) << 9) - 2576) & 0xFFFFFFF0) <= 0x8CA0)
+                        gGameTable.vab_id[1] = ss_load_banks(1 /* ST_ARMS */, id, 0, 0);
+                }
+            }
+            else
+            {
+                file_error();
+            }
+        }
+    }
 
     // 0x004EC7D0
     void snd_room_load()
@@ -2989,6 +3043,7 @@ namespace openre::audio
         // its handle, since the name snd_load_core is the public audio.h
         // wrapper in this scope.
         interop::writeJmp(0x004EC450, snd_load_core_impl);
+        interop::writeJmp(0x004EC6D0, &snd_load_arms);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
