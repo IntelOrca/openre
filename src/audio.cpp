@@ -3,6 +3,7 @@
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
+#include "scheduler.h"
 
 #include <algorithm>
 #include <cstring>
@@ -2926,10 +2927,154 @@ namespace openre::audio
 
     // 0x004ec990
 
-    // 0x004EC9C0
+    // snd_bgm_main (0x004ECDA0) is defined later in this file; Snd_bgm_set
+    // calls it, so declare it here.
+    int snd_bgm_main();
+
+    namespace
+    {
+        // Standalone globals used by Snd_bgm_set (0x004EC9C0). They fall in
+        // the standalone BGM-control area around 0x689DB6/0x689DC0 or in
+        // GameTable pad regions, so they are addressed here directly.
+        uint8_t* byte_53C790 = (uint8_t*)0x53C790;    // stage -> BGM-table offset LUT
+        uint16_t* main_bgm_id = (uint16_t*)0x689DB6;  // requested main BGM id
+        uint16_t* subb_bmg_id = (uint16_t*)0x689DC0;  // requested sub BGM id
+        int32_t* dword_689DC4 = (int32_t*)0x689DC4;   // 0 = BGM ids unchanged, 1 = main id changed
+        void** dword_689DC8 = (void**)0x689DC8;       // decrescendo data pointer
+        uint32_t* dword_6934B8 = (uint32_t*)0x6934B8; // SBGM decrescendo data pointer
+
+        // 0x004ED050
+        static int snd_bgm_sub()
+        {
+            using sig = int (*)();
+            auto p = (sig)0x004ED050;
+            return p();
+        }
+
+        // 0x004EEE00
+        static void ss_seq_set_decrescendo(int index, int a, int b)
+        {
+            using sig = void (*)(int, int, int);
+            auto p = (sig)0x004EEE00;
+            p(index, a, b);
+        }
+
+        // 0x004EC9C0
+        static void snd_bgm_set()
+        {
+            if (!gGameTable.enable_dsound)
+                return;
+
+            if (((uint8_t*)gGameTable.ctcb)[15] != 1)
+            {
+                if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                    return;
+
+                // Resolve the current stage/room to its BGM-table entry and
+                // latch the requested main/sub ids from it.
+                gGameTable.current_bgm_address = (uint8_t*)&gGameTable
+                                                     .bgm_table[gGameTable.current_room
+                                                         + byte_53C790[gGameTable.current_stage]];
+                *main_bgm_id = *((uint8_t*)gGameTable.current_bgm_address);
+                *subb_bmg_id = *((uint8_t*)gGameTable.current_bgm_address + 1);
+                ((uint8_t*)gGameTable.ctcb)[15] = 1;
+            }
+
+            if (*fade_rtn)
+            {
+                task_sleep(1);
+                return;
+            }
+
+            if ((*main_bgm_id & 0x3F) == (*bgm_main & 0x3F))
+            {
+                auto v1 = 0;
+                *dword_689DC4 = 0;
+                if ((*main_bgm_id & 0xFFC0) != 0)
+                {
+                    if (gGameTable.seq_ctr[0] && gGameTable.seq_ctr[0] != -1)
+                    {
+                        *dword_689DC8 = gGameTable.dword_6934B4;
+                        ss_seq_set_decrescendo(0, 127, 90);
+                        gGameTable.seq_ctr[0] = 15;
+                    }
+                }
+                else if (gGameTable.seq_ctr[0] == 2)
+                {
+                    if (gGameTable.seq_ctr[2] > -1)
+                    {
+                        do
+                            ss_set_vol(5, v1++, (uint16_t)gGameTable.dword_693804);
+                        while (v1 < 3);
+                    }
+                    gGameTable.seq_ctr[1] = 0;
+                }
+            }
+            else
+            {
+                *dword_689DC4 = 1;
+                if (snd_bgm_main())
+                {
+                    gGameTable.seq_ctr[1] = -1;
+                }
+                else
+                {
+                    gGameTable.seq_ctr[1] = (int8_t)(*main_bgm_id >> 6);
+                }
+                if (((uint8_t*)gGameTable.ctcb)[19])
+                    return;
+            }
+
+            if ((*subb_bmg_id & 0x3F) == (*bgm_sub & 0x3F) && *dword_689DC4 != 1)
+            {
+                if ((*subb_bmg_id & 0x40) != 0 && gGameTable.byte_693808)
+                {
+                    *dword_689DC8 = (void*)*dword_6934B8;
+                    ss_seq_set_decrescendo(1, 127, 90);
+                }
+                if ((*subb_bmg_id & 0xFF80) != 0)
+                {
+                    if (gGameTable.byte_693810)
+                    {
+                        *dword_689DC8 = (void*)*dword_6934B8;
+                        ss_seq_set_decrescendo(2, 127, 90);
+                    }
+                }
+            }
+            else
+            {
+                if (snd_bgm_sub())
+                {
+                    gGameTable.pad_693809[0] = -1;
+                    gGameTable.pad_693811[0] = -1;
+                }
+                else
+                {
+                    gGameTable.pad_693809[0] = (*subb_bmg_id & 0x40) != 0;
+                    gGameTable.pad_693811[0] = (uint8_t)(*subb_bmg_id >> 7);
+                }
+                if (((uint8_t*)gGameTable.ctcb)[19])
+                    return;
+            }
+
+            *bgm_main = *((uint8_t*)gGameTable.current_bgm_address);
+            *bgm_sub = *((uint8_t*)gGameTable.current_bgm_address + 1);
+            ((uint8_t*)gGameTable.ctcb)[15] = 0;
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_bgm_set` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        void (*const snd_bgm_set_impl)() = &snd_bgm_set;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (room.cpp). Original-binary callers reach the
+    // implementation above via the hook on 0x004EC9C0.
     void snd_bgm_set()
     {
-        interop::call(0x004EC9C0);
+        snd_bgm_set_impl();
     }
 
     // 0x004ECBE0
@@ -3179,6 +3324,10 @@ namespace openre::audio
         // its handle, since the name snd_load_enemy is the public audio.h
         // wrapper in this scope.
         interop::writeJmp(0x004EC8A0, snd_load_enemy_impl);
+        // snd_bgm_set_impl: the hook targets the static implementation via
+        // its handle, since the name snd_bgm_set is the public audio.h
+        // wrapper in this scope.
+        interop::writeJmp(0x004EC9C0, snd_bgm_set_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
