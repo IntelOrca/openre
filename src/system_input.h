@@ -15,6 +15,14 @@ namespace openre::system::input
     // Returns false on failure.
     bool init();
 
+    // Re-enumerates the connected gamepads: opens newly added ones and closes
+    // removed ones, keeping the open handles compacted to the front of the
+    // array. SDL3 detects device changes while the event pump runs
+    // (SDL_PollEvent), so this reflects pads plugged in while the game is
+    // running. Callers re-sync their index-based state with the new set
+    // afterwards.
+    void refresh_gamepads();
+
     // Fills keyState with the current keyboard state, keyed by Win32 VK code
     // (bit 0x80 set = key down), matching GetKeyboardState() semantics.
     void get_keyboard_state(uint8_t keyState[256]);
@@ -30,6 +38,10 @@ namespace openre::system::input
     // Number of buttons/axes supported by the device.
     int get_gamepad_button_count(int index);
     int get_gamepad_axis_count(int index);
+    // Stable identifier for the device behind `index` (SDL_JoystickID), or 0
+    // when the slot is empty. Used to detect when a different pad replaces
+    // the one at an index after a hotplug.
+    int get_gamepad_id(int index);
 
     // Raw gamepad poll (replaces joyGetPosEx). Returns false when the gamepad
     // is unavailable/unplugged. Axis values are in 0..0xFFFF (0 = up/left,

@@ -1494,7 +1494,7 @@ namespace openre::player
             }
         }
 
-        if (gGameTable.key_trg & 0x20 && !player->timer3)
+        if (gGameTable.key_trg & input::KEY_TYPE_CHANGE_TARGET && !player->timer3)
         {
             enemy_ck(player, 0xBB8);
             player->timer3 = 1;

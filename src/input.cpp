@@ -83,7 +83,7 @@ namespace openre::input
 
     // ---- command state engine ----
 
-    // The command engine turns raw mouse/keyboard/gamepad input into an 18-bit
+    // The command engine turns raw mouse/keyboard/gamepad input into a 19-bit
     // command state via the [input] INI bindings, OR-merges the three devices,
     // computes the rising edge once on the merged state, and fans the result
     // out to the 6 legacy outputs (g_key, key_trg, dword_9885F4/word_9885FC,
@@ -98,15 +98,15 @@ namespace openre::input
         constexpr const char* kTokenMouse = "mu:";
 
         constexpr const char* kCommandIniNames[COMMAND_COUNT] = {
-            "cancel",     "accept", "up",  "down", "left",   "right",     "forward", "backward", "turn_left",
-            "turn_right", "aim",    "run", "fire", "reload", "inventory", "menu",    "interact", "map",
+            "cancel", "accept", "up",   "down",   "left",      "right", "forward",  "backward", "turn_left",     "turn_right",
+            "aim",    "run",    "fire", "reload", "inventory", "menu",  "interact", "map",      "change_target",
         };
         static_assert(std::size(kCommandIniNames) == COMMAND_COUNT, "kCommandIniNames order must match Command enum");
 
         // Default binding token list per command, overridden by [input] INI.
         constexpr const char* kCommandDefaultTokens[COMMAND_COUNT] = {
-            "kb:escape,gp:mode",                           // cancel
-            "kb:return,gp:start",                          // accept
+            "kb:escape,gp:east",                           // cancel
+            "kb:return,gp:start,gp:south",                 // accept
             "kb:w,kb:up,gp:dpad_up,gp:axis_left_y-",       // up
             "kb:s,kb:down,gp:dpad_down,gp:axis_left_y+",   // down
             "kb:a,kb:left,gp:dpad_left,gp:axis_left_x-",   // left
@@ -117,20 +117,29 @@ namespace openre::input
             "kb:d,kb:right,gp:dpad_right,gp:axis_left_x+", // turn_right
             "kb:o,gp:l_trigger,gp:l_shoulder,mu:right",    // aim
             "kb:shift,gp:west",                            // run
-            "kb:space,gp:south,gp:r_trigger,mu:left",      // fire
+            "kb:space,gp:r_trigger,mu:left",               // fire
             "kb:r,gp:west",                                // reload
             "kb:tab,kb:i,gp:north",                        // inventory
             "kb:escape,kb:p,gp:start",                     // menu
-            "kb:e",                                        // interact
+            "kb:e,gp:south",                               // interact
             "kb:m",                                        // map
+            "gp:r_shoulder",                               // change_target
         };
         static_assert(std::size(kCommandDefaultTokens) == COMMAND_COUNT, "kCommandDefaultTokens order must match Command enum");
+
+        // Bumped when the binding schema or default mappings change.
+        // load_bindings wipes the [input] section when it mismatches so stale
+        // user configs reset to the new defaults.
+        constexpr int32_t kBindingsVersion = 1;
 
         // Legacy output bits each command contributes. rawState feeds
         // dword_9885F4/word_9885FC (state), rawEdgeF8 feeds dword_9885F8 and
         // rawEdgeFE feeds dword_9885FE (edges). key_trg is derived from the
-        // g_key edge (key_trg = newKey & ~oldKey), so commands only need gKey
-        // bits. Rows 2-9 (up/forward, down/backward, left/turn_left,
+        // g_key edge (key_trg = newKey & ~oldKey), so most commands only need
+        // gKey bits; a command that needs a key_trg bit without its g_key bit
+        // (change_target, which must not fire the weapon) puts it in
+        // keyTrgOnly and pad_set ORs it into key_trg on the command's edge.
+        // Rows 2-9 (up/forward, down/backward, left/turn_left,
         // right/turn_right) intentionally repeat: movement and turning share
         // the same g_key bits in the original binary.
         //
@@ -143,30 +152,32 @@ namespace openre::input
         struct CommandOutput
         {
             uint32_t gKey;
+            uint32_t keyTrgOnly;
             uint32_t rawState;
             uint32_t rawEdgeF8;
             uint32_t rawEdgeFE;
         };
 
         constexpr CommandOutput kCommandOutput[COMMAND_COUNT] = {
-            /* cancel     */ { 0x2000, 0x2, 0x2, 0x2 },
-            /* accept     */ { 0x1000, 0x800, 0x800, 0x800 },
-            /* up         */ { 0x1, 0x1001, 0x1001, 0x1001 },
-            /* down       */ { 0x4, 0x4004, 0x4004, 0x4004 },
-            /* left       */ { 0x8, 0x8008, 0x8008, 0x8008 },
-            /* right      */ { 0x2, 0x2002, 0x2002, 0x2002 },
-            /* forward    */ { 0x1, 0x1001, 0x1001, 0x1001 },
-            /* backward   */ { 0x4, 0x4004, 0x4004, 0x4004 },
-            /* turn_left  */ { 0x8, 0x8008, 0x8008, 0x8008 },
-            /* turn_right */ { 0x2, 0x2002, 0x2002, 0x2002 },
-            /* aim        */ { 0x100, 0, 0, 0 },
-            /* run        */ { 0x200, 0, 0, 0 },
-            /* fire       */ { 0x30, 0x10, 0x10, 0x10 },
-            /* reload     */ { 0x40, 0x40, 0x40, 0x40 },
-            /* inventory  */ { 0, 0, 0, 0x800 },
-            /* menu       */ { 0, 0, 0, 0x100 },
-            /* interact   */ { 0x80, 0x80, 0x80, 0x80 },
-            /* map        */ { 0x4000, 0, 0, 0 },
+            /* cancel     */ { 0x2000, 0, 0x2, 0x2, 0x2 },
+            /* accept     */ { 0x1000, 0, 0x800, 0x800, 0x800 },
+            /* up         */ { 0x1, 0, 0x1001, 0x1001, 0x1001 },
+            /* down       */ { 0x4, 0, 0x4004, 0x4004, 0x4004 },
+            /* left       */ { 0x8, 0, 0x8008, 0x8008, 0x8008 },
+            /* right      */ { 0x2, 0, 0x2002, 0x2002, 0x2002 },
+            /* forward    */ { 0x1, 0, 0x1001, 0x1001, 0x1001 },
+            /* backward   */ { 0x4, 0, 0x4004, 0x4004, 0x4004 },
+            /* turn_left  */ { 0x8, 0, 0x8008, 0x8008, 0x8008 },
+            /* turn_right */ { 0x2, 0, 0x2002, 0x2002, 0x2002 },
+            /* aim        */ { 0x100, 0, 0, 0, 0 },
+            /* run        */ { 0x200, 0, 0, 0, 0 },
+            /* fire       */ { 0x30, 0, 0x10, 0x10, 0x10 },
+            /* reload     */ { 0x40, 0, 0x40, 0x40, 0x40 },
+            /* inventory  */ { 0, 0, 0, 0, 0x800 },
+            /* menu       */ { 0, 0, 0, 0, 0x100 },
+            /* interact   */ { 0x80, 0, 0x80, 0x80, 0x80 },
+            /* map        */ { 0x4000, 0, 0, 0, 0 },
+            /* change_target */ { 0, 0x20, 0, 0, 0 },
         };
         static_assert(std::size(kCommandOutput) == COMMAND_COUNT, "kCommandOutput order must match Command enum");
 
@@ -232,6 +243,11 @@ namespace openre::input
         CommandBindings s_commandBindings;
         uint32_t s_commandState = 0;
         bool s_rebindLockout = false;
+
+        // SDL instance ID of the pad behind each legacy joystick slot, so a
+        // slot is re-initialised when a different pad takes its index after a
+        // hotplug (stale caps / raw-state would otherwise linger).
+        int32_t s_slotGamepadIds[system::input::kMaxGamepads] = {};
 
         struct KeyName
         {
@@ -400,6 +416,20 @@ namespace openre::input
 
     void load_bindings()
     {
+        // Reset the [input] section when the binding schema version changes so
+        // stale user configs (with old defaults or a missing change_target key)
+        // fall back to the new defaults. Only save when there was something to
+        // clear so a fresh install does not write a config file at boot.
+        if (system::config::get<int32_t>("input", "version", 0) != kBindingsVersion)
+        {
+            bool removed = system::config::remove_group("input");
+            system::config::set("input", "version", kBindingsVersion);
+            if (removed)
+            {
+                system::config::save();
+            }
+        }
+
         for (int cmd = 0; cmd < COMMAND_COUNT; cmd++)
         {
             s_commandBindings.bindings[cmd].clear();
@@ -434,6 +464,7 @@ namespace openre::input
 
     void save_bindings()
     {
+        system::config::set("input", "version", kBindingsVersion);
         for (int cmd = 0; cmd < COMMAND_COUNT; cmd++)
         {
             std::string value;
@@ -577,6 +608,16 @@ namespace openre::input
         return first_pressed_key(config_vk_codes, std::size(config_vk_codes), config_key_state);
     }
 
+    // Fills the JOYINFOEX header (dwSize / dwFlags) expected by joyGetPosEx
+    // consumers. Shared by the slot initialisation and the per-poll reset so
+    // the two sites can't drift.
+    static void init_joystick_info_header(uint8_t* joystick)
+    {
+        memset(joystick, 0, 0x34);
+        *reinterpret_cast<uint32_t*>(joystick) = 52;       // JOYINFOEX::dwSize
+        *reinterpret_cast<uint32_t*>(joystick + 4) = 0xFF; // JOYINFOEX::dwFlags
+    }
+
     // 0x004100F0 - Polls all joysticks and processes POV/buttons
     int joy_get_pos_ex(Input* self)
     {
@@ -599,9 +640,7 @@ namespace openre::input
 
             if (joystick[0x1C8 / 4] != 0) // init flag at offset 0x1C8
             {
-                memset(joystick, 0, 0x34);
-                joystick[0] = 52;   // JOYINFOEX::dwSize
-                joystick[1] = 0xFF; // JOYINFOEX::dwFlags (JOY_RETURNALL)
+                init_joystick_info_header(reinterpret_cast<uint8_t*>(joystick));
 
                 system::input::GamepadState gamepad;
                 if (system::input::poll_gamepad(joy - 1, gamepad))
@@ -675,6 +714,88 @@ namespace openre::input
         return v1;
     }
 
+    // Fills the JOYCAPS-compatible buffer + JOYINFOEX header for one legacy
+    // joystick slot and marks it initialized. `slot` is 1-based (slot 1 is the
+    // pad at SDL index 0, at self+0x208). Returns true if a gamepad is present
+    // at that slot.
+    static bool init_joystick_slot(Input* self, uint32_t slot)
+    {
+        auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208 + (slot - 1) * 0x1D8;
+        *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 1; // init flag
+
+        // Fill a JOYCAPS-compatible buffer from SDL gamepad info so any
+        // original code reading the caps area keeps working.
+        auto caps = joystick + 0x34;
+        memset(caps, 0, 0x194);
+        strncpy(reinterpret_cast<char*>(caps + 4), system::input::get_gamepad_name(slot - 1), 0x20); // szPname
+        *reinterpret_cast<uint16_t*>(caps + 48)
+            = static_cast<uint16_t>(system::input::get_gamepad_button_count(slot - 1)); // wNumButtons
+        *reinterpret_cast<uint16_t*>(caps + 70)
+            = static_cast<uint16_t>(system::input::get_gamepad_axis_count(slot - 1)); // wNumAxes
+
+        init_joystick_info_header(joystick);
+
+        system::input::GamepadState gamepad;
+        if (!system::input::poll_gamepad(slot - 1, gamepad))
+        {
+            *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 0; // mark as uninitialized
+            return false;
+        }
+        return true;
+    }
+
+    // Re-syncs the legacy joystick slots (init flags, caps) and the
+    // var_3B24/var_3D0 bookkeeping with the current SDL gamepad set, so pads
+    // plugged in while the game runs are picked up by joy_get_pos_ex and the
+    // config screen.
+    static void sync_joystick_slots(Input* self)
+    {
+        auto joyCount = static_cast<uint32_t>(system::input::get_gamepad_count() + 1);
+        self->var_3B24 = joyCount;
+        // Gate for the legacy gamepad raw merge (sub_43BB00 / sub_43BB80).
+        // This doubles as the init flag of joystick slot 1 (offset 0x3D0), so
+        // it must be set after the joystick area is cleared.
+        self->var_3D0 = (joyCount > 1) ? 1 : 0;
+
+        auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208;
+        for (auto slot = 1u; slot < system::input::kMaxGamepads; slot++)
+        {
+            auto* initFlag = reinterpret_cast<uint32_t*>(joystick + 0x1C8);
+            if (slot < joyCount)
+            {
+                auto id = system::input::get_gamepad_id(slot - 1);
+                if (*initFlag == 0 || s_slotGamepadIds[slot] != id)
+                {
+                    // New or replaced pad: reset the per-slot raw-state
+                    // tracking (gamepadState, 12 bytes before the slot) so the
+                    // first poll after the change does not produce a spurious
+                    // edge, then (re)initialise caps.
+                    memset(joystick - 12, 0, 12);
+                    if (init_joystick_slot(self, slot))
+                    {
+                        s_slotGamepadIds[slot] = id;
+                    }
+                }
+            }
+            else
+            {
+                *initFlag = 0;
+                s_slotGamepadIds[slot] = 0;
+            }
+            joystick += 0x1D8;
+        }
+    }
+
+    // Re-enumerates SDL gamepads (hotplug support) and re-syncs the legacy
+    // joystick slots. Called every frame from pad_set, before the raw layer
+    // polls. sync_joystick_slots is idempotent, so running it unconditionally
+    // keeps the mirror correct without tracking device identity here.
+    static void update_gamepads()
+    {
+        system::input::refresh_gamepads();
+        sync_joystick_slots(&gGameTable.input);
+    }
+
     // 0x004102E0
     Input* input_init(Input* self)
     {
@@ -686,13 +807,7 @@ namespace openre::input
             return self;
         }
 
-        auto joyCount = system::input::get_gamepad_count() + 1;
-        self->var_3B24 = joyCount;
-        // Gate for the legacy gamepad raw merge (sub_43BB00 / sub_43BB80).
-        // The original binary never writes this, leaving gamepad input dead;
-        // enable it when a gamepad is present.
-        self->var_3D0 = (joyCount > 1) ? 1 : 0;
-        if (joyCount >= system::input::kMaxGamepads)
+        if (system::input::get_gamepad_count() + 1 >= system::input::kMaxGamepads)
         {
             marni::out(
                 "\x83\x8F\x81\x5B\x83\x4E\x82\xAA\x91\xAB\x82\xE8\x82\xDC\x82\xB9\x82\xF1\x82\xC5\x82\xB5\x82\xBD",
@@ -701,50 +816,27 @@ namespace openre::input
         }
 
         memset(reinterpret_cast<uint8_t*>(self) + 0x24, 0, 0x3B00);
+        sync_joystick_slots(self);
 
-        if (self->var_3B24 > 1)
+        // Report the connected pads (the slots initialized by the sync).
+        auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208;
+        for (auto joy = 1u; joy < self->var_3B24; joy++)
         {
-            auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208;
-            for (auto joy = 1u; joy < self->var_3B24; joy++)
+            if (*reinterpret_cast<uint32_t*>(joystick + 0x1C8) != 0)
             {
-                *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 1; // init flag
-
-                // Fill a JOYCAPS-compatible buffer from SDL gamepad info so any
-                // original code reading the caps area keeps working.
-                auto caps = joystick + 0x34;
-                memset(caps, 0, 0x194);
-                strncpy(reinterpret_cast<char*>(caps + 4), system::input::get_gamepad_name(joy - 1), 0x20); // szPname
-                *reinterpret_cast<uint16_t*>(caps + 48)
-                    = static_cast<uint16_t>(system::input::get_gamepad_button_count(joy - 1)); // wNumButtons
-                *reinterpret_cast<uint16_t*>(caps + 70)
-                    = static_cast<uint16_t>(system::input::get_gamepad_axis_count(joy - 1)); // wNumAxes
-
-                memset(joystick, 0, 0x34);
-                *reinterpret_cast<uint32_t*>(joystick) = 52;       // JOYINFOEX::dwSize
-                *reinterpret_cast<uint32_t*>(joystick + 4) = 0xFF; // JOYINFOEX::dwFlags
-
-                system::input::GamepadState gamepad;
-                if (!system::input::poll_gamepad(joy - 1, gamepad))
-                {
-                    *reinterpret_cast<uint32_t*>(joystick + 0x1C8) = 0; // mark as uninitialized
-                }
-                else
-                {
-                    char msg[1024];
-                    sprintf(
-                        msg,
-                        "\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E"
-                        "\x82\x68\x82\x63%d\x94\xD4\x82\xCD\x81\x41%s\x83\x7B\x83\x5E\x83\x93"
-                        "\x82\xCC\x90\x94 %d \x8E\xB2\x82\xCC\x90\x94%d ",
-                        joy,
-                        system::input::get_gamepad_name(joy - 1),
-                        system::input::get_gamepad_button_count(joy - 1),
-                        system::input::get_gamepad_axis_count(joy - 1));
-                    marni::out(msg, "MarniSystem DirectInput Class");
-                }
-
-                joystick += 0x1D8;
+                char msg[1024];
+                sprintf(
+                    msg,
+                    "\x83\x57\x83\x87\x83\x43\x83\x58\x83\x65\x83\x42\x83\x62\x83\x4E"
+                    "\x82\x68\x82\x63%d\x94\xD4\x82\xCD\x81\x41%s\x83\x7B\x83\x5E\x83\x93"
+                    "\x82\xCC\x90\x94 %d \x8E\xB2\x82\xCC\x90\x94%d ",
+                    joy,
+                    system::input::get_gamepad_name(joy - 1),
+                    system::input::get_gamepad_button_count(joy - 1),
+                    system::input::get_gamepad_axis_count(joy - 1));
+                marni::out(msg, "MarniSystem DirectInput Class");
             }
+            joystick += 0x1D8;
         }
         return self;
     }
@@ -758,6 +850,10 @@ namespace openre::input
     // 0x004D0F30
     void pad_set()
     {
+        // Refresh the SDL gamepad set so pads plugged in while the game runs
+        // are picked up before this frame's polling below.
+        update_gamepads();
+
         // Save previous raw input
         gGameTable.dword_9885F8 = gGameTable.dword_9885F4;
 
@@ -809,8 +905,9 @@ namespace openre::input
         gGameTable.dword_98860C = gGameTable.g_key;
         gGameTable.g_key = 0;
 
-        uint32_t rawTrigger = 0; // edge value for dword_9885F8
-        uint32_t feEdge = 0;     // edge value for dword_9885FE (low word)
+        uint32_t rawTrigger = 0;  // edge value for dword_9885F8
+        uint32_t feEdge = 0;      // edge value for dword_9885FE (low word)
+        uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target)
 
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
         {
@@ -864,6 +961,7 @@ namespace openre::input
                 {
                     rawTrigger |= kCommandOutput[cmd].rawEdgeF8;
                     feEdge |= kCommandOutput[cmd].rawEdgeFE;
+                    keyTrgExtra |= kCommandOutput[cmd].keyTrgOnly;
                 }
             }
             gGameTable.g_key = newKey;
@@ -873,12 +971,14 @@ namespace openre::input
         if (gGameTable.fg_stop & 0x1000000)
         {
             newKey &= 0x3C00;
+            keyTrgExtra = 0;
             gGameTable.dword_689B3C = gGameTable.fg_stop;
             gGameTable.g_key = newKey;
         }
         else if (gGameTable.dword_689B3C & 0x1000000)
         {
             oldKey = newKey;
+            keyTrgExtra = 0;
             gGameTable.dword_689B3C = 0;
             gGameTable.dword_98860C = newKey;
         }
@@ -886,7 +986,9 @@ namespace openre::input
         // Calculate trigger (edge detection) values. key_trg is the rising
         // edge of g_key; commands with only a key_trg bit (e.g. menu dirs)
         // also carry that bit in gKey so the edge is produced here.
-        uint32_t keyTrigger = rising_edge(newKey, oldKey);
+        // keyTrgExtra supplies bits that must NOT appear in g_key (e.g.
+        // change_target, which shares bit 0x20 with the weapon fire).
+        uint32_t keyTrigger = rising_edge(newKey, oldKey) | keyTrgExtra;
 
         gGameTable.dword_9885FE = (gGameTable.dword_9885FE & 0xFFFF0000) | (feEdge & 0xFFFF);
         gGameTable.word_9885FC = (uint16_t)gGameTable.dword_9885F4;

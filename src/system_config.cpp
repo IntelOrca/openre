@@ -217,6 +217,31 @@ namespace openre::system::config
         }
     }
 
+    bool remove_group(const std::string& group)
+    {
+        if (!s_loaded)
+            load();
+
+        std::string prefix = group + ".";
+        bool removed = false;
+        for (auto it = s_config.begin(); it != s_config.end();)
+        {
+            if (it->first.compare(0, prefix.size(), prefix) == 0)
+            {
+                it = s_config.erase(it);
+                removed = true;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        s_keyOrder.erase(
+            std::remove_if(s_keyOrder.begin(), s_keyOrder.end(), [&](const SectionKey& sk) { return sk.section == group; }),
+            s_keyOrder.end());
+        return removed;
+    }
+
     template<> std::string get<std::string>(const std::string& group, const std::string& name, std::string default_value)
     {
         if (!s_loaded)

@@ -8,6 +8,10 @@ namespace openre::system::config
 {
     void load();
     void save();
+    // Removes every key belonging to `group` (e.g. "input"), so the next save
+    // drops the whole section. Returns true if any keys were removed. Used to
+    // reset a stale/obsolete config section.
+    bool remove_group(const std::string& group);
 
     template<typename T> T get(const std::string& group, const std::string& name, T default_value);
 

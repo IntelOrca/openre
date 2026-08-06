@@ -126,24 +126,86 @@ namespace openre::system::input
             logging::logError("[SDL3] SDL_InitSubSystem(SDL_INIT_GAMEPAD) failed: {}", SDL_GetError());
             return false;
         }
+        refresh_gamepads();
+        return true;
+    }
 
+    void refresh_gamepads()
+    {
         int count = 0;
         SDL_JoystickID* ids = SDL_GetGamepads(&count);
-        if (count > kMaxGamepads)
+        if (!ids)
         {
-            count = kMaxGamepads;
+            // SDL_GetGamepads failed; treat it as "no information" and keep
+            // the current set rather than closing every connected gamepad.
+            return;
         }
-        g_gamepadCount = count;
-        for (int i = 0; i < count; i++)
+
+        // Close gamepads that are no longer present (detached by the SDL
+        // device-change thread), compacting the surviving handles to the front
+        // of the array in the same pass. The presence scan covers the full
+        // enumeration so a device beyond kMaxGamepads is never force-closed.
+        int next = 0;
+        for (int i = 0; i < kMaxGamepads; i++)
         {
-            g_gamepads[i] = SDL_OpenGamepad(ids[i]);
             if (!g_gamepads[i])
             {
-                logging::logError("[SDL3] SDL_OpenGamepad failed for device {}: {}", i, SDL_GetError());
+                continue;
+            }
+            SDL_JoystickID id = SDL_GetGamepadID(g_gamepads[i]);
+            bool present = false;
+            for (int j = 0; j < count; j++)
+            {
+                if (ids[j] == id)
+                {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present || !SDL_GamepadConnected(g_gamepads[i]))
+            {
+                SDL_CloseGamepad(g_gamepads[i]);
+                g_gamepads[i] = nullptr;
+            }
+            else
+            {
+                if (next != i)
+                {
+                    g_gamepads[next] = g_gamepads[i];
+                    g_gamepads[i] = nullptr;
+                }
+                next++;
+            }
+        }
+
+        // Open newly connected gamepads until the array is full.
+        for (int j = 0; j < count && next < kMaxGamepads; j++)
+        {
+            bool alreadyOpen = false;
+            for (int i = 0; i < next; i++)
+            {
+                if (SDL_GetGamepadID(g_gamepads[i]) == ids[j])
+                {
+                    alreadyOpen = true;
+                    break;
+                }
+            }
+            if (alreadyOpen)
+            {
+                continue;
+            }
+            SDL_Gamepad* gamepad = SDL_OpenGamepad(ids[j]);
+            if (gamepad)
+            {
+                g_gamepads[next++] = gamepad;
+            }
+            else
+            {
+                logging::logError("[SDL3] SDL_OpenGamepad failed for device {}: {}", j, SDL_GetError());
             }
         }
         SDL_free(ids);
-        return true;
+        g_gamepadCount = next;
     }
 
     void get_keyboard_state(uint8_t keyState[256])
@@ -208,6 +270,15 @@ namespace openre::system::input
     int get_gamepad_axis_count(int index)
     {
         return SDL_GAMEPAD_AXIS_COUNT;
+    }
+
+    int get_gamepad_id(int index)
+    {
+        if (index < 0 || index >= g_gamepadCount || !g_gamepads[index])
+        {
+            return 0;
+        }
+        return SDL_GetGamepadID(g_gamepads[index]);
     }
 
     bool poll_gamepad(int index, GamepadState& state)
