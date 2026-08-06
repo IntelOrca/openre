@@ -2121,7 +2121,44 @@ namespace openre::audio
     // 0x004EEE40
     static void sub_4eee40()
     {
-        interop::call(0x004EEE40);
+        if (gGameTable.dword_99CF6C && gGameTable.enable_dsound && !check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+        {
+            // `i` is an uninitialized stack local in the original; it is only
+            // ever meaningfully set by the loop below, and is read by the
+            // SBGM SsSetVol calls even when unset (garbage in the original).
+            int i = 0;
+            if (*dword_689DCC != 1 || *dword_689DD8)
+            {
+                // i left as-is (uninitialized in the original)
+            }
+            else
+            {
+                for (i = 0; i < 3; ++i)
+                {
+                    ss_set_vol(5, i, dword_693B30[i]);
+                    ss_play(5, i, 1);
+                }
+                *dword_689DCC = 0;
+            }
+
+            if (*dword_689DD0 == 1 && !*dword_689DDC)
+            {
+                ss_set_vol(6, i, *dword_6941C8);
+                ss_play(6, 0, 1);
+                *dword_689DD0 = 0;
+            }
+
+            if (*(dword_689DD0 + 1) == 1 && !*dword_689DE0)
+            {
+                ss_set_vol(6, i, *dword_6941CC);
+                ss_play(6, 1, 1);
+                *(dword_689DD0 + 1) = 0;
+            }
+
+            *dword_689DD8 = 0;
+            *dword_689DDC = 0;
+            *dword_689DE0 = 0;
+        }
     }
 
     // 0x00435610
@@ -4490,5 +4527,6 @@ namespace openre::audio
         interop::writeJmp(0x004EEDD0, &xa_set_volume);
         interop::writeJmp(0x004EEDF0, &cd_system_control);
         interop::writeJmp(0x004EEE00, &ss_seq_set_decrescendo);
+        interop::writeJmp(0x004EEE40, &sub_4eee40);
     }
 }
