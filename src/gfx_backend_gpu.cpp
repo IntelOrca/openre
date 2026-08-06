@@ -97,6 +97,26 @@ namespace openre::gfx
             }
         }
 
+        // Maps a D3DPRIMITIVETYPE to the SDL_GPU topology. The game draws TL
+        // vertices with point/line/triangle lists and strips (the
+        // heartbeat/health display animates with line primitives), so every
+        // type must map to its true topology instead of collapsing to
+        // TRIANGLELIST (which would silently drop line/point draws).
+        // TRIANGLEFAN has no SDL_GPU topology; the callers expand fans into a
+        // triangle list (expandTriangleFan) before queueing them.
+        SDL_GPUPrimitiveType mapPrimitiveType(D3DPRIMITIVETYPE primType)
+        {
+            switch (primType)
+            {
+            case D3DPT_POINTLIST: return SDL_GPU_PRIMITIVETYPE_POINTLIST;
+            case D3DPT_LINELIST: return SDL_GPU_PRIMITIVETYPE_LINELIST;
+            case D3DPT_LINESTRIP: return SDL_GPU_PRIMITIVETYPE_LINESTRIP;
+            case D3DPT_TRIANGLELIST: return SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+            case D3DPT_TRIANGLESTRIP: return SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+            default: return SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+            }
+        }
+
         // Vertex attribute layout matching D3DTLVERTEX (32 bytes, see d3dtypes.h):
         // float sx, sy, sz, rhw; D3DCOLOR color, specular; float tu, tv. The
         // rhw and specular fields are not consumed.
@@ -104,6 +124,29 @@ namespace openre::gfx
         constexpr int kTLVertexPosOffset = 0;
         constexpr int kTLVertexColorOffset = 16;
         constexpr int kTLVertexUvOffset = 24;
+
+        // SDL_GPU has no triangle-fan topology, so a fan of N TL vertices
+        // (hub v0 + rim v1..vN-1) is expanded into (N-2) triangles
+        // (v0,v1,v2 / v0,v2,v3 / ...) that draw as a triangle list. Returns
+        // an empty vector when there are fewer than 3 vertices (nothing to
+        // rasterize).
+        std::vector<uint8_t> expandTriangleFan(const uint8_t* vertices, DWORD vertexCount)
+        {
+            std::vector<uint8_t> out;
+            if (vertexCount < 3)
+                return out;
+            out.reserve(static_cast<size_t>(vertexCount - 2) * 3 * kTLVertexStride);
+            const uint8_t* hub = vertices;
+            for (DWORD i = 1; i + 1 < vertexCount; i++)
+            {
+                out.insert(out.end(), hub, hub + kTLVertexStride);
+                out.insert(
+                    out.end(),
+                    vertices + static_cast<size_t>(i) * kTLVertexStride,
+                    vertices + static_cast<size_t>(i + 1) * kTLVertexStride);
+            }
+            return out;
+        }
 
         // One frame of deferred draw data (see the class comment for why draws
         // are queued and executed in present()).
@@ -291,10 +334,16 @@ namespace openre::gfx
             {
                 if (mDevice != nullptr)
                 {
-                    // Every transfer is submitted synchronously and waited on,
-                    // so no command buffer can still reference the resources;
-                    // wait once anyway to be safe before releasing them.
+                    // Frames are fenced rather than idle-waited, so an
+                    // in-flight frame may still reference the resources; drain
+                    // the GPU once before releasing them, then release the last
+                    // frame's fence (signaled by the idle wait above).
                     SDL_WaitForGPUIdle(mDevice);
+                    if (mFrameFence != nullptr)
+                    {
+                        SDL_ReleaseGPUFence(mDevice, mFrameFence);
+                        mFrameFence = nullptr;
+                    }
                     releaseSceneResources();
                     for (auto& pair : mSurfaces)
                         releaseSurface(pair.second);
@@ -325,6 +374,12 @@ namespace openre::gfx
                     logging::logDebug("[gfx:gpu] present skipped (device/window not ready)");
                     return;
                 }
+
+                // Wait for the previous frame's fence before reusing the shared
+                // vertex transfer buffer (and before any vertex-pool growth that
+                // releases buffers). This replaces the old full device idle wait
+                // with a one-frame-deep sync so CPU and GPU overlap.
+                waitForPreviousFrame();
 
                 auto* commandBuffer = SDL_AcquireGPUCommandBuffer(mDevice);
                 if (commandBuffer == nullptr)
@@ -393,8 +448,9 @@ namespace openre::gfx
                     appendBlitQuad(winW, winH, rtW, rtH);
 
                     // Grow the vertex pool if this frame needs more room. The
-                    // previous present waited for idle, so releasing/recreating
-                    // buffers here cannot race in-flight work.
+                    // previous frame's fence was waited on at the top of
+                    // present(), so releasing/recreating buffers here cannot
+                    // race in-flight work.
                     if (mFrameVertices.size() > mVertexBufferCapacity)
                         ensureVertexBuffer(static_cast<Uint32>(mFrameVertices.size()));
 
@@ -1196,9 +1252,20 @@ namespace openre::gfx
                     return S_OK;
                 }
 
-                const auto prim = primType == D3DPT_TRIANGLESTRIP ? SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP
-                                                                  : SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-                queueDraw(prim, static_cast<const uint8_t*>(vertices), vertexCount);
+                if (primType == D3DPT_TRIANGLEFAN)
+                {
+                    // SDL_GPU has no fan topology; expand to a triangle list.
+                    const auto* fanVertices = static_cast<const uint8_t*>(vertices);
+                    const auto expanded = expandTriangleFan(fanVertices, vertexCount);
+                    if (expanded.empty())
+                        return S_OK;
+                    queueDraw(
+                        SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+                        expanded.data(),
+                        static_cast<Uint32>(expanded.size() / kTLVertexStride));
+                    return S_OK;
+                }
+                queueDraw(mapPrimitiveType(primType), static_cast<const uint8_t*>(vertices), vertexCount);
                 return S_OK;
             }
 
@@ -1234,9 +1301,19 @@ namespace openre::gfx
                         src + static_cast<size_t>(idx[i]) * kTLVertexStride,
                         kTLVertexStride);
                 }
-                const auto prim = primType == D3DPT_TRIANGLESTRIP ? SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP
-                                                                  : SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-                queueDraw(prim, reordered.data(), indexCount);
+                if (primType == D3DPT_TRIANGLEFAN)
+                {
+                    // SDL_GPU has no fan topology; expand to a triangle list.
+                    const auto expanded = expandTriangleFan(reordered.data(), indexCount);
+                    if (expanded.empty())
+                        return S_OK;
+                    queueDraw(
+                        SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+                        expanded.data(),
+                        static_cast<Uint32>(expanded.size() / kTLVertexStride));
+                    return S_OK;
+                }
+                queueDraw(mapPrimitiveType(primType), reordered.data(), indexCount);
                 return S_OK;
             }
 
@@ -2012,6 +2089,10 @@ namespace openre::gfx
             SDL_GPUBuffer* mVertexBuffer = nullptr;
             SDL_GPUTransferBuffer* mVertexTransfer = nullptr;
             Uint32 mVertexBufferCapacity = 0;
+            // Fence of the last submitted frame. The next present waits on it
+            // before remapping the shared vertex transfer buffer, allowing one
+            // frame of CPU/GPU overlap instead of a full device idle wait.
+            SDL_GPUFence* mFrameFence = nullptr;
 
             // Pipelines: scene pipelines are cached per PipelineKey; the blit
             // pipeline presents the render target into the swapchain.
@@ -2084,7 +2165,7 @@ namespace openre::gfx
                 case SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP:
                     mDeviceState.totalTriangles += vertexCount >= 3 ? vertexCount - 2 : 0;
                     break;
-                default: break;
+                default: break; // point/line primitives have no triangles (the stat stays 0)
                 }
                 logging::logDebug(
                     "[gfx:gpu] queued draw prim={} verts={} textured={} blend={} z={}",
@@ -2533,12 +2614,30 @@ namespace openre::gfx
 
             void submitAndReset(SDL_GPUCommandBuffer* commandBuffer)
             {
-                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
-                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
-                // The frame vertex transfer buffer is remapped by the next
-                // present; wait so the copy pass is done before mapping.
-                SDL_WaitForGPUIdle(mDevice);
+                // Acquire a fence instead of blocking on a full device idle
+                // wait: the next present waits only on this fence, which lets
+                // the CPU run a frame ahead of the GPU while still guaranteeing
+                // the shared vertex transfer buffer is free before it is
+                // remapped and the vertex pool is regrown.
+                mFrameFence = SDL_SubmitGPUCommandBufferAndAcquireFence(commandBuffer);
+                if (mFrameFence == nullptr)
+                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBufferAndAcquireFence failed: {}", SDL_GetError());
                 resetFrameState();
+            }
+
+            // Waits for the previous frame's fence so the shared vertex
+            // transfer buffer can be remapped (and the vertex pool regrown)
+            // without racing in-flight GPU work. Skipped on the first frame,
+            // where no fence exists yet.
+            void waitForPreviousFrame()
+            {
+                if (mFrameFence == nullptr)
+                    return;
+                SDL_GPUFence* fences[] = { mFrameFence };
+                if (!SDL_WaitForGPUFences(mDevice, true, fences, 1))
+                    logging::logError("[gfx:gpu] SDL_WaitForGPUFences failed: {}", SDL_GetError());
+                SDL_ReleaseGPUFence(mDevice, mFrameFence);
+                mFrameFence = nullptr;
             }
 
             void resetFrameState()
