@@ -484,10 +484,91 @@ namespace openre::enemy
         return interop::call<void, Entity*, int>(0x004B3990, entity, d);
     }
 
+    // ---- Standalone globals + thunks used by snd_se_enem (0x004EDE30) ----
+    static int32_t* pEdt_adr = (int32_t*)0x693480;     // 6 ints; entry [3] is the enemy EDH entry table
+    static int32_t* dword_6934AC = (int32_t*)0x6934AC; // decoded enemy sample data ptr
+    static uint8_t* byte_6941D0 = (uint8_t*)0x6941D0;  // room reverb level cache
+    static int16_t* vol_3d_l = (int16_t*)0x693C44;
+    static int16_t* vol_3d_r = (int16_t*)0x693C46;
+    static int16_t* vol_3d_pan = (int16_t*)0x689DE4;
+
+    // 0x004EE780
+    static int snd_se_3d(const Vec32* pos, int a2)
+    {
+        using sig = int (*)(const Vec32*, int);
+        auto p = (sig)0x004EE780;
+        return p(pos, a2);
+    }
+
+    // 0x004EE770
+    static int sub_4ee770(int a, int b)
+    {
+        using sig = int (*)(int, int);
+        auto p = (sig)0x004EE770;
+        return p(a, b);
+    }
+
+    // 0x00434AB0 (hooked to openre::audio::ss_set_vol)
+    static void ss_set_vol_enemy(int type, int index, int vol)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x00434AB0;
+        p(type, index, vol);
+    }
+
+    // 0x004348F0 (hooked to openre::audio::ss_set_pan)
+    static void ss_set_pan_enemy(int type, int index, int pan)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004348F0;
+        p(type, index, pan);
+    }
+
+    // 0x004338F0 (hooked to openre::audio::ss_play)
+    static void ss_play_enemy(int type, int id, int dwFlags)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004338F0;
+        p(type, id, dwFlags);
+    }
+
     // 0x004EDE30
     void snd_se_enem(uint8_t id, EnemyEntity* enemy)
     {
-        interop::call<void, uint8_t, void*>(0x004EDE30, id, enemy);
+        if (!gGameTable.enable_dsound)
+            return;
+
+        uint8_t a1 = id;
+        if (enemy->be_flg & 0x2000)
+            a1 += 16;
+
+        int32_t v2 = pEdt_adr[3];
+        if (!v2)
+            return;
+
+        // vab_id[3] is uint8_t; the original compares the byte against 0xFF (-1).
+        if (*(int32_t*)(v2 + 4 * a1) == -1 || gGameTable.vab_id[3] == 0xFF)
+            return;
+
+        uint8_t* v3 = (uint8_t*)(v2 + 4 * a1 + 2);
+        if (!sub_4ee770(*(uint8_t*)(v2 + 4 * a1 + 3) & 0x1F, *v3 & 0xF))
+        {
+            uint8_t* v4 = (uint8_t*)(*dword_6934AC + 32 * (16 * (*(uint8_t*)(v2 + 4 * a1 + 1) & 0x7F) + (*v3 >> 4) + 0x41));
+            if (*byte_6941D0)
+                v4[1] |= *byte_6941D0;
+            else
+                v4[1] &= ~4u;
+
+            snd_se_3d(&enemy->m.pos, 1);
+
+            if (gGameTable.sfx_vol)
+            {
+                int v5 = ((uint16_t)*vol_3d_r <= (uint16_t)*vol_3d_l) ? (uint16_t)*vol_3d_l : (uint16_t)*vol_3d_r;
+                ss_set_vol_enemy(3, a1, v5);
+                ss_set_pan_enemy(3, a1, *vol_3d_pan);
+                ss_play_enemy(3, a1, 0);
+            }
+        }
     }
 
     // part of 0x004E77D0
@@ -809,5 +890,6 @@ namespace openre::enemy
     {
         interop::writeJmp(0x004B1DD0, em_move_tbl_set);
         interop::writeJmp(0x004C5230, bomb_parts_sort_gt);
+        interop::writeJmp(0x004EDE30, &snd_se_enem);
     }
 }
