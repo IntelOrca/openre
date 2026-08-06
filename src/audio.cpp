@@ -3128,6 +3128,37 @@ namespace openre::audio
         // audio.h, so an unqualified reference from openre::audio would find
         // that wrapper rather than this function.
         void (*const snd_bgm_ck_impl)() = &snd_bgm_ck;
+
+        // 0x004ECCE0
+        static void snd_bgm_play_ck()
+        {
+            if (gGameTable.dword_99CF6C && gGameTable.enable_dsound
+                && !check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            {
+                if (!gGameTable.seq_ctr[1] && gGameTable.seq_ctr[2] > -1)
+                {
+                    for (int i = 0; i < 3; ++i)
+                        ss_play(5, i, 1);
+                    gGameTable.seq_ctr[0] = 1;
+                }
+                if (!gGameTable.pad_693809[0] && gGameTable.byte_69380A > -1)
+                {
+                    ss_play(6, 0, 1);
+                    gGameTable.byte_693808 = 1;
+                }
+                if (!gGameTable.pad_693811[0] && gGameTable.byte_693812 > -1)
+                {
+                    ss_play(6, 1, 1);
+                    gGameTable.byte_693810 = 1;
+                }
+            }
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_bgm_play_ck` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        void (*const snd_bgm_play_ck_impl)() = &snd_bgm_play_ck;
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
@@ -3147,7 +3178,7 @@ namespace openre::audio
     // 0x004ECCE0
     void snd_bgm_play_ck()
     {
-        interop::call(0x004ECCE0);
+        snd_bgm_play_ck_impl();
     }
 
     // 0x004ECDA0
@@ -3393,6 +3424,10 @@ namespace openre::audio
         // handle, since the name snd_bgm_ck is the public audio.h wrapper in
         // this scope.
         interop::writeJmp(0x004ECBE0, snd_bgm_ck_impl);
+        // snd_bgm_play_ck_impl: the hook targets the static implementation via
+        // its handle, since the name snd_bgm_play_ck is the public audio.h
+        // wrapper in this scope.
+        interop::writeJmp(0x004ECCE0, snd_bgm_play_ck_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
