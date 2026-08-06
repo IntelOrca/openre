@@ -820,6 +820,27 @@ against and answer GetSurfaceDesc/IsLost/Restore/SetColorKey etc. from that
 state) — a large follow-up; until then the front-end must create real DirectDraw
 objects even for GPU-only runs.
 
+### Post-M8 fix — GPU present blit drew only one triangle (done)
+
+When running with `OPENRE_GFX_BACKEND=1`, the scene rendered correctly offscreen
+but the present pass showed only the top-left triangle of the final buffer
+(texture quad): top-left half correct game pixels, bottom-right half black.
+
+**Root cause.** `src/gfx_backend_gpu.cpp` `appendBlitQuad()` emits the present
+quad as **4 vertices** (TL, BL, TR, BR), but `ensureBlitPipeline()` created the
+blit pipeline with `SDL_GPU_PRIMITIVETYPE_TRIANGLELIST`. A triangle list with 4
+vertices rasterizes only triangle (0,1,2); the 4th vertex is dropped, so the
+second triangle never drew.
+
+**Fix.** `ensureBlitPipeline()` now creates the blit pipeline with
+`SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP`, so the 4 vertices cover the quad as
+triangles (0,1,2) and (1,2,3). Cull mode is `NONE` (PipelineKey default), so the
+strip's alternating winding is not culled. Scene pipelines are unchanged
+(triangle list).
+
+**Verified.** `build.bat` 0 warnings / 0 errors. Requires a visual run to
+confirm the full window shows the game frame.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
