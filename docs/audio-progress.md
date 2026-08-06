@@ -36,7 +36,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x004EC9C0 Snd_bgm_set (537)
 - [x] 0x004ECBE0 Snd_bgm_ck (250)
 - [x] 0x004ECCE0 Snd_bgm_play_ck (179)
-- [ ] 0x004ED050 Snd_bgm_sub (518)
+- [x] 0x004ED050 Snd_bgm_sub (518)
 - [ ] 0x004ED260 Snd_bgm_fade_ON (137)
 - [ ] 0x004ED2F0 Snd_bgm_ctr (1558)
 - [ ] 0x004ED950 Snd_se_on (1241)

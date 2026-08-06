@@ -2942,13 +2942,88 @@ namespace openre::audio
         int32_t* dword_689DC4 = (int32_t*)0x689DC4;   // 0 = BGM ids unchanged, 1 = main id changed
         void** dword_689DC8 = (void**)0x689DC8;       // decrescendo data pointer
         uint32_t* dword_6934B8 = (uint32_t*)0x6934B8; // SBGM decrescendo data pointer
+        uint8_t* byte_6D130C = (uint8_t*)0x6D130C;    // SBGM bank data load area
+        uint16_t* dword_69380C = (uint16_t*)0x69380C; // SBGM per-slot volumes, stride 8 bytes
 
         // 0x004ED050
         static int snd_bgm_sub()
         {
-            using sig = int (*)();
-            auto p = (sig)0x004ED050;
-            return p();
+            if (!gGameTable.enable_dsound)
+                return 1;
+
+            if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                return 0;
+
+            // Unload the two sub-BGM slots and the shared VAB when they are in
+            // use (the control bytes hold -1/0xFF while free).
+            if (gGameTable.byte_69380A > -1)
+            {
+                if (gGameTable.byte_693808)
+                {
+                    if (((DWORD)ss_get_status(6, 0) & 1) != 0)
+                        ss_stop_group(6, 0);
+                    gGameTable.byte_693808 = 0;
+                }
+                ss_unload_bgm(6, 0);
+                gGameTable.ss_name_sbgm[0] = 0;
+                gGameTable.byte_69380A = -1;
+            }
+            if ((int8_t)gGameTable.byte_693812 > -1)
+            {
+                if (gGameTable.byte_693810)
+                {
+                    if (((DWORD)ss_get_status(6, 1) & 1) != 0)
+                        ss_stop_group(6, 1);
+                    gGameTable.byte_693810 = 0;
+                }
+                ss_unload_bgm(6, 1);
+                gGameTable.byte_693FA4 = 0;
+                gGameTable.byte_693812 = 0xFF;
+            }
+            if ((int8_t)gGameTable.vab_id[6] > -1)
+            {
+                ss_unload_group(6);
+                gGameTable.ss_name_sbgm[0] = 0;
+                gGameTable.byte_693FA4 = 0;
+                gGameTable.vab_id[6] = 0xFF;
+            }
+
+            // The sub-BGM id is the second byte of the current BGM-table
+            // entry; 0xFF (-1) means no sub-BGM to play.
+            auto v1 = gGameTable.current_bgm_address[1];
+            if (v1 == 0xFF)
+                return -1;
+
+            // Build the file name "common\sound\bgm\sub_XX.bgm" from the low
+            // 6 bits of the id (tens/ones hex digits).
+            char mem[28];
+            std::strcpy(mem, "common\\sound\\bgm\\sub_00.bgm");
+            mem[21] = (char)(mem[21] + ((v1 & 0x3F) >> 4));
+            auto ones = v1 & 0xF;
+            mem[22] = ones >= 10 ? (char)(ones + 87) : (char)(ones + 48);
+
+            auto buffer = (uint8_t*)(((uintptr_t)gGameTable.mem_top + 16) & 0xFFFFFFF0);
+            auto numBytes = read_file_into_buffer(mem, (char*)buffer, 1);
+            if (numBytes == -1)
+                return -1;
+
+            // The bank file header points at the sequence data to play; latch
+            // it for the decrescendo logic used by Snd_bgm_set.
+            *dword_6934B8 = (uint32_t)(byte_6D130C + *(int32_t*)(buffer + numBytes - 12));
+            gGameTable.vab_id[6] = (uint8_t)ss_load_banks(6 /* ST_SBGM */, v1 & 0x3F, 0, 0);
+
+            // Slot control bytes live in two 8-byte-strided pairs.
+            for (auto i = 0; i < 2; i++)
+            {
+                *((uint8_t*)&gGameTable.byte_69380A + 8 * i)
+                    = (uint8_t)((gGameTable.vab_id[6] >> i) & 1);
+                if (bgm_ck_room(0, 4, -1) == 1 || bgm_ck_room(0, 0, -1) == 1)
+                    ss_set_vol(6, i, dword_69380C[4 * i]);
+                else
+                    ss_set_vol(6, i, 0);
+                *((uint8_t*)&gGameTable.byte_693808 + 8 * i) = 0;
+            }
+            return 0;
         }
 
         // 0x004EEE00
@@ -3429,6 +3504,7 @@ namespace openre::audio
         // wrapper in this scope.
         interop::writeJmp(0x004ECCE0, snd_bgm_play_ck_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
+        interop::writeJmp(0x004ED050, &snd_bgm_sub);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
     }
