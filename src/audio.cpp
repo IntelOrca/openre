@@ -3251,6 +3251,302 @@ namespace openre::audio
         // audio.h, so an unqualified reference from openre::audio would find
         // that wrapper rather than this function.
         void (*const snd_bgm_play_ck_impl)() = &snd_bgm_play_ck;
+
+        // 0x004ED2F0
+        static char snd_bgm_ctr(uint32_t a1)
+        {
+            char result = (char)gGameTable.enable_dsound;
+            if (!gGameTable.enable_dsound || check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                return result;
+
+            // Per-slot volume overrides for the Raccoon City police station
+            // lobby (stage 0, room 8) during the intro (cut 0) and the
+            // helicopter crash (cut 13) cutscenes.
+            const uint8_t v20[3] = { 72, 57, 29 };
+            const uint8_t v21[3] = { 0, 69, 29 };
+
+            int v2 = 1;                 // loop flag passed to SsPlay
+            uint8_t v19 = (uint8_t)a1;  // pan byte (low byte of a1)
+            int v3 = (a1 >> 28) & 0xFF; // BGM slot index (0..15)
+
+            // Stage/room switch: decides whether the SsPlay loop flag (v2) is
+            // cleared for the selected BGM slot. Every non-matching stage/room
+            // combination leaves v2 at its default of 1.
+            switch (gGameTable.current_stage)
+            {
+            case 0:
+                switch (gGameTable.current_room)
+                {
+                case 19:
+                case 20:
+                case 21:
+                    if (v3 == 1)
+                        v2 = 0;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case 1:
+                switch (gGameTable.current_room)
+                {
+                case 6:
+                case 27:
+                    if (v3 == 2)
+                        v2 = 0;
+                    break;
+                case 25:
+                    v2 = 0;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case 2:
+                switch (gGameTable.current_room)
+                {
+                case 0:
+                    if (v3 == 2)
+                        v2 = 0;
+                    else if (v3 == 0)
+                    {
+                        if (!check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
+                            v2 = 0;
+                    }
+                    break;
+                case 1:
+                    v2 = 0;
+                    break;
+                case 4:
+                case 8:
+                case 10:
+                case 11:
+                    if (v3 == 1)
+                        v2 = 0;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case 3:
+                switch (gGameTable.current_room)
+                {
+                case 0:
+                    if (v3 == 2 && (uint8_t)gGameTable.byte_98E9A6 < 0xA
+                        && (gGameTable.byte_98E9A6 & 1) != 0)
+                        v2 = 0;
+                    break;
+                case 7:
+                    if (v3 == 2)
+                        v2 = 0;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case 5:
+                switch (gGameTable.current_room)
+                {
+                case 12:
+                    if (v3 == 1 || v3 == 2)
+                        v2 = 0;
+                    break;
+                case 20:
+                    if (v3 == 2)
+                        v2 = 0;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            default:
+                break;
+            }
+
+            // Common path for every stage/room outcome.
+            result = (char)bgm_ck_room(0, 11, 13);
+            if (result == 1)
+            {
+                *(uint16_t*)&gGameTable.dword_693804 = 63;
+                v19 = 64;
+            }
+            if (check_flag(FlagGroup::System, FG_SYSTEM_10) && v3 == 1)
+                v2 = 0;
+            int v6 = v3;
+            auto seq_ctr = (int8_t*)gGameTable.seq_ctr;
+            if (seq_ctr[8 * v6 + 1] != -1 && seq_ctr[8 * v6 + 2] != -1)
+            {
+                // Base of the per-slot volume/pan table: the SBGM sequence
+                // data (dword_6934B8 holds the loaded sequence pointer) or
+                // the main BGM data.
+                uint8_t* v18 = v3 ? (uint8_t*)*dword_6934B8 : gGameTable.dword_6934B4;
+
+                switch ((a1 >> 24) & 0xF)
+                {
+                case 1: // play
+                    if (v3) // SBGM (type 6)
+                    {
+                        ss_set_vol(6, v6 - 1, ((uint16_t*)&gGameTable.dword_693804)[4 * v6]);
+                        ss_play(6, v6 - 1, v2);
+                    }
+                    else // main BGM (type 5)
+                    {
+                        for (int i = 0; i < 3; i++)
+                        {
+                            ss_set_vol(5, 0, (uint16_t)gGameTable.dword_693804);
+                            ss_play(5, i, v2);
+                        }
+                    }
+                    seq_ctr[8 * v6] = 1;
+                    break;
+
+                case 2: // resume/continue (only while the slot was started)
+                    if (seq_ctr[8 * v6] != 0)
+                    {
+                        if (v3) // SBGM
+                        {
+                            if (((uintptr_t)ss_get_status(6, v6 - 1) & 1) != 0)
+                            {
+                                ss_set_vol(6, v6 - 1, ((uint16_t*)&gGameTable.dword_693804)[4 * v6]);
+                                ss_stop_group(6, v6 - 1);
+                            }
+                        }
+                        else if (((uintptr_t)ss_get_status(5, 0) & 1) != 0)
+                        {
+                            for (int j = 0; j < 3; j++)
+                                ss_set_vol(5, j, (uint16_t)gGameTable.dword_693804);
+                            ss_stop_group(5, -1);
+                        }
+                        seq_ctr[8 * v6] = 2;
+                    }
+                    break;
+
+                case 3: // play (restart)
+                    if (v3)
+                    {
+                        ss_set_vol(6, v6 - 1, ((uint16_t*)&gGameTable.dword_693804)[4 * v6]);
+                        ss_play(6, v6 - 1, 0);
+                    }
+                    else
+                    {
+                        for (int k = 0; k < 3; k++)
+                        {
+                            ss_set_vol(5, k, (uint16_t)gGameTable.dword_693804);
+                            ss_play(5, k, 1);
+                        }
+                    }
+                    seq_ctr[8 * v6] = 1;
+                    break;
+
+                case 4: // stop
+                    if (v3)
+                    {
+                        ss_set_vol(6, v6 - 1, 0);
+                        ss_stop_group(6, v6 - 1);
+                    }
+                    else
+                    {
+                        for (int m = 0; m < 3; m++)
+                        {
+                            ss_set_vol(5, m, 0);
+                            ss_stop_group(5, m);
+                        }
+                    }
+                    seq_ctr[8 * v6] = 4;
+                    break;
+
+                case 5: // decrescendo
+                    ss_seq_set_decrescendo((uint8_t)v3, 127, 90);
+                    seq_ctr[8 * v6] = 50;
+                    break;
+
+                default:
+                    break;
+                }
+
+                // Volume/pan update, runs after every switch case (including
+                // the default). `result` mirrors AL: each SsSetVol/SsSetPan
+                // return value (low byte) is what gets returned.
+                result = (char)((a1 >> 8) & 0xFF);
+                if (v3) // SBGM (type 6)
+                {
+                    if (((a1 >> 8) & 0xFF) != 0)
+                    {
+                        uint8_t a1low = (uint8_t)((a1 >> 8) & 0xFF) - 1;
+                        if (((a1 >> 16) & 0xFF) != 0)
+                        {
+                            v18[16 * ((a1 >> 16) & 0xFF) + 17] = a1low;
+                            result = (char)ss_set_vol(6, ((a1 >> 16) & 0xFF) - 1, a1low);
+                        }
+                        else
+                        {
+                            v18[24] = a1low;
+                            for (int i = 0; i < 2; i++)
+                                result = (char)ss_set_vol(6, i, a1low);
+                        }
+                    }
+                    if (v19 != 0)
+                    {
+                        if (((a1 >> 16) & 0xFF) != 0)
+                        {
+                            v18[16 * ((a1 >> 16) & 0xFF) + 20] = v19 - 1;
+                            result = (char)(uint8_t)(uintptr_t)ss_set_pan(6, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
+                        }
+                        else
+                        {
+                            v18[25] = v19 - 1;
+                            for (int i = 0; i < 2; i++)
+                                result = (char)(uint8_t)(uintptr_t)ss_set_pan(6, i, v19 - 1);
+                        }
+                    }
+                }
+                else // main BGM (type 5)
+                {
+                    if (((a1 >> 8) & 0xFF) != 0)
+                    {
+                        uint8_t a1low = (uint8_t)((a1 >> 8) & 0xFF) - 1;
+                        if (((a1 >> 16) & 0xFF) != 0)
+                        {
+                            v18[16 * ((a1 >> 16) & 0xFF) + 17] = a1low;
+                            result = (char)ss_set_vol(5, ((a1 >> 16) & 0xFF) - 1, a1low);
+                        }
+                        else
+                        {
+                            v18[24] = a1low;
+                            for (int i = 0; i < 3; i++)
+                            {
+                                if (gGameTable.current_stage == 0 && gGameTable.current_room == 8)
+                                {
+                                    if (gGameTable.current_cut == 0)
+                                        a1low = v20[i];
+                                    if (gGameTable.current_cut == 13)
+                                        a1low = v21[i];
+                                }
+                                result = (char)ss_set_vol(5, i, a1low);
+                            }
+                        }
+                    }
+                    if (v19 != 0)
+                    {
+                        if (((a1 >> 16) & 0xFF) != 0)
+                        {
+                            v18[16 * ((a1 >> 16) & 0xFF) + 20] = v19 - 1;
+                            result = (char)(uint8_t)(uintptr_t)ss_set_pan(5, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
+                        }
+                        else
+                        {
+                            v18[25] = v19 - 1;
+                            for (int i = 0; i < 3; i++)
+                                result = (char)(uint8_t)(uintptr_t)ss_set_pan(5, i, v19 - 1);
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Handle to reach the implementation from the enclosing namespace.
+        char (*const bgm_set_control_impl)(uint32_t) = &snd_bgm_ctr;
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
@@ -3398,9 +3694,7 @@ namespace openre::audio
     // 0x004ED2F0
     void bgm_set_control(uint32_t arg0)
     {
-        using sig = void (*)(uint32_t);
-        auto p = (sig)0x004ED2F0;
-        p(arg0);
+        snd_bgm_ctr(arg0);
     }
 
     // 0x004ED920
@@ -3523,6 +3817,7 @@ namespace openre::audio
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED050, &snd_bgm_sub);
         interop::writeJmp(0x004ED260, &snd_bgm_fade_on);
+        interop::writeJmp(0x004ED2F0, bgm_set_control_impl);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
     }

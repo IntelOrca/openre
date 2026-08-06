@@ -38,7 +38,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x004ECCE0 Snd_bgm_play_ck (179)
 - [x] 0x004ED050 Snd_bgm_sub (518)
 - [x] 0x004ED260 Snd_bgm_fade_ON (137)
-- [ ] 0x004ED2F0 Snd_bgm_ctr (1558)
+- [x] 0x004ED2F0 Snd_bgm_ctr (1558)
 - [ ] 0x004ED950 Snd_se_on (1241)
 - [ ] 0x004EDE30 Snd_se_enem (263) — implement in `src/enemy.cpp` (wrapper is there)
 - [ ] 0x004EDF40 Snd_se_walk (1032) — implement in `src/player.cpp` (wrapper is there)
