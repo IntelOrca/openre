@@ -3762,12 +3762,13 @@ namespace openre::audio
         return (int16_t)((-(int16_t)catan((v4 << 12) / (a3 - a1)) - ((a3 - a1 < 0) << 11)) & 0xFFF);
     }
 
-    // 0x004EEDD0 (Xa_set_volume - temp thunk, will be replaced by a later agent)
+    // 0x004EEDD0
     static uint8_t xa_set_volume()
     {
-        using sig = uint8_t (*)();
-        auto p = (sig)0x004EEDD0;
-        return p();
+        uint8_t result = (uint8_t)gGameTable.enable_dsound;
+        if (gGameTable.enable_dsound)
+            return (uint8_t)ss_set_vol(7, 0, (int)gGameTable.cd_vol_0);
+        return result;
     }
 
     // 0x004EEC30
@@ -4477,5 +4478,6 @@ namespace openre::audio
         interop::writeJmp(0x004EED30, &xa_control_init);
         interop::writeJmp(0x004EED40, &xa_control_play);
         interop::writeJmp(0x004EED80, &xa_control_end);
+        interop::writeJmp(0x004EEDD0, &xa_set_volume);
     }
 }
