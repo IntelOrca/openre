@@ -1412,9 +1412,45 @@ namespace openre::audio
     // 0x00436370
     static int ss_is_dual_bgm(int type, int id)
     {
-        using sig = int (*)(int, int);
-        auto p = (sig)0x00436370;
-        return p(type, id);
+        if (type == 5) // ST_BGM
+        {
+            switch (id)
+            {
+            case 3:
+            case 6:
+            case 10:
+            case 13:
+            case 16:
+            case 18:
+            case 19:
+            case 21:
+            case 23:
+            case 26:
+            case 30:
+                return 1;
+            default:
+                return 0;
+            }
+        }
+
+        if (type != 6) // ST_SBGM
+            return 0;
+
+        switch (id)
+        {
+        case 4:
+        case 5:
+        case 11:
+        case 16:
+        case 20:
+        case 27:
+        case 34:
+        case 51:
+        case 52:
+            return 1;
+        default:
+            return 0;
+        }
     }
 
     // 0x00436420
