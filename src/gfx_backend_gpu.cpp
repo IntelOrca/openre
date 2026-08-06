@@ -602,14 +602,25 @@ namespace openre::gfx
 
                 // Per-frame texture-content diagnostics: throttled summary so we
                 // can see whether "textured" draws are binding empty textures.
+                if (mStatLastFrameCounter != 0)
+                {
+                    mStatFrameAccumUs
+                        += (SDL_GetPerformanceCounter() - mStatLastFrameCounter) * 1000000 / SDL_GetPerformanceFrequency();
+                }
+                mStatLastFrameCounter = SDL_GetPerformanceCounter();
                 if (++mStatLogCounter % 60 == 0)
                 {
+                    char fpsBuf[16];
+                    double fps = mStatFrameAccumUs ? 1000000.0 * 60 / mStatFrameAccumUs : 0.0;
+                    std::snprintf(fpsBuf, sizeof(fpsBuf), "%.1f", fps);
                     logging::logInfo(
-                        "[gfx:gpu] draw stats: textured+content={} textured-no-content={} untextured={}",
+                        "[gfx:gpu] draw stats: fps={} textured+content={} textured-no-content={} untextured={}",
+                        fpsBuf,
                         mStatTexturedContent,
                         mStatTexturedNoContent,
                         mStatUntextured);
                     mStatTexturedContent = mStatTexturedNoContent = mStatUntextured = 0;
+                    mStatFrameAccumUs = 0;
                 }
 
                 // Wait for the previous frame's fence before reusing the shared
@@ -2364,6 +2375,10 @@ namespace openre::gfx
             Uint64 mStatUntextured = 0;
             Uint32 mStatLogCounter = 0;
             std::unordered_set<DWORD> mLoggedNoContent;
+
+            // FPS measurement for the draw-stats summary (present()).
+            Uint64 mStatFrameAccumUs = 0;
+            Uint64 mStatLastFrameCounter = 0;
 
             // ---- deferred draw helpers ----
 
