@@ -608,18 +608,41 @@ namespace openre::gfx
                         += (SDL_GetPerformanceCounter() - mStatLastFrameCounter) * 1000000 / SDL_GetPerformanceFrequency();
                 }
                 mStatLastFrameCounter = SDL_GetPerformanceCounter();
-                if (++mStatLogCounter % 60 == 0)
+
+                auto statInterval = 15;
+                if (++mStatLogCounter % statInterval == 0)
                 {
                     char fpsBuf[16];
-                    double fps = mStatFrameAccumUs ? 1000000.0 * 60 / mStatFrameAccumUs : 0.0;
+                    double fps = mStatFrameAccumUs ? 1000000.0 * statInterval / mStatFrameAccumUs : 0.0;
                     std::snprintf(fpsBuf, sizeof(fpsBuf), "%.1f", fps);
                     logging::logInfo(
-                        "[gfx:gpu] draw stats: fps={} textured+content={} textured-no-content={} untextured={}",
+                        "[gfx:gpu] draw stats: fps={} textured+content={} textured-no-content={} untextured={} "
+                        "lock={} unlock={} dl={} up={} upB={} dlB={} tload={} palset={} palreup={} idleWaitMs={} "
+                        "fenceWaitMs={} draws={}",
                         fpsBuf,
                         mStatTexturedContent,
                         mStatTexturedNoContent,
-                        mStatUntextured);
+                        mStatUntextured,
+                        mStatLocks,
+                        mStatUnlocks,
+                        mStatDownloads,
+                        mStatUploads,
+                        mStatUploadBytes,
+                        mStatDownloadBytes,
+                        mStatTextureLoads,
+                        mStatPaletteSets,
+                        mStatPaletteReuploads,
+                        mStatIdleWaitUs / 1000,
+                        mStatFenceWaitUs / 1000,
+                        mQueuedDraws.size());
                     mStatTexturedContent = mStatTexturedNoContent = mStatUntextured = 0;
+                    mStatLocks = mStatUnlocks = 0;
+                    mStatDownloads = mStatUploads = 0;
+                    mStatUploadBytes = mStatDownloadBytes = 0;
+                    mStatTextureLoads = mStatPaletteSets = mStatPaletteReuploads = 0;
+                    mStatIdleWaitUs = mStatFenceWaitUs = 0;
+                    mLoggedLocks.clear();
+                    mLoggedUnlocks.clear();
                     mStatFrameAccumUs = 0;
                 }
 
@@ -965,6 +988,19 @@ namespace openre::gfx
                     return S_OK;
                 }
 
+                mStatLocks++;
+                if (mLoggedLocks.find(surface) == mLoggedLocks.end())
+                {
+                    mLoggedLocks.insert(surface);
+                    logging::logInfo(
+                        "[gfx:gpu] perf: Lock surface={} {}x{} bpp={} paletted={} hasContent={}",
+                        static_cast<void*>(surface),
+                        entry->width,
+                        entry->height,
+                        entry->bpp,
+                        entry->paletted,
+                        entry->hasContent);
+                }
                 if (!downloadToShadow(*entry))
                 {
                     logging::logDebug("[gfx:gpu] Lock surface={} (readback failed)", static_cast<void*>(surface));
@@ -998,6 +1034,18 @@ namespace openre::gfx
                     return S_OK;
                 }
 
+                mStatUnlocks++;
+                if (mLoggedUnlocks.find(surface) == mLoggedUnlocks.end())
+                {
+                    mLoggedUnlocks.insert(surface);
+                    logging::logInfo(
+                        "[gfx:gpu] perf: Unlock surface={} {}x{} bpp={} paletted={}",
+                        static_cast<void*>(surface),
+                        entry->width,
+                        entry->height,
+                        entry->bpp,
+                        entry->paletted);
+                }
                 if (uploadFromShadow(*entry, nullptr))
                 {
                     entry->hasContent = true;
@@ -1174,11 +1222,13 @@ namespace openre::gfx
                 // Re-expand any surface whose shadow content was written by
                 // the game itself (contentFromShadow) so the next draw sees
                 // the new colours.
+                mStatPaletteSets++;
                 for (auto& pair : mSurfaces)
                 {
                     auto& entry = pair.second;
                     if (entry.paletted && entry.palette == palette && entry.textureCreated && entry.contentFromShadow)
                     {
+                        mStatPaletteReuploads++;
                         if (uploadFromShadow(entry, nullptr))
                             entry.hasContent = true;
                     }
@@ -1393,7 +1443,11 @@ namespace openre::gfx
                     logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
                     return;
                 }
+                mStatTextureLoads++;
+                const auto waitT2 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
+                mStatIdleWaitUs
+                    += (SDL_GetPerformanceCounter() - waitT2) * 1000000 / SDL_GetPerformanceFrequency();
                 dstEntry->hasContent = true;
                 dstEntry->contentFromShadow = false; // content arrived via GPU copy
                 logging::logDebug(
@@ -1903,6 +1957,8 @@ namespace openre::gfx
                     return true;
                 }
 
+                mStatDownloads++;
+                mStatDownloadBytes += static_cast<Uint64>(entry.width) * entry.height * 4;
                 auto* commandBuffer = SDL_AcquireGPUCommandBuffer(mDevice);
                 if (commandBuffer == nullptr)
                 {
@@ -1928,7 +1984,10 @@ namespace openre::gfx
                 }
                 // The readback is async; block until the transfer buffer holds
                 // the data before mapping it (simplicity over latency).
+                const auto waitT0 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
+                mStatIdleWaitUs
+                    += (SDL_GetPerformanceCounter() - waitT0) * 1000000 / SDL_GetPerformanceFrequency();
                 void* mapped = SDL_MapGPUTransferBuffer(mDevice, entry.downloadBuffer, false);
                 if (mapped == nullptr)
                 {
@@ -1957,6 +2016,8 @@ namespace openre::gfx
                 if (w == 0 || h == 0)
                     return false;
 
+                mStatUploads++;
+                mStatUploadBytes += static_cast<Uint64>(w) * h * 4;
                 void* mapped = SDL_MapGPUTransferBuffer(mDevice, entry.uploadBuffer, false);
                 if (mapped == nullptr)
                 {
@@ -2003,7 +2064,10 @@ namespace openre::gfx
                     logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
                     return false;
                 }
+                const auto waitT1 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
+                mStatIdleWaitUs
+                    += (SDL_GetPerformanceCounter() - waitT1) * 1000000 / SDL_GetPerformanceFrequency();
                 return true;
             }
 
@@ -2379,6 +2443,21 @@ namespace openre::gfx
             // FPS measurement for the draw-stats summary (present()).
             Uint64 mStatFrameAccumUs = 0;
             Uint64 mStatLastFrameCounter = 0;
+
+            // ---- temporary perf instrumentation ----
+            Uint64 mStatLocks = 0;
+            Uint64 mStatUnlocks = 0;
+            Uint64 mStatDownloads = 0;
+            Uint64 mStatUploads = 0;
+            Uint64 mStatUploadBytes = 0;
+            Uint64 mStatDownloadBytes = 0;
+            Uint64 mStatTextureLoads = 0;
+            Uint64 mStatPaletteSets = 0;
+            Uint64 mStatPaletteReuploads = 0;
+            Uint64 mStatIdleWaitUs = 0;
+            Uint64 mStatFenceWaitUs = 0;
+            std::unordered_set<void*> mLoggedLocks;
+            std::unordered_set<void*> mLoggedUnlocks;
 
             // ---- deferred draw helpers ----
 
@@ -2963,8 +3042,11 @@ namespace openre::gfx
                 if (mFrameFence == nullptr)
                     return;
                 SDL_GPUFence* fences[] = { mFrameFence };
+                const auto waitT3 = SDL_GetPerformanceCounter();
                 if (!SDL_WaitForGPUFences(mDevice, true, fences, 1))
                     logging::logError("[gfx:gpu] SDL_WaitForGPUFences failed: {}", SDL_GetError());
+                mStatFenceWaitUs
+                    += (SDL_GetPerformanceCounter() - waitT3) * 1000000 / SDL_GetPerformanceFrequency();
                 SDL_ReleaseGPUFence(mDevice, mFrameFence);
                 mFrameFence = nullptr;
             }
