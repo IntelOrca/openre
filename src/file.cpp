@@ -487,9 +487,14 @@ namespace openre::file
         *cnt0 = 0;
 
         auto folderUtf8 = str::sjis_to_utf8(folder);
-        auto entries = system::fs::getDirectoryContents((std::string("save://") + folderUtf8).c_str(), "*");
-        if (entries.empty())
+        auto savePath = std::string("save://") + folderUtf8;
+        // Only report an error when the save folder does not exist at all
+        // (mirrors FindFirstFileA failing in the original). An existing but
+        // empty folder counts as zero saves so the memory card screen can show
+        // an empty list instead of bailing out.
+        if (system::fs::info(savePath.c_str()).kind != system::fs::FileKind::directory)
             return -1;
+        auto entries = system::fs::getDirectoryContents(savePath.c_str(), "*");
 
         for (const auto& entry : entries)
         {

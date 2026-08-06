@@ -1457,7 +1457,15 @@ namespace openre::save
             auto saveFolder = GetSaveFolder();
             auto plId = (uint8_t)SaveGetPlID(saveFolder, &gGameTable.cnt0, &gGameTable.cnt1);
             if (plId == 0xFF)
-                return;
+            {
+                // The save folder does not exist. Fall through to an empty
+                // list rather than returning early: returning without a
+                // task_sleep here makes mem_card exit the task, and since
+                // FG_SYSTEM_21 was already cleared the title thinks a load
+                // succeeded and starts the game with no save data loaded.
+                gGameTable.cnt0 = 0;
+                gGameTable.cnt1 = 0;
+            }
             save_list_files(GetSaveFolder(), gGameTable.cnt0, &gGameTable.Cards, gGameTable.cnt1, &gGameTable.Names);
             gGameTable.dword_986394 = 10;
             auto remaining = gGameTable.cnt0 - cardMode;
