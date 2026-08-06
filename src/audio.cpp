@@ -82,6 +82,10 @@ namespace openre::audio
         uint8_t* bgm_sub = (uint8_t*)0x693499;     // Bgm.Sub byte
         SeqCtr* seq_ctr_table = (SeqCtr*)0x69381C; // SEQCTR table base (3 entries)
 
+        // Standalone globals used by Snd_room_load (0x004EC7D0).
+        int32_t* dword_6934A8 = (int32_t*)0x6934A8; // room VAB data ptr (same value as rdt->offsets[1])
+        uint8_t* byte_6941D0 = (uint8_t*)0x6941D0;  // room reverb level cache
+
         // ---- Constant LUTs used by SsLoadBanks (0x004344A0) ------------------------
         // All dumped verbatim from the read-only data segment of bio2 1.10.exe.
 
@@ -2782,10 +2786,71 @@ namespace openre::audio
         }
     }
 
-    // 0x004EC7D0
+    namespace
+    {
+        // 0x004EC7D0
+        static char snd_room_load()
+        {
+            // Loads the room BGM bank (group 2) and enemy BGM bank (group 3)
+            // for the current room, then loads the room VAB if the room data
+            // provides one. Returns the low byte of the SsLoadBanks result.
+            char result = 0;
+
+            if (!gGameTable.enable_dsound)
+                return result;
+
+            ss_unload_group(2);
+            gGameTable.ss_name_room[0] = 0;
+
+            // Zero the first byte of each footstep-name slot (0x104 bytes
+            // apart) up to the Main_vol global.
+            auto v1 = gGameTable.ss_name_step;
+            do
+            {
+                *v1 = 0;
+                v1 += 260;
+            } while ((uintptr_t)v1 < (uintptr_t)main_vol);
+
+            ss_unload_group(3);
+            gGameTable.ss_name_enemy[0] = 0;
+            gGameTable.vab_id[2] = 0;
+            gGameTable.vab_id[3] = 0;
+
+            auto v0 = gGameTable.rdt->offsets[1];
+            if (v0)
+            {
+                *byte_6941D0 = (uint8_t)(gGameTable.rdt->header.reverb_lv * 4);
+                *dword_693B20 =
+                    (*(uint32_t*)((uint8_t*)v0 + 12) - (*(uint16_t*)((uint8_t*)v0 + 18) << 9) - 2592) & 0xFFFFFFF0;
+                auto rdt2 = (int32_t)(uintptr_t)gGameTable.rdt->offsets[0];
+                pEdt_adr[5] = rdt2;
+                pEdt_adr[2] = rdt2;
+                *dword_6934A8 = (int32_t)(uintptr_t)v0;
+                result = (char)ss_load_banks(2 /* ST_ROOM */, gGameTable.current_stage, gGameTable.current_room, 0);
+                gGameTable.vab_id[2] = (uint8_t)result;
+            }
+            else
+            {
+                *dword_693B20 = 0;
+            }
+
+            return result;
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_room_load` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        char (*const snd_room_load_impl)() = &snd_room_load;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (room.cpp, title.cpp). Original-binary callers
+    // (Result_init, Set_room, Title) reach the implementation above via the
+    // hook on 0x004EC7D0.
     void snd_room_load()
     {
-        interop::call(0x004EC7D0);
+        snd_room_load_impl();
     }
 
     // 0x004EC8A0
@@ -3044,6 +3109,7 @@ namespace openre::audio
         // wrapper in this scope.
         interop::writeJmp(0x004EC450, snd_load_core_impl);
         interop::writeJmp(0x004EC6D0, &snd_load_arms);
+        interop::writeJmp(0x004EC7D0, snd_room_load_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
