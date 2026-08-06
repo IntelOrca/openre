@@ -548,6 +548,106 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   the mirror but the immediate 2D paths always request nearest. 24bpp surfaces
   remain untracked (M3). Colour keying deferred to M8.
 
+### M6 — Viewport / material / stats (done)
+- **Already covered by M4** (verified, unchanged):
+  - `set_viewport` stores the full `D3DVIEWPORT2` into `mDeviceState.viewport2`
+    (with `haveViewport`); `present()` feeds `dwX/dwY/dwWidth/dwHeight` into
+    `SDL_SetGPUViewport` (falling back to the render-target dims before the
+    first viewport exists).
+  - `set_material` mirrors `material->ambient` into `mDeviceState.clearColor`
+    (alpha forced 1.0), and the scene pass uses it as the target clear colour
+    when the frame's `Clear(D3DCLEAR_TARGET)` requests a target clear
+    (`clear()` records `pendingClearTarget`/`pendingClearDepth`).
+  - `get_stats` replaces `dwTrianglesDrawn`/`dwVerticesProcessed` with the
+    GPU's cumulative `totalTriangles`/`totalVertices` when the GPU backend is
+    active; the D3D reference's `get_stats` runs first in the front-end
+    broadcast and the GPU override is gated on `active_backend()==1`, so the
+    D3D path is untouched. `queueDraw` increments both counters (triangle list
+    = `n/3`, strip = `n-2`). The game reads only those two fields
+    (`Marni::do_render`, marni.cpp L1028-1029) and computes per-frame deltas
+    from the cumulative values — matching the D3D2 device's own cumulative
+    counters.
+- **Changed in M6** (`gfx_backend_gpu.cpp`):
+  - **Z-range**: `present()` now maps the stored `D3DVIEWPORT2.dvMinZ`/
+    `dvMaxZ` onto the SDL_GPU viewport `min_depth`/`max_depth` instead of
+    hardcoding 0..1 (falling back to 0/1 before the first `SetViewport2`).
+    The game sets 0/1 at init (marni.cpp L882-883), so this is a no-op today,
+    but the pipeline now honors whatever the game sets — SDL_GPU's viewport
+    depth range performs the same clip-z → z-buffer remap as D3D's viewport
+    transform (`dvMinZ + z*(dvMaxZ-dvMinZ)`), and the depth clear stays 1.0
+    (D3D clears the z-buffer to its max value regardless of the viewport
+    range, so `z ≤ 1.0` always passes the game's LESSEQUAL test, same as D3D).
+  - `set_viewport` debug log now includes `pos`, `z=[min,max]` and the clip
+    volume; `get_stats` logs the cumulative values at debug.
+- **Viewport offset / clip (verified, no change needed).** The game calls
+  `SetViewport2` exactly once per device init with `dwX=0, dwY=0`
+  (marni.cpp L874-875; runtime log `SetViewport2 ... pos=0x0 size=640x480
+  z=[0,1] clip=(-1,-1)+2x2`), so the shader's
+  `(pos - viewport.xy)/viewport.zw` NDC conversion in `tl_vertex.hlsl` is a
+  no-op today. The math is correct for the D3D TL convention (screen coords
+  relative to the viewport origin, viewport xy added by the rasterizer): a
+  vertex at `(vp.x, vp.y)` maps to the viewport's top-left pixel, matching the
+  SDL viewport at the same offset. `dwClipX/Y/W/H = -1,-1,2,2` is the full
+  NDC clip volume — the GPU backend ignores it, which is equivalent to D3D's
+  default (no extra clipping beyond the NDC cube, which SDL_GPU rasterization
+  applies automatically). Documented, not implemented.
+- **Ambient material (verified, no change needed).** The game sets the
+  background material's ambient (marni.cpp L903-916, ambient * 0.0039215689,
+  alpha 1.0) at init and re-asserts it every frame via original code
+  (`SetMaterial`+`SetBackground` logged 190× in a ~12s run, one per frame),
+  so `clearColor` persistence is trivially correct — it is only ever written
+  by `set_material`. D3D2's target clear uses the background material's
+  ambient RGB (alpha not used), so forcing alpha 1.0 in the clear colour is
+  faithful. Runtime ambient was (0,0,0) on the tested paths (black target
+  clear, matching the D3D reference frame captures pixel-for-pixel).
+- **Clear rects (verified, no change needed).** `Marni::Clear` (marni.cpp
+  L958-962) always clears the full viewport (`D3DRECT{0,0,xsize,ysize}`);
+  runtime log confirmed every clear is `Clear rect=(0, 0, 640, 480)` with
+  `count=1`. The backend records only the flags and ignores the rect list,
+  which is correct for this game. SDL 3.4.12 does expose
+  `SDL_SetGPUScissor(render_pass, rect)` — if a future game path ever cleared
+  a sub-rect, the scene pass would need a pre-pass that draws the clear
+  colour clipped to the union of the rects with `LOADOP_LOAD` (SDL's pass
+  begin clear covers the whole target), or a `LOADOP_CLEAR` plus re-fill of
+  the outside; documented, not implemented.
+- **M0 audit §9 coverage.** Every `IDirect3DViewport2` method the game
+  actually calls is hooked and forwarded: `Clear` (+0x30), `SetViewport2`
+  (+0x34), `SetBackground` (+0x34 on the viewport slot 8); device-side
+  `SetCurrentViewport` (+0x34) is broadcast too. `AddViewport`/`AddLight`/
+  `GetViewport*` are not hooked and forward to the real device unchanged —
+  the GPU backend does not need them (it tracks the current viewport via
+  `SetCurrentViewport` + the viewport's own `SetViewport2`). The D3D2
+  software-emulation `SwapTextureHandles` (texture animation) also forwards
+  natively; the GPU backend's handle→surface map is not updated on a swap
+  (pre-existing M5 limitation, unaffected by M6).
+- **Verification evidence** (all at `OPENRE_LOG_VERBOSITY=debug`,
+  `OPENRE_RE2_DATA=F:\games\openre\data`):
+  - `build.bat`: 0 warnings / 0 errors (`TreatWarningAsError`).
+  - Default run (active=0): D3D path unchanged — init ok, game renders, 190
+    `SetMaterial`/`SetBackground`, 1 `SetViewport2`, 378 `Clear` (mostly
+    `flags=2` = z-only, a few `flags=3` = target+z), zero `[gfx:gpu]`
+    error/fail lines.
+  - GPU run (`OPENRE_GFX_BACKEND=1`): real graphics render — PrintWindow
+    capture 369×301 shows the title screen (25 unique colours, incl. the
+    signature `(0,153,188)` title band) and a later room scene (2901 unique
+    sampled colours); the same run's `OPENRE_GPU_DUMP` readbacks contained
+    room content (up to 140 unique sampled colours per 640×480 frame).
+    `GetStats triangles=… vertices=… (cumulative)` lines grow per frame
+    (0 → 1240 → 6106 triangles; 0 → 2604 → 16386 vertices) with per-frame
+    deltas of 8 triangles during the demo — the game's delta math works.
+  - F6 toggle both ways (synthetic `WM_KEYDOWN` VK_F6, SDL focus restored
+    with `WM_ACTIVATE`/`WM_SETFOCUS`): `toggled to 0` → D3D frame captures
+    pixel-identical colour distribution to the GPU frame; `toggled to 1` →
+    GPU presents resume and render; `toggled to 0` again — no crash at any
+    point.
+  - Game killed, log files removed.
+- **Known limitations.** Viewport clip volume (`dwClipX/Y/W/H`), clear
+  sub-rects and `SwapTextureHandles` are forwarded/documented but not
+  implemented on the GPU backend (the game never exercises them). Ambient is
+  only observed as black on the tested paths (title/demo/attract); the
+  per-room ambient (a room change re-SetMaterials the material) follows the
+  same `set_material` → `clearColor` path and is code-verified.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.

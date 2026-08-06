@@ -447,8 +447,13 @@ namespace openre::gfx
                     viewport.y = static_cast<float>(mDeviceState.viewport2.dwY);
                     viewport.w = static_cast<float>(mDeviceState.haveViewport ? mDeviceState.viewport2.dwWidth : rtW);
                     viewport.h = static_cast<float>(mDeviceState.haveViewport ? mDeviceState.viewport2.dwHeight : rtH);
-                    viewport.min_depth = 0.0f;
-                    viewport.max_depth = 1.0f;
+                    // The game's D3DVIEWPORT2 dvMinZ/dvMaxZ define the z-range
+                    // the viewport maps clip-space z into (the game sets 0/1 at
+                    // init, Marni::init_all 0x404071). SDL_GPU's viewport
+                    // min/max depth performs the same remap, so honor whatever
+                    // the game sets instead of hardcoding the full range.
+                    viewport.min_depth = mDeviceState.haveViewport ? mDeviceState.viewport2.dvMinZ : 0.0f;
+                    viewport.max_depth = mDeviceState.haveViewport ? mDeviceState.viewport2.dvMaxZ : 1.0f;
                     SDL_SetGPUViewport(scenePass, &viewport);
 
                     // The TL vertex shader converts screen coords to NDC using
@@ -920,11 +925,23 @@ namespace openre::gfx
                     mDeviceState.viewport2 = *vp;
                     mDeviceState.haveViewport = true;
                 }
+                // Log the full rect + z-range: the game sets dwX=0/dwY=0 and
+                // dvMinZ=0/dvMaxZ=1 at init (Marni::init_all), so the offset
+                // math in tl_vertex.hlsl and the SDL viewport z-range are
+                // no-ops today but must follow whatever the game sets.
                 logging::logDebug(
-                    "[gfx:gpu] SetViewport2 viewport={} size={}x{}",
+                    "[gfx:gpu] SetViewport2 viewport={} pos={}x{} size={}x{} z=[{},{}] clip=({},{})+{}x{}",
                     static_cast<void*>(viewport),
+                    vp != nullptr ? vp->dwX : 0,
+                    vp != nullptr ? vp->dwY : 0,
                     vp != nullptr ? vp->dwWidth : 0,
-                    vp != nullptr ? vp->dwHeight : 0);
+                    vp != nullptr ? vp->dwHeight : 0,
+                    vp != nullptr ? vp->dvMinZ : 0.0f,
+                    vp != nullptr ? vp->dvMaxZ : 0.0f,
+                    vp != nullptr ? vp->dvClipX : 0.0f,
+                    vp != nullptr ? vp->dvClipY : 0.0f,
+                    vp != nullptr ? vp->dvClipWidth : 0.0f,
+                    vp != nullptr ? vp->dvClipHeight : 0.0f);
                 return S_OK;
             }
 
@@ -1209,11 +1226,17 @@ namespace openre::gfx
                 // The D3D reference backend fills stats from the real device
                 // first; when the GPU backend is active, replace them with the
                 // counts of what the GPU actually drew so the game's per-frame
-                // deltas keep working.
+                // deltas keep working. The values are cumulative (like the
+                // D3D2 device's counters); Marni::do_render subtracts the
+                // previous GetStats to obtain the per-frame deltas.
                 if (stats != nullptr && active_backend() == 1)
                 {
                     stats->dwTrianglesDrawn = static_cast<DWORD>(mDeviceState.totalTriangles);
                     stats->dwVerticesProcessed = static_cast<DWORD>(mDeviceState.totalVertices);
+                    logging::logDebug(
+                        "[gfx:gpu] GetStats triangles={} vertices={} (cumulative)",
+                        stats->dwTrianglesDrawn,
+                        stats->dwVerticesProcessed);
                 }
                 return S_OK;
             }
