@@ -3067,6 +3067,67 @@ namespace openre::audio
         // audio.h, so an unqualified reference from openre::audio would find
         // that wrapper rather than this function.
         void (*const snd_bgm_set_impl)() = &snd_bgm_set;
+
+        // 0x004ED260
+        static void snd_bgm_fade_on(int a, int b)
+        {
+            using sig = void (*)(int, int);
+            auto p = (sig)0x004ED260;
+            p(a, b);
+        }
+
+        // 0x004ECBE0
+        static void snd_bgm_ck()
+        {
+            if (!gGameTable.dword_99CF6C || !gGameTable.enable_dsound)
+                return;
+
+            if (((uint8_t*)gGameTable.ctcb)[15] == 1)
+            {
+                ((uint8_t*)gGameTable.ctcb)[15] = 0;
+            }
+            else if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            {
+                // Resolve the current stage/room to its BGM-table entry (same
+                // index pattern as Snd_bgm_set) and check whether the main/sub
+                // ids in the table still match what is currently playing.
+                auto v0 = (uint8_t*)&gGameTable
+                              .bgm_table[gGameTable.current_room
+                                  + byte_53C790[gGameTable.current_stage]];
+                gGameTable.current_bgm_address = v0;
+
+                if (((*bgm_main ^ v0[0]) & 0x3F) != 0)
+                {
+                    snd_bgm_fade_on(0x5A, 22);
+                }
+                else
+                {
+                    if (((*bgm_sub ^ v0[1]) & 0x3F) != 0)
+                    {
+                        if (gGameTable.byte_693808 == 1
+                            && ((DWORD)ss_get_status(6, 0) & 1) != 0)
+                        {
+                            ss_seq_set_decrescendo(1, 127, 90);
+                            gGameTable.byte_693808 = 50;
+                        }
+                        if (gGameTable.byte_693810 == 1
+                            && ((DWORD)ss_get_status(6, 1) & 1) != 0)
+                        {
+                            ss_seq_set_decrescendo(2, 127, 90);
+                            gGameTable.byte_693810 = 50;
+                        }
+                    }
+                    ((uint8_t*)gGameTable.ctcb)[15] = 1;
+                    task_sleep(90);
+                }
+            }
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_bgm_ck` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        void (*const snd_bgm_ck_impl)() = &snd_bgm_ck;
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
@@ -3080,7 +3141,7 @@ namespace openre::audio
     // 0x004ECBE0
     void snd_bgm_ck()
     {
-        interop::call(0x004ECBE0);
+        snd_bgm_ck_impl();
     }
 
     // 0x004ECCE0
@@ -3328,6 +3389,10 @@ namespace openre::audio
         // its handle, since the name snd_bgm_set is the public audio.h
         // wrapper in this scope.
         interop::writeJmp(0x004EC9C0, snd_bgm_set_impl);
+        // snd_bgm_ck_impl: the hook targets the static implementation via its
+        // handle, since the name snd_bgm_ck is the public audio.h wrapper in
+        // this scope.
+        interop::writeJmp(0x004ECBE0, snd_bgm_ck_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
