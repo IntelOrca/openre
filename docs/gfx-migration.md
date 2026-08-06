@@ -268,6 +268,94 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   `SDL_ClaimWindowForGPUDevice` handles swapchain setup on its own, so
   `SDL_CreateWindow` flags were left unchanged.
 
+### M3 — GPU surface layer (done)
+- **What was implemented** (`gfx_backend_gpu.cpp` only):
+  - `GfxBackendGPU` now tracks every DirectDraw surface the front-end reports
+    (`create_surface` is called right after the real `CreateSurface` succeeds,
+    keyed by the `IUnknown*`/`IDirectDrawSurface*` pointer) in
+    `std::unordered_map<void*, SurfaceEntry>`. A `SurfaceEntry` holds an
+    `SDL_GPUTexture` (usage `SAMPLER | COLOR_TARGET`), a CPU shadow
+    (`std::vector<uint8_t>`) in the surface's DirectDraw pixel format, and two
+    transfer buffers (upload for shadow→texture, download for texture→shadow).
+  - `create_surface`: records the entry and logs creation. Pixel formats:
+    16bpp → `SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM` (byte-identical to DirectDraw
+    RGB565 → memcpy transfers), 32bpp → `R8G8B8A8_UNORM` with a channel reorder
+    on transfer (DirectDraw RGBX8888 memory order is B,G,R,X; alpha forced
+    opaque). `SDL_GPUTextureSupportsFormat` gates `SAMPLER|COLOR_TARGET`, with
+    a SAMPLER-only fallback for 16-bit formats on backends that cannot render
+    to them.
+  - **Zero-size primary handling**: the game creates the primary (`surface2`)
+    with `DDSD_CAPS` only (width/height/bit depth all zero). Such entries are
+    created in a deferred state; `ensureTexture()` lazily creates the GPU
+    texture once real dimensions arrive, which `adoptDesc()` harvests from the
+    `DDSURFACEDESC` the D3D reference backend fills during `GetSurfaceDesc` /
+    `Lock` (width, height, bpp; pitch recomputed as `width * bpp/8`). This also
+    covers `surface0`, which is created with dimensions but no pixel format.
+  - `lock`: only hands out a CPU pointer when the GPU backend is active
+    (otherwise returns S_OK and leaves the D3D backend's `lpSurface`/`lPitch`
+    untouched so the game keeps writing into the real DD surface). When active:
+    ensures the texture exists, downloads the current texture content into the
+    shadow (`SDL_DownloadFromGPUTexture` + synchronous
+    `SDL_SubmitGPUCommandBuffer` + `SDL_WaitForGPUIdle`, then
+    `SDL_MapGPUTransferBuffer`), and returns `lpSurface = shadow.data()`,
+    `lPitch = width * bpp/8`. A re-entrant lock (already locked) is a no-op.
+    First lock of a fresh surface hands back a zeroed shadow.
+  - `unlock`: uploads the shadow back into the texture
+    (`SDL_MapGPUTransferBuffer` → `SDL_UploadToGPUTexture`, synchronous
+    submit + wait) and marks the surface as having content.
+  - `blt`: surface→surface copy uses `SDL_CopyGPUTextureToTexture` (1:1,
+    rects clamped, same-format check, debug log); colorfill
+    (`src == nullptr && DDBLT_COLORFILL`) writes `fx->dwFillColor` into the
+    CPU shadow in the surface's own pixel format and uploads only the affected
+    region. Both are gated on the active backend (logged `(inactive)` when the
+    D3D backend owns rendering, which is the default — but `create_surface`,
+    `get_surface_desc`, `lock`/`unlock` bookkeeping always run so the GPU-side
+    state stays coherent for a live F6 toggle).
+  - `get_surface_desc`: unknown surface → `E_FAIL`; otherwise `adoptDesc` (logs
+    adoptions) and, when active, overwrites `dwWidth`/`dwHeight`/`lPitch` so
+    `MarniSurface2` gets `width * bytesPerPixel` as DirectDraw pitch.
+  - `is_lost` → `DD_OK` (a GPU texture is never lost); `restore` → `S_OK`;
+    `add_attached_surface` / `set_color_key` / `set_palette` / `set_clipper`
+    stay `S_OK` stub logs (color key / palette are M5 work; the game calls
+    them but nothing breaks when they no-op).
+  - `shutdown()` now waits for the GPU to idle (`SDL_WaitForGPUIdle`) and
+    releases every tracked surface's texture + transfer buffers before
+    destroying the device. `destroy_surface` releases a single entry; unknown
+    surfaces and missing entries are guarded everywhere.
+- **Verification evidence** (all at `OPENRE_LOG_VERBOSITY=debug`):
+  - `build.bat`: 0 warnings, 0 errors (`TreatWarningAsError`).
+  - Default run (active=0, no env): game still renders through D3D
+    (init_all ok, frames, window, process alive ~12s). The GPU backend ran
+    every surface call silently in the background: CreateSurface / adopted
+    GetSurfaceDesc / Lock-Unlock logged `(inactive)` (pointer left to D3D),
+    Blt logged `(inactive)`, zero `failed:`/error lines.
+  - GPU run (`OPENRE_GFX_BACKEND=1`, ~14s): `[gfx:gpu] device created
+    (driver=direct3d12)`, `window claimed`, surfaces created (primary 0x0 and
+    surface0 640x480 deferred; 16x16/128x128/256x256 textures at 16/32bpp),
+    `GetSurfaceDesc surface=... adopted real size 640x480 bpp=32` and
+    `3840x2160 bpp=32`, **222 Lock / 222 Unlock pairs** with real pointers and
+    correct pitches (640x480@32bpp → 2560, 256x256@32bpp → 1024, 16x16@16bpp →
+    32), **190 `Blt colorfill`** (GPU_13 software-clear path) and **190
+    `Blt copy 640x480 at (0,0) -> ...`** (the `flip_blt` surface0→surface2
+    copy, one per presented frame), **190 `present (swapchain cleared)`**.
+    Process stayed alive; zero `failed:`/error lines; no "Blt skipped"
+    entries. Screen is solid black as expected (no draw pipeline until M4).
+- **Known limitations**:
+  - Blt scaling is not implemented: surface→surface copies are 1:1. The
+    common `flip_blt` path is a full-size copy and works; a dst rect larger
+    than the src rect would copy only the src-sized region (rects are clamped
+    to the surfaces).
+  - The dst rect of `flip_blt` carries the window position (e.g.
+    `(1600,798)`); the copy honors it literally into the primary texture.
+    Present (M4) will decide which region of `surface2` to show.
+  - Color key (`SetColorKey`) and palettes are no-op stubs — texture
+    transparency/shadows will need them (M5).
+  - 24bpp surfaces (one 640x480 `bpp=24` entry, the D3D2 device's internal
+    back buffer) are not tracked — logged `unsupported surface bpp=24`; the
+    game degrades gracefully since the D3D backend still owns those paths.
+  - Lock with a non-null rect ignores the rect (locks the whole surface);
+    the game locks whole surfaces in practice.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
