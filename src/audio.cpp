@@ -1718,11 +1718,19 @@ namespace openre::audio
     }
 
     // 0x004EF070
-    static int bgm_ck_room(int a, int b, int c)
+    static int bgm_ck_room(int stage, int room, int cut)
     {
-        using sig = int (*)(int, int, int);
-        auto p = (sig)0x004EF070;
-        return p(a, b, c);
+        if (cut == -1)
+        {
+            if (gGameTable.current_stage == stage && gGameTable.current_room == room)
+                return 1;
+        }
+        else if (gGameTable.current_stage == stage && gGameTable.current_room == room
+                 && gGameTable.current_cut == cut)
+        {
+            return 1;
+        }
+        return 0;
     }
 
     // 0x004348F0
