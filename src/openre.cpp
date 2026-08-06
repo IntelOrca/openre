@@ -1,6 +1,7 @@
 #include "openre.h"
 #include "audio.h"
 #include "camera.h"
+#include "debug.h"
 #include "door.h"
 #include "enemy.h"
 #include "entity.h"
@@ -34,6 +35,7 @@
 
 using namespace openre;
 using namespace openre::audio;
+using namespace openre::debug;
 using namespace openre::door;
 using namespace openre::enemy;
 using namespace openre::file;
@@ -2427,7 +2429,21 @@ namespace openre
             gGameTable.vk_press |= 2; // options
             SetFocus(hWnd);
             break;
-        case VK_F6:
+        case VK_F6: debug::toggle(); break;
+        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
+        case VK_F8:
+            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
+            {
+                if (marni::change_resolution(gGameTable.pMarni))
+                    after_resolution_change();
+                else
+                    marni::out("???", "winmain.cpp");
+            }
+            break;
+        case VK_F9:
+            gGameTable.vk_press |= 0x40; // exit to menu
+            break;
+        case VK_F10:
             // Toggle the active render backend: 0 = D3D reference (DirectDraw
             // primary surface Blt), 1 = GPU (SDL_GPU swapchain present). Only
             // available in gfx_mode "both"; see docs/gfx-migration.md.
@@ -2441,19 +2457,6 @@ namespace openre
                 logging::logInfo("[gfx] F6 ignored: backend toggle only available in 'both' mode");
             }
             SetFocus(hWnd);
-            break;
-        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
-        case VK_F8:
-            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
-            {
-                if (marni::change_resolution(gGameTable.pMarni))
-                    after_resolution_change();
-                else
-                    marni::out("???", "winmain.cpp");
-            }
-            break;
-        case VK_F9:
-            gGameTable.vk_press |= 0x40; // exit to menu
             break;
         default:
             input_wmkeydown(&gGameTable.input, vk);
@@ -2812,6 +2815,7 @@ namespace openre
             gGameTable.can_draw = 0;
         }
 
+        debug::draw();
         save_print_flush();
         marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
         marni::flip(gGameTable.pMarni);
@@ -2869,6 +2873,11 @@ namespace openre
                 gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_3) ? 0 : 2;
             }
             update_timer();
+
+            // Create the GDI font used by the save/debug text renderer up front
+            // (normally only created on resolution change / card access).
+            gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+            font_create();
 
             // Increase timer resolution for accurate Sleep(1)
             constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
