@@ -1779,6 +1779,94 @@ namespace openre::audio
         return 0;
     }
 
+    // 0x00434CF0
+    static int ss_get_volume(int type, unsigned int index)
+    {
+        if (!gGameTable.audio_pMarniSnd)
+            return 1;
+
+        uint32_t* v3 = nullptr;
+        switch (type)
+        {
+        case 0: // door (0..3)
+            if (index >= 4)
+                return 0;
+            v3 = &gGameTable.audio_BufferDoor[index];
+            break;
+        case 1: // arms (0..0x1F)
+            if (index >= 0x20)
+                return 0;
+            v3 = &gGameTable.audio_BufferArms[index];
+            break;
+        case 2: // room (0..0x2F)
+            if (index >= 0x30)
+                return 0;
+            v3 = &gGameTable.audio_BufferRoom[index];
+            break;
+        case 3: // enemy (0..0x1F)
+            if (index >= 0x20)
+                return 0;
+            v3 = &gGameTable.audio_BufferEnemy[index];
+            break;
+        case 4: // core (0..0x15)
+            if (index > 0x15)
+                return 0;
+            v3 = &gGameTable.audio_BufferCore[index];
+            break;
+        case 5: // bgm (0..2)
+            if (index > 2)
+                return 0;
+            v3 = &gGameTable.audio_BufferBgm[index];
+            break;
+        case 6: // sbgm (0..1)
+            if (index > 1)
+                return 0;
+            v3 = &gGameTable.audio_BufferSBgm[index];
+            break;
+        case 7: // voice (0..1)
+            if (index > 1)
+                return 0;
+            v3 = &gGameTable.audio_BufferVoice[index];
+            break;
+        default:
+            return 0;
+        }
+
+        // Shared tail: all paths that resolve a buffer land here. The original
+        // NULL-checks v3 (loc_434DE5); it can never be NULL for the fixed array
+        // slots above, but it is kept for fidelity.
+        if (!v3)
+            return 0;
+
+        uint32_t result = *v3;
+        if (!result)
+            return 0;
+
+        auto buffer = (LPDIRECTSOUNDBUFFER)result;
+        // GetVolume lives at vtable offset 0x18 and writes the current
+        // attenuation in hundredths of a decibel back into `index`; any
+        // HRESULT other than S_OK is treated as failure (0).
+        HRESULT hr = buffer->GetVolume((LPLONG)&index);
+        if (hr != 0)
+            return 0;
+
+        // Convert the DirectSound attenuation back into the linear 0..255
+        // volume scale, inverting the conversion done by ss_set_vol (the
+        // -1971 threshold is where that function's two branches meet).
+        int v4;
+        if ((int)index > -1971)
+            v4 = (int)(index + 2286) / 18;
+        else
+            v4 = (int)(index + 10000) / 259;
+
+        // BGM/SBGM channels scale against the BGM master volume, all other
+        // channels against the SFX master volume.
+        if (type == 5 || type == 6)
+            return 100 * v4 / (unsigned __int8)gGameTable.bgm_vol;
+        else
+            return 100 * v4 / (unsigned __int8)gGameTable.sfx_vol;
+    }
+
     // 0x00434EA0
     static int ss_load_sap(DWORD type, int id, int bank, int player)
     {
@@ -2576,6 +2664,7 @@ namespace openre::audio
         interop::writeJmp(0x004347B0, &ss_get_status);
         interop::writeJmp(0x004348F0, &ss_set_pan);
         interop::writeJmp(0x00434AB0, &ss_set_vol);
+        interop::writeJmp(0x00434CF0, &ss_get_volume);
         interop::writeJmp(0x00434EA0, &ss_load_sap);
         interop::writeJmp(0x00435170, &ss_load_steps);
         interop::writeJmp(0x00435300, &ss_load_bgm);
