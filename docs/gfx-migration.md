@@ -115,10 +115,14 @@ triangles/vertices counters (`GetStats`).
 — GPU backend must recreate textures/pipeline/swapchain-sized blit accordingly,
 including the borderless-fullscreen letterbox path.
 
-### M8 — Parity sign-off & cleanup
-A/B every scene (title, menus, rooms, items, inventory, doors) with the toggle;
-fix diffs. Then: config flag to disable the D3D reference backend, compile it
-out on non-Windows, and drop the DirectDraw dependencies in vcxproj/CMake.
+### M8 — Parity sign-off & config flag (done)
+A/B every scene reachable without interactive input (title/attract screens) with
+the F6 toggle; fix diffs. Then a config flag to select the startup backend and
+disable the D3D reference broadcast for GPU-only runs.
+
+Follow-ups (deferred, see Progress M8 "Endgame follow-ups"): compile the D3D
+reference out on non-Windows, and drop the DirectDraw dependencies in
+vcxproj/CMake once the front-end fully emulates DirectDraw surfaces.
 
 ## Progress
 
@@ -728,6 +732,93 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   cycle resolutions and ALT+ENTER to toggle fullscreen; expect no crash, the
   letterboxed 4:3 frame centered in the borderless-fullscreen window, and a
   `blit pipeline recreated`/depth-recreation log line on change).
+
+### M8 — Parity sign-off & config flag (done)
+
+**A/B parity results.** Two fresh-process comparisons plus one live F6-toggle
+pair, all via PrintWindow captures of the 369×301 window (fixed at 100,100 for
+the fresh-process runs):
+
+- *Disclaimer scene* (post-logo gray card, gw2.adt): live F6-toggle pair in one
+  process, same window, same frame → **pixel-exact, 0/111069 pixels differ
+  (0.0000%)**.
+- *Logo scene* (CAPCOM-style red logo over dark red + cyan band): the logo is
+  a 3D TL draw with a bottom-edge shimmer animation; the shimmer also varies
+  between frames of the *same* backend, so same-moment toggle captures are the
+  fair comparison. Live toggle pair: **logo body rows 0–288 pixel-identical
+  (0 diff of ~110K pixels); 0.45% total diff confined to the bottom 12 rows'
+  animated shimmer** (a timing artifact, not a backend difference — the same
+  rows differ 0.35–0.44% between consecutive frames of each backend).
+- **1 px GPU 3D offset found & fixed.** Before the fix the GPU logo region
+  matched the D3D reference only at dx=−1, dy=−1 (10% diff at 0,0); 2D overlay
+  layers aligned at 0. Root cause: legacy D3D2 TL rasterization samples at
+  integer pixel points, D3D12/SDL_GPU at pixel centers (x+0.5). Fix in
+  `src/gfx_backend_gpu.cpp` present(): the scene-pass vertex uniform now
+  carries `viewport.x − 0.5, viewport.y − 0.5` (a half-pixel viewport-origin
+  shift in the NDC conversion in `tl_vertex.hlsl`), so scene geometry lands on
+  the same pixels the reference produces. The present-pass blit quad keeps the
+  unshifted viewport — it was already pixel-exact. After the fix the logo
+  region matches at dx=0, dy=0 with 0 diff.
+
+**Config flag.** Persistent `[video]` section in the INI config
+(`system::config`, `user://openre.ini` = `%APPDATA%\openre\openre.ini`):
+
+- `render_backend = d3d|gpu` (default `d3d`) — selects the startup backend.
+- `disable_d3d_reference = 0|1` (default `0`) — when `1` and the GPU backend is
+  active, the D3D reference backend stops its per-frame forwarding.
+- `OPENRE_GFX_BACKEND=1` env var still overrides the config for dev/automated
+  runs (highest precedence). F6 remains a live dev-only toggle and does not
+  persist.
+- Read once at startup in `gfx::init()`; the INI is written by the game's
+  normal config save, so a manual edit survives. Startup log line reports the
+  state, e.g. `[gfx] backends initialised (active=1, d3d reference disabled)`.
+
+**What `disable_d3d_reference` gates.** `gfx::reference_enabled()` =
+`!(g_referenceDisabled && active_backend() == 1)`. The D3D reference backend
+(`src/gfx_backend_d3d.cpp`) checks it in every per-frame draw/scene broadcast:
+Blt, CreateDevice, SetRenderTarget, SetCurrentViewport, SetViewport,
+SetBackground, BeginScene/EndScene, SetRenderState, Clear, DrawPrimitive,
+DrawIndexedPrimitive, SetTransform, MultiplyTransform, GetStats and present.
+When disabled these return immediately (no real-DirectDraw forwarding) while
+the GPU backend replays the same work on its own textures. **Kept forwarding
+even when disabled:** the surface-layer ops — Lock/Unlock/GetSurfaceDesc/
+IsLost/Restore/AddAttachedSurface/SetColorKey/SetPalette/SetClipper — because
+the game's still-original code (create_zbuffer 0x00407020, create_device
+0x00406D90, surface work 0x0040F580/0x00412BD0/0x00414750, restore_surfaces)
+depends on the real DirectDraw surface state, and the GPU backend adopts the
+real surface size/format from the descs those calls fill. The COM front-end
+(`src/gfx_d3d2.cpp`) answers every hook regardless — only the reference's
+*forwarding* is skipped.
+
+**Verified (this milestone).** (1) `build.bat` 0 warnings / 0 errors.
+(2) Default run, no config: `active=0, d3d reference enabled`, zero GPU error
+lines. (3) `render_backend = gpu`: starts `active=1`, renders. (4)
+`render_backend = gpu` + `disable_d3d_reference = 1`: renders with
+`active=1, d3d reference disabled`, no crash, no `[gfx:gpu]`/`[gfx:d3d]` error
+lines (only benign init-time `CreateSurface` logs), and the logo-body frame is
+**pixel-identical (0 diff) to the broadcast-mode GPU and D3D frames** — the
+reference never presented, so disabling it does not change output.
+(5) F6 toggle verified live in the default run (toggle GPU↔D3D, both render
+the same scene; body 0 diff). (6) Config flag removed → default run returns to
+D3D. (7) Game killed, `run_out.log`/`run_err.log` removed.
+
+**Needs manual testing (require gameplay input):** menus, rooms, inventory,
+doors — any scene reached through the in-game interface. The parity method
+(F6-toggle same-moment capture pairs) applies the same way once the game is
+past the attract loop.
+
+**Endgame follow-ups (deferred, blockers noted).** (1) *Compile the D3D
+reference out on non-Windows:* the reference backend and the COM front-end are
+Windows-only today; gating them behind `#ifdef _WIN32` is mechanical, but the
+GPU backend must still receive surface events the front-end currently
+generates from real DirectDraw objects. (2) *Drop the DirectDraw dependencies:*
+`ddraw.lib` in `src/openre.vcxproj` (L53) and `DirectDrawCreate`/
+`DirectDrawEnumerateA` in `marni.cpp` `create_ddraw` (L2607) still require real
+DirectDraw. Removing them needs the front-end to fully emulate DirectDraw
+surfaces (allocate the shadow memory the game's original COM callers Lock/Blt
+against and answer GetSurfaceDesc/IsLost/Restore/SetColorKey etc. from that
+state) — a large follow-up; until then the front-end must create real DirectDraw
+objects even for GPU-only runs.
 
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.

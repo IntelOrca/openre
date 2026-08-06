@@ -1,9 +1,11 @@
 #include "gfx_d3d2.h"
 #include "gfx_backend.h"
 #include "logger.h"
+#include "system_config.h"
 
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <unordered_map>
 
 namespace openre::gfx
@@ -699,6 +701,10 @@ namespace openre::gfx
     namespace
     {
         int g_activeBackend = 0;
+        // Set from the persistent [video] disable_d3d_reference config flag; the
+        // D3D reference backend then skips its per-frame forwarding while the
+        // GPU backend is the active one.
+        bool g_referenceDisabled = false;
     }
 
     void set_active_backend(int index)
@@ -711,20 +717,34 @@ namespace openre::gfx
         return g_activeBackend;
     }
 
+    bool reference_enabled()
+    {
+        return !(g_referenceDisabled && active_backend() == 1);
+    }
+
     void init()
     {
         backend_d3d()->init();
         backend_gpu()->init();
 
-        // Developer override for automated runs: OPENRE_GFX_BACKEND=1 starts on
-        // the GPU backend without pressing F6. Default (unset) stays on the D3D
-        // reference backend.
+        // Persistent user-facing selection: [video] render_backend = d3d|gpu in
+        // the INI (user://openre.ini), default d3d. The OPENRE_GFX_BACKEND env
+        // var overrides it for dev / automated runs.
+        const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
+        if (renderBackend == "gpu")
+            set_active_backend(1);
+
+        g_referenceDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
+
         if (const char* env = std::getenv("OPENRE_GFX_BACKEND"))
         {
             if (env[0] == '1')
                 set_active_backend(1);
         }
-        logging::logInfo("[gfx] backends initialised (active={})", active_backend());
+        logging::logInfo(
+            "[gfx] backends initialised (active={}, d3d reference {})",
+            active_backend(),
+            reference_enabled() ? "enabled" : "disabled");
     }
 
     void shutdown()

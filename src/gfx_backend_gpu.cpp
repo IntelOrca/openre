@@ -459,7 +459,17 @@ namespace openre::gfx
                     // The TL vertex shader converts screen coords to NDC using
                     // the viewport rect (SDL_PushGPUVertexUniformData is scoped
                     // to the command buffer, so one push serves every draw).
-                    const float vpSize[4] = { viewport.x, viewport.y, viewport.w, viewport.h };
+                    //
+                    // Legacy D3D2 TL rasterization samples triangles at integer
+                    // pixel points; D3D12/SDL_GPU samples at pixel centers
+                    // (x + 0.5). Shifting the viewport origin by -0.5 in the
+                    // NDC conversion moves scene geometry a half pixel
+                    // down-right, which lands the lit pixel set on exactly the
+                    // pixels the D3D reference produces (parity sign-off: the
+                    // title-screen logo was 1px up-left on the GPU backend).
+                    // The present-pass blit quad keeps its unshifted viewport:
+                    // it is already pixel-exact at integer coordinates.
+                    const float vpSize[4] = { viewport.x - 0.5f, viewport.y - 0.5f, viewport.w, viewport.h };
                     SDL_PushGPUVertexUniformData(commandBuffer, 0, vpSize, sizeof(vpSize));
 
                     for (const auto& draw : mQueuedDraws)

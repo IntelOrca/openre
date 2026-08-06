@@ -11,6 +11,20 @@ namespace openre::gfx
         // un-wrapped game, so this is the known-good reference for the GPU
         // backend. Per-frame methods are intentionally silent; only creation
         // events are logged.
+        //
+        // The persistent [video] disable_d3d_reference config flag (see
+        // gfx::reference_enabled) turns the backend into a no-op for the
+        // per-frame scene/draw broadcast (create_device, viewport/background,
+        // BeginScene/EndScene, render states, Clear, DrawPrimitive*, transforms,
+        // GetStats and the present Blt) while the GPU backend is active: the
+        // front-end hooks still answer every COM call, and the GPU backend
+        // replays the work on its own textures. The surface-layer forwards
+        // (Lock/Unlock/GetSurfaceDesc/IsLost/Restore/AddAttachedSurface/
+        // SetColorKey/SetPalette/SetClipper) are kept: the game's original code
+        // (create_zbuffer 0x00407020, create_device 0x00406D90, surface work
+        // 0x0040F580/0x00412BD0/0x00414750, restore_surfaces) depends on the
+        // real DirectDraw surface state, and the GPU backend adopts the real
+        // surface size/format from the desc those calls fill.
         class GfxBackendD3D final : public GfxBackend
         {
         public:
@@ -60,6 +74,11 @@ namespace openre::gfx
 
             HRESULT blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx) override
             {
+                // The game's present (flip_blt) and 2D blits are per-frame
+                // surface work; the GPU backend replays them on its own
+                // textures, so the reference can skip them when disabled.
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(dst); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(
@@ -156,11 +175,15 @@ namespace openre::gfx
 
             void create_device(IUnknown* /*device*/) override
             {
+                if (!reference_enabled())
+                    return;
                 logging::logInfo("[gfx:d3d] CreateDevice");
             }
 
             HRESULT set_render_target(IUnknown* device, IUnknown* surface, DWORD flags) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, LPDIRECTDRAWSURFACE, DWORD);
@@ -172,6 +195,8 @@ namespace openre::gfx
 
             HRESULT set_current_viewport(IUnknown* device, IUnknown* viewport) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, LPDIRECT3DVIEWPORT2);
@@ -183,6 +208,8 @@ namespace openre::gfx
 
             HRESULT set_viewport(IUnknown* viewport, const D3DVIEWPORT2* vp) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(viewport); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DViewport2*, LPD3DVIEWPORT2);
@@ -194,6 +221,8 @@ namespace openre::gfx
 
             HRESULT set_background(IUnknown* viewport, D3DMATERIALHANDLE materialHandle) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(viewport); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DViewport2*, D3DMATERIALHANDLE);
@@ -205,6 +234,8 @@ namespace openre::gfx
 
             HRESULT begin_scene(IUnknown* device) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*);
@@ -216,6 +247,8 @@ namespace openre::gfx
 
             HRESULT end_scene(IUnknown* device) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*);
@@ -226,6 +259,8 @@ namespace openre::gfx
 
             HRESULT set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, D3DRENDERSTATETYPE, DWORD);
@@ -237,6 +272,8 @@ namespace openre::gfx
 
             HRESULT clear(IUnknown* viewport, DWORD count, const D3DRECT* rects, DWORD flags) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(viewport); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DViewport2*, DWORD, LPD3DRECT, DWORD);
@@ -250,6 +287,8 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 DWORD flags) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn
@@ -269,6 +308,8 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 const void* indices, DWORD indexCount, DWORD flags) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(
@@ -288,6 +329,8 @@ namespace openre::gfx
 
             HRESULT set_transform(IUnknown* device, D3DTRANSFORMSTATETYPE state, const D3DMATRIX* matrix) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, D3DTRANSFORMSTATETYPE, LPD3DMATRIX);
@@ -299,6 +342,8 @@ namespace openre::gfx
 
             HRESULT multiply_transform(IUnknown* device, D3DTRANSFORMSTATETYPE state, const D3DMATRIX* matrix) override
             {
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, D3DTRANSFORMSTATETYPE, LPD3DMATRIX);
@@ -310,6 +355,11 @@ namespace openre::gfx
 
             HRESULT get_stats(IUnknown* device, D3DSTATS* stats) override
             {
+                // When the reference is disabled the GPU backend fills the
+                // counters itself; nothing in the game reads the device's other
+                // stats fields.
+                if (!reference_enabled())
+                    return S_OK;
                 if (const auto* e = registry::find(device); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice2*, LPD3DSTATS);

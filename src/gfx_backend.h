@@ -90,6 +90,13 @@ namespace openre::gfx
     void set_active_backend(int index);
     int active_backend();
 
+    // True while the D3D reference backend must keep forwarding calls to the
+    // real DirectDraw/D3D2 objects. The persistent [video] disable_d3d_reference
+    // config flag turns it off while the GPU backend is active, so the D3D
+    // reference does no per-frame draw work (the front-end hooks still answer
+    // every COM call; only the reference's forwarding is skipped).
+    bool reference_enabled();
+
     // Called from marni.cpp.
     void init();
     void shutdown();
