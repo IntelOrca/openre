@@ -1,6 +1,7 @@
 #include "system_window.h"
 #include "logger.h"
 
+#include <cstdlib>
 #include <windows.h>
 
 #include <SDL3/SDL.h>
@@ -114,7 +115,13 @@ namespace openre::system::window
             return false;
         }
 
-        gWindow = SDL_CreateWindow("BIOHAZARD(R) 2 PC", 640, 480, 0);
+        const char* title = "BIOHAZARD(R) 2 PC";
+        if (const char* envTitle = std::getenv("OPENRE_WINDOW_TITLE"); envTitle && *envTitle)
+        {
+            title = envTitle;
+        }
+
+        gWindow = SDL_CreateWindow(title, 640, 480, 0);
         if (!gWindow)
         {
             logging::logError("[SDL3] SDL_CreateWindow failed: {}", SDL_GetError());
