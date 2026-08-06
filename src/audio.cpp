@@ -71,7 +71,7 @@ namespace openre::audio
 
         // Standalone globals used by Snd_se_call (0x004EE350).
         int* ss_timer = (int*)0x6934C0;          // SE fade countdown timers (3 entries)
-        int* ss_vol = (int*)0x693468;            // SE base volume table (indexed 0..2)
+        int16_t* ss_vol = (int16_t*)0x693468;    // SE fade step table (3 word entries, stride 2)
         uint32_t* dword_689DD8 = (uint32_t*)0x689DD8; // set when the BGM fade completes
         uint32_t* dword_689DDC = (uint32_t*)0x689DDC; // set when the SBGM[0] fade completes
         uint32_t* dword_689DE0 = (uint32_t*)0x689DE0; // set when the SBGM[1] fade completes
@@ -3134,11 +3134,11 @@ namespace openre::audio
         }
 
         // 0x004EEE00
-        static void ss_seq_set_decrescendo(int seq_no, int vol, int time)
+        static void ss_seq_set_decrescendo(int16_t seq_no, int16_t vol, int time)
         {
             int v3 = vol / time;
             ss_timer[seq_no] = time;
-            ss_vol[seq_no] = v3;
+            ss_vol[seq_no] = (int16_t)v3;
             if ((v3 & 0xFFFF) == 0)
                 ss_vol[seq_no] = 1;
         }
