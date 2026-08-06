@@ -1777,6 +1777,118 @@ namespace openre::marni
             0x004C2C30, surface, x0, y0, x1, y1, a5, a6, width, height, color0, color1, flg);
     }
 
+    // GPU-backend path for MARNI line primitives (type 17/18: status-screen
+    // ECG, item box, weapon frame). When the SDL_GPU backend drives the frame
+    // the software rasterizer path is both wrong (its surface0 pixels are
+    // wiped by the deferred target clear at present) and slow (each segment
+    // does a full 640x480 lock/unlock pair = GPU readback + upload + two
+    // SDL_WaitForGPUIdle calls). Instead, emit a solid untextured quad through
+    // the wrapped D3D2 device: it lands in the GPU scene pass after the clear,
+    // exactly like every other primitive.
+    //
+    // The software rasterizer (DrawLine with flg&1) paints a 2x2 block at the
+    // doubled coordinates for every sample, so the quad spans 2 pixels:
+    // [2*x0, 2*x0+2) x [2*y0, 2*y1+2) in the 640x480 render target. Lines
+    // without flg&1 are 1 pixel wide at raw coordinates. flg&2 lines are
+    // additive (accumulate into the target) -> ONE/ONE blend. The color is
+    // 0x00RRGGBB -> D3DCOLOR 0xFFRRGGBB (the TL vertex shader swizzles the
+    // B,G,R,A memory bytes to RGBA). All in-game line users are axis-aligned,
+    // so the bounding-box quad is exact; a diagonal line would render as its
+    // bounding rectangle (no such line exists today).
+    static void draw_line_gpu(Marni* self, int x0, int y0, int x1, int y1, uint32_t color0, uint32_t color1, int type)
+    {
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        if (dd2 == nullptr)
+            return;
+
+        const bool doubled = (type & 1) != 0;
+        const bool additive = (type & 2) != 0;
+
+        // Untextured, no depth interaction, solid overwrite (or ONE/ONE
+        // additive for flg&2 lines, mirroring DrawLine's GetCurrentColor+add).
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, 0);
+        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
+        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, additive ? TRUE : FALSE);
+        if (additive)
+        {
+            dd2->SetRenderState(D3DRENDERSTATE_SRCBLEND, D3DBLEND_ONE);
+            dd2->SetRenderState(D3DRENDERSTATE_DESTBLEND, D3DBLEND_ONE);
+        }
+
+        // Endpoint blocks are inclusive: the first sample covers [2*x0, 2*x0+2),
+        // the last [2*x1, 2*x1+2) (1px wide for non-doubled lines).
+        const float sx0 = doubled ? 2.0f * x0 : static_cast<float>(x0);
+        const float sy0 = doubled ? 2.0f * y0 : static_cast<float>(y0);
+        const float sx1 = doubled ? 2.0f * x1 + 2.0f : static_cast<float>(x1 + 1);
+        const float sy1 = doubled ? 2.0f * y1 + 2.0f : static_cast<float>(y1 + 1);
+
+        const int adx = x1 > x0 ? x1 - x0 : x0 - x1;
+        const int ady = y1 > y0 ? y1 - y0 : y0 - y1;
+        // Pair the strip along the minor axis so the color interpolates along
+        // the line (horizontal-ish lines pair by column, vertical-ish by row).
+        D3DTLVERTEX v[4] = {};
+        const D3DCOLOR c0 = 0xFF000000u | color0;
+        const D3DCOLOR c1 = 0xFF000000u | color1;
+        for (auto& vertex : v)
+        {
+            vertex.sz = 0.0f;
+            vertex.rhw = 1.0f;
+        }
+        if (adx >= ady)
+        {
+            v[0].sx = sx0;
+            v[0].sy = sy0;
+            v[0].color = c0;
+            v[1].sx = sx0;
+            v[1].sy = sy1;
+            v[1].color = c0;
+            v[2].sx = sx1;
+            v[2].sy = sy0;
+            v[2].color = c1;
+            v[3].sx = sx1;
+            v[3].sy = sy1;
+            v[3].color = c1;
+        }
+        else
+        {
+            v[0].sx = sx0;
+            v[0].sy = sy0;
+            v[0].color = c0;
+            v[1].sx = sx1;
+            v[1].sy = sy0;
+            v[1].color = c0;
+            v[2].sx = sx0;
+            v[2].sy = sy1;
+            v[2].color = c1;
+            v[3].sx = sx1;
+            v[3].sy = sy1;
+            v[3].color = c1;
+        }
+        // tu/tv stay 0 (untextured).
+
+        static bool sLogged = false;
+        if (!sLogged)
+        {
+            sLogged = true;
+            char cbuf[16];
+            std::snprintf(cbuf, sizeof(cbuf), "%#010lx", static_cast<unsigned long>(color0));
+            logging::logInfo(
+                "[marni] line prim via GPU queue: ({},{})-({},{}) type={} doubled={} additive={} color0={}",
+                x0,
+                y0,
+                x1,
+                y1,
+                type,
+                doubled,
+                additive,
+                cbuf);
+        }
+
+        dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, v, 4, D3DDP_WAIT);
+    }
+
     // 0x0040C6E0
     static void __stdcall draw_line_flat(Marni* self, PrimLine2* line)
     {
@@ -1788,6 +1900,13 @@ namespace openre::marni
         if (line->type & 0x200000)
         {
             type |= 2;
+        }
+        if (gfx::active_backend() == 1 && (self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            // GPU backend: emit the line as a GPU primitive instead of
+            // software-rasterizing it into surface0 (see draw_line_gpu).
+            draw_line_gpu(self, line->x0, line->y0, line->x1, line->y1, line->color0, line->color0, type);
+            return;
         }
         if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
         {
@@ -1823,6 +1942,13 @@ namespace openre::marni
         if (line->type & 0x200000)
         {
             type |= 2;
+        }
+        if (gfx::active_backend() == 1 && (self->gpu_flag & GpuFlags::GPU_13) == 0)
+        {
+            // GPU backend: emit the line as a GPU primitive instead of
+            // software-rasterizing it into surface0 (see draw_line_gpu).
+            draw_line_gpu(self, line->x0, line->y0, line->x1, line->y1, line->color0, line->color1, type);
+            return;
         }
         if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
         {

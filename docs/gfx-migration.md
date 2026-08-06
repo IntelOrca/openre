@@ -927,6 +927,33 @@ separately:
      untextured=25666` to `textured=37980 untextured=0`, and `CreateTextureHandle`
      registrations rose from 15 to 76.
 
+6. **GPU inventory screen slow (12-13fps) + missing heartbeat/health line**
+   (post-`9b8d2f4`). Both symptoms shared one root cause: MARNI line
+   primitives (status-screen ECG, item box, weapon frame) are drawn by the
+   *original software rasterizer* (`DrawLine`, 0x004C2C30) through a
+   `surface_lock`/`surface_unlock` pair on `surface0` (`src/marni.cpp`
+   `draw_line_flat`/`draw_line_gourad`). Each segment locked the surface
+   (full 640x480 GPU readback + `SDL_WaitForGPUIdle`), rasterised on the CPU,
+   then unlocked (full upload + another idle wait). The ECG animates up to 32
+   segments/frame → ~66 full-surface synchronous transfers/frame → 12-13fps;
+   and because the GPU backend defers the target clear to the scene pass
+   (`present()` `load_op = CLEAR`), the mid-frame upload of the line pixels
+   was then wiped, so the line never showed.
+   - **Fix (Option A): route lines through the GPU draw queue.** When the
+     SDL_GPU backend is active, `draw_line_flat`/`draw_line_gourad` now emit
+     each segment as a 4-vertex untextured `D3DTLVERTEX` TRIANGLESTRIP quad
+     through the wrapped D3D2 device instead of software-rasterizing (new
+     `draw_line_gpu` helper in `src/marni.cpp`). The quad spans the doubled
+     coordinates (`[2*x0,2*x0+2) x [2*y0,2*y1+2)`) matching the rasterizer's
+     2x2-block overwrite, packs the colour as `0xFF000000 | 0x00RRGGBB`, and
+     uses ONE/ONE blending for additive (`flg&2`) lines. It lands in the
+     deferred scene pass *after* the clear (correct z-order) and never touches
+     the surface. The original lock/rasterize/unlock path is preserved
+     byte-for-byte for D3D mode. Verified at runtime: ECG line renders (green
+     2x2 blocks at the expected half-res-derived coords), `lock/unlock` dropped
+     from ~64/frame to startup-only, and the status screen runs at ~54fps
+     (was 12-13fps).
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
