@@ -76,6 +76,11 @@ namespace openre::audio
         uint32_t* dword_689DDC = (uint32_t*)0x689DDC; // set when the SBGM[0] fade completes
         uint32_t* dword_689DE0 = (uint32_t*)0x689DE0; // set when the SBGM[1] fade completes
 
+        // Standalone globals used by the Xa_* voice playback functions (0x004EEC30 etc.).
+        int32_t* dword_693464 = (int32_t*)0x693464; // XA voice result / load handle
+        uint8_t* byte_69346E = (uint8_t*)0x69346E;  // XA voice active flag
+        uint8_t* byte_693470 = (uint8_t*)0x693470;  // XA voice active flag
+
         // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
         // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
         // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
@@ -3757,6 +3762,42 @@ namespace openre::audio
         return (int16_t)((-(int16_t)catan((v4 << 12) / (a3 - a1)) - ((a3 - a1 < 0) << 11)) & 0xFFF);
     }
 
+    // 0x004EEDD0 (Xa_set_volume - temp thunk, will be replaced by a later agent)
+    static uint8_t xa_set_volume()
+    {
+        using sig = uint8_t (*)();
+        auto p = (sig)0x004EEDD0;
+        return p();
+    }
+
+    // 0x004EEC30
+    static void xa_play(int mode, int no)
+    {
+        int v2;
+        if (mode)
+            v2 = 0;
+        else
+            v2 = (int)gGameTable.current_stage + 1;
+
+        *dword_693464 = 0;
+
+        if (gGameTable.enable_dsound)
+        {
+            ss_load_banks(7 /* ST_VOICE */, v2, no, (int)(gGameTable.fg_status >> 31));
+            *byte_693470 = 1;
+            *byte_69346E = 1;
+            xa_set_volume();
+            gGameTable.fg_status |= 0x20u;
+            ss_play(7, 0, 0);
+        }
+        else
+        {
+            *dword_693464 = ss_voice_load(v2, no);
+            *byte_693470 = 1;
+            *byte_69346E = 1;
+        }
+    }
+
     // 0x004EE780
     static int snd_se_3d(const Vec32* pos, int a2)
     {
@@ -4329,5 +4370,6 @@ namespace openre::audio
         interop::writeJmp(0x004EE440, &snd_bgm_fade);
         interop::writeJmp(0x004EE780, &snd_se_3d);
         interop::writeJmp(0x004EEBD0, &snd_se_dir_ck);
+        interop::writeJmp(0x004EEC30, &xa_play);
     }
 }
