@@ -2402,10 +2402,82 @@ namespace openre::audio
         }
     }
 
-    // 0x004EC250
+    namespace
+    {
+        // 0x004EC250
+        static char snd_sys_init2()
+        {
+            char v0 = (char)gGameTable.enable_dsound;
+            if (gGameTable.enable_dsound)
+            {
+                ss_stop_all();
+                v0 = (char)ss_shutdown();
+
+                // Seq_ctr is a 3 x {int8, ?, int8} table at 0x693800 with an
+                // 8-byte stride between slots.
+                auto seq_ctr = (int8_t*)gGameTable.seq_ctr;
+                for (int i = 0; i < 3; i++)
+                {
+                    if (seq_ctr[8 * i])
+                    {
+                        v0 = (char)(uintptr_t)ss_get_status(5, i);
+                        if ((v0 & 1) != 0)
+                            v0 = (char)ss_stop_group(5, i);
+                        seq_ctr[8 * i] = 0;
+                    }
+                    if (seq_ctr[8 * i + 2] > -1)
+                    {
+                        ss_unload_group(5);
+                        // Clears ss_name_bgm and the 260-byte slot at
+                        // byte_6935E4 (first byte of each, like the original).
+                        char* p = gGameTable.ss_name_bgm;
+                        do
+                        {
+                            *p = 0;
+                            p += 260;
+                        } while ((int)p < (int)(gGameTable.pad_6935E4 + 260));
+                        seq_ctr[8 * i + 2] = -1;
+                    }
+                }
+                for (int j = 0; j < 7; j++)
+                {
+                    if ((int8_t)gGameTable.vab_id[j] > -1)
+                    {
+                        v0 = (char)ss_unload_group(j);
+                        gGameTable.vab_id[j] = 0xFF;
+                    }
+                }
+                gGameTable.ss_name_enemy[0] = 0;
+                gGameTable.ss_name_room[0] = 0;
+                gGameTable.ss_name_door[0] = 0;
+                gGameTable.ss_name_core[0] = 0;
+                gGameTable.ss_name_arms[0] = 0;
+                gGameTable.ss_name_step[0] = 0;
+                gGameTable.ss_name_step[260] = 0;
+                gGameTable.ss_name_step[520] = 0;
+                gGameTable.ss_name_bgm[0] = 0;
+                gGameTable.pad_6935E4[0] = 0;
+                gGameTable.pad_6935E4[260] = 0;
+                gGameTable.ss_name_sbgm[0] = 0;
+                gGameTable.byte_693FA4 = 0;
+            }
+            return v0;
+        }
+
+        // Handle to reach the implementation from the enclosing namespace:
+        // `snd_sys_init2` is also the name of the public wrapper declared in
+        // audio.h, so an unqualified reference from openre::audio would find
+        // that wrapper rather than this function.
+        char (*const snd_sys_init2_impl)() = &snd_sys_init2;
+    }
+
+    // Public wrapper declared in audio.h; used by C++ callers in other
+    // translation units (openre.cpp, title.cpp). Original-binary callers
+    // (Die_move_end, Game_loop, ExBattle_init, ExBattle_exit, Capcom_logo)
+    // reach the implementation above via the hook on 0x004EC250.
     void snd_sys_init2()
     {
-        interop::call(0x004EC250);
+        snd_sys_init2_impl();
     }
 
     // 0x004ec340
@@ -2674,6 +2746,10 @@ namespace openre::audio
         interop::writeJmp(0x00436470, &ss_voice_load);
         interop::writeJmp(0x00436590, &ss_voice_parse);
         interop::writeJmp(0x00436810, &bgm_channels_init);
+        // snd_sys_init2_impl: the hook targets the static implementation
+        // (snd_sys_init2) via its handle, since the name snd_sys_init2 is the
+        // public audio.h wrapper in this scope.
+        interop::writeJmp(0x004EC250, snd_sys_init2_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED920, bgm_set_entry);
         // interop::writeJmp(0x004ED950, snd_se_on);
