@@ -1428,9 +1428,60 @@ namespace openre::audio
     // 0x004EEF70
     static int room_fs_ck()
     {
-        using sig = int (*)();
-        auto p = (sig)0x004EEF70;
-        return p();
+        int stage = (int)gGameTable.current_stage;
+        int room = (int)gGameTable.current_room;
+        if (stage)
+        {
+            switch (stage)
+            {
+            case 1:
+                if (room == 1)
+                    return 1;
+                if (room == 8)
+                    return 1;
+                break;
+            case 2:
+                if (room == 12)
+                    return 1;
+                if (room == 13)
+                    return 1;
+                break;
+            case 3:
+                if (room == 1)
+                    return 1;
+                if (room == 3)
+                    return 1;
+                break;
+            case 4:
+                if (room == 3)
+                    return 1;
+                break;
+            case 5:
+                switch (room)
+                {
+                case 3:
+                case 7:
+                case 18:
+                    return 1;
+                default:
+                    break;
+                }
+                break;
+            case 6:
+                if (room == 1)
+                    return 1;
+                if (room == 4)
+                    return 1;
+                break;
+            default:
+                break;
+            }
+        }
+        else if (room == 15)
+        {
+            return 1;
+        }
+        return 0;
     }
 
     // 0x004344A0
@@ -4526,5 +4577,6 @@ namespace openre::audio
         interop::writeJmp(0x004EEE40, &sub_4eee40);
         interop::writeJmp(0x004EEF30, &bgm_ck_room112);
         interop::writeJmp(0x004EEF50, &bgm_ck_room115);
+        interop::writeJmp(0x004EEF70, &room_fs_ck);
     }
 }

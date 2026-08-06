@@ -59,7 +59,7 @@ Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio
 - [x] 0x004EEE40 sub_4EEE40 (236)
 - [x] 0x004EEF30 Bgm_ck_room112 (29)
 - [x] 0x004EEF50 Bgm_ck_room115 (29)
-- [ ] 0x004EEF70 Room_fs_ck (256)
+- [x] 0x004EEF70 Room_fs_ck (256)
 
 ## Out of scope (not audio)
 
