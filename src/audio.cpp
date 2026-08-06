@@ -59,6 +59,11 @@ namespace openre::audio
         uint8_t* byte_6DEF0C = (uint8_t*)0x6DEF0C;  // arms .edh buffer
         int32_t* dword_6934A4 = (int32_t*)0x6934A4; // decoded arms data ptr
 
+        // Standalone globals used by Snd_se_on (0x004ED950).
+        int16_t* vol_3d_l = (int16_t*)0x693C44;
+        int16_t* vol_3d_r = (int16_t*)0x693C46;
+        int16_t* vol_3d_pan = (int16_t*)0x689DE4;
+
         // SEQCTR / SoundVolume types used by Snd_sys_init_sub2 (0x004EC410).
         // The 3-entry SEQCTR table lives at 0x693800 with an 8-byte stride,
         // overlapping the GameTable seq_ctr / dword_693804 fields, so it is
@@ -3709,22 +3714,198 @@ namespace openre::audio
         gGameTable.bgm_table[tableIndex] = arg0 & 0xFFFF;
     }
 
-    // 0x004ED950
-    static void snd_se_on(int a0, const Vec32* a1)
+    // 0x004EE780
+    static int snd_se_3d(const Vec32* pos, int a2)
     {
-        using sig = void (*)(int, const Vec32*);
-        auto p = (sig)0x004ED950;
-        p(a0, a1);
+        using sig = int (*)(const Vec32*, int);
+        auto p = (sig)0x004EE780;
+        return p(pos, a2);
+    }
+
+    // 0x004ED950
+    static void snd_se_on_impl(int a1, const Vec32* a2)
+    {
+        if (!gGameTable.enable_dsound)
+            return;
+
+        int v2 = (a1 >> 24) & 0xFF;      // HIBYTE(a1)
+        int v3 = (a1 >> 16) & 0xFF;      // BYTE2(a1)
+        int a1a = a1 & 0xFF;
+        int8_t v4 = (int8_t)gGameTable.vab_id[v2];
+
+        uint8_t* v5 = (uint8_t*)pEdt_adr[v2];
+        if (!v5)
+            return;
+
+        int32_t v6 = *(int32_t*)(v5 + 4 * v3);
+        if (gGameTable.dword_99CF6C)
+        {
+            if (v6 == -1 || !v4)
+                return;
+        }
+        else
+        {
+            if ((v6 == -1 || !v4) && v3 == 8 && v2 == 4)
+            {
+                v5[4 * v3 + 0] = 0;
+                v5[4 * v3 + 1] = 0;
+                v5[4 * v3 + 2] = 0x53;
+                v5[4 * v3 + 3] = 6;
+            }
+        }
+
+        int v8 = v5[4 * v3 + 1] & 0x7F;
+        int32_t v7 = dword_6934A0[v2];
+        if (!v7)
+            return;
+
+        uint8_t* v9 = (uint8_t*)(v7 + 32 * ((v5[4 * v3 + 2] >> 4) + 16 * v8 + 0x41));
+
+        if (!gGameTable.dword_99CF6C && v2 == 4)
+            v9[2] = 110;
+
+        if (!check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) || v2 != 0)
+        {
+            if (v2 == 2 && v3 == 20)
+                v9[2] = 110;
+        }
+        else if (bgm_ck_room(4, 4, 7) || bgm_ck_room(2, 10, 5) || bgm_ck_room(2, 4, 3))
+        {
+            v9[2] = 110;
+        }
+
+        if (gGameTable.current_stage == 3 && gGameTable.current_room == 4 && gGameTable.pl.id == 14 && v2 == 2)
+        {
+            if (v3 >= 0xA && v3 <= 0xE)
+                a1a = 1;
+            if (v3 >= 0xF && v3 <= 0x11)
+                v9[2] = 110;
+        }
+
+        int v10, v11;
+        if (a1a)
+        {
+            snd_se_3d(a2, a1a);
+            if (v2 == 1 && !v8)
+            {
+                *vol_3d_l += 10;
+                *vol_3d_r += 10;
+            }
+            if (bgm_ck_room(0, 10, -1) && v3 == 10)
+            {
+                *vol_3d_l += 20;
+                v10 = *vol_3d_r + 20;
+                *vol_3d_r = (int16_t)v10;
+            }
+            else
+            {
+                v10 = *vol_3d_r;
+            }
+            v11 = *vol_3d_l;
+            if ((uint16_t)*vol_3d_l > 0x7F)
+            {
+                v11 = 127;
+                *vol_3d_l = 127;
+            }
+            if (v10 > 0x7F)
+            {
+                v10 = 127;
+                goto label_48;
+            }
+        }
+        else
+        {
+            v11 = (int16_t)(int8_t)v9[2];
+            *vol_3d_l = v11;
+            v10 = (int16_t)(int8_t)v9[2];
+            *vol_3d_pan = 0;
+            goto label_48;
+        }
+
+    label_48:
+        *vol_3d_r = (int16_t)v10;
+
+        if (!gGameTable.sfx_vol)
+            return;
+
+        int v12 = (v10 <= v11) ? (uint16_t)*vol_3d_l : v10;
+        ss_set_vol(v2, v3, v12);
+        ss_set_pan(v2, v3, *vol_3d_pan);
+
+        int v13 = 0;
+        if (gGameTable.current_stage == 0 && gGameTable.current_room == 18 && v2 == 2 && v3 == 7)
+            ss_play(2, 7, 1);
+        if (gGameTable.current_stage == 3 && gGameTable.current_room == 8 && v2 == 2 && v3 == 15)
+            ss_play(2, 47, 1);
+        if (gGameTable.current_stage == 5)
+        {
+            if (gGameTable.current_room == 1)
+            {
+                if (v2 == 2 && v3 == 13)
+                    ss_play(2, 47, 1);
+            }
+            else if (gGameTable.current_room == 12 && v2 == 2 && v3 == 13)
+            {
+                v13 = 1;
+            }
+        }
+        ss_play(v2, v3, v13);
+
+        if (gGameTable.current_stage == 1)
+        {
+            if (gGameTable.current_room != 0)
+                goto label_79;
+            if (v2 != 2 || v3 != 18)
+                return;
+            ss_set_vol(2, 0x13, 127);
+            ss_set_pan(2, 0x13, 0);
+            ss_play(2, 0x13, 0);
+            // scd_var_stage == 1 is always true here, fall through to LABEL_79
+        label_79:
+            if (gGameTable.current_room != 26 || v2 != 2 || v3 != 14)
+                return;
+            int v14 = (*vol_3d_r <= *vol_3d_l) ? *vol_3d_l : *vol_3d_r;
+            ss_set_vol(2, 0x0A, v14);
+            ss_set_pan(2, 0x0A, (int16_t)((uint16_t)*vol_3d_r - (uint16_t)*vol_3d_l));
+            ss_play(2, 0x0A, 0);
+        }
+
+        if (gGameTable.current_stage == 0 && gGameTable.current_room == 18 && v2 == 2 && v3 == 8)
+            ss_stop_group(2, 7);
+        if (gGameTable.current_stage == 3)
+        {
+            if (gGameTable.current_room != 8 || v2 != 2)
+                return;
+            if (v3 == 14)
+            {
+                ss_stop_group(2, 47);
+                return;
+            }
+            if (v3 != 16)
+                return;
+            ss_stop_group(2, 47);
+        }
+        if (gGameTable.current_stage == 5)
+        {
+            if (gGameTable.current_room == 1)
+            {
+                if (v2 != 2 || v3 != 14)
+                    return;
+                ss_stop_group(2, 47);
+            }
+            if (gGameTable.current_room == 12 && v2 == 2 && v3 == 14)
+                ss_stop_group(2, 13);
+        }
     }
 
     void snd_se_on(int a0, const Vec32& a1)
     {
-        snd_se_on(a0, &a1);
+        snd_se_on_impl(a0, &a1);
     }
 
     void snd_se_on(int a0)
     {
-        snd_se_on(a0, nullptr);
+        snd_se_on_impl(a0, nullptr);
     }
 
     // 0x004329B0
@@ -3819,6 +4000,6 @@ namespace openre::audio
         interop::writeJmp(0x004ED260, &snd_bgm_fade_on);
         interop::writeJmp(0x004ED2F0, bgm_set_control_impl);
         interop::writeJmp(0x004ED920, bgm_set_entry);
-        // interop::writeJmp(0x004ED950, snd_se_on);
+        interop::writeJmp(0x004ED950, &snd_se_on_impl);
     }
 }
