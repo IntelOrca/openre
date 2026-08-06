@@ -19,6 +19,8 @@ namespace openre::gfx
 
         // IDirectDrawSurface (also IDirectDrawSurface2)
         constexpr int SURF_QueryInterface = 0;
+        constexpr int SURF_AddRef = 1;
+        constexpr int SURF_Release = 2;
         constexpr int SURF_AddAttachedSurface = 3;
         constexpr int SURF_Blt = 5;
         constexpr int SURF_GetSurfaceDesc = 22;

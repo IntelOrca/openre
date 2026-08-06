@@ -51,6 +51,17 @@ namespace openre::gfx
             }
             registryMap().clear();
         }
+
+        void erase(void* obj)
+        {
+            auto& map = registryMap();
+            const auto it = map.find(obj);
+            if (it != map.end())
+            {
+                delete[] it->second.newVtbl;
+                map.erase(it);
+            }
+        }
     }
 
     namespace
@@ -173,14 +184,50 @@ namespace openre::gfx
         // IDirectDrawSurface hooks
         // ------------------------------------------------------------------
 
-        // NOTE: IDirectDrawSurface::Release is deliberately NOT hooked. ddraw.dll
-        // overwrites the AddRef/Release slots (1 and 2) of every surface object's
-        // vtable in-place after wrap_surface installs the replacement vtable, so
-        // a Release hook installed there never fires (verified at runtime: the
-        // other wrapped slots - QI, Lock, Blt, ... - resolve into openre.dll
-        // while slot 2 points back into ddraw.dll for every surface). Surface
-        // cleanup therefore relies on create_surface / create_device releasing
-        // any previous entry for the same key or render-target role.
+        // NOTE: IDirectDrawSurface::Release IS hooked. ddraw.dll's destruction
+        // path validates the surface's vtable pointer while tearing down the
+        // primary surface: with our wrapped (foreign) vtable installed it skips
+        // releasing the primary/window association, and the next
+        // CreateSurface(primary) fails with DDERR_PRIMARYSURFACEALREADYEXISTS.
+        // That failure makes change_mode bail out with GPU_9 cleared, so every
+        // clear/draw/flip early-returns and rendering freezes (window still
+        // resizes) after a mode change (F8) or fullscreen toggle (ALT+ENTER).
+        // The earlier comment claimed ddraw.dll overwrites the AddRef/Release
+        // slots of the wrapped vtable in place so a Release hook never fires.
+        // Verified at runtime that only the AddRef slot (1) is re-patched (it
+        // stays ddraw's own AddRef either way); slot 2 remains ours and this
+        // hook fires for every wrapped surface.
+
+        static ULONG STDMETHODCALLTYPE hook_surface_release(IDirectDrawSurface* self)
+        {
+            const auto* e = registry::find(self);
+            if (e == nullptr)
+                return E_UNEXPECTED;
+            using Fn = ULONG(STDMETHODCALLTYPE*)(IDirectDrawSurface*);
+            // Restore the original vtable for the duration of the real call so
+            // ddraw.dll's destruction path sees its own vtable (same pattern as
+            // hook_ddraw_create_surface).
+            auto** vpp = reinterpret_cast<void***>(self);
+            auto* wrapped = *vpp;
+            *vpp = e->origVtbl;
+            const auto count = reinterpret_cast<Fn>(e->origVtbl[slots::SURF_Release])(self);
+            if (count == 0)
+            {
+                // The surface was destroyed: drop the backends' registries so a
+                // mode change does not leak GPU resources or keep a stale render
+                // target. The object is gone, so leave its vtable as ddraw's
+                // original and never touch it again.
+                backend_d3d()->destroy_surface(self);
+                backend_gpu()->destroy_surface(self);
+                registry::erase(self);
+            }
+            else
+            {
+                // The surface survived (still referenced); keep intercepting it.
+                *vpp = wrapped;
+            }
+            return count;
+        }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_add_attached(IDirectDrawSurface* self, LPDIRECTDRAWSURFACE attached)
         {
@@ -591,6 +638,7 @@ namespace openre::gfx
         newVtbl[slots::SURF_SetColorKey] = reinterpret_cast<void*>(&hook_surface_set_color_key);
         newVtbl[slots::SURF_SetPalette] = reinterpret_cast<void*>(&hook_surface_set_palette);
         newVtbl[slots::SURF_SetClipper] = reinterpret_cast<void*>(&hook_surface_set_clipper);
+        newVtbl[slots::SURF_Release] = reinterpret_cast<void*>(&hook_surface_release);
         registry::set(surface, orig, newVtbl);
         *reinterpret_cast<void***>(surface) = newVtbl;
     }
