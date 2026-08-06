@@ -2589,10 +2589,6 @@ namespace openre
         }
 
         marni::config_shutdown();
-        if (gGameTable.hMutex)
-        {
-            CloseHandle((HANDLE)gGameTable.hMutex);
-        }
 
         return error;
     }
@@ -2810,15 +2806,6 @@ namespace openre
     // 0x00441ED0
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
-        const char* mutexName = "bio2.658b45ea117473d4.game";
-
-        gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
-        if (gGameTable.hMutex)
-        {
-            return win_exit(ERROR_18);
-        }
-        gGameTable.hMutex = CreateMutexA(0, 0, mutexName);
-
         marni::out();
         config_read();
 
