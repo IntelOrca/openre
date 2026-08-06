@@ -171,6 +171,15 @@ namespace openre::gfx
         // IDirectDrawSurface hooks
         // ------------------------------------------------------------------
 
+        // NOTE: IDirectDrawSurface::Release is deliberately NOT hooked. ddraw.dll
+        // overwrites the AddRef/Release slots (1 and 2) of every surface object's
+        // vtable in-place after wrap_surface installs the replacement vtable, so
+        // a Release hook installed there never fires (verified at runtime: the
+        // other wrapped slots - QI, Lock, Blt, ... - resolve into openre.dll
+        // while slot 2 points back into ddraw.dll for every surface). Surface
+        // cleanup therefore relies on create_surface / create_device releasing
+        // any previous entry for the same key or render-target role.
+
         static HRESULT STDMETHODCALLTYPE hook_surface_add_attached(IDirectDrawSurface* self, LPDIRECTDRAWSURFACE attached)
         {
             const auto hr = backend_d3d()->add_attached_surface(self, attached);
@@ -475,9 +484,11 @@ namespace openre::gfx
             return hr;
         }
 
-        // The game asks textures for a D3D handle (opaque DWORD) that it later
-        // binds via SetRenderState(TEXTUREHANDLE); broadcast the handle along
-        // with the owning surface so the GPU backend can resolve it.
+        // GetHandle is broadcast so the GPU backend can resolve
+        // TEXTUREHANDLE render state to a surface. (Release is not hooked for
+        // IDirect3DTexture2 either: ddraw.dll repatches the AddRef/Release
+        // slots of the underlying surface objects, and the game never releases
+        // texture interfaces through a wrapped vtable.)
         static HRESULT STDMETHODCALLTYPE
         hook_texture_get_handle(IDirect3DTexture2* self, LPDIRECT3DDEVICE2 device, LPD3DTEXTUREHANDLE handle)
         {

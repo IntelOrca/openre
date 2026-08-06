@@ -534,6 +534,16 @@ namespace openre::gfx
                 if (mDevice == nullptr)
                     return;
 
+                // A mode change re-creates surface2/surface0, and ddraw.dll may
+                // hand back a recycled pointer for the new object. Release any
+                // entry that still exists for this key so its GPU resources are
+                // not leaked before the new entry is stored.
+                if (mSurfaces.find(surface) != mSurfaces.end())
+                {
+                    logging::logDebug("[gfx:gpu] CreateSurface {} (replacing previous entry)", static_cast<void*>(surface));
+                    releaseSurfaceEntry(surface);
+                }
+
                 SurfaceEntry entry;
                 entry.width = desc->dwWidth;
                 entry.height = desc->dwHeight;
@@ -579,24 +589,22 @@ namespace openre::gfx
 
             void destroy_surface(IUnknown* surface) override
             {
-                const auto it = mSurfaces.find(surface);
-                if (it == mSurfaces.end())
+                if (mSurfaces.find(surface) == mSurfaces.end())
                 {
                     logging::logDebug("[gfx:gpu] DestroySurface {} (unknown)", static_cast<void*>(surface));
                     return;
                 }
                 logging::logDebug("[gfx:gpu] DestroySurface {}", static_cast<void*>(surface));
-                // Drop texture-handle entries that reference this surface so a
-                // stale handle can never resolve to a freed texture.
-                for (auto h = mTextureHandles.begin(); h != mTextureHandles.end();)
+                if (mDeviceState.renderTarget == surface)
                 {
-                    if (h->second == surface)
-                        h = mTextureHandles.erase(h);
-                    else
-                        ++h;
+                    // The device's render target is gone (the game destroyed
+                    // the surface); drop the key so present() falls back to a
+                    // cleared swapchain until a new render target is set.
+                    logging::logDebug(
+                        "[gfx:gpu] DestroySurface {} (was the current render target)", static_cast<void*>(surface));
+                    mDeviceState.renderTarget = nullptr;
                 }
-                releaseSurface(it->second);
-                mSurfaces.erase(it);
+                releaseSurfaceEntry(surface);
             }
 
             HRESULT lock(IUnknown* surface, LPRECT /*rect*/, LPDDSURFACEDESC desc, DWORD /*flags*/, HANDLE /*event*/) override
@@ -877,6 +885,20 @@ namespace openre::gfx
 
             void create_device(IUnknown* device) override
             {
+                // The device is re-created on every mode change (Marni::init_all
+                // creates a new surface0 and then CreateDevice against it), so
+                // the previous render target's entry is dead - its DirectDraw
+                // surface was replaced, not Released (ddraw.dll repatches the
+                // AddRef/Release vtable slots in-place, so a Release hook can
+                // never observe it). Free it here so mode changes do not
+                // accumulate one render-target-sized texture per change.
+                if (mDeviceState.renderTarget != nullptr)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] CreateDevice: releasing previous render target entry {}",
+                        static_cast<void*>(mDeviceState.renderTarget));
+                    releaseSurfaceEntry(mDeviceState.renderTarget);
+                }
                 mDeviceState = {};
                 logging::logInfo("[gfx:gpu] CreateDevice device={}", static_cast<void*>(device));
             }
@@ -1247,6 +1269,28 @@ namespace openre::gfx
             {
                 const auto it = mSurfaces.find(surface);
                 return it == mSurfaces.end() ? nullptr : &it->second;
+            }
+
+            // Frees the GPU resources of the entry stored under `key` and
+            // removes it from mSurfaces. Also purges any texture-handle entry
+            // that resolves to the surface so a stale handle can never resolve
+            // to a freed texture. Used by destroy_surface (backend API for
+            // surface destruction), create_surface (recycled pointer) and
+            // create_device (previous render target replaced by a mode change).
+            void releaseSurfaceEntry(void* key)
+            {
+                const auto it = mSurfaces.find(key);
+                if (it == mSurfaces.end())
+                    return;
+                for (auto h = mTextureHandles.begin(); h != mTextureHandles.end();)
+                {
+                    if (h->second == key)
+                        h = mTextureHandles.erase(h);
+                    else
+                        ++h;
+                }
+                releaseSurface(it->second);
+                mSurfaces.erase(it);
             }
 
             // Derives shift/bit-count for each channel from its mask.
@@ -1963,6 +2007,7 @@ namespace openre::gfx
             // pipeline presents the render target into the swapchain.
             std::unordered_map<PipelineKey, SDL_GPUGraphicsPipeline*, PipelineKeyHash> mPipelineCache;
             SDL_GPUGraphicsPipeline* mBlitPipeline = nullptr;
+            SDL_GPUTextureFormat mBlitSwapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
             Uint32 mBlitQuadOffset = 0;
 
             // Debug aid (OPENRE_GPU_DUMP=<N>): every N-th frame, read back the
@@ -2197,6 +2242,7 @@ namespace openre::gfx
                     SDL_ReleaseGPUGraphicsPipeline(mDevice, mBlitPipeline);
                     mBlitPipeline = nullptr;
                 }
+                mBlitSwapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
                 if (mVertexShader != nullptr)
                 {
                     SDL_ReleaseGPUShader(mDevice, mVertexShader);
@@ -2352,8 +2398,21 @@ namespace openre::gfx
 
             void ensureBlitPipeline(SDL_GPUTextureFormat swapchainFormat)
             {
-                if (mBlitPipeline != nullptr)
+                if (mBlitPipeline != nullptr && mBlitSwapchainFormat == swapchainFormat)
                     return;
+                if (mBlitPipeline != nullptr)
+                {
+                    // The swapchain format changed (fullscreen / display-mode
+                    // change can swap the window's pixel format): a pipeline's
+                    // color target format is immutable, so rebuild it.
+                    logging::logInfo(
+                        "[gfx:gpu] blit pipeline recreated (swapchain format {} -> {})",
+                        static_cast<int>(mBlitSwapchainFormat),
+                        static_cast<int>(swapchainFormat));
+                    SDL_ReleaseGPUGraphicsPipeline(mDevice, mBlitPipeline);
+                    mBlitPipeline = nullptr;
+                }
+                mBlitSwapchainFormat = swapchainFormat;
                 PipelineKey key{};
                 key.textured = true;
                 key.primType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;

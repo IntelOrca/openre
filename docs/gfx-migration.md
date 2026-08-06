@@ -648,6 +648,87 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   per-room ambient (a room change re-SetMaterials the material) follows the
   same `set_material` → `clearColor` path and is code-verified.
 
+### M7 — Fullscreen & resolution change (done)
+- **Surface re-creation (`gfx_backend_gpu.cpp`).** A mode change re-creates
+  surface2 (primary), surface0 (render target) and the z-buffer through the
+  front-end `CreateSurface` hooks, and ddraw.dll may hand back a recycled
+  pointer. `create_surface` now releases any existing entry stored under the
+  same key first (freeing its GPU texture and purging texture-handle entries
+  that resolve to it), so a mode change can never leak the previous
+  generation's resources for a re-used pointer. `create_device` releases the
+  previous render-target entry (its surface was *replaced*, never Released, so
+  no destruction notification ever arrives) — without this, each mode change
+  leaked one render-target-sized texture. `destroy_surface` (backend API, kept
+  for future use) clears `mDeviceState.renderTarget` when the destroyed
+  surface is the current target, so `present()` falls back to a cleared
+  swapchain instead of dereferencing a stale entry.
+- **Surface Release hook — attempted, proven impossible, removed.** Per the
+  M7 plan the front-end first hooked `IDirectDrawSurface::Release` /
+  `IDirect3DTexture2::Release` (vtable slot 2, forwarding to the original and
+  broadcasting `destroy_surface` to both backends when refcount hits 0).
+  Runtime verification showed the hook **never fires**, and live-memory
+  inspection of the game process explained why: ddraw.dll overwrites the
+  AddRef/Release slots (1 and 2) of every surface object's vtable **in place,
+  after** `wrap_surface` installs the replacement vtable. The wrapped slots
+  (QueryInterface, Lock, Blt, GetSurfaceDesc, …) all resolve into openre.dll,
+  while slot 2 points back into ddraw.dll for every surface type (render
+  target, z-buffer, texture surfaces) — including the second interface in the
+  same 64-slot vtable block. ddraw manages its own reference counting and
+  never lets a foreign Release run, so a vtable-level Release hook cannot
+  work on this path (and patching ddraw.dll's Release function itself would
+  risk the D3D reference path, which must stay known-good). The hooks and
+  `registry::remove` were removed; the replacement-based cleanup above is the
+  effective fallback the plan allowed for. Memory stays bounded: surface
+  entries are keyed by COM pointer, and the only surfaces the game re-creates
+  per mode change are surface0/surface2 (≤ 2 entries per change, freed on
+  recycle or device re-create; texture handles are re-registered by the game
+  after `restore_surfaces`).
+- **Blit pipeline vs swapchain format.** A graphics pipeline's color target
+  format is immutable, and a fullscreen/display-mode change can swap the
+  window's pixel format. `ensureBlitPipeline` now records the swapchain format
+  it was built for (`mBlitSwapchainFormat`) and recreates the pipeline when
+  `SDL_AcquireGPUSwapchainTexture` reports a different format
+  (`blit pipeline recreated (swapchain format … -> …)`), instead of skipping
+  whenever a pipeline already exists.
+- **Letterbox in fullscreen (verified).** The present blit already adapts each
+  frame to the swapchain's current `winW/winH` vs the render target's
+  `rtW/rtH` (`appendBlitQuad`), so borderless fullscreen letterboxes
+  automatically. Measured at 1920×1440 mode on a 3840×2160 window: content
+  scaled 1.5× to 2880×2160, centered at x = (3840−2880)/2 = 480 exactly, with
+  the 4:3 content filling the window height — pixel-accurate. In windowed
+  mode the blit fits the window (no crash on resize; SDL recreates the
+  swapchain and `SDL_AcquireGPUSwapchainTexture` returns the new size).
+- **Verification evidence** (all at `OPENRE_LOG_VERBOSITY=debug`,
+  `OPENRE_RE2_DATA=F:\games\openre\data`):
+  - `build.bat`: 0 warnings / 0 errors (`TreatWarningAsError`).
+  - Default run (active=0): D3D path unchanged; F8 mode changes and ALT+ENTER
+    survived (0→4→0, 1920×1440 fullscreen), zero GPU errors.
+  - GPU run (`OPENRE_GFX_BACKEND=1`): real graphics render at 640×480
+    (title/demo frames, present `rt=640x480`, per-frame triangle deltas);
+    mode change 0→1 re-created the depth texture `640x480 D16` →
+    `960x720 D16` and re-broadcast `SetRenderTarget` with the new surface
+    pointers; ALT+ENTER 1→4 (1920×1440 fullscreen) survived with the letterbox
+    blit centered as measured above. Starting the game with the config set to
+    `DisplayMode = 640x480 32bpp full:0` vs `1920x1440 32bpp full:1`
+    re-verified the same init path (surface0 at each size, depth texture per
+    size, fullscreen letterbox) on the final build.
+  - Synthetic key delivery to the running game proved unreliable in this
+    environment (SDL reads its own keyboard events; WM_KEYDOWN/SendKeys to the
+    window were ignored at the title screen where the F8 mode-change guard is
+    active), so the runtime F8/ALT+ENTER evidence above is from the session
+    that implemented M7; the code paths exercised are unchanged by the final
+    commit (only dead Release-hook code was removed).
+  - Game killed, `run_out.log`/`run_err.log` removed.
+- **Known limitations.** (1) The game never Releases the old surface0/surface2
+  COM objects on a mode change and ddraw.dll repatches the Release vtable
+  slots, so per-mode-change GPU cleanup relies on `create_surface`/
+  `create_device` replacing previous entries — bounded to one generation,
+  never unbounded. (2) Runtime F8/ALT+ENTER could not be re-driven in this
+  environment (manual test: run with `OPENRE_GFX_BACKEND=1`, press F8 to
+  cycle resolutions and ALT+ENTER to toggle fullscreen; expect no crash, the
+  letterboxed 4:3 frame centered in the borderless-fullscreen window, and a
+  `blit pipeline recreated`/depth-recreation log line on change).
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
