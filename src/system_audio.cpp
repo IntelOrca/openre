@@ -700,6 +700,24 @@ namespace openre::system::audio
         return true;
     }
 
+    int get_vol(uint32_t handle)
+    {
+        ScopedLock lock(get_mutex());
+        Voice* v = voice_at(handle);
+        if (!v)
+            return 0;
+        // Invert set_vol's gain = 10^(centibel / 2000) -> centibel =
+        // 2000 * log10(gain). A zero gain (silence) saturates at -10000.
+        if (v->gain <= 0.0f)
+            return -10000;
+        int cb = (int)std::lround(2000.0 * std::log10((double)v->gain));
+        if (cb > 0)
+            cb = 0;
+        if (cb < -10000)
+            cb = -10000;
+        return cb;
+    }
+
     bool set_pan(uint32_t handle, int pan)
     {
         ScopedLock lock(get_mutex());

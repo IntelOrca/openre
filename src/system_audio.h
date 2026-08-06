@@ -47,6 +47,9 @@ namespace openre::system::audio
     // Sets the linear gain from a DirectSound volume in centibels (0 = full,
     // -10000 = silence, clamped). gain = 10^(centibel / 2000).
     bool set_vol(uint32_t handle, int centibel);
+    // Returns the voice's current volume in DirectSound centibels (0 = full,
+    // -10000 = silence), inverting set_vol. Returns 0 for an invalid handle.
+    int get_vol(uint32_t handle);
     // Sets an equal-power pan from DirectSound units (-10000 = left,
     // 0 = centre, +10000 = right, clamped).
     bool set_pan(uint32_t handle, int pan);
