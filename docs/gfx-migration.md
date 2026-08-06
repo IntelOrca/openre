@@ -204,14 +204,79 @@ Implementation approach for the COM front-end (`gfx_d3d2.cpp`):
   renders continuous frames, window "BIOHAZARD(R) 2 PC" present, process stays
   running. All temporary diagnostic trace logging was removed afterwards.
 
+### M2 — GPU swapchain + present + toggle (done)
+- **What was implemented**:
+  - `system_window.h/cpp`: added `system::window::get_window()` returning the
+    `SDL_Window*` as `void*` (header stays SDL-free) so the GPU backend can
+    claim the game window.
+  - `gfx_backend_gpu.cpp`: `GfxBackendGPU` is no longer a stub for the present
+    path. `init()` creates an SDL_GPU device
+    (`SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV)`
+    → driver `direct3d12` on this machine), claims the SDL3 window
+    (`SDL_ClaimWindowForGPUDevice`), logs the swapchain format
+    (`SDL_GetGPUSwapchainTextureFormat` → 12 = `B8G8R8A8_UNORM`) and a
+    `(M2: swapchain ready)` marker. If device creation or claim fails the
+    backend returns false and the game keeps running on the D3D path (active
+    backend stays 0). `present()` acquires a command buffer + swapchain texture
+    (non-blocking `SDL_AcquireGPUSwapchainTexture`), runs a render pass that
+    clears the swapchain to solid black, and submits. A NULL swapchain texture
+    (window minimized / swapchain being recreated on resize) is logged at debug
+    and the frame is dropped without crashing. `shutdown()` releases the window
+    claim and destroys the device before SDL_Quit. All other methods remain
+    stubs (surface/texture/draw are M3+).
+  - Present is **gated on the active backend**: `GfxBackendGPU::present()`
+    returns immediately unless `active_backend() == 1`, so while the D3D
+    reference backend is active the DirectDraw primary surface (the game's Blt
+    in `flip_blt`) keeps owning the window unchanged.
+  - `openre.cpp`: F6 toggles the active backend
+    (`gfx::set_active_backend(gfx::active_backend() ? 0 : 1)`) and logs the
+    new value (`[gfx] active backend toggled to N`).
+  - `gfx_d3d2.cpp`: `gfx::init()` reads an `OPENRE_GFX_BACKEND` env var
+    (`=1` starts on the GPU backend) as a developer hook for automated
+    verification; default stays 0.
+- **Risk checkpoint result: the DirectDraw primary surface and the SDL_GPU
+  swapchain coexist cleanly on the same window.** The game's `surface2` (DD
+  primary on the same HWND) and the D3D12 swapchain created by
+  `SDL_ClaimWindowForGPUDevice` do not fight: with active=0 the swapchain
+  exists but never presents and D3D output is pixel-identical to before; with
+  active=1 the swapchain presents every frame (solid black, no content yet) and
+  toggling back to 0 instantly restores the DD-presented frame. No black
+  screen, crash, or garbled output at any point, including during live resizes
+  and minimize/restore. The planned fallback (unified present via readback) was
+  not needed.
+- **Verification evidence** (all at `OPENRE_LOG_VERBOSITY=debug`):
+  - Default run (active=0): `[gfx:gpu] device created (driver=direct3d12)`,
+    `[gfx:gpu] window claimed, swapchain format=12 (M2: swapchain ready)`,
+    `[gfx] backends initialised (active=0)`; the game then renders continuous
+    frames through the D3D path (BeginScene/EndScene/Blt cycles, ~17k log
+    lines), window "BIOHAZARD(R) 2 PC" present, process stays alive — no
+    `[gfx:gpu] present` lines (correctly gated off).
+  - GPU run (`OPENRE_GFX_BACKEND=1`): `[gfx] backends initialised (active=1)`,
+    `[gfx:gpu] present (swapchain cleared)` logged every frame (190 presents in
+    ~10s), zero `failed:` lines, zero "swapchain texture unavailable" skips.
+  - Live resize (640x480 → 800x600 → back) while on the GPU backend: process
+    keeps running, present continues (~97 more presents during the resizes), no
+    errors.
+  - Live minimize/restore while on the GPU backend: process keeps running,
+    present resumes after restore, no errors.
+  - Live F6 toggle via synthetic keypress: `[gfx] active backend toggled to 0`
+    (GPU presents stop), `toggled to 1` (GPU presents resume), `toggled to 0`
+    (GPU presents stop again) — the A/B switch is instant and D3D output
+    returns immediately when active=0.
+  - `build.bat`: 0 warnings, 0 errors (`TreatWarningAsError`).
+- Note: on this SDL 3.4.12 there is no `SDL_WINDOW_GPU` window flag;
+  `SDL_ClaimWindowForGPUDevice` handles swapchain setup on its own, so
+  `SDL_CreateWindow` flags were left unchanged.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
 - Save-menu GDI text (`GetDC`+`TextOut`) → SDL_ttf.
 
 ## Risks / notes
-- **Window sharing** (DD primary vs SDL_GPU swapchain) — validated at M2 with a
-  documented fallback.
+- **Window sharing** (DD primary vs SDL_GPU swapchain) — validated at M2: they
+  coexist cleanly on the same window (see Progress M2); the readback fallback
+  was not needed.
 - **Shader tooling**: need DXC in the build (HLSL → DXIL + SPIR-V); SDL 3.4.12
   bundled already supports both formats plus MSL/METALLIB.
 - **COM ABI**: front-end vtable layouts must exactly match d3d.h/ddraw.h.

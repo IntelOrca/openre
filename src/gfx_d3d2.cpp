@@ -2,6 +2,7 @@
 #include "gfx_backend.h"
 #include "logger.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 
@@ -209,8 +210,7 @@ namespace openre::gfx
         // IDirect3D2 hooks
         // ------------------------------------------------------------------
 
-        static HRESULT STDMETHODCALLTYPE
-        hook_d3d2_enum_devices(IDirect3D2* self, LPVOID callback, LPVOID context)
+        static HRESULT STDMETHODCALLTYPE hook_d3d2_enum_devices(IDirect3D2* self, LPVOID callback, LPVOID context)
         {
             const auto* e = registry::find(self);
             if (e == nullptr)
@@ -496,6 +496,15 @@ namespace openre::gfx
     {
         backend_d3d()->init();
         backend_gpu()->init();
+
+        // Developer override for automated runs: OPENRE_GFX_BACKEND=1 starts on
+        // the GPU backend without pressing F6. Default (unset) stays on the D3D
+        // reference backend.
+        if (const char* env = std::getenv("OPENRE_GFX_BACKEND"))
+        {
+            if (env[0] == '1')
+                set_active_backend(1);
+        }
         logging::logInfo("[gfx] backends initialised (active={})", active_backend());
     }
 

@@ -1,30 +1,121 @@
 #include "gfx_backend.h"
 #include "logger.h"
+#include "system_window.h"
+
+#include <SDL3/SDL.h>
 
 namespace openre::gfx
 {
     namespace
     {
-        // GPU backend stub: intercepts the render-path calls but does nothing
-        // yet. Per-frame methods log at debug level; data-producing methods
-        // return success without filling data. init/shutdown are wired.
+        // GPU backend: creates an SDL_GPU device, claims the game window and
+        // presents a cleared swapchain (M2). Surface/texture/draw support
+        // arrives in later milestones; the remaining methods stay as stubs.
+        // Present only runs while the GPU backend is the active backend, so the
+        // DirectDraw primary surface keeps showing when the D3D reference
+        // backend (0) is selected.
         class GfxBackendGPU final : public GfxBackend
         {
         public:
             bool init() override
             {
-                logging::logInfo("[gfx:gpu] init (stub)");
+                mWindow = static_cast<SDL_Window*>(system::window::get_window());
+                if (mWindow == nullptr)
+                {
+                    logging::logError("[gfx:gpu] init failed: no SDL window available");
+                    return false;
+                }
+
+                mDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+                if (mDevice == nullptr)
+                {
+                    logging::logError("[gfx:gpu] SDL_CreateGPUDevice failed: {}", SDL_GetError());
+                    return false;
+                }
+                logging::logInfo("[gfx:gpu] device created (driver={})", SDL_GetGPUDeviceDriver(mDevice));
+
+                if (!SDL_ClaimWindowForGPUDevice(mDevice, mWindow))
+                {
+                    logging::logError("[gfx:gpu] SDL_ClaimWindowForGPUDevice failed: {}", SDL_GetError());
+                    SDL_DestroyGPUDevice(mDevice);
+                    mDevice = nullptr;
+                    return false;
+                }
+
+                const auto format = SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow);
+                logging::logInfo(
+                    "[gfx:gpu] window claimed, swapchain format={} (M2: swapchain ready)", static_cast<int>(format));
                 return true;
             }
 
             void shutdown() override
             {
-                logging::logInfo("[gfx:gpu] shutdown (stub)");
+                if (mDevice != nullptr)
+                {
+                    if (mWindow != nullptr)
+                        SDL_ReleaseWindowFromGPUDevice(mDevice, mWindow);
+                    SDL_DestroyGPUDevice(mDevice);
+                    mDevice = nullptr;
+                }
+                mWindow = nullptr;
+                logging::logInfo("[gfx:gpu] shutdown (swapchain released, device destroyed)");
             }
 
             void present() override
             {
-                logging::logDebug("[gfx:gpu] present");
+                // While the D3D reference backend is active the DirectDraw
+                // primary surface (the game's Blt in flip_blt) owns the window;
+                // do not acquire/present the swapchain in that case.
+                if (active_backend() != 1)
+                    return;
+                if (mDevice == nullptr || mWindow == nullptr)
+                {
+                    logging::logDebug("[gfx:gpu] present skipped (device/window not ready)");
+                    return;
+                }
+
+                auto* commandBuffer = SDL_AcquireGPUCommandBuffer(mDevice);
+                if (commandBuffer == nullptr)
+                {
+                    logging::logError("[gfx:gpu] SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
+                    return;
+                }
+
+                SDL_GPUTexture* swapchainTexture = nullptr;
+                Uint32 width = 0;
+                Uint32 height = 0;
+                if (!SDL_AcquireGPUSwapchainTexture(commandBuffer, mWindow, &swapchainTexture, &width, &height))
+                {
+                    logging::logError("[gfx:gpu] SDL_AcquireGPUSwapchainTexture failed: {}", SDL_GetError());
+                    SDL_CancelGPUCommandBuffer(commandBuffer);
+                    return;
+                }
+                if (swapchainTexture == nullptr)
+                {
+                    // Window minimized / swapchain being recreated on resize:
+                    // nothing to render into this frame, just drop it.
+                    logging::logDebug("[gfx:gpu] swapchain texture unavailable (minimized/resized), skipping frame");
+                    SDL_CancelGPUCommandBuffer(commandBuffer);
+                    return;
+                }
+
+                SDL_GPUColorTargetInfo target = {};
+                target.texture = swapchainTexture;
+                target.mip_level = 0;
+                target.layer_or_depth_plane = 0;
+                target.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f }; // solid black until M3 content
+                target.load_op = SDL_GPU_LOADOP_CLEAR;
+                target.store_op = SDL_GPU_STOREOP_STORE;
+
+                auto* renderPass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
+                SDL_EndGPURenderPass(renderPass);
+
+                if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+                {
+                    logging::logError("[gfx:gpu] SDL_SubmitGPUCommandBuffer failed: {}", SDL_GetError());
+                    return;
+                }
+                logging::logDebug("[gfx:gpu] present (swapchain cleared)");
             }
 
             // ---- surface layer ----
@@ -224,6 +315,10 @@ namespace openre::gfx
             {
                 return S_OK;
             }
+
+        private:
+            SDL_GPUDevice* mDevice = nullptr;
+            SDL_Window* mWindow = nullptr;
         };
     }
 

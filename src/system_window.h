@@ -40,6 +40,9 @@ namespace openre::system::window
 
     // Underlying Win32 window handle (never SDL_Window*).
     void* get_hwnd();
+    // The SDL_Window* created by init(), returned as void* so the header stays
+    // SDL-free. Used by the GPU backend to claim the window for a swapchain.
+    void* get_window();
     // Win32 module instance, used by DialogBoxParamA (SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER).
     void* get_hinstance();
 

@@ -6,6 +6,7 @@
 #include "entity.h"
 #include "error.h"
 #include "file.h"
+#include "gfx_backend.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -2424,6 +2425,14 @@ namespace openre
             break;
         case VK_F5:
             gGameTable.vk_press |= 2; // options
+            SetFocus(hWnd);
+            break;
+        case VK_F6:
+            // Toggle the active render backend: 0 = D3D reference (DirectDraw
+            // primary surface Blt), 1 = GPU (SDL_GPU swapchain present). See
+            // docs/gfx-migration.md.
+            gfx::set_active_backend(gfx::active_backend() ? 0 : 1);
+            logging::logInfo("[gfx] active backend toggled to {}", gfx::active_backend());
             SetFocus(hWnd);
             break;
         case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;

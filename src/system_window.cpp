@@ -148,6 +148,11 @@ namespace openre::system::window
         return SDL_GetPointerProperty(SDL_GetWindowProperties(gWindow), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
     }
 
+    void* get_window()
+    {
+        return gWindow;
+    }
+
     bool set_fullscreen(bool fullscreen)
     {
         if (!gWindow)
