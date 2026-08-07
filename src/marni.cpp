@@ -42,6 +42,7 @@ namespace openre::marni
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
+    static int __stdcall surface_set_index_color(int x, int y, uint32_t color, int mode);
     int __stdcall surface2_vrelease(MarniSurface2* self);
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
@@ -7258,6 +7259,16 @@ namespace openre::marni
         self->vtbl = (MarniSurfaceVTBL*)0x005173D4;
         surface3_vrelease(self);
         surface2_release(self);
+    }
+
+    // 0x00413710
+    static int __stdcall surface_set_index_color(int x, int y, uint32_t color, int mode)
+    {
+        // Original is a no-op stub: it only logs via MarniOut() and returns 1.
+        // All parameters are unused. SetCurrentColor calls it when the surface
+        // is palette-based; this type is "not supported" by the original.
+        out("not supported this type. MarniBits::SetIndexColor", "");
+        return 1;
     }
 
     // 0x00412ED0
