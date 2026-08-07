@@ -6195,7 +6195,33 @@ namespace openre::marni
     // 0x0040F580
     static void __stdcall surfacey_vrelease(MarniSurface2* self)
     {
-        interop::thiscall<int, MarniSurface2*>(0x0040F580, self);
+        auto surface = (MarniSurface3*)self;
+
+        if (surface->var_27)
+        {
+            if (surface->pDDsurface)
+            {
+                ((LPDIRECTDRAWSURFACE)surface->pDDsurface)->Release();
+                surface->pDDsurface = nullptr;
+            }
+
+            if (surface->pDDpalette)
+            {
+                for (int i = 0; i < surface->pal_cnt; i++)
+                {
+                    auto pDDpalette = (LPDIRECTDRAWPALETTE)surface->pDDpalette[i];
+                    if (pDDpalette)
+                    {
+                        pDDpalette->Release();
+                        surface->pDDpalette[i] = nullptr;
+                    }
+                }
+            }
+        }
+
+        operator_delete(surface->pDDpalette);
+        surface->pDDpalette = nullptr;
+        surface2_vrelease(self);
     }
 
     // 0x0040f600
@@ -6842,6 +6868,7 @@ namespace openre::marni
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
+        interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
     }
 }
