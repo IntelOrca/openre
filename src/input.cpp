@@ -167,29 +167,29 @@ namespace openre::input
         constexpr CommandOutput kCommandOutput[COMMAND_COUNT] = {
             /* cancel     */ { 0x2000, 0, 0x2, 0x2, 0x2 },
             /* accept     */ { 0x1000, 0, 0x80, 0x80, 0x80 },
-            /* up         */ { 0x1, 0, 0x1001, 0x1001, 0x1001 },
-            /* down       */ { 0x4, 0, 0x4004, 0x4004, 0x4004 },
-            /* left       */ { 0x8, 0, 0x8008, 0x8008, 0x8008 },
-            /* right      */ { 0x2, 0, 0x2002, 0x2002, 0x2002 },
-            /* forward    */ { 0x1, 0, 0x1001, 0x1001, 0x1001 },
-            /* backward   */ { 0x4, 0, 0x4004, 0x4004, 0x4004 },
-            /* turn_left  */ { 0x8, 0, 0x8008, 0x8008, 0x8008 },
-            /* turn_right */ { 0x2, 0, 0x2002, 0x2002, 0x2002 },
+            /* up         */ { 0x1, 0, 0x1000, 0x1000, 0x1000 },
+            /* down       */ { 0x4, 0, 0x4000, 0x4000, 0x4000 },
+            /* left       */ { 0x8, 0, 0x8000, 0x8000, 0x8000 },
+            /* right      */ { 0x2, 0, 0x2000, 0x2000, 0x2000 },
+            /* forward    */ { 0x10, 0, 0x1000, 0x1000, 0x1000 },
+            /* backward   */ { 0x20, 0, 0x4000, 0x4000, 0x4000 },
+            /* turn_left  */ { 0x8, 0, 0x8000, 0x8000, 0x8000 },
+            /* turn_right */ { 0x2, 0, 0x2000, 0x2000, 0x2000 },
             /* aim        */ { 0x100, 0, 0, 0, 0 },
             /* run        */ { 0x200, 0, 0, 0, 0 },
             // g_key = run (0x200) | weapon fire/change-target (0x20) | knife (0x10).
             // The 0x20 bit deliberately re-enters key_trg on the shot's edge
             // (same as the original fire key); raw keeps 0x10 only.
-            /* fire       */ { 0x230, 0, 0x10, 0x10, 0x10 },
-            /* reload     */ { 0x40, 0, 0x40, 0x40, 0x40 },
+            /* fire       */ { 0x40, 0, 0x10, 0x10, 0x10 },
+            /* reload     */ { 0, 0, 0, 0, 0 },
             // rawEdgeF8 0x800 lets the inventory key also confirm on the save
             // screen and skip doors, matching the original Z key.
             /* inventory  */ { 0, 0, 0, 0x800, 0x800 },
             /* menu       */ { 0, 0, 0, 0, 0x100 },
             /* interact   */ { 0x80, 0, 0x80, 0x80, 0x80 },
             /* map        */ { 0x4000, 0, 0, 0, 0 },
-            /* change_target */ { 0, 0x20, 0, 0, 0 },
-            /* quick_turn */ { 0, 0x400, 0, 0, 0 },
+            /* change_target */ { 0, 0, 0x4, 0x4, 0x4 },
+            /* quick_turn */ { 0x400, 0, 0, 0, 0 },
         };
         static_assert(std::size(kCommandOutput) == COMMAND_COUNT, "kCommandOutput order must match Command enum");
 
