@@ -2,6 +2,14 @@
 
 Checklist of RE2 audio functions that need decompiling as part of the SDL3 audio migration.
 
+## Status
+
+The SDL3 audio migration is **complete**: the new `system::audio` module (`src/system_audio.cpp` / `.h`) replaces DirectSound/ACM/mmio, the `ss_*` layer and the game-logic layer (`Snd_*` / `Xa_*` / `bgm_*`) delegate to it, and the project links `SDL3.lib` (with `CopySDL3` copying `SDL3.dll` to the output). Remaining caveats:
+
+- `square_root0` (0x451780) and `sca_ck_line` (0x4E3440) in `src/audio.cpp` are still `interop::call` wrappers — out of scope for this migration.
+- `winmm.lib` is kept only for `input.cpp`'s joystick API.
+- Manual audio testing is still required: SE, BGM, voice and XA playback via `run.bat`.
+
 **Workflow:** each sub-agent picks one unchecked function, decompiles it (using IDA via `ida-pro-mcp-*` tools) into hand-written C++ code, replaces its `interop::call`/raw-pointer wrapper in `src/audio.cpp` (or the file noted below), ticks it off here, and makes a commit. Do not tick a function off until its wrapper is replaced and the build passes.
 
 - Where the function lives in our code is noted per section: the `ss_*` / `snd_*` / `bgm_*` / `Xa_*` functions go in `src/audio.cpp` unless noted otherwise.
