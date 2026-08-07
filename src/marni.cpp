@@ -7210,8 +7210,124 @@ namespace openre::marni
     // 0x00414750
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt)
     {
-        return interop::thiscall<int, MarniSurface2*, int, int, int, int, int>(
-            0x00414750, self, width, height, depth, palBpp, palCnt);
+        // The object can be re-created in place, so release anything it currently owns
+        // (vtbl->release_fn at offset 0x20).
+        surface_release(self);
+
+        self->width = (int16_t)width;
+        self->height = (int16_t)height;
+        self->bpp = (uint8_t)depth;
+
+        // depth is the pixel bit depth (-4 = 4-bit paletted, 4 = 4bpp, 8, 16 or 32).
+        switch (depth)
+        {
+            case -4:
+                self->pBitmap = operator_new((size_t)(height * width));
+                self->pitch = (int16_t)width;
+                self->bpp = 4;
+                self->var_2B = 1;
+                break;
+            case 4:
+                self->pBitmap = operator_new((size_t)(height * width / 2));
+                self->pitch = (int16_t)(width / 2);
+                break;
+            case 8:
+                self->pBitmap = operator_new((size_t)(height * width));
+                self->pitch = (int16_t)width;
+                break;
+            case 16:
+                self->pBitmap = operator_new((size_t)(2 * height * width));
+                self->pitch = (int16_t)(2 * width);
+                break;
+            case 32:
+                self->pBitmap = operator_new((size_t)(4 * height * width));
+                self->pitch = (int16_t)(4 * width);
+                break;
+            default:
+                goto unsupported_format;
+        }
+
+        if (!self->pBitmap)
+        {
+            out("", "MarniBits::CreateWork");
+            return 0;
+        }
+
+        self->var_25 = (uint8_t)palBpp;
+        if (palBpp)
+        {
+            self->pal_cnt = (palCnt > 0) ? (int16_t)palCnt : 1;
+            self->var_28 = 1; // Is_paletted
+
+            size_t allocSize;
+            if (self->bpp == 4)
+            {
+                allocSize = (size_t)(16 * self->pal_cnt * (palBpp >> 3));
+            }
+            else if (self->bpp == 8)
+            {
+                allocSize = (size_t)((self->pal_cnt * (palBpp >> 3)) << 8);
+            }
+            else
+            {
+                goto unsupported_format;
+            }
+
+            self->pPalette = operator_new(allocSize);
+            if (!self->pPalette)
+            {
+                out("", "failed to create the work for palette MarniBits::CreateWork");
+                operator_delete(self->pBitmap);
+                self->pBitmap = nullptr;
+                return 0;
+            }
+        }
+
+        // Fill in the pixel format descriptor for the surface's bit depth.
+        switch (self->bpp)
+        {
+            case 4:
+            case 8:
+            case 0x10:
+                self->desc.a_shift = 15;
+                self->desc.a_bitcnt = 1;
+                self->desc.a_mask = 1;
+                self->desc.r_shift = 10;
+                self->desc.r_bitcnt = 5;
+                self->desc.r_mask = 31;
+                self->desc.g_shift = 5;
+                self->desc.g_bitcnt = 5;
+                self->desc.g_mask = 31;
+                self->desc.b_bitcnt = 5;
+                self->desc.b_mask = 31;
+                self->desc.b_shift = 0;
+                break;
+            case 0x20:
+                self->desc.a_shift = 24;
+                self->desc.a_bitcnt = 8;
+                self->desc.a_mask = 0xFF;
+                self->desc.r_shift = 16;
+                self->desc.r_bitcnt = 8;
+                self->desc.r_mask = 0xFF;
+                self->desc.g_shift = 8;
+                self->desc.g_bitcnt = 8;
+                self->desc.g_mask = 0xFF;
+                self->desc.b_bitcnt = 8;
+                self->desc.b_mask = 0xFF;
+                self->desc.b_shift = 0;
+                break;
+            default:
+                break;
+        }
+
+        self->bOpen = 1;
+        self->var_27 = 1;
+        self->var_29 = 1;
+        return 1;
+
+    unsupported_format:
+        out("unsupported format...%d MarniBits::CreateWork", "");
+        return 0;
     }
 
     // 0x00413950
@@ -8345,7 +8461,6 @@ namespace openre::marni
         interop::hookThisCall(0x00412BD0, &surface2_vfill);
         interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
-        interop::hookThisCall(0x004123D0, &surface_pal_blt);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x0040F600, &surfacex_vpallock);
         interop::hookThisCall(0x0040FAD0, &surfacex_vunlock);
