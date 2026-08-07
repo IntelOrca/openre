@@ -985,7 +985,8 @@ struct Marni
     uint8_t field_8C7088[252];          // 0x8C7088
     uint8_t field_8C7184[252];          // 0x8C7184
     uint32_t dwVidMemTotal;             // 0x8C7280
-    uint8_t pad_8C7284[8];              // 0x8C7284
+    uint32_t field_8C7284;              // 0x8C7284
+    int32_t zbuffer_depth;              // 0x8C7288
     uint32_t field_8C728C[256];         // 0x8C728C
     uint8_t pad_8C768C[12];             // 0x8C768C
     PolygonObject** polygons;           // 0x8C7698

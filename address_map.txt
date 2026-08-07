@@ -762,6 +762,8 @@ declare     otag                    MarniOt[5]              0x008C7024
 declare     field_8C7088            u8[252]                 0x008C7088
 declare     field_8C7184            u8[252]                 0x008C7184
 declare     dwVidMemTotal           u32                     0x008C7280
+declare     field_8C7284            u32                     0x008C7284
+declare     zbuffer_depth           s32                     0x008C7288
 declare     field_8C728C            u32[256]                0x008C728C
 declare     polygons                PolygonObject**         0x008C7698
 declare     polygons_count          u32                     0x008C769C

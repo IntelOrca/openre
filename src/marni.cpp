@@ -80,6 +80,7 @@ namespace openre::marni
     static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static void __stdcall surface3_dtor(MarniSurface3* self);
+    static void __stdcall surfacex_dtor(MarniSurfaceX* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
 
     // 0x0050D905
@@ -330,7 +331,96 @@ namespace openre::marni
     // 0x004022E0
     static void __stdcall request_video_memory(Marni* self)
     {
-        interop::thiscall<int, Marni*>(0x004022E0, self);
+        if (!self->is_gpu_active)
+        {
+            out("though this class is unable you have tried to call.", "Direct3D::RequestVideoMemory");
+            return;
+        }
+
+        auto cnt_2k_buffer = self->polygons_count; // cnt_2K_buffer
+        auto count_use_gpu1 = 0;                   // textures with GPU_9 + GPU_1 flags
+        self->field_8C8418 = 0;
+        self->field_8C8420 = 0;
+        self->field_8C841C = 0;
+        auto count_use_gpu0 = 0;                   // textures with GPU_9 + GPU_0 flags
+        self->field_8C8414 = 0;
+
+        // Count used entries (index 1..cnt-1) in the 2K buffer.
+        if (cnt_2k_buffer > 1)
+        {
+            for (auto i = 1u; i < cnt_2k_buffer; i++)
+            {
+                if (self->polygons[i])
+                    self->field_8C8414++;
+            }
+        }
+
+        if (self->gpu_flag & GpuFlags::GPU_13)
+        {
+            for (auto i = 0; i < 256; i++)
+            {
+                if (self->textures[i].var_00)
+                {
+                    self->field_8C8418++;
+                    if (self->textures[i].var_00 & GpuFlags::GPU_1)
+                        self->field_8C8420++;
+                    if (self->textures[i].var_00 & GpuFlags::GPU_0)
+                        self->field_8C841C++;
+                }
+            }
+            return;
+        }
+
+        if (self->pDirectDraw == nullptr)
+        {
+            out("invalid class.", "Direct3D::RequestVideoMemory");
+            return;
+        }
+
+        // 380 bytes (95 dwords); the original sets dwSize to 0x17C (380),
+        // which is larger than the modern DDCAPS (0x178), so use a raw buffer.
+        DWORD ddcaps[95] = {};
+        ddcaps[0] = 380; // DDCAPS dwSize
+        gGameTable.error = ((LPDIRECTDRAW)self->pDirectDraw)->GetCaps((LPDDCAPS)ddcaps, 0);
+        if (gGameTable.error)
+            error(gGameTable.error);
+        else
+            self->dwVidMemFree = ddcaps[0x10]; // DDCAPS dwVidMemFree
+
+        auto count_use = 0; // textures with GPU_9 flag
+        for (auto i = 0; i < 256; i++)
+        {
+            auto flags = self->texture_nodes[i].var_14;
+            if (flags && (flags & GpuFlags::GPU_13) == 0)
+            {
+                self->field_8C8418++;
+                if (flags & GpuFlags::GPU_1)
+                    self->field_8C8420++;
+                if (flags & GpuFlags::GPU_0)
+                    self->field_8C841C++;
+                if (flags & GpuFlags::GPU_9)
+                {
+                    count_use++;
+                    if (flags & GpuFlags::GPU_1)
+                        count_use_gpu1++;
+                    if (flags & GpuFlags::GPU_0)
+                        count_use_gpu0++;
+                }
+            }
+        }
+
+        if (self->field_8C8418)
+            *(float*)&self->field_8C8410 = (float)count_use / (float)self->field_8C8418;
+        else
+            self->field_8C8410 = 0;
+        if (self->field_8C8420)
+            self->field_8C8424 = (float)count_use_gpu1 / (float)self->field_8C8420;
+        else
+            self->field_8C8424 = 0.0f;
+        if (self->field_8C841C)
+            *(float*)&self->field_8C8428 = (float)count_use_gpu0 / (float)self->field_8C841C;
+        else
+            self->field_8C8428 = 0;
     }
 
     // The windowed mode index to restore when leaving fullscreen via ALT+ENTER.
@@ -1034,7 +1124,65 @@ namespace openre::marni
     // 0x00404FA0
     static int __stdcall clear_buffers(Marni* self)
     {
-        return interop::thiscall<int, Marni*>(0x00404FA0, self);
+        // Deactivate the GPU and clear the "device created" flag.
+        self->is_gpu_active = 0;
+        self->gpu_flag &= ~GpuFlags::GPU_9;
+
+        // Free every texture node's surface object.
+        for (int i = 0; i < 256; i++)
+        {
+            auto& node = self->texture_nodes[i];
+            if (node.var_14 != 0)
+            {
+                if (node.surface != nullptr)
+                {
+                    surfacex_dtor(node.surface);
+                    cstd_free(node.surface);
+                }
+                node.surface = nullptr;
+            }
+        }
+
+        // Release the work-surface wrappers' COM objects.
+        for (int i = 0; i < 128; i++)
+        {
+            auto p = self->var_8C76A0[i];
+            if (p != nullptr)
+            {
+                auto obj = *(void**)p;
+                if (obj != nullptr)
+                {
+                    auto vtbl = *(void***)obj;
+                    ((void(__stdcall*)(void*))vtbl[2])(obj); // IUnknown::Release
+                    *(void**)p = nullptr;
+                }
+            }
+        }
+
+        if (self->pMaterial != nullptr)
+        {
+            ((LPDIRECT3DMATERIAL2)self->pMaterial)->Release();
+            self->pMaterial = nullptr;
+        }
+        if (self->pViewport != nullptr)
+        {
+            ((LPDIRECT3DVIEWPORT2)self->pViewport)->Release();
+            self->pViewport = nullptr;
+        }
+        if (self->pDirectDevice2 != nullptr)
+        {
+            ((LPDIRECT3DDEVICE2)self->pDirectDevice2)->Release();
+            self->pDirectDevice2 = nullptr;
+        }
+        if (self->pClipper != nullptr)
+        {
+            ((LPDIRECTDRAWCLIPPER)self->pClipper)->Release();
+            self->pClipper = nullptr;
+        }
+
+        surface_release(&self->surface0);
+        surface_release(&self->surfaceZ);
+        return interop::thiscall<int, MarniSurface2*>((uintptr_t)self->surface2.vtbl->release_fn, &self->surface2);
     }
 
     // 0x004050C0
@@ -1447,13 +1595,204 @@ namespace openre::marni
     // 0x00405DD0
     static int __stdcall get_z_buffer_caps(Marni* self)
     {
-        return interop::thiscall<int, Marni*>(0x00405DD0, self);
+        DDCAPS driverCaps = {};
+        DDCAPS helCaps = {};
+        driverCaps.dwSize = sizeof(DDCAPS);
+        helCaps.dwSize = sizeof(DDCAPS);
+
+        gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)->GetCaps(&driverCaps, &helCaps);
+        if (gGameTable.error)
+        {
+            out("GetCaps failed in while checking driver capabilities", "MarniSystem Direct3D Class");
+            return 0;
+        }
+
+        if (driverCaps.dwZBufferBitDepths == 0)
+            self->zbuffer_depth = 16;
+        else if (driverCaps.dwZBufferBitDepths & DDBD_32)
+            self->zbuffer_depth = 32;
+        else if (driverCaps.dwZBufferBitDepths & DDBD_24)
+            self->zbuffer_depth = 24;
+        else if (driverCaps.dwZBufferBitDepths & DDBD_16)
+            self->zbuffer_depth = 16;
+        else if (driverCaps.dwZBufferBitDepths & DDBD_8)
+            self->zbuffer_depth = 8;
+        else
+        {
+            out("No valid Z-Buffer depths available", "MarniSystem Direct3D Class");
+            return 0;
+        }
+
+        self->field_8C7284 = driverCaps.ddsCaps.dwCaps;
+        return (int)driverCaps.ddsCaps.dwCaps;
+    }
+
+    // Thin wrappers around the MarniSurface2 vtable blit functions.
+    static void surface_blt(MarniSurface2* self, LPRECT pDstRect, LPRECT pSrcRect, MarniSurface2* pSrc, int a5, int a6)
+    {
+        interop::thiscall<int, MarniSurface2*, LPRECT, LPRECT, MarniSurface2*, int, int>(
+            (uintptr_t)self->vtbl->blt, self, pDstRect, pSrcRect, pSrc, a5, a6);
+    }
+
+    static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst)
+    {
+        interop::thiscall<int, MarniSurface2*, MarniSurface2*, int, int>(
+            (uintptr_t)self->vtbl->pal_blt, self, pSrc, paletteSrc, paletteDst);
+    }
+
+    // 0x00416C40
+    static int __stdcall search_texture_object_1(Marni* self, int count)
+    {
+        return interop::thiscall<int, Marni*, int>(0x00416C40, self, count);
     }
 
     // 0x00405EC0
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode)
     {
-        return interop::thiscall<int, Marni*, MarniSurface2*, uint32_t>(0x00405EC0, self, pSrcSurface, mode);
+        if (!self->is_gpu_active)
+            return 0;
+
+        if (!pSrcSurface->bOpen)
+        {
+            out("invalid bits specified. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+            return 0;
+        }
+
+        auto gpu_flg = self->gpu_flag;
+        if ((gpu_flg & GpuFlags::GPU_13) != 0 || (mode & 0x4000) != 0)
+        {
+            // Temporary texture object: allocate the slot and copy the source
+            // surface into it without creating a GPU texture (no reload).
+            auto texture_id = search_texture_object_1(self, 0);
+            if (!texture_id)
+            {
+                out("failed to allocate on not enough memory. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+                return 0;
+            }
+
+            auto& texture = self->textures[texture_id];
+            if (pSrcSurface->var_28) // Is_paletted
+            {
+                surface2_create_work(
+                    &texture.surface, pSrcSurface->width, pSrcSurface->height, 8, self->bpp, pSrcSurface->pal_cnt);
+                texture.surface.desc = self->surface0.desc;
+                surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
+                surface_pal_blt(&texture.surface, pSrcSurface, -1, -1);
+            }
+            else
+            {
+                surface2_create_work(&texture.surface, pSrcSurface->width, pSrcSurface->height, self->bpp, 0, -1);
+                texture.surface.desc = self->surface0.desc;
+                surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
+            }
+            texture.var_00 = mode;
+            return texture_id;
+        }
+
+        if (pSrcSurface->width > 256 || pSrcSurface->height > 256)
+        {
+            out("size greater than 256x256 is not supported. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+            return 0;
+        }
+
+        // Number of palette entries the texture object is allocated for.
+        int pal_count = 1;
+        if ((mode & 0x20) != 0)
+        {
+            if (pSrcSurface->var_28) // Is_paletted
+                pal_count = pSrcSurface->pal_cnt;
+            else
+                mode &= ~0x20;
+        }
+
+        // Adjust the mode for paletted surfaces / GPUs without a 4bpp or 8bpp
+        // hardware palette: convert to an RGB texture (clear bit 0x20, set bit
+        // 0x40) so the texture can be generated without hardware palette support.
+        auto bpp = pSrcSurface->bpp;
+        if ((gpu_flg & (GpuFlags::GPU_0 | GpuFlags::GPU_1)) == 0 && (mode & 0x20) != 0)
+        {
+            mode = (mode & ~0x20) | 0x40;
+        }
+        else if (pSrcSurface->var_28 &&
+                 (((bpp == 4 && ((gpu_flg & GpuFlags::GPU_1) != 0 || (gpu_flg & GpuFlags::GPU_0) != 0)) ||
+                   (bpp == 8 && (gpu_flg & GpuFlags::GPU_1) != 0))))
+        {
+            mode |= 0x80;
+            if ((gpu_flg & 0x100) == 0)
+                mode = (mode & ~0x20) | 0x40;
+        }
+
+        int texture_id = 0;
+        switch (mode & 0xFFFFDFEB)
+        {
+        case 1:
+        case 2:
+            texture_id = search_texture_object_1(self, 1);
+            if (!texture_id)
+                goto alloc_failed;
+            {
+                auto& texture = self->textures[texture_id];
+                surface2_create_work(
+                    &texture.surface, pSrcSurface->width, pSrcSurface->height, pSrcSurface->bpp, pSrcSurface->var_25, -1);
+                surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
+                texture.var_36 = 1;
+            }
+            break;
+        case 0x22:
+        case 0x41:
+        case 0x42:
+        case 0xC1:
+        case 0xC2:
+            texture_id = search_texture_object_1(self, pal_count);
+            if (!texture_id)
+                goto alloc_failed;
+            {
+                auto& texture = self->textures[texture_id];
+                surface2_create_work(
+                    &texture.surface, pSrcSurface->width, pSrcSurface->height, pSrcSurface->bpp, pSrcSurface->var_25, pal_count);
+                surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
+                surface_pal_blt(&texture.surface, pSrcSurface, -1, -1);
+                texture.var_36 = (uint16_t)pal_count;
+            }
+            break;
+        case 0x81:
+        case 0x82:
+        case 0xA1:
+        case 0xA2:
+            texture_id = search_texture_object_1(self, 1);
+            if (!texture_id)
+                goto alloc_failed;
+            {
+                auto& texture = self->textures[texture_id];
+                surface2_create_work(
+                    &texture.surface, pSrcSurface->width, pSrcSurface->height, pSrcSurface->bpp, pSrcSurface->var_25, pal_count);
+                surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
+                surface_pal_blt(&texture.surface, pSrcSurface, -1, -1);
+                texture.var_36 = 1;
+            }
+            break;
+        default:
+            out("not supported type...0x%08x Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+            return 0;
+        }
+
+        self->textures[texture_id].var_00 = mode;
+        if ((mode & 0x2000) != 0)
+            return texture_id;
+
+        if (!reload_texture(self, texture_id))
+        {
+            out("failed to generate the texutre Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+            texture_surface_release(self, texture_id);
+            return 0;
+        }
+
+        request_video_memory(self);
+        return texture_id;
+
+    alloc_failed:
+        out("failed to allocate on not enough memory. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+        return 0;
     }
 
     // 0x004063D0
@@ -1497,7 +1836,45 @@ namespace openre::marni
     // 0x004064D0
     static void __stdcall destroy(Marni* marni)
     {
-        interop::thiscall<int, Marni*>(0x004064D0, marni);
+        marni->gpu_flag &= ~GpuFlags::GPU_9;
+
+        clear_buffers(marni);
+
+        for (auto i = 0; i < 256; i++)
+            unload_texture(marni, i);
+
+        auto pClipper = (LPDIRECTDRAWCLIPPER)marni->pClipper;
+        marni->hWnd = nullptr;
+        if (pClipper != nullptr)
+        {
+            pClipper->Release();
+            marni->pClipper = nullptr;
+        }
+
+        surface_release(&marni->surface0);
+        surface_release(&marni->surface2);
+
+        if ((marni->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
+        {
+            marni->is_gpu_busy = 1;
+            ((LPDIRECTDRAW2)marni->pDirectDraw2)->RestoreDisplayMode();
+            dd_set_coop_level((HWND)marni->hWnd, 0, (LPDIRECTDRAW2)marni->pDirectDraw2);
+            marni->is_gpu_busy = 0;
+        }
+
+        movie_release(marni->pMovie);
+
+        if (marni->pDirect3D2 != nullptr)
+        {
+            ((LPDIRECT3D2)marni->pDirect3D2)->Release();
+            marni->pDirect3D2 = nullptr;
+        }
+
+        if (marni->pDirectDraw2 != nullptr)
+        {
+            ((LPDIRECTDRAW2)marni->pDirectDraw2)->Release();
+            marni->pDirectDraw2 = nullptr;
+        }
     }
 
     // 0x004065C0
@@ -1591,13 +1968,214 @@ namespace openre::marni
     // 0x00406D90
     static int __stdcall create_device(Marni* self)
     {
-        return interop::thiscall<int, Marni*>(0x00406D90, self);
+        // Texture format table stored inline in the Marni object
+        // (count at +0x8C78A0, entries from +0x8C78A4).
+        constexpr size_t kFormatEntrySize = 0x6C; // legacy DDSURFACEDESC size (modern ddraw.h is 0x7C)
+
+        // Release any previously created D3D device.
+        if (self->pDirectDevice2)
+        {
+            ((LPDIRECT3DDEVICE2)self->pDirectDevice2)->Release();
+            self->pDirectDevice2 = nullptr;
+        }
+
+        // Software renderer (GPU_13): no D3D device is created.
+        if (self->gpu_flag & GpuFlags::GPU_13)
+            return 1;
+
+        // Pick the device class: use the HAL device when the selected driver is
+        // hardware accelerated, otherwise fall back to the software RGB device.
+        const GUID* pDeviceGuid = &IID_IDirect3DHALDevice;
+        if (!gGameTable.d3d_devices[self->device_cnt].hwAccelerated)
+            pDeviceGuid = &IID_IDirect3DRGBDevice;
+
+        gGameTable.error = ((LPDIRECT3D2)self->pDirect3D2)
+            ->CreateDevice(*pDeviceGuid, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface, (LPDIRECT3DDEVICE2*)&self->pDirectDevice2);
+        if (gGameTable.error)
+        {
+            error(gGameTable.error);
+            out("failed to generate the D3DDevice2 for Draw Primitive.", "MarniSystem Direct3D::MD3DCreateDevice");
+            return 0;
+        }
+
+        out("driver...%s", gGameTable.d3d_devices[self->device_cnt].lpDeviceDescription);
+
+        if (gGameTable.d3d_devices[self->device_cnt].supportsFloat)
+        {
+            // The game enumerates the texture formats the device supports and
+            // keeps the high-colour ones (15+ total RGB bits with an alpha
+            // channel, non-paletted) in its private format table.
+            constexpr size_t kMaxFormats = 20;
+            uint8_t formats[kMaxFormats * kFormatEntrySize];
+
+            // D3DEnumTextureFormats (0x00406880), not yet decompiled.
+            int formatCount = interop::call<int, LPDIRECT3DDEVICE2, int, LPDDSURFACEDESC>(
+                0x00406880, (LPDIRECT3DDEVICE2)self->pDirectDevice2, (int)kMaxFormats, (LPDDSURFACEDESC)formats);
+            if (formatCount != 0)
+            {
+                int matched = 0;
+                if (formatCount > 0)
+                {
+                    auto* pTable = reinterpret_cast<uint8_t*>(self) + 0x8C78A4;
+                    for (int i = 0; i < formatCount; i++)
+                    {
+                        auto* pFormat = (DDSURFACEDESC*)(formats + kFormatEntrySize * i);
+                        MarniSurfaceDesc sDesc;
+                        ddrawdesc2surfdesc(pFormat, &sDesc);
+                        if (sDesc.r_bitcnt + sDesc.g_bitcnt + sDesc.b_bitcnt >= 15
+                            && sDesc.a_bitcnt != 0
+                            && (pFormat->ddpfPixelFormat.dwFlags & (DDPF_PALETTEINDEXED4 | DDPF_PALETTEINDEXED8)) == 0)
+                        {
+                            auto* pDest = (DDSURFACEDESC*)(pTable + kFormatEntrySize * matched);
+                            memcpy(pDest, pFormat, kFormatEntrySize);
+                            pDest->dwFlags = 0x1007;           // DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY | DDSCAPS_LOCALVIDMEM
+                            pDest->ddsCaps.dwCaps = 0x4001000; // DDSCAPS2_TEXTUREMANAGE | DDSCAPS_TEXTURE
+                            matched++;
+                        }
+                    }
+                }
+                *(int32_t*)((uint8_t*)self + 0x8C78A0) = matched;
+            }
+            else
+            {
+                out("failed to detect a texture formats.", "MarniSystem Direct3D::MD3DCreateDevice");
+                if (self->pDirectDevice2)
+                {
+                    ((LPDIRECT3DDEVICE2)self->pDirectDevice2)->Release();
+                    self->pDirectDevice2 = nullptr;
+                }
+                return 0;
+            }
+        }
+
+        out("texture formats detected here...%d", "MD3DCreateDevice");
+        self->gpu_flag &= ~(GpuFlags::GPU_0 | GpuFlags::GPU_1);
+
+        auto formatCount = *(int32_t*)((uint8_t*)self + 0x8C78A0);
+        if (formatCount > 0)
+        {
+            auto* pTable = reinterpret_cast<uint8_t*>(self) + 0x8C78A4;
+            for (int i = 0; i < formatCount; i++)
+            {
+                auto* pEntry = (DDSURFACEDESC*)(pTable + kFormatEntrySize * i);
+                if (pEntry->ddpfPixelFormat.dwFlags & DDPF_PALETTEINDEXED4)
+                {
+                    out("4 palette index", "");
+                }
+                else if (pEntry->ddpfPixelFormat.dwFlags & DDPF_PALETTEINDEXED8)
+                {
+                    out("8 palette index", "");
+                }
+                else
+                {
+                    MarniSurfaceDesc sDesc;
+                    ddrawdesc2surfdesc(pEntry, &sDesc);
+                    out("%d%d%d%d", "");
+                }
+            }
+        }
+
+        return 1;
     }
 
     // 0x00407020
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
     {
-        return interop::thiscall<int, Marni*, int, int, LPDIRECTDRAWSURFACE*>(0x00407020, self, width, height, pDDsurfaceZ);
+        if (self->gpu_flag & GpuFlags::GPU_13)
+            return 1;
+
+        if (!gGameTable.d3d_devices[self->device_cnt].supportsZbuffer)
+        {
+            out("it seems that this driver hasn't function of Zbuffer.", "MarniSystem Direct3D::MD3DCreateZBuffer");
+            *pDDsurfaceZ = 0;
+            return 0;
+        }
+
+        // Query the back buffer's desc so the z-buffer inherits its memory type
+        // (system or video memory).
+        DDSURFACEDESC backBufferDesc;
+        memset(&backBufferDesc, 0, sizeof(backBufferDesc));
+        backBufferDesc.dwSize = sizeof(DDSURFACEDESC);
+        backBufferDesc.dwFlags = DDSD_CAPS;
+        ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->GetSurfaceDesc(&backBufferDesc);
+
+        DDSURFACEDESC desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.dwHeight = height;
+        desc.ddsCaps.dwCaps
+            = (backBufferDesc.ddsCaps.dwCaps & (DDSCAPS_SYSTEMMEMORY | DDSCAPS_VIDEOMEMORY)) | DDSCAPS_ZBUFFER;
+        desc.dwWidth = width;
+        desc.dwSize = sizeof(DDSURFACEDESC);
+        desc.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_ZBUFFERBITDEPTH;
+
+        // Pick the deepest z-buffer bit depth the device advertised.
+        auto zBufferBitDepth = ((LPD3DDEVICEDESC)gGameTable.d3d_devices[self->device_cnt].desc)->dwDeviceZBufferBitDepth;
+        if (zBufferBitDepth & 0x100)
+            desc.dwZBufferBitDepth = 32;
+        else if (zBufferBitDepth & 0x200)
+            desc.dwZBufferBitDepth = 24;
+        else if (zBufferBitDepth & 0x400)
+            desc.dwZBufferBitDepth = 16;
+        else if (zBufferBitDepth & 0x800)
+            desc.dwZBufferBitDepth = 8;
+        else
+        {
+            out("it seems that this device can't specify a number of bit of Zbuffer.", "MarniSystem Direct3D::MD3DCreateZBuffer");
+            goto fail;
+        }
+
+        gGameTable.error = ((LPDIRECTDRAW)self->pDirectDraw)->CreateSurface((LPDDSURFACEDESC)&desc, pDDsurfaceZ, 0);
+        if (gGameTable.error)
+        {
+            // The device rejected the requested depth; retry with the next lower
+            // one (32 -> 24 -> 16) before giving up.
+            while (desc.dwZBufferBitDepth > 16)
+            {
+                if (desc.dwZBufferBitDepth == 24)
+                    desc.dwZBufferBitDepth = 16;
+                else if (desc.dwZBufferBitDepth == 32)
+                    desc.dwZBufferBitDepth = 24;
+
+                gGameTable.error = ((LPDIRECTDRAW)self->pDirectDraw)->CreateSurface((LPDDSURFACEDESC)&desc, pDDsurfaceZ, 0);
+                if (!gGameTable.error)
+                    break;
+            }
+            if (gGameTable.error)
+            {
+                error(gGameTable.error);
+                out("failed to generate the Zbuffer.", "MarniSystem Direct3D::MD3DCreateZBuffer");
+                goto fail;
+            }
+        }
+
+        gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->AddAttachedSurface(*pDDsurfaceZ);
+        if (gGameTable.error)
+        {
+            error(gGameTable.error);
+            out("failed to attache with Zbuffer.", "MarniSystem Direct3D::MD3DCreateZBuffer");
+            goto fail;
+        }
+
+        gGameTable.error = get_surface_desc(&desc, *pDDsurfaceZ);
+        if (gGameTable.error)
+        {
+            out(
+                "\x83\x54\x81\x5b\x83\x74\x83\x46\x83\x58\x82\xcc\x8f\xf3\x91\xd4\x82\xf0\x8e\xe6\x93\xbe\x82\xc5\x82\xab\x82\xc8\x82\xa9\x82\xc1\x82\xbd", // サーフェスの状態を取得できなかった
+                "MarniSystem Direct3D::MD3DCreateZBuffer");
+            goto fail;
+        }
+
+        // Remember whether the z-buffer ended up in video memory.
+        self->gpu_flag |= (desc.ddsCaps.dwCaps >> 9) & 0x20;
+        return 1;
+
+    fail:
+        if (*pDDsurfaceZ)
+        {
+            (*pDDsurfaceZ)->Release();
+            *pDDsurfaceZ = 0;
+        }
+        return 0;
     }
 
     // 0x00407290
@@ -2592,6 +3170,10 @@ namespace openre::marni
     // 0x0040ed90
 
     // 0x0040edb0
+    static void __stdcall surfacex_dtor(MarniSurfaceX* self)
+    {
+        interop::thiscall<int, MarniSurfaceX*>(0x0040EDB0, self);
+    }
 
     // 0x0040ee00
 
@@ -3341,19 +3923,26 @@ namespace openre::marni
         interop::hookThisCall(0x00402210, &add_primitive_scaler);
         interop::hookThisCall(0x00402240, &add_primitive_back);
         interop::hookThisCall(0x00402290, &clear_otags);
+        interop::hookThisCall(0x004022E0, &request_video_memory);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x00402940, &restore_surfaces);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);
+        interop::hookThisCall(0x00405DD0, &get_z_buffer_caps);
         interop::hookThisCall(0x00404CE0, &unload_texture);
         interop::hookThisCall(0x00404D20, &clear);
+        interop::hookThisCall(0x00404FA0, &clear_buffers);
         interop::hookThisCall(0x004050C0, &dtor);
         interop::hookThisCall(0x00405320, &init);
         interop::hookThisCall(0x00406450, &move);
+        interop::hookThisCall(0x004064D0, &destroy);
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);
+        interop::hookThisCall(0x00406D90, &create_device);
+        interop::hookThisCall(0x00407020, &create_zbuffer);
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x00405EC0, &create_texture_handle);
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
