@@ -107,7 +107,45 @@ namespace openre::marni
     // 0x00414C80
     int __stdcall movie_seek(MarniMovie* self)
     {
-        return interop::thiscall<int, MarniMovie*>(0x00414C80, self);
+        // Restarts the movie at position 0.
+        uint32_t flag = self->flag;
+        if ((flag & 1) == 0)
+            return 0;
+
+        if ((flag & 8) != 0)
+        {
+            // Streaming mode
+            auto pStream = self->pMediaStream;
+            auto vtbl = *(uint32_t**)pStream;
+
+            // IAMMultiMediaStream::SetState(STREAMSTATE_STOP) at vtable offset 0x1C
+            auto pfnSetState = (HRESULT(__stdcall*)(void*, uint32_t))vtbl[0x1C / 4];
+            pfnSetState(pStream, 0); // STREAMSTATE_STOP = 0
+
+            // IAMMultiMediaStream::Seek(0) at vtable offset 0x28
+            auto pfnSeek = (HRESULT(__stdcall*)(void*, int64_t, uint32_t))vtbl[0x28 / 4];
+            pfnSeek(pStream, 0, 0);
+        }
+        else
+        {
+            // DirectShow mode
+            auto pMC = self->pMediaControl;
+            auto vtblMC = *(uint32_t**)pMC;
+
+            // IMediaControl::Stop at vtable offset 0x24
+            auto pfnStop = (HRESULT(__stdcall*)(void*))vtblMC[0x24 / 4];
+            pfnStop(pMC);
+
+            auto pMP = self->pMediaPosition;
+            auto vtblMP = *(uint32_t**)pMP;
+
+            // IMediaPosition::put_CurrentPosition(0) at vtable offset 0x20
+            auto pfnPutPos = (HRESULT(__stdcall*)(void*, double))vtblMP[0x20 / 4];
+            pfnPutPos(pMP, 0.0);
+        }
+
+        self->flag = (flag & ~2u) | 4u;
+        return 1;
     }
 
     // DirectShow CLSID/IID GUIDs used by movie_open (from binary rdata)
