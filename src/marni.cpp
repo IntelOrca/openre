@@ -42,7 +42,7 @@ namespace openre::marni
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int adjust_rect(RECT* clip, const RECT* src, RECT* out);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
-    static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
+    int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     static int __stdcall surface_set_index_color(int x, int y, uint32_t color, int mode);
     int __stdcall surface2_vrelease(MarniSurface2* self);
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
@@ -7459,7 +7459,7 @@ namespace openre::marni
     // 0x00412d20
 
     // 0x00414750
-    static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt)
+    int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt)
     {
         // The object can be re-created in place, so release anything it currently owns
         // (vtbl->release_fn at offset 0x20).

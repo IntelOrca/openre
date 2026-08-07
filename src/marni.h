@@ -47,6 +47,7 @@ namespace openre::marni
     void __stdcall surface2_ctor(MarniSurface2* self);
     void __stdcall surface2_release(MarniSurface2* self);
     int __stdcall surface2_vrelease(MarniSurface2* self);
+    int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
 
     void config_flip_filter(MarniConfig* self);
     void config_read_all(MarniConfig* self);
