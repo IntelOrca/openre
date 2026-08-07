@@ -3887,7 +3887,131 @@ namespace openre::marni
     // 0x0040b8d0
     static int __stdcall sub_40B8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B8D0, self, pPrim, drawInfo);
+        // Projected textured 4-vertex polygon (type 0x4D): same quad layout as
+        // sub_40B560 (four int16 corners, a shared projection divisor at 0x20
+        // and per-corner UV bytes) but with its own B,G,R,A colour bytes at
+        // 0x2C..0x2F. Each channel is doubled and overflow past 8 bits is
+        // folded into the per-vertex specular value (flagged via
+        // specularEnable). The blend-mode bits select the alpha, and the
+        // 0x400000 mode uses the prim's own alpha byte.
+        auto* vertices = drawInfo->vertices;
+        const auto* prim = (const uint8_t*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        const int32_t type = *(const int32_t*)(prim + 4);
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+
+        uint32_t v7 = (uint32_t)prim[45] * 2; // G channel
+        uint32_t v8 = (uint32_t)prim[44] * 2; // B channel
+        uint32_t v10 = (uint32_t)prim[46] * 2; // R channel
+        int hasOverflow = 0;
+        uint32_t ovfR = 0, ovfG = 0, ovfB = 0;
+        if (v10 >= 256)
+        {
+            hasOverflow = 1;
+            ovfR = v10 - 256;
+            v10 = 255;
+        }
+        if (v7 >= 256)
+        {
+            hasOverflow = 1;
+            ovfG = v7 - 256;
+            v7 = 255;
+        }
+        if (v8 >= 256)
+        {
+            hasOverflow = 1;
+            ovfB = v8 - 256;
+            v8 = 255;
+        }
+
+        D3DCOLOR color;
+        const uint32_t mode = (uint32_t)type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (mode == 0x100000 || mode == 0x200000)
+                v10 |= 0xFFFF8000;
+            else if (mode == 0x300000)
+                v10 |= 0x4000;
+            else if (mode != 0x400000)
+                v10 |= 0xFFFFFF00;
+        }
+        else
+        {
+            if (mode == 0x100000)
+                v10 |= 0xFFFF8000;
+            else if (mode == 0x300000)
+                v10 |= 0x4000;
+            else if (mode != 0x400000)
+                v10 |= 0xFFFFFF00;
+        }
+        if (mode == 0x400000)
+            color = (D3DCOLOR)(v8 | ((v7 | ((v10 | ((uint32_t)prim[47] << 8)) << 8)) << 8));
+        else
+            color = (D3DCOLOR)(v8 | ((v7 | (v10 << 8)) << 8));
+        D3DCOLOR specular = hasOverflow ? (D3DCOLOR)(ovfB | ((ovfG | (ovfR << 8)) << 8)) : 0;
+
+        const int16_t primW = *(const int16_t*)(prim + 32);
+        const int32_t prj = (int32_t)self->field_8C7EDC;
+        const float sz = (float)(1.0 - (double)(prj / 2) / (double)primW);
+        const float rhw = (float)(1.0 / (double)primW);
+        const float adjustV = *(const float*)&self->field_8C7020;
+
+        const auto make_sx = [&](int16_t x) {
+            return (float)(((double)x * (double)prj / (double)primW + (double)self->field_8C7EC4) * (double)self->aspect_x);
+        };
+        const auto make_sy = [&](int16_t y) {
+            return (float)(((double)y * (double)prj / (double)primW + (double)self->field_8C7EC8) * (double)self->aspect_y);
+        };
+        const auto make_tu = [&](uint8_t u) {
+            return (float)((double)u * (double)invTexW + (double)adjustV);
+        };
+        const auto make_tv = [&](uint8_t v) {
+            return (float)((double)v * (double)invTexH + (double)adjustV);
+        };
+
+        vertices[0].sx = make_sx(*(const int16_t*)(prim + 16));
+        vertices[0].sy = make_sy(*(const int16_t*)(prim + 18));
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = make_tu(prim[34]);
+        vertices[0].tv = make_tv(prim[35]);
+
+        vertices[1].sx = make_sx(*(const int16_t*)(prim + 20));
+        vertices[1].sy = make_sy(*(const int16_t*)(prim + 22));
+        vertices[1].sz = vertices[0].sz;
+        vertices[1].rhw = vertices[0].rhw;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].tu = make_tu(prim[36]);
+        vertices[1].tv = make_tv(prim[37]);
+
+        vertices[2].sx = make_sx(*(const int16_t*)(prim + 24));
+        vertices[2].sy = make_sy(*(const int16_t*)(prim + 26));
+        vertices[2].sz = vertices[0].sz;
+        vertices[2].rhw = vertices[0].rhw;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = make_tu(prim[38]);
+        vertices[2].tv = make_tv(prim[39]);
+
+        vertices[3].sx = make_sx(*(const int16_t*)(prim + 28));
+        vertices[3].sy = make_sy(*(const int16_t*)(prim + 30));
+        vertices[3].sz = vertices[0].sz;
+        vertices[3].rhw = vertices[0].rhw;
+        vertices[3].color = color;
+        vertices[3].specular = specular;
+        vertices[3].tu = make_tu(prim[40]);
+        vertices[3].tv = make_tv(prim[41]);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = hasOverflow;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // 0x0040BCF0
