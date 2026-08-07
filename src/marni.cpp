@@ -83,6 +83,9 @@ namespace openre::marni
     static void __stdcall surface3_dtor(MarniSurface3* self);
     static void __stdcall surfacex_dtor(MarniSurfaceX* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
+    static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
+    static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
+    static void __stdcall sub_416B90(Marni* self, int a2);
 
     // 0x0050D905
     void* cstd_malloc(size_t len)
@@ -2326,11 +2329,102 @@ namespace openre::marni
     }
 
     // 0x00407690
+    static int __stdcall trans_object_ngtin3_vinsnins(Marni* self, MarniOt* pOt, Prim* pPrim)
+    {
+        return interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x00407690, self, pOt, pPrim);
+    }
 
     // 0x00408140
-    static void __stdcall trans_object(Marni* self, MarniOt* pOt, Prim* pPrim)
+    static int __stdcall trans_object(Marni* self, MarniOt* pOt, Prim* pPrim)
     {
-        interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x00408140, self, pOt, pPrim);
+        if (self->is_gpu_active == 0)
+            return 0;
+
+        // The 2K object primitive stores a polygon object index at offset 0x4C;
+        // look the object up in the polygon object table ("2K buffer").
+        const auto* prim = (const uint8_t*)pPrim;
+        const uint32_t objectIndex = *(const uint32_t*)(prim + 0x4C);
+        auto* pObject = self->polygons[objectIndex];
+        if (pObject == nullptr || (*((const uint8_t*)pObject + 0x34) & 1) == 0)
+        {
+            if (pObject == nullptr)
+                out("object didn't exist on the handle you specified.", "MarniSystem Direct3D::TransObject");
+            else
+                out("object you specified is invalid.", "MarniSystem Direct3D::TransObject");
+            self->is_gpu_active = 0;
+            return 0;
+        }
+
+        // Copy the polygon object header (obj+0x10, 9 dwords). Fields of interest:
+        // [2]=vertices count [4]=normals count [6]=primitives count [8]=primitive type.
+        uint32_t header[9];
+        memcpy(header, (uint8_t*)pObject + 0x10, sizeof(header));
+        if (header[4] > 0x400u)
+        {
+            out("object you specified has too normals then can't proceed. %d", "Direct3D::TransObject");
+            return 0;
+        }
+        if (header[2] > 0x800u)
+        {
+            out("object you specified has too vertices then can't proceed. %d", "Direct3D::TransObject");
+            return 0;
+        }
+        if (header[6] > 0x800u)
+        {
+            out("object you specified has too primitives then can't proceed. %d", "Direct3D::TransObject");
+            return 0;
+        }
+
+        // 0x100 type bit: copy the object matrices (2x 0x40 bytes) into the system.
+        if ((pPrim->type & 0x100) != 0)
+        {
+            memcpy(&self->field_8C7E10, prim + 0x60, 0x40);
+            memcpy(&self->field_8C7E50, prim + 0xA0, 0x40);
+        }
+
+        // Dispatch on the masked polygon object primitive type.
+        const uint32_t type = header[8] & 0xFF801FFF;
+        if (type > 0x10014C0)
+        {
+            if (type > 0x1800400)
+            {
+                if (type != 0x1800401)
+                    goto unsupported;
+                return 1;
+            }
+            if (type == 0x1800400)
+                return 1;
+            const uint32_t v9 = type - 0x1800080;
+            if (v9 == 0)
+                return 1;
+            if (v9 == 1)
+            {
+                // 0x1800081: NG/TIN3-style polygon object
+                trans_object_ngtin3_vinsnins(self, pOt, pPrim);
+                return 1;
+            }
+        }
+        else
+        {
+            if (type == 0x10014C0)
+                return 1;
+            if (type <= 0x1442)
+            {
+                if (type == 0x1442)
+                    return 1;
+                const uint32_t v7 = type - 0x402;
+                if (v7 == 0)
+                    return 1;
+                if (v7 == 2)
+                    return 1;
+            }
+            else if (type == 0x800400)
+                return 1;
+        }
+
+    unsupported:
+        out("this type is not supported.", "MarniSystem Direct3D::TransObject");
+        return 0;
     }
 
     // 0x004082c0
@@ -2353,34 +2447,685 @@ namespace openre::marni
 
     // 0x0040a1d0
 
+    // Gradient triangle primitive: 3 texture-mapped vertices sharing one flat
+    // colour. The R/G/B channels are doubled (values >255 overflow into the
+    // specular field, and any overflow also sets specularEnable). The type's
+    // 0x100000..0x400000 mode bits pick the alpha byte exactly like the sprite
+    // builder, and the positions are perspective-projected by z.
+    struct PrimGradTri : Prim
+    {
+        uint32_t texture;               // 0x0008
+        uint32_t var_0C;                // 0x000C
+        int16_t x0;                     // 0x0010
+        int16_t y0;                     // 0x0012
+        int16_t x1;                     // 0x0014
+        int16_t y1;                     // 0x0016
+        int16_t x2;                     // 0x0018
+        int16_t y2;                     // 0x001A
+        int16_t z;                      // 0x001C
+        uint8_t u0;                     // 0x001E
+        uint8_t v0;                     // 0x001F
+        uint8_t u1;                     // 0x0020
+        uint8_t v1;                     // 0x0021
+        uint8_t u2;                     // 0x0022
+        uint8_t v2;                     // 0x0023
+        uint8_t b;                      // 0x0024
+        uint8_t g;                      // 0x0025
+        uint8_t r;                      // 0x0026
+        uint8_t a;                      // 0x0027
+    };
+    static_assert(sizeof(PrimGradTri) == 0x28);
+
     // 0x0040a4b0
     static int __stdcall sub_40A4B0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A4B0, self, pPrim, drawInfo);
+        auto* pTri = (PrimGradTri*)pPrim;
+        auto* texture = (MarniTextureNode*)drawInfo->texture;
+        auto* vertices = drawInfo->vertices;
+        const float invTexW = (float)(1.0 / (double)texture->width);
+        const float invTexH = (float)(1.0 / (double)texture->height);
+
+        // Colour channels are doubled; overflow beyond 255 is captured in the
+        // specular field, and the "any overflow" flag becomes specularEnable.
+        int32_t r = 2 * (int32_t)pTri->r;
+        int32_t g = 2 * (int32_t)pTri->g;
+        int32_t b = 2 * (int32_t)pTri->b;
+        int32_t rOverflow = 0;
+        int32_t gOverflow = 0;
+        int32_t bOverflow = 0;
+        int32_t hasOverflow = 0;
+        if (r >= 256)
+        {
+            hasOverflow = 1;
+            rOverflow = r - 256;
+            r = 255;
+        }
+        if (g >= 256)
+        {
+            hasOverflow = 1;
+            gOverflow = g - 256;
+            g = 255;
+        }
+        if (b >= 256)
+        {
+            hasOverflow = 1;
+            bOverflow = b - 256;
+            b = 255;
+        }
+
+        // Red byte plus the alpha byte picked by the 0x100000..0x400000 type
+        // mode bits (same scheme as the sprite builder).
+        uint32_t redAlpha;
+        const uint32_t typeBits = (uint32_t)pTri->type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (typeBits == 0x100000 || typeBits == 0x200000)
+                redAlpha = (uint32_t)r | 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                redAlpha = (uint32_t)r | (0x40u << 8);
+            else if (typeBits == 0x400000)
+                redAlpha = (uint32_t)r | ((uint32_t)pTri->a << 8);
+            else
+                redAlpha = (uint32_t)r | 0xFFFFFF00;
+        }
+        else
+        {
+            if (typeBits == 0x100000)
+                redAlpha = (uint32_t)r | 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                redAlpha = (uint32_t)r | (0x40u << 8);
+            else if (typeBits == 0x400000)
+                redAlpha = (uint32_t)r | ((uint32_t)pTri->a << 8);
+            else
+                redAlpha = (uint32_t)r | 0xFFFFFF00;
+        }
+        const uint32_t color = (uint32_t)b | (((uint32_t)g | (redAlpha << 8)) << 8);
+
+        uint32_t specular;
+        if (hasOverflow)
+            specular = (uint32_t)bOverflow | (((uint32_t)gOverflow | ((uint32_t)rOverflow << 8)) << 8);
+        else
+            specular = 0;
+
+        const int16_t z = pTri->z;
+        const float sz = (float)(1.0 - (double)((int32_t)self->field_8C7EDC / 2) / (double)z);
+        const float rhw = (float)(1.0 / (double)z);
+        const double projScale = (double)(int32_t)self->field_8C7EDC;
+        const float texOffset = *reinterpret_cast<const float*>(&self->field_8C7020);
+
+        const auto make_sx = [&](int16_t x) {
+            return (float)(((double)x * projScale / (double)z + (double)self->field_8C7EC4) * (double)self->aspect_x);
+        };
+        const auto make_sy = [&](int16_t y) {
+            return (float)(((double)y * projScale / (double)z + (double)self->field_8C7EC8) * (double)self->aspect_y);
+        };
+
+        vertices[0].sx = make_sx(pTri->x0);
+        vertices[0].sy = make_sy(pTri->y0);
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = (float)((double)pTri->u0 * invTexW + (double)texOffset);
+        vertices[0].tv = (float)((double)pTri->v0 * invTexH + (double)texOffset);
+
+        vertices[1].sx = make_sx(pTri->x1);
+        vertices[1].sy = make_sy(pTri->y1);
+        vertices[1].sz = sz;
+        vertices[1].rhw = rhw;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].tu = (float)((double)pTri->u1 * invTexW + (double)texOffset);
+        vertices[1].tv = (float)((double)pTri->v1 * invTexH + (double)texOffset);
+
+        vertices[2].sx = make_sx(pTri->x2);
+        vertices[2].sy = make_sy(pTri->y2);
+        vertices[2].sz = sz;
+        vertices[2].rhw = rhw;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = (float)((double)pTri->u2 * invTexW + (double)texOffset);
+        vertices[2].tv = (float)((double)pTri->v2 * invTexH + (double)texOffset);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = hasOverflow;
+        drawInfo->vertexCount = 3;
+        return 1;
     }
 
-    // 0x0040a830
+    // Prim type 0x45 (69) gouraud quad layout: 4 int16 coordinates, 4 (u,v)
+    // texcoords and a per-quad BGRA colour in bytes 0x28..0x2B.
+    struct PrimGouraudQuad : Prim
+    {
+        uint32_t texture;               // 0x0008
+        uint32_t var_0C;                // 0x000C
+        int16_t x0;                     // 0x0010
+        int16_t y0;                     // 0x0012
+        int16_t x1;                     // 0x0014
+        int16_t y1;                     // 0x0016
+        int16_t x2;                     // 0x0018
+        int16_t y2;                     // 0x001A
+        int16_t x3;                     // 0x001C
+        int16_t y3;                     // 0x001E
+        uint8_t u0;                     // 0x0020
+        uint8_t v0;                     // 0x0021
+        uint8_t u1;                     // 0x0022
+        uint8_t v1;                     // 0x0023
+        uint8_t u2;                     // 0x0024
+        uint8_t v2;                     // 0x0025
+        uint8_t u3;                     // 0x0026
+        uint8_t v3;                     // 0x0027
+        uint8_t b;                      // 0x0028
+        uint8_t g;                      // 0x0029
+        uint8_t r;                      // 0x002A
+        uint8_t a;                      // 0x002B
+    };
+    static_assert(sizeof(PrimGouraudQuad) == 0x2C);
+
+    // 0x0040A830
     static int __stdcall sub_40A830(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040A830, self, pPrim, drawInfo);
+        auto pQuad = (PrimGouraudQuad*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        auto vertices = drawInfo->vertices;
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+        float uvOffset = *(float*)&self->field_8C7020;
+
+        // Each B,G,R channel is doubled for the D3D colour; channels that
+        // overflow 255 wrap into the specular colour (signalled to the
+        // renderer through specularEnable).
+        int b2 = 2 * pQuad->b;
+        int g2 = 2 * pQuad->g;
+        int r2 = 2 * pQuad->r;
+        int specularEnable = 0;
+        int bOverflow = 0;
+        int gOverflow = 0;
+        int rOverflow = 0;
+        if (r2 >= 256)
+        {
+            specularEnable = 1;
+            rOverflow = r2 - 256;
+            r2 = 255;
+        }
+        if (g2 >= 256)
+        {
+            specularEnable = 1;
+            gOverflow = g2 - 256;
+            g2 = 255;
+        }
+        if (b2 >= 256)
+        {
+            specularEnable = 1;
+            bOverflow = b2 - 256;
+            b2 = 255;
+        }
+        uint32_t b = (uint32_t)b2;
+        uint32_t g = (uint32_t)g2;
+        uint32_t r = (uint32_t)r2;
+
+        // The alpha byte depends on the blend-type bits (0x100000..0x400000)
+        // and the gpu_flag bit 0x4000 (movie/sprite mode), mirroring the other
+        // quad builders; the 0x400000 mode uses the primitive's own alpha byte.
+        uint32_t v12;
+        uint32_t mode = (uint32_t)pPrim->type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (mode > 0x300000)
+            {
+                if (mode == 0x400000)
+                    v12 = r | ((uint32_t)pQuad->a << 8);
+                else
+                    v12 = r | 0xFFFFFF00;
+            }
+            else if (mode != 0x300000)
+            {
+                if (mode == 0x100000 || mode == 0x200000)
+                    v12 = r | 0xFFFF8000;
+                else
+                    v12 = r | 0xFFFFFF00;
+            }
+            else
+            {
+                v12 = r | 0x4000;
+            }
+        }
+        else
+        {
+            if (mode == 0x100000)
+                v12 = r | 0xFFFF8000;
+            else if (mode == 0x300000)
+                v12 = r | 0x4000;
+            else if (mode == 0x400000)
+                v12 = r | ((uint32_t)pQuad->a << 8);
+            else
+                v12 = r | 0xFFFFFF00;
+        }
+        const uint32_t color = b | ((g | (v12 << 8)) << 8);
+        const uint32_t specular =
+            specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
+
+        vertices[0].sx = (float)((double)pQuad->x0 * self->aspect_x);
+        vertices[0].sy = (float)((double)pQuad->y0 * self->aspect_y);
+        vertices[0].sz = 0.5f;
+        vertices[0].rhw = 2.0f;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = (float)((double)pQuad->u0 * invTexW + uvOffset);
+        vertices[0].tv = (float)((double)pQuad->v0 * invTexH + uvOffset);
+
+        vertices[1].sx = (float)((double)pQuad->x1 * self->aspect_x);
+        vertices[1].sy = (float)((double)pQuad->y1 * self->aspect_y);
+        vertices[1].sz = 0.5f;
+        vertices[1].rhw = 2.0f;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].tu = (float)((double)pQuad->u1 * invTexW + uvOffset);
+        vertices[1].tv = (float)((double)pQuad->v1 * invTexH + uvOffset);
+
+        vertices[2].sx = (float)((double)pQuad->x2 * self->aspect_x);
+        vertices[2].sy = (float)((double)pQuad->y2 * self->aspect_y);
+        vertices[2].sz = 0.5f;
+        vertices[2].rhw = 2.0f;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = (float)((double)pQuad->u2 * invTexW + uvOffset);
+        vertices[2].tv = (float)((double)pQuad->v2 * invTexH + uvOffset);
+
+        vertices[3].sx = (float)((double)pQuad->x3 * self->aspect_x);
+        vertices[3].sy = (float)((double)pQuad->y3 * self->aspect_y);
+        vertices[3].sz = 0.5f;
+        vertices[3].rhw = 2.0f;
+        vertices[3].color = color;
+        vertices[3].specular = specular;
+        vertices[3].tu = (float)((double)pQuad->u3 * invTexW + uvOffset);
+        vertices[3].tv = (float)((double)pQuad->v3 * invTexH + uvOffset);
+
+        drawInfo->zWriteEnable = 0;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->vertexCount = 4;
+        drawInfo->specularEnable = specularEnable;
+        return 1;
     }
+
+    // Prim type 0x46 (70) gouraud textured quad: four int16 corners, four
+    // (u,v) texcoord bytes and four per-vertex B,G,R,A colour sets at
+    // 0x28..0x37. Each colour channel is doubled; channels that overflow 255
+    // wrap into the per-vertex specular field and set specularEnable (the
+    // shade mode is gouraud, 2). The alpha byte is picked by the type's
+    // 0x100000..0x400000 mode bits exactly like the other quad builders;
+    // 0x400000 uses the primitive's own alpha byte.
+    struct PrimPolyG4 : Prim
+    {
+        uint32_t texture;               // 0x0008
+        uint32_t var_0C;                // 0x000C
+        int16_t x0;                     // 0x0010
+        int16_t y0;                     // 0x0012
+        int16_t x1;                     // 0x0014
+        int16_t y1;                     // 0x0016
+        int16_t x2;                     // 0x0018
+        int16_t y2;                     // 0x001A
+        int16_t x3;                     // 0x001C
+        int16_t y3;                     // 0x001E
+        uint8_t u0;                     // 0x0020
+        uint8_t v0;                     // 0x0021
+        uint8_t u1;                     // 0x0022
+        uint8_t v1;                     // 0x0023
+        uint8_t u2;                     // 0x0024
+        uint8_t v2;                     // 0x0025
+        uint8_t u3;                     // 0x0026
+        uint8_t v3;                     // 0x0027
+        uint8_t b0;                     // 0x0028
+        uint8_t g0;                     // 0x0029
+        uint8_t r0;                     // 0x002A
+        uint8_t a0;                     // 0x002B
+        uint8_t b1;                     // 0x002C
+        uint8_t g1;                     // 0x002D
+        uint8_t r1;                     // 0x002E
+        uint8_t a1;                     // 0x002F
+        uint8_t b2;                     // 0x0030
+        uint8_t g2;                     // 0x0031
+        uint8_t r2;                     // 0x0032
+        uint8_t a2;                     // 0x0033
+        uint8_t b3;                     // 0x0034
+        uint8_t g3;                     // 0x0035
+        uint8_t r3;                     // 0x0036
+        uint8_t a3;                     // 0x0037
+    };
+    static_assert(sizeof(PrimPolyG4) == 0x38);
 
     // 0x0040ab60
     static int __stdcall sub_40AB60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040AB60, self, pPrim, drawInfo);
+        auto pQuad = (PrimPolyG4*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        auto vertices = drawInfo->vertices;
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+        float uvOffset = *(float*)&self->field_8C7020;
+
+        uint32_t mode = (uint32_t)pPrim->type & 0xF00000;
+        int specularEnable = 0;
+
+        // Fold the doubled B/G/R bytes into the D3D colour, pick the alpha
+        // byte from the mode bits and wrap channel overflow into the specular.
+        auto build_vertex = [&](int idx, int16_t x, int16_t y, uint8_t u, uint8_t v, uint8_t bByte, uint8_t gByte, uint8_t rByte,
+                                uint8_t aByte) {
+            int32_t b = 2 * (int32_t)bByte;
+            int32_t g = 2 * (int32_t)gByte;
+            int32_t r = 2 * (int32_t)rByte;
+            int32_t bOverflow = 0;
+            int32_t gOverflow = 0;
+            int32_t rOverflow = 0;
+            if (r >= 256)
+            {
+                specularEnable = 1;
+                rOverflow = r - 256;
+                r = 255;
+            }
+            if (g >= 256)
+            {
+                specularEnable = 1;
+                gOverflow = g - 256;
+                g = 255;
+            }
+            if (b >= 256)
+            {
+                specularEnable = 1;
+                bOverflow = b - 256;
+                b = 255;
+            }
+
+            // Red byte plus the alpha byte picked by the 0x100000..0x400000
+            // type mode bits (same scheme as the other quad builders).
+            uint32_t redAlpha;
+            if ((self->gpu_flag & 0x4000) != 0)
+            {
+                if (mode > 0x300000)
+                {
+                    if (mode == 0x400000)
+                        redAlpha = (uint32_t)r | ((uint32_t)aByte << 8);
+                    else
+                        redAlpha = (uint32_t)r | 0xFFFFFF00;
+                }
+                else if (mode != 0x300000)
+                {
+                    if (mode == 0x100000 || mode == 0x200000)
+                        redAlpha = (uint32_t)r | 0xFFFF8000;
+                    else
+                        redAlpha = (uint32_t)r | 0xFFFFFF00;
+                }
+                else
+                {
+                    redAlpha = (uint32_t)r | 0x4000;
+                }
+            }
+            else
+            {
+                if (mode == 0x100000)
+                    redAlpha = (uint32_t)r | 0xFFFF8000;
+                else if (mode == 0x300000)
+                    redAlpha = (uint32_t)r | 0x4000;
+                else if (mode == 0x400000)
+                    redAlpha = (uint32_t)r | ((uint32_t)aByte << 8);
+                else
+                    redAlpha = (uint32_t)r | 0xFFFFFF00;
+            }
+            const uint32_t color = (uint32_t)b | (((uint32_t)g | (redAlpha << 8)) << 8);
+            const uint32_t specular =
+                specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
+
+            vertices[idx].sx = (float)((double)x * self->aspect_x);
+            vertices[idx].sy = (float)((double)y * self->aspect_y);
+            vertices[idx].sz = 0.5f;
+            vertices[idx].rhw = 2.0f;
+            vertices[idx].color = color;
+            vertices[idx].specular = specular;
+            vertices[idx].tu = (float)((double)u * invTexW + uvOffset);
+            vertices[idx].tv = (float)((double)v * invTexH + uvOffset);
+        };
+
+        build_vertex(0, pQuad->x0, pQuad->y0, pQuad->u0, pQuad->v0, pQuad->b0, pQuad->g0, pQuad->r0, pQuad->a0);
+        build_vertex(1, pQuad->x1, pQuad->y1, pQuad->u1, pQuad->v1, pQuad->b1, pQuad->g1, pQuad->r1, pQuad->a1);
+        build_vertex(2, pQuad->x2, pQuad->y2, pQuad->u2, pQuad->v2, pQuad->b2, pQuad->g2, pQuad->r2, pQuad->a2);
+        build_vertex(3, pQuad->x3, pQuad->y3, pQuad->u3, pQuad->v3, pQuad->b3, pQuad->g3, pQuad->r3, pQuad->a3);
+
+        drawInfo->zWriteEnable = 0;
+        drawInfo->shadeMode = 2;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = specularEnable;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // 0x0040B260
-    static int __stdcall sub_40B260(Marni* self, Prim* pPrim, void* a3)
+    static int __stdcall sub_40B260(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, void*>(0x0040B260, self, pPrim, a3);
+        // Sprite primitive (type 0x49) -> 4 D3D TL vertices. Same shape as
+        // sub_40C470 but with projected coordinates: each x/y is first scaled
+        // by the projection factor (field_8C7EDC, set by trans_matrix from
+        // PrimScaler::prj) over the primitive width, offset by the centre
+        // (field_8C7EC4/field_8C7EC8), then scaled by the aspect ratio.
+        auto* vertices = drawInfo->vertices;
+        const auto* prim = (const uint8_t*)pPrim;
+        const int32_t type = *(const int32_t*)(prim + 4);
+
+        uint32_t v7;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            const uint32_t mode = (uint32_t)type & 0xF00000;
+            if (mode == 0x400000)
+            {
+                v7 = prim[30] | ((uint32_t)prim[31] << 8);
+            }
+            else if (mode == 0x300000)
+            {
+                v7 = prim[30] | (0x40u << 8);
+            }
+            else if (mode == 0x100000 || mode == 0x200000)
+            {
+                v7 = prim[30] | 0xFFFF8000;
+            }
+            else
+            {
+                v7 = *(const uint16_t*)(prim + 30) | 0xFFFFFF00;
+            }
+        }
+        else
+        {
+            const uint32_t mode = (uint32_t)type & 0xF00000;
+            if (mode == 0x100000)
+            {
+                v7 = prim[30] | 0xFFFF8000;
+            }
+            else if (mode == 0x300000)
+            {
+                v7 = prim[30] | (0x40u << 8);
+            }
+            else if (mode == 0x400000)
+            {
+                v7 = *(const uint16_t*)(prim + 30);
+            }
+            else
+            {
+                v7 = *(const uint16_t*)(prim + 30) | 0xFFFFFF00;
+            }
+        }
+        const uint32_t color = prim[28] | (((uint32_t)prim[29] | (v7 << 8)) << 8);
+
+        const int16_t primW = *(const int16_t*)(prim + 24);
+        const int32_t prj = (int32_t)self->field_8C7EDC;
+        const float sz = (float)(1.0 - (double)(prj / 2) / (double)primW);
+        const float rhw = (float)(1.0 / (double)primW);
+
+        const auto make_sx = [&](int16_t x) {
+            return (float)(((double)x * (double)prj / (double)primW + (double)self->field_8C7EC4) * (double)self->aspect_x);
+        };
+        const auto make_sy = [&](int16_t y) {
+            return (float)(((double)y * (double)prj / (double)primW + (double)self->field_8C7EC8) * (double)self->aspect_y);
+        };
+
+        vertices[0].sx = make_sx(*(const int16_t*)(prim + 8));
+        vertices[0].sy = make_sy(*(const int16_t*)(prim + 10));
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+
+        vertices[1].sx = make_sx(*(const int16_t*)(prim + 12));
+        vertices[1].sy = make_sy(*(const int16_t*)(prim + 14));
+        vertices[1].sz = vertices[0].sz;
+        vertices[1].rhw = vertices[0].rhw;
+        vertices[1].color = color;
+
+        vertices[2].sx = make_sx(*(const int16_t*)(prim + 16));
+        vertices[2].sy = make_sy(*(const int16_t*)(prim + 18));
+        vertices[2].sz = vertices[0].sz;
+        vertices[2].rhw = vertices[0].rhw;
+        vertices[2].color = color;
+
+        vertices[3].sx = make_sx(*(const int16_t*)(prim + 20));
+        vertices[3].sy = make_sy(*(const int16_t*)(prim + 22));
+        vertices[3].sz = vertices[0].sz;
+        vertices[3].rhw = vertices[0].rhw;
+        vertices[3].color = color;
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = 0;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
+
+    // Prim type 0x1004C quad layout (4 int16 coords, int16 z, 4 texcoord pairs)
+    struct PrimPolyFT4 : Prim
+    {
+        uint32_t texture;               // 0x0008
+        uint32_t var_0C;                // 0x000C
+        int16_t x0;                     // 0x0010
+        int16_t y0;                     // 0x0012
+        int16_t x1;                     // 0x0014
+        int16_t y1;                     // 0x0016
+        int16_t x2;                     // 0x0018
+        int16_t y2;                     // 0x001A
+        int16_t x3;                     // 0x001C
+        int16_t y3;                     // 0x001E
+        int16_t z;                      // 0x0020
+        uint8_t u0;                     // 0x0022
+        uint8_t v0;                     // 0x0023
+        uint8_t u1;                     // 0x0024
+        uint8_t v1;                     // 0x0025
+        uint8_t u2;                     // 0x0026
+        uint8_t v2;                     // 0x0027
+        uint8_t u3;                     // 0x0028
+        uint8_t v3;                     // 0x0029
+    };
+    static_assert(sizeof(PrimPolyFT4) == 0x2C); // 0x2A of fields + 2 bytes tail padding
 
     // 0x0040b560
     static int __stdcall sub_40B560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B560, self, pPrim, drawInfo);
+        // Projected textured 4-vertex polygon (type 0x4C): four corners, each
+        // with its own int16 coordinate and UV byte, plus a shared scaling
+        // divisor (offset 0x20). The corners are projected like the sprite
+        // builders (scaled by the projection factor over the poly divisor,
+        // offset by the centre, then aspect-scaled), the texture coordinates
+        // are scaled by the texture size and offset by field_8C7020, and the
+        // colour comes purely from the blend mode bits (0x100000..0x400000)
+        // and the 0x4000 gpu_flag, as in sub_40D300. A near-white specular is
+        // set on every vertex.
+        auto* vertices = drawInfo->vertices;
+        const auto* prim = (const uint8_t*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        const int32_t type = *(const int32_t*)(prim + 4);
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+
+        D3DCOLOR color;
+        const uint32_t mode = (uint32_t)type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (mode == 0x100000 || mode == 0x200000)
+                color = 0x80FFFFFF;
+            else if (mode == 0x300000)
+                color = 0x40FFFFFF;
+            else
+                color = 0xFFFFFFFF;
+        }
+        else
+        {
+            if (mode == 0x100000)
+                color = 0x80FFFFFF;
+            else if (mode == 0x300000)
+                color = 0x40FFFFFF;
+            else
+                color = 0xFFFFFFFF;
+        }
+
+        const int16_t primW = *(const int16_t*)(prim + 32);
+        const int32_t prj = (int32_t)self->field_8C7EDC;
+        const float sz = (float)(1.0 - (double)(prj / 2) / (double)primW);
+        const float rhw = (float)(1.0 / (double)primW);
+        const float adjustV = *(const float*)&self->field_8C7020;
+
+        const auto make_sx = [&](int16_t x) {
+            return (float)(((double)x * (double)prj / (double)primW + (double)self->field_8C7EC4) * (double)self->aspect_x);
+        };
+        const auto make_sy = [&](int16_t y) {
+            return (float)(((double)y * (double)prj / (double)primW + (double)self->field_8C7EC8) * (double)self->aspect_y);
+        };
+        const auto make_tu = [&](uint8_t u) {
+            return (float)((double)u * (double)invTexW + (double)adjustV);
+        };
+        const auto make_tv = [&](uint8_t v) {
+            return (float)((double)v * (double)invTexH + (double)adjustV);
+        };
+
+        vertices[0].sx = make_sx(*(const int16_t*)(prim + 16));
+        vertices[0].sy = make_sy(*(const int16_t*)(prim + 18));
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+        vertices[0].specular = 0x00FEFEFE;
+        vertices[0].tu = make_tu(prim[34]);
+        vertices[0].tv = make_tv(prim[35]);
+
+        vertices[1].sx = make_sx(*(const int16_t*)(prim + 20));
+        vertices[1].sy = make_sy(*(const int16_t*)(prim + 22));
+        vertices[1].sz = vertices[0].sz;
+        vertices[1].rhw = vertices[0].rhw;
+        vertices[1].color = color;
+        vertices[1].specular = 0x00FEFEFE;
+        vertices[1].tu = make_tu(prim[36]);
+        vertices[1].tv = make_tv(prim[37]);
+
+        vertices[2].sx = make_sx(*(const int16_t*)(prim + 24));
+        vertices[2].sy = make_sy(*(const int16_t*)(prim + 26));
+        vertices[2].sz = vertices[0].sz;
+        vertices[2].rhw = vertices[0].rhw;
+        vertices[2].color = color;
+        vertices[2].specular = 0x00FEFEFE;
+        vertices[2].tu = make_tu(prim[38]);
+        vertices[2].tv = make_tv(prim[39]);
+
+        vertices[3].sx = make_sx(*(const int16_t*)(prim + 28));
+        vertices[3].sy = make_sy(*(const int16_t*)(prim + 30));
+        vertices[3].sz = vertices[0].sz;
+        vertices[3].rhw = vertices[0].rhw;
+        vertices[3].color = color;
+        vertices[3].specular = 0x00FEFEFE;
+        vertices[3].tu = make_tu(prim[40]);
+        vertices[3].tv = make_tv(prim[41]);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = 1;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // 0x0040b8d0
@@ -2389,7 +3134,7 @@ namespace openre::marni
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040B8D0, self, pPrim, drawInfo);
     }
 
-    // 0x0040bcf0
+    // 0x0040BCF0
     static int __stdcall sub_40BCF0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
         return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040BCF0, self, pPrim, drawInfo);
@@ -2398,7 +3143,116 @@ namespace openre::marni
     // 0x0040c100
     static int __stdcall sub_40C100(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040C100, self, pPrim, drawInfo);
+        // Flat-textured 4-vertex polygon (type 0x1004C): fills the draw op with
+        // four D3D TL vertices. Unlike the other quad builders this one keeps its
+        // own per-vertex z (int16 at offset 0x20), so sz/rhw are computed from it,
+        // and the u/v texture coordinates carry the Adjust_u/v offsets.
+        auto pQuad = (PrimPolyFT4*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        auto vertices = drawInfo->vertices;
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+
+        D3DCOLOR color;
+        auto typeBits = pPrim->type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (typeBits == 0x400000)
+                color = 0xFFFFFF;
+            else if (typeBits == 0x300000)
+                color = 0x40FFFFFF;
+            else if (typeBits == 0x100000 || typeBits == 0x200000)
+                color = 0x80FFFFFF;
+            else
+                color = 0xFFFFFFFF;
+        }
+        else
+        {
+            if (typeBits == 0x100000)
+                color = 0x80FFFFFF;
+            else if (typeBits == 0x300000)
+                color = 0x40FFFFFF;
+            else if (typeBits == 0x400000)
+                color = 0xFFFFFF;
+            else
+                color = 0xFFFFFFFF;
+        }
+
+        const int halfW = self->render_w / 2;
+        const int halfH = self->render_h / 2;
+        const int centreX = self->field_8C7EC4;
+        const int centreY = self->field_8C7EC8;
+
+        // Offset each vertex coordinate from the middle of the render target.
+        const int x0t = centreX + pQuad->x0 - halfW;
+        const int y0t = centreY + pQuad->y0 - halfH;
+        const int x1t = centreX + pQuad->x1 - halfW;
+        const int y1t = centreY + pQuad->y1 - halfH;
+        const int x2t = centreX + pQuad->x2 - halfW;
+        const int y2t = centreY + pQuad->y2 - halfH;
+        const int x3t = centreX + pQuad->x3 - halfW;
+        const int y3t = centreY + pQuad->y3 - halfH;
+
+        const float adjustU = self->field_8C701C;
+        const float adjustV = *(const float*)&self->field_8C7020;
+        const float sz = 1.0f - (float)((double)((int32_t)self->field_8C7EDC / 2) / pQuad->z);
+        const float rhw = 1.0f / pQuad->z;
+
+        const auto make_sx = [&](int x) {
+            return (float)((double)x * (double)self->aspect_x + (double)adjustU);
+        };
+        const auto make_sy = [&](int y) {
+            return (float)((double)y * (double)self->aspect_y + (double)adjustU);
+        };
+        const auto make_tu = [&](uint8_t u) {
+            return (float)((double)u * (double)invTexW + (double)adjustV);
+        };
+        const auto make_tv = [&](uint8_t v) {
+            return (float)((double)v * (double)invTexH + (double)adjustV);
+        };
+
+        vertices[0].sx = make_sx(x0t);
+        vertices[0].sy = make_sy(y0t);
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+        vertices[0].specular = 0;
+        vertices[0].tu = make_tu(pQuad->u0);
+        vertices[0].tv = make_tv(pQuad->v0);
+
+        vertices[1].sx = make_sx(x1t);
+        vertices[1].sy = make_sy(y1t);
+        vertices[1].sz = vertices[0].sz;
+        vertices[1].rhw = vertices[0].rhw;
+        vertices[1].color = color;
+        vertices[1].specular = 0;
+        vertices[1].tu = make_tu(pQuad->u1);
+        vertices[1].tv = make_tv(pQuad->v1);
+
+        vertices[2].sx = make_sx(x2t);
+        vertices[2].sy = make_sy(y2t);
+        vertices[2].sz = vertices[0].sz;
+        vertices[2].rhw = vertices[0].rhw;
+        vertices[2].color = color;
+        vertices[2].specular = 0;
+        vertices[2].tu = make_tu(pQuad->u2);
+        vertices[2].tv = make_tv(pQuad->v2);
+
+        vertices[3].sx = make_sx(x3t);
+        vertices[3].sy = make_sy(y3t);
+        vertices[3].sz = vertices[0].sz;
+        vertices[3].rhw = vertices[0].rhw;
+        vertices[3].color = color;
+        vertices[3].specular = 0;
+        vertices[3].tu = make_tu(pQuad->u3);
+        vertices[3].tv = make_tv(pQuad->v3);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->vertexCount = 4;
+        drawInfo->specularEnable = 1;
+        return 1;
     }
 
     // 0x0040c470
@@ -2769,7 +3623,136 @@ namespace openre::marni
     // 0x0040CFD0
     static int __stdcall sub_40CFD0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040CFD0, self, pPrim, drawInfo);
+        // Textured quad primitive (type 0x1002D): float z projection, 4 int16
+        // corners, 4 texcoords, plus per-prim B,G,R,A colour bytes at 0x20..0x23.
+        // The colour channels are doubled and any overflow past 8 bits is folded
+        // into the specular value (and flagged via specularEnable).
+        auto vertices = drawInfo->vertices;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        const auto* prim = (const uint8_t*)pPrim;
+        const int32_t type = *(const int32_t*)(prim + 4);
+        const float z = *(const float*)(prim + 16);
+
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+
+        uint32_t v6 = prim[33] * 2; // G channel
+        uint32_t v7 = prim[32] * 2; // B channel
+        uint32_t v9 = prim[34] * 2; // R channel
+        int overflow = 0;
+        uint32_t ovfR = 0, ovfG = 0, ovfB = 0;
+        if (v9 >= 256)
+        {
+            overflow = 1;
+            ovfR = v9 - 256;
+            v9 = 255;
+        }
+        if (v6 >= 256)
+        {
+            overflow = 1;
+            ovfG = v6 - 256;
+            v6 = 255;
+        }
+        if (v7 >= 256)
+        {
+            overflow = 1;
+            ovfB = v7 - 256;
+            v7 = 255;
+        }
+
+        D3DCOLOR color;
+        const uint32_t mode = (uint32_t)type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (mode == 0x100000 || mode == 0x200000)
+            {
+                v9 |= 0xFFFF8000;
+            }
+            else if (mode == 0x300000)
+            {
+                v9 |= 0x4000;
+            }
+            else if (mode != 0x400000)
+            {
+                v9 |= 0xFFFFFF00;
+            }
+        }
+        else
+        {
+            if (mode == 0x100000)
+            {
+                v9 |= 0xFFFF8000;
+            }
+            else if (mode == 0x300000)
+            {
+                v9 |= 0x4000;
+            }
+            else if (mode != 0x400000)
+            {
+                v9 |= 0xFFFFFF00;
+            }
+        }
+        if (mode == 0x400000)
+        {
+            color = (D3DCOLOR)((v6 | ((v9 | ((uint32_t)prim[35] << 8)) << 8)) << 8 | v7);
+        }
+        else
+        {
+            color = (D3DCOLOR)((v6 | (v9 << 8)) << 8 | v7);
+        }
+        D3DCOLOR specular = overflow ? (D3DCOLOR)(ovfB | ((ovfG | (ovfR << 8)) << 8)) : 0;
+
+        const int32_t halfW = self->render_w / 2;
+        const int32_t halfH = self->render_h / 2;
+        const int32_t x0 = self->field_8C7EC4 + *(const int16_t*)(prim + 20) - halfW;
+        const int32_t y0 = self->field_8C7EC8 + *(const int16_t*)(prim + 22) - halfH;
+        const int32_t x1 = self->field_8C7EC4 + *(const int16_t*)(prim + 24) - halfW;
+        const int32_t y1 = self->field_8C7EC8 + *(const int16_t*)(prim + 26) - halfH;
+
+        vertices[0].sx = (float)((double)x0 * self->aspect_x);
+        vertices[0].sy = (float)((double)y0 * self->aspect_y);
+        vertices[0].sz = 1.0f - (float)((double)((int32_t)self->field_8C7EDC / 2) / z);
+        vertices[0].rhw = 1.0f / z;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = (float)((double)prim[28] * invTexW);
+        vertices[0].tv = (float)((double)prim[29] * invTexH);
+
+        vertices[1].sy = vertices[0].sy;
+        vertices[1].sz = vertices[0].sz;
+        vertices[1].rhw = vertices[0].rhw;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].sx = (float)((double)(x1 + 1) * self->aspect_x);
+        vertices[1].tv = vertices[0].tv;
+        vertices[1].tu = (float)((double)(prim[30] + 1) * invTexW);
+
+        vertices[2].sx = vertices[0].sx;
+        vertices[2].sz = vertices[0].sz;
+        vertices[2].rhw = vertices[0].rhw;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = vertices[0].tu;
+        vertices[2].sy = (float)((double)(y1 + 1) * self->aspect_y);
+        vertices[2].tv = (float)((double)(prim[31] + 1) * invTexH);
+
+        vertices[3].color = color;
+        vertices[3].specular = specular;
+        vertices[3].sx = vertices[1].sx;
+        vertices[3].sy = vertices[2].sy;
+        vertices[3].sz = vertices[0].sz;
+        vertices[3].rhw = vertices[0].rhw;
+        vertices[3].tu = vertices[1].tu;
+        vertices[3].tv = vertices[2].tv;
+
+        sub_40E6E0(vertices);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = overflow;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // Prim type 0x1002C quad layout (float z projection, 4 int16 coords, 4 texcoords)
@@ -2868,15 +3851,273 @@ namespace openre::marni
     }
 
     // 0x0040D560
+    // Scaled sprite primitive (type 0x2D) -> 4 D3D TL vertices. Unlike the
+    // int16 quad builders, the primitive carries a float centre (x, y) and a
+    // projection depth z (floats at offsets 0x10..0x18); the quad half-size is
+    // half the texture-coordinate span ((u1-u0)/2, (v1-v0)/2) projected by
+    // 1/z. Colour bytes B,G,R,A are read from the tail of the primitive; the
+    // B/G/R bytes are doubled, with values >= 256 clamping to 255 and the
+    // excess spilled into the vertex specular field. The alpha channel depends
+    // on the type's 0x100000..0x400000 mode bits and gpu_flag bit 0x4000.
     static int __stdcall sub_40D560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D560, self, pPrim, drawInfo);
+        auto vertices = drawInfo->vertices;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        const auto* prim = (const uint8_t*)pPrim;
+
+        const float invTexW = (float)(1.0 / texture->width);
+        const float invTexH = (float)(1.0 / texture->height);
+
+        // Doubled colour components; values >= 256 clamp to 255 and the excess
+        // is packed into the vertex specular field below.
+        uint32_t b = 2 * prim[0x28];
+        uint32_t g = 2 * prim[0x29];
+        uint32_t r = 2 * prim[0x2A];
+        bool overflow = false;
+        uint32_t b_ovf = 0;
+        uint32_t g_ovf = 0;
+        uint32_t r_ovf = 0;
+        if (r >= 256)
+        {
+            overflow = true;
+            r_ovf = r - 256;
+            r = 255;
+        }
+        if (g >= 256)
+        {
+            overflow = true;
+            g_ovf = g - 256;
+            g = 255;
+        }
+        if (b >= 256)
+        {
+            overflow = true;
+            b_ovf = b - 256;
+            b = 255;
+        }
+
+        // Fold the blend-mode bits into the red byte; alpha becomes 0x80
+        // (0x100000/0x200000), 0x40 (0x300000) or 0xFF (default). For the
+        // 0x400000 mode the primitive's own alpha byte is used instead.
+        const uint32_t typeBits = (uint32_t)pPrim->type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (typeBits == 0x100000 || typeBits == 0x200000)
+                r |= 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                r |= 0x40u << 8;
+            else if (typeBits != 0x400000)
+                r |= 0xFFFFFF00;
+        }
+        else
+        {
+            if (typeBits == 0x100000)
+                r |= 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                r |= 0x40u << 8;
+            else if (typeBits != 0x400000)
+                r |= 0xFFFFFF00;
+        }
+
+        uint32_t color;
+        if (typeBits == 0x400000)
+            color = b | ((g | ((r | ((uint32_t)prim[0x2B] << 8)) << 8)) << 8);
+        else
+            color = b | ((g | (r << 8)) << 8);
+
+        uint32_t specular;
+        if (overflow)
+            specular = b_ovf | ((g_ovf | (r_ovf << 8)) << 8);
+        else
+            specular = 0;
+
+        const float z = *(const float*)(prim + 0x10);
+        if (z == 0.0f)
+            return 0;
+
+        // Half the texture-coordinate span gives the quad half-size.
+        const int32_t xHalf = (prim[0x26] - prim[0x24]) / 2;
+        const int32_t yHalf = (prim[0x27] - prim[0x25]) / 2;
+        const float cx = *(const float*)(prim + 0x14);
+        const float cy = *(const float*)(prim + 0x18);
+        const float invZ = (float)(1.0 / (double)z);
+        const float scale = (float)(int32_t)self->field_8C7EDC; // signed int -> float (fild in the original)
+        const float offX = (float)self->field_8C7EC4;
+        const float offY = (float)self->field_8C7EC8;
+
+        const double left = (((double)cx - (double)xHalf) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
+        const double right = (((double)xHalf + (double)cx) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
+        const double top = (((double)cy - (double)yHalf) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
+        const double bottom = (((double)yHalf + (double)cy) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
+        const float sz = 1.0f - (float)((double)((int32_t)self->field_8C7EDC / 2) / (double)z);
+        const float rhw = (float)(1.0 / (double)z);
+
+        vertices[0].sx = (float)left;
+        vertices[0].sy = (float)top;
+        vertices[0].sz = sz;
+        vertices[0].rhw = rhw;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = (float)((double)prim[0x24] * (double)invTexW);
+        vertices[0].tv = (float)((double)prim[0x25] * (double)invTexH);
+
+        vertices[1].sx = (float)right;
+        vertices[1].sy = vertices[0].sy;
+        vertices[1].sz = sz;
+        vertices[1].rhw = rhw;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].tu = (float)((double)(prim[0x26] + 1) * (double)invTexW);
+        vertices[1].tv = vertices[0].tv;
+
+        vertices[2].sx = vertices[0].sx;
+        vertices[2].sy = (float)bottom;
+        vertices[2].sz = sz;
+        vertices[2].rhw = rhw;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = vertices[0].tu;
+        vertices[2].tv = (float)((double)(prim[0x27] + 1) * (double)invTexH);
+
+        vertices[3].sx = vertices[1].sx;
+        vertices[3].sy = vertices[2].sy;
+        vertices[3].sz = sz;
+        vertices[3].rhw = rhw;
+        vertices[3].color = color;
+        vertices[3].specular = specular;
+        vertices[3].tu = vertices[1].tu;
+        vertices[3].tv = vertices[2].tv;
+
+        // Snap the quad to pixel centres and rearrange the texture coordinates.
+        sub_40E6E0(vertices);
+
+        drawInfo->zWriteEnable = 1;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = overflow ? 1 : 0;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // 0x40D8D0
     static int __stdcall sub_40D8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040D8D0, self, pPrim, drawInfo);
+        // Textured quad primitive: 2 int16 coordinate pairs (x0,y0),(x1,y1) at
+        // 0x10..0x17, 4 texcoords (u0,v0,u1,v1) at 0x18..0x1B and the B,G,R,A
+        // colour bytes at 0x1C..0x1F. The B/G/R channels are doubled; values
+        // >= 256 clamp to 255 and the excess is packed into the vertex
+        // specular field (and flagged via specularEnable). The alpha channel
+        // depends on the type's 0x100000..0x400000 mode bits and gpu_flag bit
+        // 0x4000 (movie/sprite mode).
+        auto pSpr = (PrimSprite*)pPrim;
+        auto texture = (MarniTextureNode*)drawInfo->texture;
+        auto vertices = drawInfo->vertices;
+        const auto* prim = (const uint8_t*)pPrim;
+        const int32_t type = pPrim->type;
+
+        float invTexW = (float)(1.0 / texture->width);
+        float invTexH = (float)(1.0 / texture->height);
+
+        uint32_t vR = prim[30] * 2; // R channel
+        uint32_t vG = prim[29] * 2; // G channel
+        uint32_t vB = prim[28] * 2; // B channel
+        int overflow = 0;
+        uint32_t ovfR = 0, ovfG = 0, ovfB = 0;
+        if (vR >= 256)
+        {
+            overflow = 1;
+            ovfR = vR - 256;
+            vR = 255;
+        }
+        if (vG >= 256)
+        {
+            overflow = 1;
+            ovfG = vG - 256;
+            vG = 255;
+        }
+        if (vB >= 256)
+        {
+            overflow = 1;
+            ovfB = vB - 256;
+            vB = 255;
+        }
+
+        // Fold the blend-mode bits into the red byte; alpha becomes 0x80
+        // (0x100000/0x200000), 0x40 (0x300000) or 0xFF (default). For the
+        // 0x400000 mode the primitive's own alpha byte (prim[31]) is used
+        // instead.
+        const uint32_t typeBits = (uint32_t)type & 0xF00000;
+        if ((self->gpu_flag & 0x4000) != 0)
+        {
+            if (typeBits == 0x100000 || typeBits == 0x200000)
+                vR |= 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                vR |= 0x4000;
+            else if (typeBits != 0x400000)
+                vR |= 0xFFFFFF00;
+        }
+        else
+        {
+            if (typeBits == 0x100000)
+                vR |= 0xFFFF8000;
+            else if (typeBits == 0x300000)
+                vR |= 0x4000;
+            else if (typeBits != 0x400000)
+                vR |= 0xFFFFFF00;
+        }
+
+        D3DCOLOR color;
+        if (typeBits == 0x400000)
+            color = (D3DCOLOR)(vB | ((vG | ((vR | ((uint32_t)prim[31] << 8)) << 8)) << 8));
+        else
+            color = (D3DCOLOR)(vB | ((vG | (vR << 8)) << 8));
+        D3DCOLOR specular = overflow ? (D3DCOLOR)(ovfB | ((ovfG | (ovfR << 8)) << 8)) : 0;
+
+        vertices[0].sx = (float)((double)pSpr->x0 * self->aspect_x);
+        vertices[0].sy = (float)((double)pSpr->y0 * self->aspect_y);
+        vertices[0].sz = 0.5f;
+        vertices[0].rhw = 2.0f;
+        vertices[0].color = color;
+        vertices[0].specular = specular;
+        vertices[0].tu = (float)((double)pSpr->u0 * invTexW);
+        vertices[0].tv = (float)((double)pSpr->v0 * invTexH);
+
+        vertices[1].sy = vertices[0].sy;
+        vertices[1].sz = 0.5f;
+        vertices[1].rhw = 2.0f;
+        vertices[1].color = color;
+        vertices[1].specular = specular;
+        vertices[1].sx = (float)((double)(pSpr->x1 + 1) * self->aspect_x);
+        vertices[1].tv = vertices[0].tv;
+        vertices[1].tu = (float)((double)(pSpr->u1 + 1) * invTexW);
+
+        vertices[2].sx = vertices[0].sx;
+        vertices[2].sz = 0.5f;
+        vertices[2].rhw = 2.0f;
+        vertices[2].color = color;
+        vertices[2].specular = specular;
+        vertices[2].tu = vertices[0].tu;
+        vertices[2].sy = (float)((double)(pSpr->y1 + 1) * self->aspect_y);
+        vertices[2].tv = (float)((double)(pSpr->v1 + 1) * invTexH);
+
+        vertices[3].color = color;
+        vertices[3].specular = specular;
+        vertices[3].sx = vertices[1].sx;
+        vertices[3].sy = vertices[2].sy;
+        vertices[3].sz = 0.5f;
+        vertices[3].rhw = 2.0f;
+        vertices[3].tu = vertices[1].tu;
+        vertices[3].tv = vertices[2].tv;
+
+        // Snap the quad to pixel centres and rearrange the texture coordinates.
+        sub_40E6E0(vertices);
+
+        drawInfo->zWriteEnable = 0;
+        drawInfo->shadeMode = 1;
+        drawInfo->cullMode = 1;
+        drawInfo->specularEnable = overflow;
+        drawInfo->vertexCount = 4;
+        return 1;
     }
 
     // 0x0040E6E0
