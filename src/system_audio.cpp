@@ -83,6 +83,79 @@ namespace openre::system::audio
         int gChannels = 2;
         std::array<Voice, kVoiceCount> gVoices;
         std::vector<float> gScratch; // mix output scratch (gChannels interleaved floats)
+
+        // Optional mixer-output dump (OPENRE_DUMP_MIX): writes the exact
+        // post-mix float buffer (before SDL_PutAudioStreamData) to
+        // <dir>/mix_output.wav as 16-bit PCM so rendered output can be compared
+        // against the clean decoded input from OPENRE_DUMP_AUDIO. Set the env
+        // var to a directory, or to "1" for the default dump/audio.
+        void wr_le16(std::ofstream& file, uint16_t v);
+        void wr_le32(std::ofstream& file, uint32_t v);
+        std::ofstream gMixFile;
+        uint32_t gMixFrames = 0;
+        void dump_mix_init()
+        {
+            const char* env = std::getenv("OPENRE_DUMP_MIX");
+            if (!env)
+                return;
+            std::string dir = env;
+            if (dir.empty() || dir == "1")
+                dir = "dump/audio";
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            std::filesystem::path path = std::filesystem::path(dir) / "mix_output.wav";
+            gMixFile.open(path, std::ios::binary | std::ios::trunc);
+            if (gMixFile)
+            {
+                // placeholder RIFF header, patched on close
+                char hdr[44] = {};
+                gMixFile.write(hdr, 44);
+                gMixFrames = 0;
+                logging::logInfo("system_audio: [MIX DUMP] writing {} ({} Hz, {} ch)", path.string(), gFrequency, gChannels);
+            }
+        }
+        void dump_mix_append(const float* frames, int count)
+        {
+            if (!gMixFile.is_open())
+                return;
+            for (int i = 0; i < count * gChannels; i++)
+            {
+                float v = frames[i];
+                if (v > 1.0f)
+                    v = 1.0f;
+                if (v < -1.0f)
+                    v = -1.0f;
+                int16_t s = (int16_t)(v * 32767.0f);
+                char b[2] = { (char)(s & 0xFF), (char)((s >> 8) & 0xFF) };
+                gMixFile.write(b, 2);
+            }
+            gMixFrames += (uint32_t)count;
+        }
+        void dump_mix_close()
+        {
+            if (!gMixFile.is_open())
+                return;
+            gMixFile.seekp(0);
+            const uint32_t dataSize = gMixFrames * (uint32_t)gChannels * 2;
+            const uint32_t byteRate = (uint32_t)gFrequency * (uint32_t)gChannels * 2;
+            const uint16_t blockAlign = (uint16_t)(gChannels * 2);
+            gMixFile.write("RIFF", 4);
+            wr_le32(gMixFile, 36 + dataSize);
+            gMixFile.write("WAVE", 4);
+            gMixFile.write("fmt ", 4);
+            wr_le32(gMixFile, 16);
+            wr_le16(gMixFile, 1);
+            wr_le16(gMixFile, (uint16_t)gChannels);
+            wr_le32(gMixFile, (uint32_t)gFrequency);
+            wr_le32(gMixFile, byteRate);
+            wr_le16(gMixFile, blockAlign);
+            wr_le16(gMixFile, 16);
+            gMixFile.write("data", 4);
+            wr_le32(gMixFile, dataSize);
+            gMixFile.close();
+            logging::logInfo("system_audio: [MIX DUMP] closed mix_output.wav ({} frames)", gMixFrames);
+        }
+        // --- END mixer-output dump ---
         class ScopedLock
         {
         public:
@@ -160,27 +233,39 @@ namespace openre::system::audio
 
                     int i = (int)v.pos;
                     double frac = v.pos - (double)i;
-                    int i2 = (i + 1 < v.total) ? i + 1 : i;
+                    int i2 = (i + 1 < v.total) ? i + 1 : (v.loop ? 0 : i);
 
                     float sample[2];
                     if (v.channels == 1)
                     {
                         float s = (float)v.data[i] * inv32768;
-                        sample[0] = s + ((float)v.data[i2] - s) * (float)frac;
+                        sample[0] = s + ((float)v.data[i2] * inv32768 - s) * (float)frac;
                         sample[1] = sample[0];
                     }
                     else
                     {
                         float l = (float)v.data[i * 2] * inv32768;
                         float r = (float)v.data[i * 2 + 1] * inv32768;
-                        sample[0] = l + ((float)v.data[i2 * 2] - l) * (float)frac;
-                        sample[1] = r + ((float)v.data[i2 * 2 + 1] - r) * (float)frac;
+                        sample[0] = l + ((float)v.data[i2 * 2] * inv32768 - l) * (float)frac;
+                        sample[1] = r + ((float)v.data[i2 * 2 + 1] * inv32768 - r) * (float)frac;
                     }
 
                     acc[0] += sample[0] * v.gain * v.panL;
                     acc[1] += sample[1] * v.gain * v.panR;
                     v.pos += (double)v.frequency * stepScale;
                 }
+
+                // Clamp the summed mix to full scale, matching DirectSound's
+                // behaviour when several voices overlap; the DAC can't play
+                // values beyond [-1, 1] anyway.
+                if (acc[0] > 1.0f)
+                    acc[0] = 1.0f;
+                else if (acc[0] < -1.0f)
+                    acc[0] = -1.0f;
+                if (acc[1] > 1.0f)
+                    acc[1] = 1.0f;
+                else if (acc[1] < -1.0f)
+                    acc[1] = -1.0f;
 
                 if (gChannels == 1)
                     out[f] = (acc[0] + acc[1]) * 0.5f;
@@ -213,6 +298,7 @@ namespace openre::system::audio
                     break;
                 mix_frames(gScratch.data(), frames);
                 SDL_PutAudioStreamData(stream, gScratch.data(), frames * frameBytes);
+                dump_mix_append(gScratch.data(), frames);
                 remaining -= frames * frameBytes;
             }
             SDL_UnlockMutex(gMutex);
@@ -349,6 +435,34 @@ namespace openre::system::audio
 
         gInitialized = true;
         logging::logInfo("system_audio: initialised, {} Hz, {} channel(s)", gFrequency, gChannels);
+        if (std::getenv("OPENRE_DUMP_MIX"))
+        {
+            // Log the actual SDL stream + device formats so the captured mix
+            // output can be interpreted (which conversions SDL applies
+            // downstream of the mixer).
+            SDL_AudioSpec src, dst;
+            if (SDL_GetAudioStreamFormat(gStream, &src, &dst))
+                logging::logInfo(
+                    "system_audio: [MIX DUMP] stream src {} Hz {} ch fmt {} -> dst {} Hz {} ch fmt {}",
+                    src.freq,
+                    src.channels,
+                    (int)src.format,
+                    dst.freq,
+                    dst.channels,
+                    (int)dst.format);
+            SDL_AudioDeviceID devid = SDL_GetAudioStreamDevice(gStream);
+            if (devid)
+            {
+                SDL_AudioSpec dev;
+                if (SDL_GetAudioDeviceFormat(devid, &dev, nullptr))
+                    logging::logInfo(
+                        "system_audio: [MIX DUMP] device format {} Hz {} ch fmt {}",
+                        dev.freq,
+                        dev.channels,
+                        (int)dev.format);
+            }
+        }
+        dump_mix_init();
         return true;
     }
 
@@ -365,6 +479,7 @@ namespace openre::system::audio
             SDL_DestroyAudioStream(gStream);
             gStream = nullptr;
         }
+        dump_mix_close();
 
         if (gMutex)
         {
