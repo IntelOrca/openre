@@ -94,6 +94,7 @@ namespace openre::marni
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
+    static int surface_get_alpha_bits(MarniSurfaceX* self);
     static char* surface_calc_address(MarniSurface* self, int x, int y);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
@@ -6770,6 +6771,37 @@ namespace openre::marni
         self->var_29 = 0;
         interop::thiscall<void, MarniSurfaceX*>(0x0040FFD0, self);
         return 1;
+    }
+
+    // 0x0040FF70
+    static int surface_get_alpha_bits(MarniSurfaceX* self)
+    {
+        if (!self->pDDsurface)
+            return 0;
+
+        // Query the surface pixel format and count the alpha bits (the number of
+        // consecutive set bits in the RGB alpha bit mask, e.g. 8 for 0xFF000000).
+        DDSURFACEDESC desc = {};
+        desc.dwSize = 0x6C; // matches the original (DDSURFACEDESC dwSize on x86)
+        desc.dwFlags = DDSD_PIXELFORMAT;
+        ((LPDIRECTDRAWSURFACE)self->pDDsurface)->GetSurfaceDesc(&desc);
+
+        uint32_t alphaMask = desc.ddpfPixelFormat.dwRGBAlphaBitMask;
+        int alphaBits = 0;
+        if (alphaMask)
+        {
+            // Skip trailing zero bits to reach the lowest set bit.
+            while (!(alphaMask & 1))
+                alphaMask >>= 1;
+
+            // Count the consecutive set bits from the lowest set bit upward.
+            do
+            {
+                alphaMask >>= 1;
+                ++alphaBits;
+            } while (alphaMask & 1);
+        }
+        return alphaBits;
     }
 
     // 0x004134C0
