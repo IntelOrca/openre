@@ -51,6 +51,7 @@ namespace openre::marni
     static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
+    static int surface_set_current_color(MarniSurface2* self, int x, int y, uint32_t color, int mode);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -7124,8 +7125,7 @@ namespace openre::marni
                 for (int x = 0; x < fillWidth; x++)
                 {
                     // MarniSurface::SetCurrentColor handles the per-bpp (8/16/24/32) pixel write.
-                    interop::thiscall<int, MarniSurface2*, int, int, uint32_t, int>(
-                        0x00413DD0, self, rc.left + x, rc.top + y, color, mode);
+                    surface_set_current_color(self, rc.left + x, rc.top + y, color, mode);
                 }
             }
         }
@@ -7624,6 +7624,112 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x00413DD0
+    static int surface_set_current_color(MarniSurface2* self, int x, int y, uint32_t color, int mode)
+    {
+        // Paletted surfaces are handled by the palette-index path.
+        if (self->var_28)
+            return surface_set_index_color(x, y, color, mode);
+
+        auto* addr = surface_calc_address((MarniSurface*)self, x, y);
+        if (!addr)
+        {
+            out("initialization failed", "MarniBits::SetCurrentColor");
+            return 0;
+        }
+
+        // Split the 0xAARRGGBB color into 8-bit channels.
+        uint32_t red = (color >> 16) & 0xFF;
+        uint32_t green = (color >> 8) & 0xFF;
+        uint32_t blue = color & 0xFF;
+        uint32_t alpha = (color >> 24) & 0xFF;
+
+        uint32_t current;
+        if (mode == 128) // additive blend
+        {
+            // Add the source color to the pixel already in the surface, clamping
+            // each channel at 255. The alpha channel is taken from the surface.
+            surface_get_current_color(self, x, y, &current);
+            red += (current >> 16) & 0xFF;
+            green += (current >> 8) & 0xFF;
+            blue += current & 0xFF;
+            alpha = (current >> 24) & 0xFF;
+            if (red > 0xFF)
+                red = 0xFF;
+            if (green > 0xFF)
+                green = 0xFF;
+            if (blue > 0xFF)
+                blue = 0xFF;
+        }
+        else if (mode == 512) // alpha blend
+        {
+            // src * alpha / 255 + dst * (255 - alpha) / 255; alpha from the surface.
+            uint32_t srcRed = alpha * red / 0xFF;
+            uint32_t srcGreen = alpha * green / 0xFF;
+            uint32_t srcBlue = alpha * blue / 0xFF;
+            surface_get_current_color(self, x, y, &current);
+            red = srcRed + (255 - alpha) * ((current >> 16) & 0xFF) / 0xFF;
+            green = srcGreen + (255 - alpha) * ((current >> 8) & 0xFF) / 0xFF;
+            blue = srcBlue + (255 - alpha) * (current & 0xFF) / 0xFF;
+            alpha = (current >> 24) & 0xFF;
+        }
+
+        // Pack the channels into the surface pixel format via the field masks.
+        uint32_t packed = ((uint32_t)(self->desc.r_mask & (red >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
+                        | ((uint32_t)(self->desc.g_mask & (green >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift)
+                        | ((uint32_t)(self->desc.b_mask & (blue >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift)
+                        | ((uint32_t)(self->desc.a_mask & (alpha >> (8 - self->desc.a_bitcnt))) << self->desc.a_shift);
+
+        switch (self->bpp)
+        {
+            case 8:
+                if (mode & 2)
+                    *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr & packed);
+                else if (mode & 4)
+                    *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr | packed);
+                else
+                    *(uint8_t*)addr = (uint8_t)packed;
+                break;
+            case 16:
+                if (mode & 2)
+                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
+                else if (mode & 4)
+                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
+                else
+                    *(uint16_t*)addr = (uint16_t)packed;
+                break;
+            case 24:
+                if (mode & 2)
+                {
+                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
+                    addr[2] = (uint8_t)(addr[2] & (packed >> 16));
+                }
+                else if (mode & 4)
+                {
+                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
+                    addr[2] = (uint8_t)(addr[2] | (packed >> 16));
+                }
+                else
+                {
+                    *(uint16_t*)addr = (uint16_t)packed;
+                    addr[2] = (uint8_t)(packed >> 16);
+                }
+                break;
+            case 32:
+                if (mode & 2)
+                    *(uint32_t*)addr &= packed;
+                else if (mode & 4)
+                    *(uint32_t*)addr |= packed;
+                else
+                    *(uint32_t*)addr = packed;
+                break;
+            default:
+                out("this bitpixel isn't supported", "MarniBits::SetCurrentColor");
+                break;
+        }
+        return 1;
+    }
+
     // 0x00412ED0
     static void __stdcall MarniBits_SetAddress(MarniSurface2* self, void* address, int flags)
     {
@@ -8111,8 +8217,7 @@ namespace openre::marni
                         int pixel = (bits >> (14 - px * 2)) & 3;
                         if (pixel == 1 || pixel == 2) // skip transparent (0) and shadow (3)
                         {
-                            interop::thiscall<int, MarniSurface*, int, int, uint32_t, int>(
-                                0x00413DD0, surface, px + j * 8, row + i * 8, 0xFFFFFF, 0);
+                            surface_set_current_color(surface, px + j * 8, row + i * 8, 0xFFFFFF, 0);
                         }
                     }
                 }
