@@ -6235,7 +6235,18 @@ namespace openre::marni
     // 0x0040FEF0
     MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self)
     {
-        return interop::thiscall<MarniSurfaceY*, MarniSurfaceY*>(0x0040FEF0, self);
+        // Mirror MarniSurface2::Ctor call: zero the base surface (0x30 bytes) and set its
+        // vtbl, then override the vtbl with MarniSurfaceY::vTbl and zero the D3D fields.
+        // NOTE: must NOT memset sizeof(MarniSurfaceY) — the embedded Marni::Surface0/Z/2/3
+        // members are MarniSurface (0x3C) and surface3 sits at the exact tail of Marni.
+        surface2_ctor(self);
+        self->vtbl = (MarniSurfaceVTBL*)0x0051737C;
+        self->pDDsurface = nullptr;
+        self->pDDpalette = nullptr;
+        self->var_29 = 0;
+        self->bOpen = 0;
+        self->var_27 = 0;
+        return self;
     }
 
     // 0x0040FF20
@@ -6856,6 +6867,7 @@ namespace openre::marni
         interop::hookThisCall(0x00407020, &create_zbuffer);
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
         interop::hookThisCall(0x00405EC0, &create_texture_handle);
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
