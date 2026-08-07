@@ -2229,12 +2229,6 @@ namespace openre
         return true;
     }
 
-    // 0x00433830
-    static void ssclose()
-    {
-        interop::call(0x00433830);
-    }
-
     // 0x00431000
     void font_create()
     {
@@ -2697,7 +2691,7 @@ namespace openre
                 marni::kill();
                 gGameTable.hwnd = nullptr;
                 rsrc_release();
-                ssclose();
+                audio::ss_close();
                 font_delete();
                 return quit_cleanup();
             case system::window::EventType::KeyDown:

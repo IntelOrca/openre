@@ -368,7 +368,7 @@ namespace openre::audio
     }
 
     // 0x00433830
-    static int ss_close()
+    int ss_close()
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;
