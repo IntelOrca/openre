@@ -55,6 +55,7 @@ namespace openre::marni
     void config_shutdown();
 
     void font_trans(MarniFont* self, MarniSurface* surface);
+    char* surface_calc_address(MarniSurface* self, int x, int y);
 
     void mapping_tmd(int workNo, Md1* pTmd, int id);
     void out();

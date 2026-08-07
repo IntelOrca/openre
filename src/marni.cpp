@@ -104,7 +104,7 @@ namespace openre::marni
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
-    static char* surface_calc_address(MarniSurface* self, int x, int y);
+    char* surface_calc_address(MarniSurface* self, int x, int y);
     static int surface_set_color(MarniSurface2* self, int x, int y, uint32_t color, int alpha);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
@@ -7128,7 +7128,7 @@ namespace openre::marni
     }
 
     // 0x004134C0
-    static char* surface_calc_address(MarniSurface* self, int x, int y)
+    char* surface_calc_address(MarniSurface* self, int x, int y)
     {
         if (!self->bOpen)
         {

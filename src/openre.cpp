@@ -2532,9 +2532,48 @@ namespace openre
     }
 
     // 0x00442920
-    static void draw_monitor_effect(int a0)
+    // Draws the "monitor" scanline effect: the framebuffer is copied back onto
+    // itself in 7 horizontal bands, each band row shifted left by xtbl[band]
+    // (scaled) pixels. The surface is locked for the whole effect.
+    static int draw_monitor_effect(int posY)
     {
-        interop::call(0x00442920);
+        auto* marni = gGameTable.pMarni;
+
+        int xtbl[7] = { 2, 3, 4, 4, 4, 3, 2 };
+
+        interop::thiscall<int, MarniSurface2*, int, int>(
+            (uintptr_t)marni->surface0.vtbl->lock_fn, &marni->surface0, 0, 0);
+
+        int v1 = 0;
+        int v14 = 0;
+        do
+        {
+            int v3 = marni->xsize / 320;
+            int v4 = marni->ysize / 240;
+            if (v4 > 0)
+            {
+                int v5 = xtbl[v1];
+                int v6 = v4 * (posY + v1);
+                int h = v4;
+                do
+                {
+                    int xSize = marni->xsize;
+                    size_t v12 = (size_t)((xSize - v5) * marni->bpp * v3 / 8);
+                    char* v11 = marni::surface_calc_address(&marni->surface0, v3 * v5, v6);
+                    char* v9 = marni::surface_calc_address(&marni->surface0, 0, v6);
+                    memcpy(v9, v11, v12);
+                    ++v6;
+                    --h;
+                } while (h);
+                v1 = v14;
+            }
+            v14 = ++v1;
+        } while (v1 < 7);
+
+        interop::thiscall<int, MarniSurface2*>(
+            (uintptr_t)marni->surface0.vtbl->unlock_fn, &marni->surface0);
+
+        return 1;
     }
 
     // 0x004DD3B0
@@ -2950,6 +2989,7 @@ void onAttach()
     interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
     interop::writeJmp(0x004315D0, save_menu_draw);
+    interop::writeJmp(0x00442920, draw_monitor_effect);
 
     scheduler_init_hooks();
     title_init_hooks();
