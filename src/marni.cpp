@@ -40,6 +40,7 @@ namespace openre::marni
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
+    static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     int __stdcall surface2_vrelease(MarniSurface2* self);
     static void __stdcall destroy(Marni* marni);
@@ -6206,6 +6207,53 @@ namespace openre::marni
     // 0x0040f370
 
     // 0x0040f380
+    static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode)
+    {
+        if (mode)
+            return surface2_vfill(self, pRect, color, mode);
+
+        if (!self->bOpen)
+        {
+            // Original (Shift-JIS at 0x51EAA4): "ブロックが有効でないのにサービスを使おうとしました"
+            out("tried to call the service although it is not locked", "DirectDrawSurface::Blt");
+            return 0;
+        }
+
+        RECT rect;
+        RECT rc;
+        if (pRect)
+        {
+            SetRect(&rect, 0, 0, self->width - 1, self->height - 1);
+            if (!interop::call<int, RECT*, RECT*, RECT*>(0x00411590, &rect, pRect, &rc))
+                return 0;
+            ++rc.right;
+            ++rc.bottom;
+        }
+        else
+        {
+            SetRect(&rc, 0, 0, self->width, self->height);
+        }
+
+        // Pack the 0x00RRGGBB color into the surface's native pixel format using its masks/shifts.
+        uint32_t packed = ((self->desc.b_mask & ((color & 0xFF) >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift)
+                        | ((self->desc.r_mask & (((color >> 16) & 0xFF) >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
+                        | ((self->desc.g_mask & (((color >> 8) & 0xFF) >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift);
+
+        DDBLTFX ddbltfx;
+        ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
+        ddbltfx.dwSize = sizeof(DDBLTFX);
+        ddbltfx.dwFillColor = packed;
+
+        HRESULT hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)->Blt(
+            &rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
+        if (!hr)
+            return 1;
+
+        out("failed to blt operation. DirectDrawSurface::Blt", "");
+        self->bOpen = 0;
+        error(hr);
+        return 0;
+    }
 
     // 0x0040f520
 
@@ -6962,6 +7010,7 @@ namespace openre::marni
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
         interop::hookThisCall(0x00412BD0, &surface2_vfill);
+        interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
