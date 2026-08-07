@@ -501,9 +501,14 @@ namespace openre::enemy
     }
 
     // 0x004EE770
-    static int sub_4ee770(int a, int b)
+    static uint8_t sub_4ee770(int a, int b)
     {
-        using sig = int (*)(int, int);
+        // The original is a 3-byte stub: `xor al, al; ret`. It only clears
+        // AL; the upper 24 bits of EAX are left as garbage, so the result must
+        // be read as an 8-bit value. snd_se_enem's original `test al, al; jnz`
+        // does exactly that; an int return type would surface the garbage
+        // upper bits and spuriously suppress every enemy sound.
+        using sig = uint8_t (*)(int, int);
         auto p = (sig)0x004EE770;
         return p(a, b);
     }
