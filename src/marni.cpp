@@ -1269,7 +1269,7 @@ namespace openre::marni
                 self->surfaceZ.pDDsurface = nullptr;
             }
 
-            LPDIRECTDRAWSURFACE lpZBuffer;
+            LPDIRECTDRAWSURFACE lpZBuffer = nullptr;
             if (!create_zbuffer(self, self->xsize, self->ysize, &lpZBuffer))
             {
                 out();
