@@ -85,6 +85,9 @@ namespace openre::marni
     static int __stdcall get_z_buffer_caps(Marni* self);
     static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
+    static int __stdcall insert_draw_op(
+        Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
     static void __stdcall sub_416B90(Marni* self, int a2);
 
     // 0x0050D905
@@ -2679,11 +2682,412 @@ namespace openre::marni
 
         return 1;
     }
+    // 0x00411630
+    static void apply_matrix_float(float* vec, const float* mat)
+    {
+        const float v0 = vec[0];
+        const float v1 = vec[1];
+        const float v2 = vec[2];
+        vec[0] = v0 * mat[0] + v1 * mat[1] + v2 * mat[2];
+        vec[1] = v0 * mat[4] + v1 * mat[5] + v2 * mat[6];
+        vec[2] = v0 * mat[8] + v1 * mat[9] + v2 * mat[10];
+    }
+
+    // 0x00415E80
+    static int __stdcall refer_vertex(PolygonObject* self, int index, float* out)
+    {
+        return interop::thiscall<int, PolygonObject*, int, float*>(0x00415E80, self, index, out);
+    }
+
+    // 0x00415AE0
+    static int __stdcall refer_normal(PolygonObject* self, int index, float* out)
+    {
+        return interop::thiscall<int, PolygonObject*, int, float*>(0x00415AE0, self, index, out);
+    }
+
+    // 0x004156E0
+    static int __stdcall modify_primitive(PolygonObject* self, int index, void* out)
+    {
+        return interop::thiscall<int, PolygonObject*, int, void*>(0x004156E0, self, index, out);
+    }
+
+    // 0x0040E9D0
+    static int sub_40E9D0(
+        Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount)
+    {
+        int result = vertexCount;
+        if (vertexCount > 0)
+        {
+            auto v14 = &vertices[2];
+            auto triangleCount = (vertexCount - 1) / 3 + 1;
+            do
+            {
+                LPD3DTLVERTEX v17[3];
+                v17[0] = &v14[-2];
+                v17[1] = &v14[-1];
+                v17[2] = v14;
+                result = insert_draw_op(
+                    self, filter, a3, srcBlend, dstBlend, textureHandle, zWriteEnable, shadeMode, cullMode, specularEnable,
+                    zFunc, v17);
+                v14 += 3;
+                --triangleCount;
+            } while (triangleCount);
+        }
+        return result;
+    }
+
 
     // 0x00407690
     static int __stdcall trans_object_ngtin3_vinsnins(Marni* self, MarniOt* pOt, Prim* pPrim)
     {
-        return interop::thiscall<int, Marni*, MarniOt*, Prim*>(0x00407690, self, pOt, pPrim);
+        // The 2K object primitive stores a texture handle at offset 0x08; the
+        // CLUT index for the base texture section is at offset 0x54.
+        const auto* prim = (const uint8_t*)pPrim;
+        const uint32_t textureHandle = *(const uint32_t*)(prim + 8);
+        if (textureHandle == 0)
+        {
+            out("specified NULL handle as Texture.", "Direct3D::TransObjectNgTin3_VinsNins");
+            return 0;
+        }
+
+        MarniTextureNode* textures[0x800] = { nullptr };
+        textures[0] = search_texture_object_0_from_1_in_condition(self, textureHandle, *(const uint8_t*)(prim + 0x54));
+        if (textures[0] == nullptr)
+        {
+            out("invalud handle.", "Direct3D::TransObjectTin4_Vfp");
+            return 0;
+        }
+
+        // Up to 4 texture sections: each additional CLUT is looked up only when
+        // the corresponding split-table word (offset 0x58) is non-zero.
+        for (int i = 1; i < 4; i++)
+        {
+            if (*(const uint16_t*)(prim + 0x58 + 2 * (i - 1)) != 0)
+            {
+                textures[i] = search_texture_object_0_from_1_in_condition(self, textureHandle, *(const uint8_t*)(prim + 0x54 + i));
+                if (textures[i] == nullptr)
+                {
+                    out("invalid clut range.", "Direct3D::TransObjectNgTin3_VinsNins");
+                    return 0;
+                }
+            }
+        }
+
+        // The polygon object is held in the 2K buffer; when flagged, copy its
+        // header (vertex/normal/primitive counts) from offset 0x10.
+        auto* pObject = self->polygons[*(const uint32_t*)(prim + 0x4C)];
+        uint32_t header[9] = { 0 };
+        if ((((const uint8_t*)pObject)[0x34] & 1) != 0)
+            memcpy(header, (const uint8_t*)pObject + 0x10, sizeof(header));
+
+        // Primitive colour: B/G/R are doubled (modulated by the per-normal
+        // light), A is used raw; each channel is clamped to 8-bit range.
+        const int32_t primType = pPrim->type;
+        const uint8_t alpha = *(const uint8_t*)(prim + 0x53);
+        int32_t primB = 2 * *(const uint8_t*)(prim + 0x52);
+        int32_t primG = 2 * *(const uint8_t*)(prim + 0x51);
+        int32_t primR = 2 * *(const uint8_t*)(prim + 0x50);
+        if (primB >= 256) primB = 255;
+        if (primG >= 256) primG = 255;
+        if (primR >= 256) primR = 255;
+
+        uint32_t fallbackColor = 0;
+        uint32_t colors[0x400] = { 0 };
+        if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::GPU_17) != 0)
+        {
+            // Flat shading: build a single colour from the primitive colour and
+            // the alpha byte picked by the 0x100000..0x400000 mode bits.
+            uint32_t base;
+            switch (primType & 0xF00000)
+            {
+            case 0x100000: base = (uint32_t)primB | 0xFFFF8000; break;
+            case 0x300000: base = (uint32_t)primB | 0x4000; break;
+            case 0x400000: base = (uint32_t)primB | ((uint32_t)alpha << 8); break;
+            default: base = (uint32_t)primB | 0xFFFFFF00; break;
+            }
+            fallbackColor = (uint32_t)primR | (((uint32_t)primG | (base << 8)) << 8);
+        }
+        else
+        {
+            // Per-normal lighting: transform each normal through the two light
+            // matrices, add the ambient colour and modulate by the primitive
+            // colour. Components equal to zero (or unordered/NaN) are clamped.
+            const float* lightMatrix1 = (const float*)&self->field_8C7E10;
+            const float* lightMatrix2 = &self->field_8C7E50;
+            const auto* ambient = (const uint8_t*)&self->field_8C7E90;
+            for (uint32_t n = 0; n < header[4]; n++)
+            {
+                float normal[3];
+                refer_normal(pObject, n, normal);
+
+                apply_matrix_float(normal, lightMatrix1);
+                if (!(normal[0] >= 0.0f)) normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f)) normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f)) normal[2] = 0.0f;
+
+                apply_matrix_float(normal, lightMatrix2);
+                if (!(normal[0] >= 0.0f)) normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f)) normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f)) normal[2] = 0.0f;
+
+                // The ambient word at field_8C7E90 is packed B,G,R (bytes 0,1,2).
+                normal[0] += (float)ambient[2];
+                normal[1] += (float)ambient[1];
+                normal[2] += (float)ambient[0];
+
+                if (normal[0] >= 255.0f) normal[0] = 255.0f;
+                if (normal[1] >= 255.0f) normal[1] = 255.0f;
+                if (normal[2] >= 255.0f) normal[2] = 255.0f;
+
+                const int nB = (int)normal[0];
+                const int nG = (int)normal[1];
+                const int nR = (int)normal[2];
+                const int cR = (primR * nR) / 255;
+                const int cG = (primG * nG) / 255;
+                const int cB = (primB * nB) / 255;
+
+                switch (primType & 0xF00000)
+                {
+                case 0x100000: colors[n] = 0x80000000 | (cB << 16) | (cG << 8) | cR; break;
+                case 0x300000: colors[n] = 0x40000000 | (cB << 16) | (cG << 8) | cR; break;
+                case 0x400000: colors[n] = ((uint32_t)alpha << 24) | (cB << 16) | (cG << 8) | cR; break;
+                default: colors[n] = 0xFF000000 | (cB << 16) | (cG << 8) | cR; break;
+                }
+            }
+        }
+
+        // Transform the object's vertices: refer, negate Y, apply the object
+        // matrix and translation, then project into screen space. Vertices
+        // behind the near plane are flattened to the origin.
+        const int32_t prj = (int32_t)self->field_8C7EDC;
+        const double projScale = (double)prj;
+        const double halfPrj = (double)(prj / 2);
+        float verts[0x800 * 3];
+        for (uint32_t i = 0; i < header[2]; i++)
+        {
+            float a1[3];
+            refer_vertex(pObject, i, a1);
+            a1[1] = -a1[1];
+            apply_matrix_float(a1, (const float*)(prim + 0xC));
+            a1[0] += *(const float*)(prim + 0x18);
+            a1[1] += *(const float*)(prim + 0x28);
+            a1[2] += *(const float*)(prim + 0x38);
+
+            // Only an unordered (NaN) depth is flattened to the origin; any
+            // ordered value (including negative) is projected and left to the
+            // w-clip.
+            if (a1[2] != a1[2])
+            {
+                a1[0] = 0.0f;
+                a1[1] = 0.0f;
+            }
+            else
+            {
+                a1[0] = (float)(((double)a1[0] * projScale / (double)a1[2] + (double)self->field_8C7EC4) * (double)self->aspect_x);
+                a1[1] = (float)(((double)a1[1] * projScale / (double)a1[2] + (double)self->field_8C7EC8) * (double)self->aspect_y);
+            }
+            verts[3 * i + 0] = a1[0];
+            verts[3 * i + 1] = a1[1];
+            verts[3 * i + 2] = a1[2];
+        }
+
+        // Texture coordinate scale factors (width/height minus one) and the
+        // shared U/V adjust value.
+        const int texW = textures[0]->width - 1;
+        const int texH = textures[0]->height - 1;
+        const float texOffset = *reinterpret_cast<const float*>(&self->field_8C7020);
+
+        // The primitive records (from ModifyPrimitive) reference vertex indices,
+        // colour (normal) indices and packed U/V bytes. The six U/V bytes map
+        // to TU/TV as uN / (width-1), vN / (height-1).
+        struct TransPrimRecord
+        {
+            uint16_t vtx0;   // +0x00
+            uint16_t vtx1;   // +0x02
+            uint16_t vtx2;   // +0x04
+            uint16_t color0; // +0x06
+            uint16_t color1; // +0x08
+            uint16_t color2; // +0x0A
+            uint8_t u0;      // +0x0C
+            uint8_t v0;      // +0x0D
+            uint8_t u1;      // +0x0E
+            uint8_t v1;      // +0x0F
+            uint8_t u2;      // +0x10
+            uint8_t v2;      // +0x11
+        };
+
+        // Expand each primitive into three D3DTLVERTEX and record section splits
+        // from the split table at primitive offset 0x58.
+        uint32_t chunkStarts[0x800] = { 0 };
+        int splitCount = 0;
+        uint32_t threshold = *(const uint16_t*)(prim + 0x58);
+        const uint16_t* splitTable = (const uint16_t*)(prim + 0x58);
+        D3DTLVERTEX packedVertices[0x800 * 3];
+        int primIdx;
+        for (primIdx = 0; primIdx < (int)header[6]; primIdx++)
+        {
+            if (*(const uint16_t*)(prim + 0x58) != 0 && primIdx == (int)threshold)
+            {
+                chunkStarts[splitCount] = primIdx;
+                splitCount++;
+                splitTable++;
+                threshold += *splitTable;
+            }
+
+            TransPrimRecord record;
+            modify_primitive(pObject, primIdx, &record);
+
+            auto* vout = &packedVertices[3 * primIdx];
+            const float* v0 = &verts[3 * record.vtx0];
+            const float* v1 = &verts[3 * record.vtx1];
+            const float* v2 = &verts[3 * record.vtx2];
+
+            const double invW0 = 1.0 / (double)v0[2];
+            vout[0].sx = v0[0];
+            vout[0].sy = v0[1];
+            vout[0].sz = (float)(1.0 - halfPrj * invW0);
+            vout[0].rhw = (float)invW0;
+            vout[0].color = colors[record.color0];
+            vout[0].specular = 0;
+            vout[0].tu = (float)((double)record.u0 / (double)texW + (double)texOffset);
+            vout[0].tv = (float)((double)record.v0 / (double)texH + (double)texOffset);
+
+            const double invW1 = 1.0 / (double)v1[2];
+            vout[1].sx = v1[0];
+            vout[1].sy = v1[1];
+            vout[1].sz = (float)(1.0 - halfPrj * invW1);
+            vout[1].rhw = (float)invW1;
+            vout[1].color = colors[record.color1];
+            vout[1].specular = 0;
+            vout[1].tu = (float)((double)record.u1 / (double)texW + (double)texOffset);
+            vout[1].tv = (float)((double)record.v1 / (double)texH + (double)texOffset);
+
+            const double invW2 = 1.0 / (double)v2[2];
+            vout[2].sx = v2[0];
+            vout[2].sy = v2[1];
+            vout[2].sz = (float)(1.0 - halfPrj * invW2);
+            vout[2].rhw = (float)invW2;
+            vout[2].color = colors[record.color2];
+            vout[2].specular = 0;
+            vout[2].tu = (float)((double)record.u2 / (double)texW + (double)texOffset);
+            vout[2].tv = (float)((double)record.v2 / (double)texH + (double)texOffset);
+
+            // Software lighting path: override with the flat colour.
+            if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::GPU_17) != 0)
+            {
+                vout[0].color = fallbackColor;
+                vout[1].color = fallbackColor;
+                vout[2].color = fallbackColor;
+            }
+        }
+
+        chunkStarts[splitCount] = primIdx;
+        splitCount++;
+        if (splitCount <= 0)
+            return 1;
+
+        // Draw each section (texture) of the primitive list.
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        for (int i = 0; i < splitCount; i++)
+        {
+            int vertexCount;
+            LPD3DTLVERTEX vertexPtr;
+            if (*(const uint16_t*)(prim + 0x58) != 0 && i != 0)
+            {
+                // Section i covers primitives [chunkStarts[i-1], chunkStarts[i]).
+                const int start = (int)chunkStarts[i - 1];
+                const int end = (int)chunkStarts[i];
+                vertexCount = 3 * (end - start);
+                vertexPtr = &packedVertices[3 * start];
+            }
+            else
+            {
+                vertexCount = 3 * (int)chunkStarts[0];
+                vertexPtr = packedVertices;
+            }
+
+            if (vertexCount == 0)
+                continue;
+
+            gGameTable.error = dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
+            dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, 1);
+            dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, D3DSHADE_GOURAUD);
+
+            // Allow the drawing-op path only when the base texture has no overlay
+            // flag and the primitive does not request texture blending.
+            const uint8_t v99 = (textures[0]->var_14 & 4) == 0 && (pPrim->type & 0x10000000) == 0;
+
+            dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, 0);
+            dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, 0);
+            dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+            dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
+
+            const uint32_t texHandle = textures[i]->surface->texture_handle;
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, texHandle);
+
+            const uint32_t cullMode = (~(uint32_t)primType & 0x40000000 | 0x20000000) >> 29;
+            dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, cullMode);
+
+            set_filtering(self, 1);
+
+            const uint32_t mode = (uint32_t)primType & 0xF00000;
+            int srcBlend = D3DBLEND_SRCALPHA;
+            int dstBlend = D3DBLEND_INVSRCALPHA;
+            bool useDrawOp = true;
+            if (mode > 0x400000)
+            {
+                if (mode == 0x600000)
+                {
+                    // SRCALPHA / INVSRCALPHA via the draw-op path.
+                }
+                else if (mode == 0x700000)
+                {
+                    srcBlend = D3DBLEND_SRCCOLOR;
+                    dstBlend = D3DBLEND_SRCCOLOR;
+                }
+                else
+                {
+                    useDrawOp = v99 != 0 && textures[0]->surface->var_2C != 0;
+                }
+            }
+            else
+            {
+                if (mode == 0x400000 || mode == 0x100000)
+                {
+                    // SRCALPHA / INVSRCALPHA via the draw-op path.
+                }
+                else if (mode == 0x200000 || mode == 0x300000)
+                {
+                    srcBlend = D3DBLEND_SRCALPHA;
+                    dstBlend = D3DBLEND_ONE;
+                }
+                else
+                {
+                    useDrawOp = v99 != 0 && textures[0]->surface->var_2C != 0;
+                }
+            }
+
+            if (useDrawOp)
+            {
+                sub_40E9D0(self, 1, 1, srcBlend, dstBlend, texHandle, 1, 2, cullMode, 0, 4, vertexPtr, vertexCount);
+            }
+            else
+            {
+                dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, 0);
+                dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, vertexPtr, vertexCount, D3DDP_WAIT);
+            }
+
+            if (gGameTable.error)
+            {
+                out("error happened.", "Direct3D::TransObjectNgTin3_VinsNins");
+                error(gGameTable.error);
+                return 0;
+            }
+        }
+
+        return 1;
     }
 
     // 0x00408140
