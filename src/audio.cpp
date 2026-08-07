@@ -12,12 +12,6 @@
 #include <string>
 #include <windows.h>
 
-// <mmsystem.h> only supplies mmioOpenA/mmioRead/mmioSeek for the HMMIO
-// wrapper entry points (ss_create_buffer / ss_voice_parse) that keep the
-// original calling convention for their hooks; all real file reading goes
-// through system::fs.
-#include <mmsystem.h>
-
 using namespace openre::file;
 
 namespace openre::audio
@@ -747,32 +741,14 @@ namespace openre::audio
         return 1;
     }
 
-    // 0x00435930
-    static int ss_create_buffer(HMMIO hmmio, DWORD type, DWORD sub)
-    {
-        // Original entry point. Every in-game caller is hooked and reworked to
-        // pass raw bytes to ss_create_buffer_data, so this wrapper only keeps
-        // the original calling convention alive. The mmio file read below is
-        // the last Win32 surface in this file (see top-of-file note).
-        LONG pos = mmioSeek(hmmio, 0, SEEK_CUR);
-        LONG end = mmioSeek(hmmio, 0, SEEK_END);
-        if (end <= pos)
-            return 0;
-        mmioSeek(hmmio, pos, SEEK_SET);
-        std::vector<uint8_t> data((size_t)(end - pos));
-        if (mmioRead(hmmio, (HPSTR)data.data(), end - pos) != end - pos)
-            return 0;
-        return ss_create_buffer_data(data.data(), (int)data.size(), type, sub);
-    }
-
     // 0x00435540
-    static MMRESULT ss_init_buffers(DWORD type)
+    static int ss_init_buffers(DWORD type)
     {
         auto& ss = gGameTable.ss_file_string;
         logging::logInfo("[AUDIO OPEN] {}", ss.data);
         std::vector<uint8_t> data = system::fs::readAllBytes(ss.data);
         if (data.size() < 8)
-            return MMSYSERR_INVALHANDLE;
+            return 1; // original returned MMSYSERR_INVALHANDLE here; callers ignore it
 
         uint32_t mask0 = read_le32(data.data());
         uint32_t mask1 = read_le32(data.data() + 4);
@@ -2008,7 +1984,6 @@ namespace openre::audio
         return 1;
     }
 
-    static float ss_voice_parse(HMMIO hmmio);
     static float ss_voice_parse_data(const uint8_t* data, int size);
 
     // 0x00436470
@@ -2084,24 +2059,6 @@ namespace openre::audio
             return (float)((double)num / (double)(16 * samplesPerSec));
         }
         return 0.0f;
-    }
-
-    // 0x00436590
-    static float ss_voice_parse(HMMIO hmmio)
-    {
-        // Original entry point. Only SsVoiceLoad called it, and that is hooked
-        // and reworked to ss_voice_parse_data, so this wrapper only keeps the
-        // original calling convention alive. The mmio read below is the last
-        // Win32 surface in this file (see top-of-file note).
-        LONG pos = mmioSeek(hmmio, 0, SEEK_CUR);
-        LONG end = mmioSeek(hmmio, 0, SEEK_END);
-        if (end <= pos)
-            return 0.0f;
-        mmioSeek(hmmio, pos, SEEK_SET);
-        std::vector<uint8_t> data((size_t)(end - pos));
-        if (mmioRead(hmmio, (HPSTR)data.data(), end - pos) != end - pos)
-            return 0.0f;
-        return ss_voice_parse_data(data.data(), (int)data.size());
     }
 
     // START SND
@@ -4087,9 +4044,7 @@ namespace openre::audio
         interop::writeJmp(0x00435300, &ss_load_bgm);
         interop::writeJmp(0x00435610, &ss_init_2);
         interop::writeJmp(0x00435540, &ss_init_buffers);
-        interop::writeJmp(0x00435930, &ss_create_buffer);
         interop::writeJmp(0x00436470, &ss_voice_load);
-        interop::writeJmp(0x00436590, &ss_voice_parse);
         // snd_sys_init2_impl: the hook targets the static implementation
         // (snd_sys_init2) via its handle, since the name snd_sys_init2 is the
         // public audio.h wrapper in this scope.
