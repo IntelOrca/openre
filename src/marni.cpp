@@ -99,6 +99,7 @@ namespace openre::marni
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
     static char* surface_calc_address(MarniSurface* self, int x, int y);
+    static int surface_set_color(MarniSurface2* self, int x, int y, uint32_t color, int alpha);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
@@ -7348,6 +7349,68 @@ namespace openre::marni
         surface2_vrelease(self);
         self->pDDsurface = nullptr;
         return 1;
+    }
+
+    // 0x00413C80
+    static int surface_set_color(MarniSurface2* self, int x, int y, uint32_t color, int alpha)
+    {
+        // SetColor does not support alpha; the caller must pass 0.
+        if (alpha != 0)
+        {
+            out("alpha is not supported", "MarniBits::SetColor");
+            return 0;
+        }
+
+        char* addr = surface_calc_address((MarniSurface*)self, x, y);
+        if (!addr)
+        {
+            out("initialization failed", "MarniBits::SetColor");
+            return 0;
+        }
+
+        switch (self->bpp)
+        {
+            case 4:
+            {
+                // 4bpp: the color is the palette index; nibble-packed unless var_2B is set.
+                uint8_t old = *(uint8_t*)addr;
+                if (self->var_2B)
+                {
+                    // Unpacked layout (one byte per pixel). NOTE: mirroring the original
+                    // binary, the byte is written back unchanged — the color is never
+                    // applied for this layout (the value is read and stored as-is).
+                    *(uint8_t*)addr = old;
+                }
+                else if (self->var_2A)
+                {
+                    if ((x & 1) != 0)
+                        *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
+                    else
+                        *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
+                }
+                else
+                {
+                    if ((x & 1) != 0)
+                        *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
+                    else
+                        *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
+                }
+                return 1;
+            }
+            case 8:
+                *(uint8_t*)addr = (uint8_t)color;
+                return 1;
+            case 16:
+                *(uint16_t*)addr = (uint16_t)color;
+                return 1;
+            case 32:
+                *(uint32_t*)addr = color;
+                return 1;
+            default:
+                // 24bpp (and anything else) is not handled by SetColor.
+                out("not supported", "MarniBits::SetColor");
+                return 1;
+        }
     }
 
     // 0x004144E0
