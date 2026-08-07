@@ -94,7 +94,7 @@ namespace openre::marni
     static void __stdcall surface3_dtor(MarniSurface3* self);
     static void __stdcall surfacex_dtor(MarniSurfaceX* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
-    static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
+    static int surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
@@ -2011,10 +2011,76 @@ namespace openre::marni
             (uintptr_t)self->vtbl->blt, self, pDstRect, pSrcRect, pSrc, a5, a6);
     }
 
-    static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst)
+    // 0x004123D0
+    static int surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst)
     {
-        interop::thiscall<int, MarniSurface2*, MarniSurface2*, int, int>(
-            (uintptr_t)self->vtbl->pal_blt, self, pSrc, paletteSrc, paletteDst);
+        if (!self->bOpen)
+        {
+            out("invalid class", "MarniBits::PalBlt");
+            return 0;
+        }
+
+        // A palette number of -1 means "use the surface's current palette".
+        int paletteSrc2 = paletteSrc;
+        int paletteDst2 = paletteDst;
+        if (paletteSrc == -1)
+            paletteSrc2 = pSrc->var_22;
+        if (paletteDst == -1)
+            paletteDst2 = self->var_22;
+
+        // Both surfaces must be palette indexed.
+        if (!pSrc->var_28 || !self->var_28)
+        {
+            out("", "this is not palette indexed bits. MarniBits::PalBlt");
+            return 0;
+        }
+
+        // Both palette numbers must lie within the destination and source palettes.
+        if (self->pal_cnt <= paletteDst2 || pSrc->pal_cnt <= paletteSrc2)
+        {
+            out("", "specified invalid palette number. MarniBits::PalBlt");
+            return 0;
+        }
+
+        uint8_t bpp = self->bpp;
+        if (pSrc->bpp < bpp)
+            bpp = pSrc->bpp;
+        int rowSize = 1 << bpp;
+
+        if (!interop::thiscall<int, MarniSurface2*, int>((uintptr_t)self->vtbl->pal_lock, self, 0)
+            || !interop::thiscall<int, MarniSurface2*, int>((uintptr_t)pSrc->vtbl->pal_lock, pSrc, 0))
+        {
+            out("", "failed to lock. MarniBits::PalBlt");
+            return 0;
+        }
+
+        if ((paletteSrc == -1 || paletteDst == -1) && self->pal_cnt <= pSrc->pal_cnt)
+        {
+            // Copy every palette of the source surface onto the matching palette of the destination.
+            for (int pal = 0; pal < self->pal_cnt; pal++)
+            {
+                for (int i = 0; i < rowSize; i++)
+                {
+                    uint32_t rgb;
+                    surface_get_palette_color(pSrc, i, pal, &rgb);
+                    surface_set_palette_color(self, i, pal, rgb, 0);
+                }
+            }
+        }
+        else
+        {
+            // Copy a single palette range from the source palette to the destination palette.
+            for (int i = 0; i < rowSize; i++)
+            {
+                uint32_t rgb;
+                surface_get_palette_color(pSrc, i, paletteSrc2, &rgb);
+                surface_set_palette_color(self, i, paletteDst2, rgb, 0);
+            }
+        }
+
+        interop::thiscall<void, MarniSurface2*>((uintptr_t)self->vtbl->pal_unlock, self);
+        interop::thiscall<void, MarniSurface2*>((uintptr_t)pSrc->vtbl->pal_unlock, pSrc);
+        return 1;
     }
 
     // 0x00416B50
@@ -8279,6 +8345,7 @@ namespace openre::marni
         interop::hookThisCall(0x00412BD0, &surface2_vfill);
         interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
+        interop::hookThisCall(0x004123D0, &surface_pal_blt);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x0040F600, &surfacex_vpallock);
         interop::hookThisCall(0x0040FAD0, &surfacex_vunlock);
