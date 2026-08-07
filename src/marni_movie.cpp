@@ -72,7 +72,36 @@ namespace openre::marni
     // 0x00414C00
     int __stdcall movie_update(MarniMovie* self)
     {
-        return interop::thiscall<int, MarniMovie*>(0x00414C00, self);
+        // Advances playback. Runs only while the movie is open (flag 1) and has
+        // been started (flag 2).
+        uint32_t flag = self->flag;
+        if ((flag & 1) == 0 || (flag & 2) == 0)
+            return 1;
+
+        if ((flag & 8) != 0)
+        {
+            // Streaming mode: present the next sample via
+            // IDirectDrawMediaStreamSample::Update (vtable offset 0x18, index 6).
+            auto pSample = self->field_90;
+            auto vtbl = *(uint32_t**)pSample;
+            auto pfnUpdate = (HRESULT(__stdcall*)(void*, uint32_t, void*, void*, void*))vtbl[0x18 / 4];
+            pfnUpdate(pSample, 0, nullptr, nullptr, nullptr);
+            return 1;
+        }
+
+        // DirectShow mode: track the current position and loop at the end.
+        auto pMP = self->pMediaPosition;
+        auto vtblMP = *(uint32_t**)pMP;
+
+        // IMediaPosition::get_CurrentPosition at vtable offset 0x24 (index 9)
+        auto pfnGetPos = (HRESULT(__stdcall*)(void*, double*))vtblMP[0x24 / 4];
+        if (pfnGetPos(pMP, &self->pos))
+            out("error reading the position. MarniMovie::Update", "");
+
+        if (self->duration <= self->pos)
+            movie_seek(self);
+
+        return 1;
     }
 
     // 0x00414C80
