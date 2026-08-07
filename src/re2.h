@@ -892,9 +892,12 @@ static_assert(sizeof(WindowRect) == 0x10);
 struct MarniTextureNode
 {
     uint16_t next;                      // 0x0000
-    uint8_t pad_0002[6];                // 0x0002
+    uint16_t texture_id;                // 0x0002
+    uint16_t page;                      // 0x0004
+    uint8_t pad_0006[2];                // 0x0006
     MarniSurfaceX* surface;             // 0x0008
-    uint8_t pad_000C[8];                // 0x000C
+    int32_t width;                      // 0x000C
+    int32_t height;                     // 0x0010
     uint32_t var_14;                    // 0x0014
 };
 static_assert(sizeof(MarniTextureNode) == 0x18);
