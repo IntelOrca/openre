@@ -23,6 +23,8 @@ namespace openre::gfx
         constexpr int SURF_Release = 2;
         constexpr int SURF_AddAttachedSurface = 3;
         constexpr int SURF_Blt = 5;
+        constexpr int SURF_GetDC = 17;
+        constexpr int SURF_ReleaseDC = 26;
         constexpr int SURF_GetSurfaceDesc = 22;
         constexpr int SURF_IsLost = 24;
         constexpr int SURF_Lock = 25;

@@ -415,6 +415,29 @@ namespace openre::gfx
             return hr;
         }
 
+        // The game draws the save screen's text via GDI over an HDC obtained
+        // from the surface (GetDC/ReleaseDC). In GPU mode that text would land
+        // in the real ddraw surface memory, which is never presented, so the
+        // GPU backend supplies its own DIB-backed HDC over the surface shadow
+        // instead (see gfx_backend_gpu.cpp get_dc/release_dc).
+        static HRESULT STDMETHODCALLTYPE hook_surface_get_dc(IDirectDrawSurface* self, HDC* hdc)
+        {
+            // Defensive: if both backends skip (e.g. the GPU backend is active
+            // but has no device yet), never hand the game back a garbage handle.
+            if (hdc != nullptr)
+                *hdc = nullptr;
+            const auto hr = backend_d3d()->get_dc(self, hdc);
+            backend_gpu()->get_dc(self, hdc);
+            return hr;
+        }
+
+        static HRESULT STDMETHODCALLTYPE hook_surface_release_dc(IDirectDrawSurface* self, HDC hdc)
+        {
+            const auto hr = backend_d3d()->release_dc(self, hdc);
+            backend_gpu()->release_dc(self, hdc);
+            return hr;
+        }
+
         // ------------------------------------------------------------------
         // IDirect3D2 hooks
         // ------------------------------------------------------------------
@@ -728,6 +751,8 @@ namespace openre::gfx
         newVtbl[slots::SURF_SetColorKey] = reinterpret_cast<void*>(&hook_surface_set_color_key);
         newVtbl[slots::SURF_SetPalette] = reinterpret_cast<void*>(&hook_surface_set_palette);
         newVtbl[slots::SURF_SetClipper] = reinterpret_cast<void*>(&hook_surface_set_clipper);
+        newVtbl[slots::SURF_GetDC] = reinterpret_cast<void*>(&hook_surface_get_dc);
+        newVtbl[slots::SURF_ReleaseDC] = reinterpret_cast<void*>(&hook_surface_release_dc);
         newVtbl[slots::SURF_Release] = reinterpret_cast<void*>(&hook_surface_release);
         registry::set(surface, orig, newVtbl);
         *reinterpret_cast<void***>(surface) = newVtbl;

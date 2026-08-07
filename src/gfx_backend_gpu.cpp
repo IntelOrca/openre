@@ -509,6 +509,20 @@ namespace openre::gfx
                 // arrived via texture_load must not be re-expanded from their
                 // (empty) shadow when their palette changes.
                 bool contentFromShadow = false;
+
+                // GDI text bridge (GetDC/ReleaseDC). The game draws the save
+                // screen's text into an HDC; the GPU backend backs it with a
+                // DIB section over the surface shadow so the text lands in the
+                // surface's pixel format. For the render target the text is
+                // composited by present() as a separate overlay layer after the
+                // scene pass (textOverlayPending + textTexture), so the room
+                // redraw cannot wipe it.
+                HDC gdiDc = nullptr;
+                HBITMAP gdiBitmap = nullptr;
+                void* gdiBits = nullptr;
+                bool textOverlayPending = false;
+                SDL_GPUTexture* textTexture = nullptr;       // GDI overlay layer (render target only)
+                SDL_GPUTransferBuffer* textUpload = nullptr; // dedicated upload for the overlay
             };
 
             // Per-palette state: 256 RGBA entries (0xAARRGGBB, matching
@@ -815,6 +829,23 @@ namespace openre::gfx
                     }
                     SDL_EndGPURenderPass(scenePass);
 
+                    // The scene pass wrote the room into the render target.
+                    if (rtEntry != nullptr)
+                        rtEntry->hasContent = true;
+
+                    // GDI text overlay (save screen): the game draws its text
+                    // via GDI into a DIB over the surface shadow
+                    // (GetDC/ReleaseDC). It must survive the scene redraw
+                    // above, so composite it on top in the present pass as a
+                    // second full-screen blit of a dedicated overlay texture.
+                    bool applyTextOverlay = false;
+                    if (rtEntry != nullptr && rtEntry->textOverlayPending)
+                    {
+                        if (uploadTextOverlay(*rtEntry, commandBuffer))
+                            applyTextOverlay = true;
+                        rtEntry->textOverlayPending = false;
+                    }
+
                     // Present pass: letterbox the render target into the
                     // swapchain (the blit quad was appended to the vertex pool).
                     ensureBlitPipeline(SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow));
@@ -840,6 +871,15 @@ namespace openre::gfx
                         SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, mBlitQuadOffset };
                         SDL_BindGPUVertexBuffers(presentPass, 0, &vertexBinding, 1);
                         SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
+                        if (applyTextOverlay && rtEntry != nullptr && rtEntry->textTexture != nullptr)
+                        {
+                            // Composite the GDI text layer (room + text, fully
+                            // opaque) over the freshly rendered scene.
+                            SDL_GPUTextureSamplerBinding textBinding = { rtEntry->textTexture, mSamplerLinear };
+                            SDL_BindGPUFragmentSamplers(presentPass, 0, &textBinding, 1);
+                            SDL_BindGPUVertexBuffers(presentPass, 0, &vertexBinding, 1);
+                            SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
+                        }
                         SDL_EndGPURenderPass(presentPass);
                     }
                 }
@@ -1059,6 +1099,210 @@ namespace openre::gfx
                     entry->height,
                     entry->bpp,
                     entry->lockedPtr == entry->shadow.data());
+                return S_OK;
+            }
+
+            // ---- GDI text bridge (GetDC/ReleaseDC) ----
+
+            // Creates (once) a top-down DIB section whose bit layout matches the
+            // surface shadow so GDI text can be copied straight in/out:
+            // 32bpp BI_RGB and 16bpp BI_BITFIELDS (using the surface's masks)
+            // are byte-identical to the DirectDraw layouts the shadow stores.
+            bool ensureGdiDc(SurfaceEntry& entry)
+            {
+                if (entry.gdiDc != nullptr)
+                    return true;
+                if (mDevice == nullptr || entry.width == 0 || entry.height == 0 || entry.bpp == 0)
+                    return false;
+
+                // BITMAPINFO only carries a 1-entry colour table; the 8bpp
+                // path seeds all 256 entries, so back the header with a full
+                // table. The 16bpp BI_BITFIELDS path uses the first three
+                // entries as the R/G/B masks.
+                struct
+                {
+                    BITMAPINFOHEADER bmiHeader;
+                    RGBQUAD bmiColors[256];
+                } bmi = {};
+                bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                bmi.bmiHeader.biWidth = static_cast<LONG>(entry.width);
+                bmi.bmiHeader.biHeight = -static_cast<LONG>(entry.height); // top-down, matches DirectDraw
+                bmi.bmiHeader.biPlanes = 1;
+                bmi.bmiHeader.biBitCount = static_cast<WORD>(entry.bpp);
+                if (entry.bpp == 16)
+                {
+                    // 16bpp layouts (RGB565/RGB555/ARGB1555) need BI_BITFIELDS
+                    // so GDI writes the same bit layout as the surface shadow.
+                    bmi.bmiHeader.biCompression = BI_BITFIELDS;
+                    const DWORD masks[3] = { entry.rMask, entry.gMask, entry.bMask };
+                    std::memcpy(bmi.bmiColors, masks, sizeof(masks));
+                }
+                else
+                {
+                    bmi.bmiHeader.biCompression = BI_RGB;
+                }
+                if (entry.paletted)
+                {
+                    // 8bpp indexed: seed the DIB colour table from the
+                    // surface's palette so GDI text resolves to game colours.
+                    const auto it = mPalettes.find(entry.palette);
+                    if (it != mPalettes.end())
+                    {
+                        for (Uint32 i = 0; i < 256; i++)
+                        {
+                            bmi.bmiColors[i].rgbRed = static_cast<BYTE>((it->second.rgba[i] >> 16) & 0xFF);
+                            bmi.bmiColors[i].rgbGreen = static_cast<BYTE>((it->second.rgba[i] >> 8) & 0xFF);
+                            bmi.bmiColors[i].rgbBlue = static_cast<BYTE>(it->second.rgba[i] & 0xFF);
+                        }
+                    }
+                }
+
+                void* bits = nullptr;
+                HBITMAP bmp
+                    = CreateDIBSection(nullptr, reinterpret_cast<BITMAPINFO*>(&bmi), DIB_RGB_COLORS, &bits, nullptr, 0);
+                if (bmp == nullptr)
+                {
+                    logging::logError(
+                        "[gfx:gpu] CreateDIBSection failed ({}x{} bpp={}): {}",
+                        entry.width,
+                        entry.height,
+                        entry.bpp,
+                        GetLastError());
+                    return false;
+                }
+                HDC dc = CreateCompatibleDC(nullptr);
+                if (dc == nullptr)
+                {
+                    logging::logError("[gfx:gpu] CreateCompatibleDC failed: {}", GetLastError());
+                    DeleteObject(bmp);
+                    return false;
+                }
+                SelectObject(dc, bmp);
+                entry.gdiDc = dc;
+                entry.gdiBitmap = bmp;
+                entry.gdiBits = bits;
+                logging::logDebug("[gfx:gpu] GDI DC created ({}x{} bpp={})", entry.width, entry.height, entry.bpp);
+                return true;
+            }
+
+            // Copies the CPU shadow into the DIB bits so GDI draws over the
+            // current surface content. Row pitch may differ (DIB rows are
+            // dword-aligned, DirectDraw rows are not padded).
+            void copyShadowToGdi(SurfaceEntry& entry)
+            {
+                if (entry.gdiBits == nullptr || entry.gdiDc == nullptr)
+                    return;
+                const auto texel = entry.bpp / 8;
+                if (texel == 0 || entry.shadow.size() < static_cast<size_t>(entry.pitch) * entry.height)
+                    return;
+                const auto dibRow = (static_cast<size_t>(entry.width) * texel + 3u) & ~size_t(3);
+                auto* dst = static_cast<uint8_t*>(entry.gdiBits);
+                for (Uint32 y = 0; y < entry.height; y++)
+                {
+                    std::memcpy(
+                        dst + static_cast<size_t>(y) * dibRow,
+                        entry.shadow.data() + static_cast<size_t>(y) * entry.pitch,
+                        static_cast<size_t>(entry.width) * texel);
+                }
+            }
+
+            // Copies the DIB bits (shadow + GDI text) back into the shadow.
+            void copyGdiToShadow(SurfaceEntry& entry)
+            {
+                if (entry.gdiBits == nullptr || entry.gdiDc == nullptr)
+                    return;
+                const auto texel = entry.bpp / 8;
+                if (texel == 0 || entry.shadow.size() < static_cast<size_t>(entry.pitch) * entry.height)
+                    return;
+                const auto dibRow = (static_cast<size_t>(entry.width) * texel + 3u) & ~size_t(3);
+                const auto* src = static_cast<const uint8_t*>(entry.gdiBits);
+                for (Uint32 y = 0; y < entry.height; y++)
+                {
+                    std::memcpy(
+                        entry.shadow.data() + static_cast<size_t>(y) * entry.pitch,
+                        src + static_cast<size_t>(y) * dibRow,
+                        static_cast<size_t>(entry.width) * texel);
+                }
+            }
+
+            HRESULT get_dc(IUnknown* surface, HDC* hdc) override
+            {
+                if (hdc == nullptr)
+                    return E_POINTER;
+                // When the D3D reference is active the front-end already set
+                // *hdc from the real DirectDraw surface; only replace it when
+                // this backend owns the presenter.
+                if (mDevice == nullptr)
+                    return S_OK;
+                auto* entry = findSurface(surface);
+                if (entry == nullptr || active_backend() != 1)
+                    return S_OK;
+
+                // Seed the DIB with the current surface content so transparent
+                // -background GDI text composites over it. For the render
+                // target the texture stays room-only (the text is composited
+                // as a separate layer in present()), so this readback is a
+                // clean backdrop even while the menu text is on screen. While
+                // the game holds a Lock the shadow IS the live surface buffer
+                // (its writes have not been uploaded yet), so a readback here
+                // would discard them - keep the shadow as-is in that case.
+                if (entry->textureCreated && !entry->locked)
+                {
+                    if (!downloadToShadow(*entry))
+                        std::memset(entry->shadow.data(), 0, entry->shadow.size());
+                }
+
+                if (!ensureGdiDc(*entry))
+                {
+                    // Unsupported format or resource failure: hand back a plain
+                    // memory DC so the game's GDI calls cannot crash on a null
+                    // HDC (the text simply stays invisible).
+                    if (entry->gdiDc == nullptr)
+                    {
+                        entry->gdiDc = CreateCompatibleDC(nullptr);
+                        entry->gdiBitmap = nullptr;
+                        entry->gdiBits = nullptr;
+                    }
+                }
+                copyShadowToGdi(*entry);
+                *hdc = entry->gdiDc;
+                return S_OK;
+            }
+
+            HRESULT release_dc(IUnknown* surface, HDC hdc) override
+            {
+                if (mDevice == nullptr)
+                    return S_OK;
+                auto* entry = findSurface(surface);
+                if (entry == nullptr || entry->gdiDc == nullptr || entry->gdiDc != hdc)
+                {
+                    logging::logDebug("[gfx:gpu] ReleaseDC surface={} (no matching GetDC)", static_cast<void*>(surface));
+                    return S_OK;
+                }
+                if (active_backend() != 1)
+                    return S_OK;
+
+                if (entry->gdiBits != nullptr)
+                    copyGdiToShadow(*entry);
+
+                if (surface == mDeviceState.renderTarget)
+                {
+                    // Defer to present(): the scene pass re-renders the room
+                    // (with a clear) every frame, so an immediate upload would
+                    // be wiped. present() composites the overlay after the
+                    // scene pass instead.
+                    entry->textOverlayPending = true;
+                }
+                else if (entry->gdiBits != nullptr && entry->textureCreated)
+                {
+                    // Non render-target surface: upload now so any later Blt
+                    // that samples this surface's texture picks up the text.
+                    if (uploadFromShadow(*entry, nullptr))
+                    {
+                        entry->hasContent = true;
+                        entry->contentFromShadow = true;
+                    }
+                }
                 return S_OK;
             }
 
@@ -1934,12 +2178,36 @@ namespace openre::gfx
                         SDL_ReleaseGPUTransferBuffer(mDevice, entry.downloadBuffer);
                         entry.downloadBuffer = nullptr;
                     }
+                    if (entry.textTexture != nullptr)
+                    {
+                        SDL_ReleaseGPUTexture(mDevice, entry.textTexture);
+                        entry.textTexture = nullptr;
+                    }
+                    if (entry.textUpload != nullptr)
+                    {
+                        SDL_ReleaseGPUTransferBuffer(mDevice, entry.textUpload);
+                        entry.textUpload = nullptr;
+                    }
                 }
+                // Delete the DC before the bitmap it has selected: deleting an
+                // object that is still selected into a DC is invalid.
+                if (entry.gdiDc != nullptr)
+                {
+                    DeleteDC(entry.gdiDc);
+                    entry.gdiDc = nullptr;
+                }
+                if (entry.gdiBitmap != nullptr)
+                {
+                    DeleteObject(entry.gdiBitmap);
+                    entry.gdiBitmap = nullptr;
+                }
+                entry.gdiBits = nullptr;
                 entry.shadow.clear();
                 entry.textureCreated = false;
                 entry.hasContent = false;
                 entry.locked = false;
                 entry.contentFromShadow = false;
+                entry.textOverlayPending = false;
                 entry.palette = nullptr;
             }
 
@@ -2065,6 +2333,81 @@ namespace openre::gfx
                 const auto waitT1 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
                 mStatIdleWaitUs += (SDL_GetPerformanceCounter() - waitT1) * 1000000 / SDL_GetPerformanceFrequency();
+                return true;
+            }
+
+            // Uploads the GDI text layer (entry.shadow, room + GDI text in the
+            // surface pixel format) into the entry's overlay texture using the
+            // given (already open) command buffer, so the upload lands in the
+            // same submitted frame as the scene pass it must composite over.
+            // Uses a dedicated transfer buffer: entry.uploadBuffer is mapped
+            // mid-frame by Lock/Unlock, which would race this queued upload.
+            bool uploadTextOverlay(SurfaceEntry& entry, SDL_GPUCommandBuffer* commandBuffer)
+            {
+                if (mDevice == nullptr || commandBuffer == nullptr || !entry.textureCreated)
+                    return false;
+
+                if (entry.textTexture == nullptr || entry.textUpload == nullptr)
+                {
+                    if (entry.textTexture == nullptr)
+                    {
+                        SDL_GPUTextureCreateInfo info = {};
+                        info.type = SDL_GPU_TEXTURETYPE_2D;
+                        info.format = entry.format;
+                        info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+                        info.width = entry.width;
+                        info.height = entry.height;
+                        info.layer_count_or_depth = 1;
+                        info.num_levels = 1;
+                        info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+                        entry.textTexture = SDL_CreateGPUTexture(mDevice, &info);
+                    }
+                    if (entry.textUpload == nullptr)
+                    {
+                        SDL_GPUTransferBufferCreateInfo info = {};
+                        info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                        info.size = static_cast<Uint32>(entry.width) * textureTexelBytes(entry.format) * entry.height;
+                        entry.textUpload = SDL_CreateGPUTransferBuffer(mDevice, &info);
+                    }
+                    if (entry.textTexture == nullptr || entry.textUpload == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] text overlay resource creation failed: {}", SDL_GetError());
+                        return false;
+                    }
+                }
+
+                void* mapped = SDL_MapGPUTransferBuffer(mDevice, entry.textUpload, false);
+                if (mapped == nullptr)
+                {
+                    logging::logError("[gfx:gpu] text overlay map failed: {}", SDL_GetError());
+                    return false;
+                }
+                auto* dst = static_cast<uint8_t*>(mapped);
+                const auto srcTexel = entry.bpp / 8;
+                const auto dstTexel = textureTexelBytes(entry.format);
+                const auto rowPixels = static_cast<size_t>(entry.width);
+                for (Uint32 row = 0; row < entry.height; row++)
+                {
+                    const auto* srcRow = entry.shadow.data() + static_cast<size_t>(row) * entry.pitch;
+                    auto* dstRow = dst + (static_cast<size_t>(row) * rowPixels) * dstTexel;
+                    convertShadowToTexture(entry, srcRow, dstRow, entry.width);
+                }
+                SDL_UnmapGPUTransferBuffer(mDevice, entry.textUpload);
+
+                auto* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                SDL_GPUTextureTransferInfo source = {};
+                source.transfer_buffer = entry.textUpload;
+                source.pixels_per_row = entry.width;
+                source.rows_per_layer = entry.height;
+                SDL_GPUTextureRegion destination = {};
+                destination.texture = entry.textTexture;
+                destination.w = entry.width;
+                destination.h = entry.height;
+                destination.d = 1;
+                SDL_UploadToGPUTexture(copyPass, &source, &destination, false);
+                SDL_EndGPUCopyPass(copyPass);
+                mStatUploads++;
+                mStatUploadBytes += static_cast<Uint64>(entry.width) * entry.height * 4;
                 return true;
             }
 

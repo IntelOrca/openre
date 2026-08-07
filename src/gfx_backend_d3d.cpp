@@ -326,6 +326,41 @@ namespace openre::gfx
                 return E_UNEXPECTED;
             }
 
+            HRESULT get_dc(IUnknown* surface, HDC* hdc) override
+            {
+                // GDI text bridge (save screen). The GPU backend supplies the
+                // HDC (a DIB over its surface shadow) whenever it is the active
+                // presenter, so only create the real DirectDraw DC when the
+                // reference owns the surface: creating it here while the GPU
+                // backend overrides *hdc would leak a real DC that the game's
+                // ReleaseDC (passing the DIB DC) can never release, and the
+                // real surface would stay DC-locked.
+                if (active_backend() == 1)
+                    return S_OK;
+                if (const auto* e = registry::find(surface); e != nullptr)
+                {
+                    using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, HDC*);
+                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_GetDC])(
+                        reinterpret_cast<IDirectDrawSurface*>(surface), hdc);
+                }
+                return E_UNEXPECTED;
+            }
+
+            HRESULT release_dc(IUnknown* surface, HDC hdc) override
+            {
+                // Mirrors get_dc: the game only hands back the DC we created,
+                // so skip the real call while the GPU backend owns the HDC.
+                if (active_backend() == 1)
+                    return S_OK;
+                if (const auto* e = registry::find(surface); e != nullptr)
+                {
+                    using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, HDC);
+                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_ReleaseDC])(
+                        reinterpret_cast<IDirectDrawSurface*>(surface), hdc);
+                }
+                return E_UNEXPECTED;
+            }
+
             // ---- device / scene ----
 
             void create_device(IUnknown* /*device*/) override

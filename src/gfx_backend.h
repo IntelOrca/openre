@@ -37,6 +37,8 @@ namespace openre::gfx
         virtual HRESULT set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key) = 0;
         virtual HRESULT set_palette(IUnknown* surface, IUnknown* palette) = 0;
         virtual HRESULT set_clipper(IUnknown* surface, IUnknown* clipper) = 0;
+        virtual HRESULT get_dc(IUnknown* surface, HDC* hdc) = 0;
+        virtual HRESULT release_dc(IUnknown* surface, HDC hdc) = 0;
 
         // ---- device / scene ----
         virtual void create_device(IUnknown* device) = 0;
