@@ -52,6 +52,7 @@ namespace openre::marni
     static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_set_current_color(MarniSurface2* self, int x, int y, uint32_t color, int mode);
+    static int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -2007,8 +2008,234 @@ namespace openre::marni
     // Thin wrappers around the MarniSurface2 vtable blit functions.
     static void surface_blt(MarniSurface2* self, LPRECT pDstRect, LPRECT pSrcRect, MarniSurface2* pSrc, int a5, int a6)
     {
-        interop::thiscall<int, MarniSurface2*, LPRECT, LPRECT, MarniSurface2*, int, int>(
-            (uintptr_t)self->vtbl->blt, self, pDstRect, pSrcRect, pSrc, a5, a6);
+        surface2_blt(self, pDstRect, pSrcRect, pSrc, a5, a6);
+    }
+
+    // 0x00412580
+    // MarniSurface2::Blt - blit pSrc onto self, sampling the source rectangle
+    // (pSrcRect, optionally NULL for the whole surface) into the destination
+    // rectangle (pDstRect, optionally NULL for the whole surface).
+    //
+    // a5 is a set of mode flags: 0x10 = flip horizontally, 0x20 = flip
+    // vertically, plus the blending flags passed through to Set*Color. When a6
+    // is non-NULL it points to a 4-float table used to scale each colour
+    // channel (R, G, B, A) before the pixel is written.
+    static int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6)
+    {
+        if (!self->bOpen || !pSrc->bOpen)
+        {
+            out("tried to call the service although the bitmap is not valid", "MarniBits::Blt");
+            return 0;
+        }
+
+        // Source rectangle: must lie entirely inside the source surface.
+        RECT rc;
+        if (pSrcRect)
+        {
+            if (pSrcRect->top < 0 || pSrcRect->left < 0 || pSrcRect->right >= pSrc->width || pSrcRect->bottom >= pSrc->height)
+            {
+                out("MarniBits::Blt out of range (src)...%d %d %d %d", "MarniBits::Blt");
+                return 0;
+            }
+            rc.left = pSrcRect->left;
+            rc.top = pSrcRect->top;
+            rc.right = pSrcRect->right;
+            rc.bottom = pSrcRect->bottom;
+        }
+        else
+        {
+            SetRect(&rc, 0, 0, pSrc->width - 1, pSrc->height - 1);
+        }
+
+        // Destination rectangle: clipped against the destination surface.
+        // a1[0] doubles as the clip rect for Adjust_rect; the original also
+        // fills a per-column source-X table into a1[1..] that is never read.
+        RECT a1[751];
+        LONG left, v13, v15, v16;
+        RECT a3;
+        if (pDstRect)
+        {
+            left = pDstRect->left;
+            v13 = pDstRect->top;
+            v15 = pDstRect->right;
+            v16 = pDstRect->bottom;
+
+            SetRect(&a1[0], 0, 0, self->width - 1, self->height - 1);
+            if (!adjust_rect(&a1[0], pDstRect, &a3))
+                return 0;
+        }
+        else
+        {
+            SetRect(&a3, 0, 0, self->width - 1, self->height - 1);
+            left = a3.left;
+            v13 = a3.top;
+            v15 = a3.right;
+            v16 = a3.bottom;
+        }
+
+        // Sizes of the clipped destination and the source rectangles.
+        int v17 = v15 - left;
+        int v57 = a3.right - a3.left + 1;
+        int v59 = a3.bottom - a3.top + 1;
+        int v51 = rc.right - rc.left + 1;
+
+        // Source sampling ratio and the offset of the clipped destination's
+        // first column/row into the source rectangle. These use __ftol-style
+        // float-to-int truncation in the original.
+        float ratio = (float)v51 / (float)(v17 + 1);
+        int v63 = (rc.right - rc.left) * (a3.left - left) / v17;
+        int v62 = (rc.bottom - rc.top) * (a3.top - v13) / (v16 - v13);
+
+        // The original pre-computes the source X for every destination column
+        // into a1[] but never reads it back; mirrored here for fidelity.
+        for (int v22 = 0; v22 < v57; ++v22)
+            (&a1[1].left)[v22] = (int)((float)(v22 + v63) * ratio + (float)rc.left);
+
+        // Pick the blit flavour. When both a5 and a6 are zero the mode is
+        // derived from the surface formats: bit 8 = palette-indexed source,
+        // bit 12 = palette-indexed destination (var_28). The bpp/var_25 terms
+        // are computed but masked away by the 0x1100 test below.
+        int v27 = 0;
+        if (!a5 && !a6)
+        {
+            v27 = (pSrc->bpp / 8) | ((self->bpp / 8) << 4);
+            if (pSrc->var_28)
+                v27 |= 0x100;
+            if (self->var_28)
+                v27 |= 0x1000;
+            v27 |= (((self->var_25 / 8) << 4) | (pSrc->var_25 / 8)) << 16;
+        }
+        int v28 = v27 & 0x1100;
+        if (v28 && v28 != 0x100)
+        {
+            if (v28 != 0x1100)
+                return 1;
+
+            // Palette-indexed blit: copy palette indices, then sync the palette.
+            surface_lock(self, 0, 0);
+            surface_lock(pSrc, 0, 0);
+
+            self->var_2D = 1;
+            self->var_2C = 0;
+
+            int v29 = 0;
+            if (v59 > 0)
+            {
+                do
+                {
+                    int v31 = 0;
+                    if (v57 > 0)
+                    {
+                        int v32 = v29 + v62;
+                        int flipY = a5 & 0x20;
+                        do
+                        {
+                            uint32_t color = 0;
+                            if (rc.left + v31 + v63 > rc.right || rc.top + v32 > rc.bottom)
+                            {
+                                color = 0;
+                            }
+                            else
+                            {
+                                surface_get_color(pSrc, rc.left + v31 + v63, rc.top + v32, &color);
+                            }
+
+                            int dstX = (a5 & 0x10) ? a3.right - v31 : v31 + a3.left;
+                            int dstY = flipY ? a3.bottom - v29 : v29 + a3.top;
+                            surface_set_color(self, dstX, dstY, color, a5);
+                            ++v31;
+                        } while (v31 < v57);
+                    }
+                    ++v29;
+                } while (v29 < v59);
+            }
+
+            surface_unlock(pSrc);
+            surface_unlock(self);
+            interop::thiscall<int, MarniSurface2*, MarniSurface2*, int, int>((uintptr_t)self->vtbl->pal_blt, self, pSrc, -1, -1);
+            return 1;
+        }
+
+        // General blit: read each source pixel's current colour, optionally
+        // scale it with the a6 table, and write it to the destination.
+        surface_lock(self, 0, 0);
+        surface_lock(pSrc, 0, 0);
+
+        self->var_2D = 1;
+        self->var_2C = 0;
+
+        int v36 = 0;
+        uint32_t v55 = 0;
+        if (v59 > 0)
+        {
+            do
+            {
+                int v37 = 0;
+                if (v57 > 0)
+                {
+                    int v64 = v62 + v36;
+                    do
+                    {
+                        uint32_t v38;
+                        if (rc.left + v37 + v63 > rc.right || v64 + rc.top > rc.bottom)
+                        {
+                            v38 = 0;
+                        }
+                        else
+                        {
+                            uint32_t a4;
+                            if (!surface_get_current_color(pSrc, rc.left + v37 + v63, v64 + rc.top, &a4))
+                            {
+                                out("failed to acquire the color", "MarniBits::Blt");
+                                return 0;
+                            }
+                            v38 = a4;
+                            if ((v38 & 0xFFFFFF) != 0)
+                            {
+                                if (!pSrc->desc.a_bitcnt)
+                                    v38 |= 0xFF000000;
+                            }
+                            else
+                            {
+                                v38 = 0;
+                            }
+                        }
+
+                        if (a6)
+                        {
+                            const float* pScale = (const float*)a6;
+                            int v40 = (int)((float)((v38 >> 16) & 0xFF) * pScale[0]);
+                            int v42 = (int)((float)((v38 >> 8) & 0xFF) * pScale[1]);
+                            int v45 = (int)((float)(v38 & 0xFF) * pScale[2]);
+                            int v46 = (int)((float)((v38 >> 24) & 0xFF) * pScale[3]);
+                            if (v40 >= 256)
+                                v40 = 255;
+                            if (v42 >= 256)
+                                v42 = 255;
+                            if (v45 >= 256)
+                                v45 = 255;
+                            if (v46 >= 256)
+                                v46 = 255;
+                            v38 = (uint32_t)((uint8_t)v45 | ((uint8_t)v42 << 8) | ((uint8_t)v40 << 16) | ((uint8_t)v46 << 24));
+                        }
+
+                        if ((v38 & 0xFF000000) != 0xFF000000)
+                            self->var_2C = 1;
+
+                        int dstX = (a5 & 0x10) ? a3.right - v37 : v37 + a3.left;
+                        int dstY = (a5 & 0x20) ? a3.bottom - (int)v55 : a3.top + (int)v55;
+                        surface_set_current_color(self, dstX, dstY, v38, a5);
+                        ++v37;
+                    } while (v37 < v57);
+                    v36 = (int)v55;
+                }
+                v55 = ++v36;
+            } while (v36 < v59);
+        }
+
+        surface_unlock(pSrc);
+        surface_unlock(self);
+        return 1;
     }
 
     // 0x004123D0
@@ -7993,8 +8220,7 @@ namespace openre::marni
         ecx0a.bOpen = 1;
         ecx0a.var_27 = 1;
 
-        interop::thiscall<int, MarniSurface2*, RECT*, RECT*, MarniSurface*, int, int>(
-            0x00412580, &ecx0a, nullptr, nullptr, self, 32, 0);
+        surface2_blt(&ecx0a, nullptr, nullptr, self, 32, 0);
 
         ecx0a.var_27 = 0;
 
