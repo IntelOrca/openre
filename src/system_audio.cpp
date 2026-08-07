@@ -591,6 +591,16 @@ namespace openre::system::audio
                 v->pos = 0.0;
             v->playing = true;
         }
+        else if (!v->loop)
+        {
+            // The voice is still playing. DirectSound treated Play() on an
+            // already-playing one-shot as a no-op, which silently swallowed
+            // re-triggered one-shots (e.g. footsteps whose trigger arrived
+            // before the previous step had finished, dropping to ~1 step/s
+            // while running in rooms with short samples). Restart the one-shot
+            // so every trigger is audible; looping voices are left untouched.
+            v->pos = 0.0;
+        }
         return true;
     }
 
