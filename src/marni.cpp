@@ -88,6 +88,7 @@ namespace openre::marni
     static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
+    static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
@@ -6450,6 +6451,67 @@ namespace openre::marni
     }
 
     // 0x0040f9c0
+    static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self)
+    {
+        if (!self->bOpen)
+        {
+            out("tried to unlock regardless of invalid surface", "DirectDrawSurface::PalUnlock");
+            return 0;
+        }
+        if (!self->bPalLocked)
+        {
+            out("not locked", "MarniBits::PalUnlock");
+            return 0;
+        }
+        if (!self->pPalette)
+        {
+            out("not supposed situation. lppal is NULL", "MarniSystem DirectDrawSurface::PalUnlock");
+            return 0;
+        }
+
+        PALETTEENTRY entries[256];
+        int v3 = 0;
+        if (self->pal_cnt > 0)
+        {
+            while (1)
+            {
+                int v4 = 1 << self->bpp;
+                int v5 = 0;
+                if (v4 > 0)
+                {
+                    // pPalette holds 0x00RRGGBB little-endian DWORDs; unpack them
+                    // into PALETTEENTRYs for SetEntries.
+                    auto* src = (uint8_t*)self->pPalette + 4 * v3 * v4;
+                    do
+                    {
+                        src += 4;
+                        entries[v5].peRed = src[-2];
+                        entries[v5].peGreen = src[-3];
+                        entries[v5].peBlue = src[-4];
+                        entries[v5].peFlags = 0;
+                        v5++;
+                    } while (v5 < v4);
+                }
+
+                auto pDDpalette = (LPDIRECTDRAWPALETTE)self->pDDpalette[v3];
+                if (pDDpalette->SetEntries(0, 0, v4, entries))
+                    break;
+
+                v3++;
+                if (v3 >= self->pal_cnt)
+                    goto done;
+            }
+
+            out("failed to set the palettes to the device", "MarniSystem DirectDrawSurface::PalUnlock");
+            return 0;
+        }
+
+    done:
+        operator_delete(self->pPalette);
+        self->pPalette = nullptr;
+        self->bPalLocked = 0;
+        return 0;
+    }
 
     // 0x0040fad0
 
@@ -7154,6 +7216,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x0040EE30, &surfacex_load);
+        interop::hookThisCall(0x0040F9C0, &surfacex_vpalunlock);
         interop::hookThisCall(0x0040F790, &surfacex_vlock);
         interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
         interop::hookThisCall(0x00405EC0, &create_texture_handle);
