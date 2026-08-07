@@ -714,7 +714,359 @@ namespace openre::marni
     // 0x004033F0
     static int __stdcall reload_texture(Marni* self, int texture)
     {
-        return interop::thiscall<int, Marni*, int>(0x004033F0, self, texture);
+        if (!self->is_gpu_active)
+            return 0;
+
+        auto& tex = self->textures[texture];
+        uint32_t vTbl = tex.var_00;
+        if (!vTbl)
+            return 1;
+        if ((vTbl & 0x2000) != 0)
+            return 1;
+        if ((self->gpu_flag & 0x2000) != 0)
+            return 1;
+
+        // Destroy the old texture node chain.
+        uint16_t v6 = tex.head;
+        do
+        {
+            auto& node = self->texture_nodes[v6];
+            if (node.surface)
+            {
+                surfacex_dtor(node.surface);
+                interop::call<void, void*>(0x0050AA10, node.surface);
+            }
+            node.surface = nullptr;
+            v6 = node.next;
+        } while (v6 != 0);
+
+        DDSURFACEDESC ddesc = {};
+        auto pSrc = &tex.surface;
+
+        // Find the matching texture format for the source surface (fills ddesc).
+        if (!interop::thiscall<int, Marni*, MarniSurface2*, DDSURFACEDESC*, int>(
+                0x00402560, self, &tex.surface, &ddesc, vTbl & 4))
+        {
+            out("there's no format matching. Direct3D::ReloadTexture", "");
+            return 0;
+        }
+
+        ddesc.dwWidth = tex.surface.width;
+        ddesc.dwHeight = tex.surface.height;
+
+        MarniSurfaceX surfX;
+        interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, &surfX);
+
+        auto compress_create = [&](MarniTextureNode& node) {
+            if (node.surface->is_vmem)
+            {
+                node.var_14 |= 0x0100;
+            }
+            else
+            {
+                while (interop::thiscall<int, Marni*>(0x004170F0, self))
+                {
+                    interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                        0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                    if (node.surface->is_vmem)
+                    {
+                        node.var_14 |= 0x0100;
+                        break;
+                    }
+                }
+                if (!node.surface->is_vmem)
+                    node.var_14 |= 0x1000;
+            }
+            surfacex_create_texture_object(node.surface);
+        };
+
+        switch (vTbl & 0xFFFFFFEB)
+        {
+        case 1:
+        case 2:
+        {
+            ddesc.ddsCaps.dwCaps |= 0x800;
+            uint16_t nodeIndex = tex.head;
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_texture_object(&surfX);
+            ddesc.ddsCaps.dwCaps &= ~0x800;
+            tex.surface.var_22 = 0;
+
+            auto& node = self->texture_nodes[nodeIndex];
+            node.var_14 = vTbl;
+            node.texture_id = (uint16_t)texture;
+            node.page = tex.surface.var_22;
+            if (node.surface)
+            {
+                surfacex_dtor(node.surface);
+                interop::call<void, void*>(0x0050AA10, node.surface);
+            }
+            node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+            if (node.surface)
+                interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+            if (!node.surface->bOpen)
+            {
+                out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
+                if (node.surface)
+                {
+                    surfacex_dtor(node.surface);
+                    interop::call<void, void*>(0x0050AA10, node.surface);
+                }
+                node.surface = nullptr;
+                surfacex_dtor(&surfX);
+                return 0;
+            }
+
+            compress_create(node);
+
+            node.width = surfX.width;
+            node.height = surfX.height;
+            interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
+                0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
+            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
+                0x0040EE30, node.surface, &surfX);
+            if (!gGameTable.error)
+            {
+                interop::thiscall<int, MarniSurfaceX*, int>(
+                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                surfacex_dtor(&surfX);
+                return 1;
+            }
+
+            // Failed to load the texture.
+            out("failed to load texture.", "Direct3D::ReloadTexture");
+            sub_416B90(self, texture);
+            surfacex_dtor(&surfX);
+            return 0;
+        }
+
+        case 0x22:
+        case 0x41:
+        case 0x42:
+        {
+            ddesc.ddsCaps.dwCaps |= 0x800;
+            uint16_t nodeIndex = tex.head;
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_texture_object(&surfX);
+            ddesc.ddsCaps.dwCaps &= ~0x800;
+            tex.surface.var_22 = 0;
+
+            uint16_t counter = 0;
+            for (;;)
+            {
+                auto& node = self->texture_nodes[nodeIndex];
+                node.var_14 = vTbl;
+                node.texture_id = (uint16_t)texture;
+                node.page = counter;
+                if (node.surface)
+                {
+                    surfacex_dtor(node.surface);
+                    interop::call<void, void*>(0x0050AA10, node.surface);
+                }
+                node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+                if (node.surface)
+                    interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                    0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                if (!node.surface->bOpen)
+                {
+                    out("failed to generate the surface. Direct3D::ReloadTexture", "");
+                    if (node.surface)
+                    {
+                        surfacex_dtor(node.surface);
+                        interop::call<void, void*>(0x0050AA10, node.surface);
+                    }
+                    node.surface = nullptr;
+                    surfacex_dtor(&surfX);
+                    return 0;
+                }
+
+                compress_create(node);
+
+                RECT rc;
+                RECT pRectDst;
+                SetRect(&rc, 0, 0, pSrc->width - 1, pSrc->height - 1);
+                SetRect(&pRectDst, 0, 0, pSrc->width - 1, pSrc->height - 1);
+                node.width = surfX.width;
+                node.height = surfX.height;
+                tex.surface.var_22 = (int16_t)counter;
+                surfX.var_2A = 1;
+                interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
+                    0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
+                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
+                    0x0040EE30, node.surface, &surfX);
+                if (!gGameTable.error)
+                {
+                    interop::thiscall<int, MarniSurfaceX*, int>(
+                        0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                    nodeIndex = node.next;
+                    ++counter;
+                    if (node.next == 0)
+                    {
+                        surfacex_dtor(&surfX);
+                        return 1;
+                    }
+                    continue;
+                }
+
+                // Failed to load the texture.
+                out("failed to load texture.", "Direct3D::ReloadTexture");
+                sub_416B90(self, texture);
+                surfacex_dtor(&surfX);
+                return 0;
+            }
+        }
+
+        case 0x81:
+        case 0x82:
+        case 0xA1:
+        case 0xA2:
+        {
+            ddesc.ddsCaps.dwCaps |= 0x800;
+            uint16_t nodeIndex = tex.head;
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_texture_object(&surfX);
+            ddesc.ddsCaps.dwCaps &= ~0x800;
+            tex.surface.var_22 = 0;
+
+            auto& node = self->texture_nodes[nodeIndex];
+            node.var_14 = vTbl;
+            node.texture_id = (uint16_t)texture;
+            node.page = tex.surface.var_22;
+            if (node.surface)
+            {
+                surfacex_dtor(node.surface);
+                interop::call<void, void*>(0x0050AA10, node.surface);
+            }
+            node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+            if (node.surface)
+                interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, tex.surface.pal_cnt);
+            if (!node.surface->bOpen)
+            {
+                out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
+                if (node.surface)
+                {
+                    surfacex_dtor(node.surface);
+                    interop::call<void, void*>(0x0050AA10, node.surface);
+                }
+                node.surface = nullptr;
+                surfacex_dtor(&surfX);
+                return 0;
+            }
+
+            compress_create(node);
+
+            RECT rc;
+            RECT pRectDst;
+            SetRect(&rc, 0, 0, pSrc->width - 1, pSrc->height - 1);
+            SetRect(&pRectDst, 0, 0, pSrc->width - 1, pSrc->height - 1);
+            node.width = surfX.width;
+            node.height = surfX.height;
+            surfX.var_2A = 1;
+            interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
+                0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
+            for (int i = 0; i < tex.surface.pal_cnt; ++i)
+                surface_pal_blt(node.surface, pSrc, i, i);
+            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
+                0x0040EE30, node.surface, &surfX);
+            if (!gGameTable.error)
+            {
+                interop::thiscall<int, MarniSurfaceX*, int>(
+                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                surfacex_dtor(&surfX);
+                return 1;
+            }
+
+            // Failed to load the texture.
+            out("failed to load texture.", "Direct3D::ReloadTexture");
+            sub_416B90(self, texture);
+            surfacex_dtor(&surfX);
+            return 0;
+        }
+
+        case 0xC1:
+        case 0xC2:
+        {
+            ddesc.ddsCaps.dwCaps |= 0x800;
+            uint16_t nodeIndex = tex.head;
+            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_texture_object(&surfX);
+            ddesc.ddsCaps.dwCaps &= ~0x800;
+            tex.surface.var_22 = 0;
+
+            uint16_t counter = 0;
+            for (;;)
+            {
+                auto& node = self->texture_nodes[nodeIndex];
+                node.var_14 = vTbl;
+                node.texture_id = (uint16_t)texture;
+                node.page = counter;
+                if (node.surface)
+                {
+                    surfacex_dtor(node.surface);
+                    interop::call<void, void*>(0x0050AA10, node.surface);
+                }
+                node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+                if (node.surface)
+                    interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
+                    0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                if (!node.surface->bOpen)
+                {
+                    out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
+                    if (node.surface)
+                    {
+                        surfacex_dtor(node.surface);
+                        interop::call<void, void*>(0x0050AA10, node.surface);
+                    }
+                    node.surface = nullptr;
+                    surfacex_dtor(&surfX);
+                    return 0;
+                }
+
+                compress_create(node);
+
+                node.width = surfX.width;
+                node.height = surfX.height;
+                surfX.var_2A = 1;
+                interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
+                    0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
+                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
+                    0x0040EE30, node.surface, &surfX);
+                surface_pal_blt(node.surface, pSrc, counter, 0);
+                if (gGameTable.error)
+                {
+                    // Failed to load the texture.
+                    out("failed to load texture.", "Direct3D::ReloadTexture");
+                    sub_416B90(self, texture);
+                    surfacex_dtor(&surfX);
+                    return 0;
+                }
+                interop::thiscall<int, MarniSurfaceX*, int>(
+                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                nodeIndex = node.next;
+                ++counter;
+                if (node.next == 0)
+                {
+                    surfacex_dtor(&surfX);
+                    return 1;
+                }
+            }
+        }
+
+        default:
+            out("not support. Direct3D::ReloadTexture", "");
+            surfacex_dtor(&surfX);
+            return 0;
+        }
     }
 
     // 0x00403ec0
@@ -5622,6 +5974,7 @@ namespace openre::marni
         interop::hookThisCall(0x00402290, &clear_otags);
         interop::hookThisCall(0x004022E0, &request_video_memory);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
+        interop::hookThisCall(0x004033F0, &reload_texture);
         interop::hookThisCall(0x00402940, &restore_surfaces);
         interop::hookThisCall(0x00402A80, &flip);
         interop::hookThisCall(0x00402BC0, &draw);
