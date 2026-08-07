@@ -3,6 +3,7 @@
 #include "marni.h"
 #include "openre.h"
 #include <array>
+#include <cstdio>
 #include <cstring>
 
 namespace openre::tim
@@ -168,6 +169,30 @@ namespace openre::tim
         return 1;
     }
 
+    // 0x0042FDB0
+    static int __stdcall timobject_create(TimObject* self, const char* path)
+    {
+        marni::surface2_vrelease(self);
+
+        FILE* fp = fopen(path, "rb");
+        if (fp == nullptr)
+        {
+            marni::out("failed to open the file. TIMObject::Create", "");
+            return 0;
+        }
+
+        fseek(fp, 0, SEEK_END);
+        long size = ftell(fp);
+        void* buffer = operator_new((size_t)(4 * (size / 4) + 4));
+        fseek(fp, 0, SEEK_SET);
+        fread(buffer, 1, size, fp);
+        fclose(fp);
+
+        int result = timobject_in(self, (Tim*)buffer);
+        operator_delete(buffer);
+        return result;
+    }
+
     // 0x0043FF40
     int tim_buffer_to_surface(Tim* pTim, uint32_t page, uint32_t mode)
     {
@@ -212,6 +237,7 @@ namespace openre::tim
 
     void tim_init_hooks()
     {
+        interop::hookThisCall(0x0042FDB0, &timobject_create);
         interop::writeJmp(0x0043FF40, &tim_buffer_to_surface);
         interop::hookThisCall(0x0042FB70, &timobject_in);
     }
