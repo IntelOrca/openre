@@ -6514,6 +6514,58 @@ namespace openre::marni
     }
 
     // 0x0040fad0
+    static int __stdcall surfacex_vunlock(MarniSurfaceX* self)
+    {
+        if (!self->bOpen)
+        {
+            out("tried to unlock a surface that is not open", "MarniBits::Unlock");
+            return 0;
+        }
+
+        ((LPDIRECTDRAWSURFACE)self->pDDsurface)->Unlock(nullptr);
+
+        if (!self->var_28) // Is_paletted
+        {
+            goto done;
+        }
+
+        if (!self->pPalette)
+        {
+            out("not supposed situation. lppal is NULL. MarniSystem DirectDrawSurface::Unlock", "MarniBits::Unlock");
+            return 0;
+        }
+
+        // The palette entries are 0x00RRGGBB little-endian DWORDs; unpack them
+        // into PALETTEENTRYs for SetEntries.
+        for (int v3 = 0; v3 < self->pal_cnt; v3++)
+        {
+            int count = 1 << self->bpp;
+            PALETTEENTRY entries[256];
+            for (int v5 = 0; v5 < count; v5++)
+            {
+                uint32_t color = ((uint32_t*)self->pPalette)[v3 * count + v5];
+                entries[v5].peRed = (color >> 16) & 0xFF;
+                entries[v5].peGreen = (color >> 8) & 0xFF;
+                entries[v5].peBlue = color & 0xFF;
+                entries[v5].peFlags = 0;
+            }
+
+            auto* palette = (LPDIRECTDRAWPALETTE)self->pDDpalette[v3];
+            if (palette->SetEntries(0, 0, count, entries))
+            {
+                out("failed to set the palettes to the device. MarniSystem DirectDrawSurface::Unlock", "MarniBits::Unlock");
+                return 0;
+            }
+        }
+
+        operator_delete(self->pPalette);
+
+    done:
+        self->pBitmap = nullptr;
+        self->pPalette = nullptr;
+        self->bLocked = 0;
+        return 0;
+    }
 
     // MarniSurfaceX::vRelease (0x40EE00) — the release_fn slot of MarniSurfaceX::vTbl
     // (0x517358). Releases the D3D texture if one is attached, then delegates to
@@ -7235,6 +7287,7 @@ namespace openre::marni
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x0040F600, &surfacex_vpallock);
+        interop::hookThisCall(0x0040FAD0, &surfacex_vunlock);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
     }
 }
