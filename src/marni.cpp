@@ -6279,7 +6279,53 @@ namespace openre::marni
     // 0x00412BD0
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
     {
-        return interop::thiscall<int, MarniSurface2*, LPRECT, uint32_t, int>(0x00412BD0, self, pSrcRect, color, mode);
+        if (!self->bOpen)
+        {
+            out("tried to call the service although it is not locked", "MarniBits::Blt");
+            return 0;
+        }
+
+        RECT rect;
+        RECT rc;
+        if (pSrcRect)
+        {
+            SetRect(&rect, 0, 0, self->width - 1, self->height - 1);
+            if (!interop::call<int, RECT*, RECT*, RECT*>(0x00411590, &rect, pSrcRect, &rc))
+                return 0;
+        }
+        else
+        {
+            SetRect(&rc, 0, 0, self->width - 1, self->height - 1);
+        }
+
+        if (!surface_lock(self, 0, 0))
+        {
+            out("failed to lock", "MarniBits::Blt");
+            self->bOpen = 0;
+            return 0;
+        }
+
+        int fillWidth = rc.right - rc.left + 1;
+        int fillHeight = rc.bottom - rc.top + 1;
+        if (color || mode)
+        {
+            for (int y = 0; y < fillHeight; y++)
+            {
+                for (int x = 0; x < fillWidth; x++)
+                {
+                    // MarniSurface::SetCurrentColor handles the per-bpp (8/16/24/32) pixel write.
+                    interop::thiscall<int, MarniSurface2*, int, int, uint32_t, int>(
+                        0x00413DD0, self, rc.left + x, rc.top + y, color, mode);
+                }
+            }
+        }
+        else
+        {
+            std::memset(self->pBitmap, 0, self->height * self->pitch);
+        }
+
+        surface_unlock(self);
+        return 1;
     }
 
     // Skipping a lot until we talk about what the heck is going on.
@@ -6897,6 +6943,7 @@ namespace openre::marni
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
+        interop::hookThisCall(0x00412BD0, &surface2_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
