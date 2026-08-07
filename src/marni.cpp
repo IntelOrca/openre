@@ -6725,7 +6725,49 @@ namespace openre::marni
     // 0x00411360
     void font_trans(MarniFont* self, MarniSurface* surface)
     {
-        interop::thiscall<void, MarniFont*, MarniSurface*>(0x00411360, self, surface);
+        if (!self->bitmap)
+            return;
+
+        // The font bitmap is an atlas of self->width * self->height characters,
+        // each rendered as an 8x8 pixel block on the surface.
+        if (surface->width < 8 * (int)self->width || surface->height < 8 * (int)self->height)
+        {
+            out("bits you specified is too small to trans this screen font. recommended to %dx%d cScreenFont::Trans", "");
+            return;
+        }
+
+        if (!surface_lock(surface, 0, 0))
+            return;
+
+        const uint8_t* bitmap = (const uint8_t*)self->bitmap;
+        for (int i = 0; i < (int)self->height; i++)
+        {
+            for (int j = 0; j < (int)self->width; j++)
+            {
+                uint8_t ch = bitmap[i * (int)self->width + j];
+                if (ch == 0 || ch == 0x20) // 0 = empty cell, ' ' = space
+                    continue;
+
+                // Look up the 8x8 (2bpp) glyph for this character in the fixed font table.
+                uint8_t code = (uint8_t)(ch - 32);
+                const uint16_t* glyph = (const uint16_t*)(0x51F2A0 + 2 * (((code >> 5) << 8) + (code & 0x1F)));
+                for (int row = 0; row < 8; row++)
+                {
+                    uint16_t bits = glyph[row * 32];
+                    for (int px = 0; px < 8; px++)
+                    {
+                        int pixel = (bits >> (14 - px * 2)) & 3;
+                        if (pixel == 1 || pixel == 2) // skip transparent (0) and shadow (3)
+                        {
+                            interop::thiscall<int, MarniSurface*, int, int, uint32_t, int>(
+                                0x00413DD0, surface, px + j * 8, row + i * 8, 0xFFFFFF, 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        surface_unlock(surface);
     }
 
     void init_hooks()
