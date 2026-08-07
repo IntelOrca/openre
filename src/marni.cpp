@@ -88,7 +88,7 @@ namespace openre::marni
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
-    static void __stdcall sub_416B90(Marni* self, int a2);
+    static int __stdcall sub_416B90(Marni* self, int a2);
 
     // 0x0050D905
     void* cstd_malloc(size_t len)
@@ -6442,9 +6442,21 @@ namespace openre::marni
     }
 
     // 0x00416B90
-    static void __stdcall sub_416B90(Marni* self, int a2)
+    static int __stdcall sub_416B90(Marni* self, int a2)
     {
-        interop::thiscall<int, Marni*, int>(0x00416B90, self, a2);
+        auto& node = self->texture_nodes[a2];
+        if (node.var_14 != 0)
+        {
+            if (node.surface)
+            {
+                surfacex_dtor(node.surface);
+                operator_delete(node.surface);
+            }
+            node.surface = nullptr;
+            node.next = 0;
+            node.var_14 = 0;
+        }
+        return 1;
     }
 
     // 0x00416BE0
