@@ -45,6 +45,7 @@ namespace openre::marni
     int __stdcall surface2_vrelease(MarniSurface2* self);
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
+    static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -7131,6 +7132,12 @@ namespace openre::marni
         self->var_29 = 0;
         self->var_22 = 0;
         return 1;
+    }
+
+    // 0x00413C60
+    static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode)
+    {
+        return surface_set_palette_color(self, col_index, self->var_22, rgb, mode);
     }
 
     // 0x00414AC0
