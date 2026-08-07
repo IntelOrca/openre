@@ -6202,7 +6202,22 @@ namespace openre::marni
     // 0x00412ED0
     static void __stdcall MarniBits_SetAddress(MarniSurface2* self, void* address, int flags)
     {
-        interop::thiscall<void, MarniSurface2*, void*, int>(0x00412ED0, self, address, flags);
+        // Returns 1 on success, 0 on failure in the original; no caller uses the result.
+        if (self->bOpen)
+        {
+            out("this class is active and the value could not be set", "MarniBits::SetAddress");
+            return;
+        }
+
+        if (self->var_27 == 1)
+        {
+            out("tried to set on this class (possible leak)", "MarniBits::SetAddress");
+            return;
+        }
+
+        self->var_27 = 0;
+        self->pBitmap = address;
+        self->pPalette = (void*)flags;
     }
 
     // 0x00412D20
