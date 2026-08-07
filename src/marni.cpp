@@ -43,6 +43,7 @@ namespace openre::marni
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     int __stdcall surface2_vrelease(MarniSurface2* self);
+    static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -6834,6 +6835,104 @@ namespace openre::marni
     }
 
     // I guess we are just jumping to 0x00412000+ then?
+
+    // 0x00413730
+    static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out)
+    {
+        if (!self->bOpen)
+        {
+            out("you tried to use this class regardless of invalid class", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+        if (!self->bLocked && !self->bPalLocked)
+        {
+            out("don't forget to lock before using this", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+        if (!self->var_28)
+        {
+            out("this is not palette indexed class", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+
+        int colorsPerPal = 1 << self->bpp;
+        if (colorsPerPal <= col_index)
+        {
+            out("you specified number which is out of range", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+        if (pal_index >= self->pal_cnt)
+        {
+            out("you specified number which is out of range of pal count", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+
+        uint32_t v8;
+        if (self->var_25 == 16)
+        {
+            v8 = ((uint16_t*)self->pPalette)[col_index + pal_index * colorsPerPal];
+        }
+        else if (self->var_25 == 32)
+        {
+            v8 = ((uint32_t*)self->pPalette)[col_index + pal_index * colorsPerPal];
+        }
+        else
+        {
+            out("not supported type", "MarniBits::GetPaletteColor");
+            return 0;
+        }
+
+        uint8_t a_bitcnt = self->desc.a_bitcnt;
+        int v10;
+        if (a_bitcnt == 0)
+        {
+            v10 = 255;
+        }
+        else
+        {
+            v10 = (self->desc.a_mask & (v8 >> self->desc.a_shift)) << (8 - a_bitcnt);
+            if (v10)
+                v10 |= 255 >> a_bitcnt;
+        }
+
+        int v12 = (self->desc.r_mask & (v8 >> self->desc.r_shift)) << (8 - self->desc.r_bitcnt);
+        if (v12)
+            v12 |= 255 >> self->desc.r_bitcnt;
+
+        int v14 = (self->desc.g_mask & (v8 >> self->desc.g_shift)) << (8 - self->desc.g_bitcnt);
+        if (v14)
+            v14 |= 255 >> self->desc.g_bitcnt;
+
+        int v16 = (self->desc.b_mask & (v8 >> self->desc.b_shift)) << (8 - self->desc.b_bitcnt);
+        if (v16)
+            v16 |= 255 >> self->desc.b_bitcnt;
+
+        if (a_bitcnt != 0)
+        {
+            if (v12 || v14 || v16)
+            {
+                if (v10 == 0)
+                {
+                    // LOBYTE(v16) = LOBYTE(v14) = LOBYTE(v12) = 0
+                    v16 = 0;
+                    v14 = 0;
+                    v12 = 0;
+                }
+            }
+            else
+            {
+                v10 = 0;
+            }
+        }
+        else
+        {
+            v10 = (v12 || v14 || v16) ? 0xFF : 0;
+        }
+
+        // pack 0xAARRGGBB
+        *color_out = (uint8_t)v16 | (((uint8_t)v14 | ((((uint32_t)v10 << 8) | (uint8_t)v12) << 8)) << 8);
+        return 1;
+    }
 
     // 0x00412BD0
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
