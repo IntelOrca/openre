@@ -49,6 +49,7 @@ namespace openre::marni
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
     static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode);
     static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
+    static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -7278,6 +7279,60 @@ namespace openre::marni
         self->bOpen = 0;
         self->var_29 = 0;
         self->var_22 = 0;
+        return 1;
+    }
+
+    // 0x004141A0
+    static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out)
+    {
+        auto* addr = surface_calc_address((MarniSurface*)self, x, y);
+        if (!addr)
+        {
+            out("initialization failed", "MarniBits::GetColor");
+            return 0;
+        }
+
+        uint32_t color; // value read from the pixel (raw surface pixel, may be a palette index)
+        switch (self->bpp)
+        {
+            case 4:
+                color = *(uint8_t*)addr;
+                if (self->var_2B)
+                {
+                    // Byte-per-pixel layout; the whole byte is the value.
+                    break;
+                }
+                if (self->var_2A)
+                {
+                    if ((x & 1) == 0)
+                    {
+                        color &= 0xF;
+                        break;
+                    }
+                }
+                else if ((x & 1) != 0)
+                {
+                    color &= 0xF;
+                    break;
+                }
+                color >>= 4;
+                color &= 0xF;
+                break;
+            case 8:
+                color = *(uint8_t*)addr;
+                break;
+            case 16:
+                color = *(uint16_t*)addr;
+                break;
+            case 32:
+                color = *(uint32_t*)addr;
+                break;
+            default:
+                out("unsupported bit pixel", "MarniBits::GetColor");
+                return 0;
+        }
+
+        *color_out = color;
         return 1;
     }
 
