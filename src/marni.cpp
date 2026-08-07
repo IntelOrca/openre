@@ -6384,6 +6384,70 @@ namespace openre::marni
     }
 
     // 0x0040f600
+    static int __stdcall surfacex_vpallock(MarniSurfaceX* self, int* a2)
+    {
+        if (!self->bOpen)
+        {
+            out("this class is invalid", "DirectDrawSurface::PalLock");
+            return 0;
+        }
+
+        if (self->bLocked == 1)
+        {
+            out("you are about to try the lock double", "MarniBits::PalLock");
+            return 0;
+        }
+
+        if (!self->var_28)
+        {
+            out("this class is not palettize", "MarniBits::PalLock");
+            return 0;
+        }
+
+        self->pPalette = operator_new(4 * self->pal_cnt * (1 << self->bpp));
+        if (!self->pPalette)
+        {
+            out("failed to allocate the work for palette", "MarniSystem DirectDrawSurface::PalLock");
+            return 0;
+        }
+
+        auto palette = (uint32_t*)self->pPalette;
+        for (int v5 = 0; v5 < self->pal_cnt; v5++)
+        {
+            PALETTEENTRY entries[256];
+            HRESULT hr = ((LPDIRECTDRAWPALETTE)self->pDDpalette[v5])->GetEntries(
+                0, 0, 1 << self->bpp, (LPPALETTEENTRY)entries);
+            if (hr != 0)
+            {
+                out("failed to read the palette from device", "MarniSystem DirectDrawSurface::PalLock");
+                return 0;
+            }
+
+            int count = 1 << self->bpp;
+            for (int i = 0; i < count; i++)
+            {
+                palette[v5 * count + i] = entries[i].peBlue | (entries[i].peRed << 16) | (entries[i].peGreen << 8);
+            }
+        }
+
+        self->desc.a_bitcnt = 8;
+        self->desc.r_bitcnt = 8;
+        self->desc.g_shift = 8;
+        self->desc.g_bitcnt = 8;
+        self->desc.b_bitcnt = 8;
+        self->desc.a_shift = 24;
+        self->desc.a_mask = 0xFF;
+        self->desc.r_shift = 16;
+        self->desc.r_mask = 0xFF;
+        self->desc.g_mask = 0xFF;
+        self->desc.b_shift = 0;
+        self->desc.b_mask = 0xFF;
+
+        if (a2)
+            *a2 = (int)self->pPalette;
+        self->bPalLocked = 1;
+        return 1;
+    }
 
     // 0x0040f9c0
 
@@ -7107,6 +7171,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
         interop::hookThisCall(0x0040F580, &surfacey_vrelease);
+        interop::hookThisCall(0x0040F600, &surfacex_vpallock);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
     }
 }
