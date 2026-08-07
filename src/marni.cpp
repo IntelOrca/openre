@@ -1999,10 +1999,83 @@ namespace openre::marni
             (uintptr_t)self->vtbl->pal_blt, self, pSrc, paletteSrc, paletteDst);
     }
 
+    // 0x00416B50
+    static int __stdcall texture_node_alloc(Marni* self)
+    {
+        int index = 1;
+        for (auto i = &self->texture_nodes[1];; ++i)
+        {
+            // A node is free when both its `next` link and `var_14` are zero.
+            if (i->var_14 == 0 && i->next == 0)
+                break;
+            if (++index >= 256)
+                return 0;
+        }
+        memset(&self->texture_nodes[index], 0, sizeof(MarniTextureNode));
+        return index;
+    }
+
     // 0x00416C40
     static int __stdcall search_texture_object_1(Marni* self, int count)
     {
-        return interop::thiscall<int, Marni*, int>(0x00416C40, self, count);
+        // Find a free texture slot (indices 1..255). The loop stops as soon as
+        // a slot whose `var_00` flag is clear is found, otherwise 0 is returned.
+        int v3 = 1;
+        for (auto i = &self->textures[1]; i->var_00; ++i)
+        {
+            if (++v3 >= 256)
+                return 0;
+        }
+
+        auto& texture = self->textures[v3];
+        // Reset the slot's surface so it can be re-created from scratch.
+        surface_release(&texture.surface);
+
+        // Temporary texture object (count == 0): no texture nodes are allocated.
+        if (!count)
+        {
+            texture.head = 0;
+            return v3;
+        }
+
+        // Allocate the head texture node for this texture object.
+        auto v7 = texture_node_alloc(self);
+        texture.head = (uint16_t)v7;
+        if (!v7)
+        {
+            out("there is no available work of texture object level0. Direct3D::SearchTextureObject1", "Direct3D::SearchTextureObject1");
+            return 0;
+        }
+
+        // Build a linked list of texture nodes starting from `v7`; the last
+        // node terminates the list with `next == 0`.
+        int v10;
+        int v8 = 0;
+        int v9 = v7;
+        if (count > 0)
+        {
+            while (1)
+            {
+                v10 = texture_node_alloc(self);
+                if (!v10)
+                {
+                    out("there is no available work of texture object level0. Direct3D::SearchTextureObject1", "Direct3D::SearchTextureObject1");
+                    return 0;
+                }
+                self->texture_nodes[v9].next = (uint16_t)v10;
+                v9 = v10;
+                ++v8;
+                self->texture_nodes[v10].next = 0xFFFF;
+                if (v8 >= count)
+                    break;
+            }
+        }
+        else
+        {
+            v10 = count;
+        }
+        self->texture_nodes[v10].next = 0;
+        return v3;
     }
 
     // 0x00405EC0
