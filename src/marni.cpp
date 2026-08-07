@@ -44,6 +44,7 @@ namespace openre::marni
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     int __stdcall surface2_vrelease(MarniSurface2* self);
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
+    static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -6994,6 +6995,95 @@ namespace openre::marni
     {
         return interop::thiscall<int, MarniSurface2*, int, int, int, int, int>(
             0x00414750, self, width, height, depth, palBpp, palCnt);
+    }
+
+    // 0x00413950
+    static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode)
+    {
+        if (!self->bOpen || (!self->bLocked && !self->bPalLocked) || !self->var_28
+            || (1 << self->bpp) <= col_index || pal_index >= self->pal_cnt)
+        {
+            out("you tried to use this class regardless of invalid class.", "MarniBits::SetPaletteColor");
+            return 0;
+        }
+
+        // Split the incoming color into its ARGB components.
+        uint32_t v7 = (rgb >> 16) & 0xFF;   // red
+        uint32_t rgba = (rgb >> 8) & 0xFF;  // green
+        uint32_t v9 = (rgb >> 24) & 0xFF;   // alpha
+        uint32_t v10 = rgb & 0xFF;          // blue
+
+        if (mode == 128)
+        {
+            // Additive blending: add the existing palette entry to the new color.
+            uint32_t oldColor;
+            surface_get_palette_color(self, col_index, pal_index, &oldColor);
+            v7 += (oldColor >> 16) & 0xFF;
+            rgba += (oldColor >> 8) & 0xFF;
+            v9 = (oldColor >> 24) & 0xFF;
+            v10 = (oldColor & 0xFF) + v10;
+            if (v7 > 0xFF)
+                v7 = 0xFF;
+            if (rgba > 0xFF)
+                rgba = 0xFF;
+            if (v10 > 0xFF)
+                v10 = 0xFF;
+        }
+        else if (mode == 512)
+        {
+            // Alpha blending: mix the new color with the existing palette entry.
+            uint32_t v16 = v9 * rgba / 0xFF;
+            uint32_t v17 = v9 * v10 / 0xFF;
+            uint32_t oldColor;
+            surface_get_palette_color(self, col_index, pal_index, &oldColor);
+            uint32_t v11 = oldColor;
+            uint32_t rgbb = (0xFF - v9) * ((oldColor >> 16) & 0xFF) / 0xFF;
+            uint32_t oldGreen = (0xFF - v9) * ((oldColor >> 8) & 0xFF) / 0xFF;
+            v7 = rgbb + v9 * v7 / 0xFF;
+            uint32_t v12 = (0xFF - v9) * (oldColor & 0xFF) / 0xFF;
+            v9 = (oldColor >> 24) & 0xFF;
+            rgba = oldGreen + v16;
+            v10 = v17 + v12;
+        }
+
+        uint8_t a_bitcnt = self->desc.a_bitcnt;
+        if (a_bitcnt)
+            goto label_26;
+        if (v7 || rgba || v10)
+        {
+            if (!v9)
+            {
+                v10 = 0;
+                v7 = 0;
+                rgba = 0;
+                goto label_27;
+            }
+        label_26:
+            if (v9 == 0xFF)
+                goto label_28;
+            goto label_27;
+        }
+        v9 = 0;
+    label_27:
+        self->var_2C = 1;
+    label_28:
+        uint8_t palbpp = self->var_25;
+        int v15 = ((self->desc.a_mask & (v9 >> (8 - a_bitcnt))) << self->desc.a_shift)
+            | ((self->desc.r_mask & (v7 >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
+            | ((self->desc.g_mask & (rgba >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift)
+            | ((self->desc.b_mask & (v10 >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift);
+        if (palbpp == 16)
+        {
+            *(uint16_t*)((uint8_t*)self->pPalette + 2 * col_index + 2 * pal_index * (1 << self->bpp)) = (uint16_t)v15;
+            return 1;
+        }
+        if (palbpp == 32)
+        {
+            *(uint32_t*)((uint8_t*)self->pPalette + 4 * col_index + 4 * pal_index * (1 << self->bpp)) = (uint32_t)v15;
+            return 1;
+        }
+        out("not supported type.", "MarniBits::SetPaletteColor");
+        return 1;
     }
 
     // 0x004149D0
