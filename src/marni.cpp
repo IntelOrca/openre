@@ -99,6 +99,8 @@ namespace openre::marni
     static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
+    static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device);
+    static void surfacex_vrelease(MarniSurfaceX* self);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
@@ -853,8 +855,7 @@ namespace openre::marni
                 0x0040EE30, node.surface, &surfX);
             if (!gGameTable.error)
             {
-                interop::thiscall<int, MarniSurfaceX*, int>(
-                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
                 surfacex_dtor(&surfX);
                 return 1;
             }
@@ -924,8 +925,7 @@ namespace openre::marni
                     0x0040EE30, node.surface, &surfX);
                 if (!gGameTable.error)
                 {
-                    interop::thiscall<int, MarniSurfaceX*, int>(
-                        0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                    surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
                     nodeIndex = node.next;
                     ++counter;
                     if (node.next == 0)
@@ -1001,8 +1001,7 @@ namespace openre::marni
                 0x0040EE30, node.surface, &surfX);
             if (!gGameTable.error)
             {
-                interop::thiscall<int, MarniSurfaceX*, int>(
-                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
                 surfacex_dtor(&surfX);
                 return 1;
             }
@@ -1073,8 +1072,7 @@ namespace openre::marni
                     surfacex_dtor(&surfX);
                     return 0;
                 }
-                interop::thiscall<int, MarniSurfaceX*, int>(
-                    0x0040ED20, node.surface, (int)(intptr_t)self->pDirectDevice2);
+                surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
                 nodeIndex = node.next;
                 ++counter;
                 if (node.next == 0)
@@ -6268,7 +6266,32 @@ namespace openre::marni
         return 1;
     }
 
-    // 0x0040ed20
+    // 0x0040ED20
+    static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device)
+    {
+        // Direct3DSurface::GetTextureHandle — asks the attached D3D texture for its
+        // handle, which is what the draw pipeline uses to reference the texture.
+        if (self->bOpen)
+        {
+            auto pDDtexture = (LPDIRECT3DTEXTURE2)self->pDDtexture;
+            if (pDDtexture != nullptr)
+            {
+                if (SUCCEEDED(pDDtexture->GetHandle(device, (LPD3DTEXTUREHANDLE)&self->texture_handle)))
+                    return 1;
+                out("Could not load texture.", "MarniSystem Direct3DSurface::Direct3DSurface");
+            }
+            else
+            {
+                out("", "Direct3DSurface::GetTextureHandle");
+            }
+        }
+        else
+        {
+            out("", "Direct3DSurface::GetTextureHandle");
+        }
+        surfacex_vrelease(self);
+        return 0;
+    }
 
     // 0x0040ed90
 
@@ -8814,6 +8837,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x0040EE30, &surfacex_load);
+        interop::hookThisCall(0x0040ED20, &surfacex_get_texture_handle);
         interop::hookThisCall(0x0040FBE0, &surfacex_create_work);
         interop::hookThisCall(0x0040F9C0, &surfacex_vpalunlock);
         interop::hookThisCall(0x0040F790, &surfacex_vlock);
