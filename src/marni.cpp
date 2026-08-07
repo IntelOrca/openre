@@ -96,7 +96,7 @@ namespace openre::marni
     static void __stdcall surface3_dtor(MarniSurface3* self);
     static void __stdcall surfacex_dtor(MarniSurfaceX* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
-    static int surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
+    static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
@@ -2240,7 +2240,7 @@ namespace openre::marni
     }
 
     // 0x004123D0
-    static int surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst)
+    static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst)
     {
         if (!self->bOpen)
         {
@@ -8837,5 +8837,6 @@ namespace openre::marni
         interop::hookThisCall(0x0040FAD0, &surfacex_vunlock);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
         interop::hookThisCall(0x004130D0, &surface_operator_eq);
+        interop::hookThisCall(0x004123D0, &surface_pal_blt);
     }
 }
