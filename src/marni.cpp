@@ -50,6 +50,7 @@ namespace openre::marni
     static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode);
     static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
+    static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -7522,6 +7523,95 @@ namespace openre::marni
         self->vtbl = (MarniSurfaceVTBL*)0x005173D4;
         surface3_vrelease(self);
         surface2_release(self);
+    }
+
+    // 0x004142D0
+    static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out)
+    {
+        // Palette-index surfaces look the pixel up in the palette instead.
+        if (self->var_28)
+            return surface_get_index_color(self, x, y, color_out);
+
+        auto* addr = surface_calc_address((MarniSurface*)self, x, y);
+        if (!addr)
+        {
+            out("initialization failed", "MarniBits::GetCurrentColor");
+            return 0;
+        }
+
+        uint32_t pixel; // raw pixel value read from the surface
+        switch (self->bpp)
+        {
+            case 4:
+                pixel = *(uint8_t*)addr;
+                // Two pixels per byte; var_2A selects which nibble is the low pixel.
+                if (self->var_2A)
+                {
+                    if ((x & 1) == 0)
+                        pixel &= 0xF;
+                    else
+                        pixel >>= 4;
+                }
+                else
+                {
+                    if ((x & 1) == 0)
+                        pixel >>= 4;
+                    else
+                        pixel &= 0xF;
+                }
+                break;
+            case 8:
+                pixel = *(uint8_t*)addr;
+                break;
+            case 16:
+                pixel = *(uint16_t*)addr;
+                break;
+            case 32:
+                pixel = *(uint32_t*)addr;
+                break;
+            default:
+                out("unsupported bit pixel", "MarniBits::GetColor");
+                return 0;
+        }
+
+        // Expand the pixel's bit fields into 8-bit A/R/G/B channels.
+        int a_bitcnt = self->desc.a_bitcnt;
+        int alpha = 255;
+        if (a_bitcnt != 0)
+        {
+            alpha = (int)((self->desc.a_mask & (pixel >> self->desc.a_shift)) << (8 - a_bitcnt));
+            if (alpha != 0)
+                alpha |= 255 >> a_bitcnt;
+        }
+        int red = (int)((self->desc.r_mask & (pixel >> self->desc.r_shift)) << (8 - self->desc.r_bitcnt));
+        if (red != 0)
+            red |= 255 >> self->desc.r_bitcnt;
+        int green = (int)((self->desc.g_mask & (pixel >> self->desc.g_shift)) << (8 - self->desc.g_bitcnt));
+        if (green != 0)
+            green |= 255 >> self->desc.g_bitcnt;
+        int blue = (int)((self->desc.b_mask & (pixel >> self->desc.b_shift)) << (8 - self->desc.b_bitcnt));
+        if (blue != 0)
+            blue |= 255 >> self->desc.b_bitcnt;
+
+        // A fully transparent pixel (alpha == 0) collapses to black, and a pixel
+        // with no color channels forces alpha to zero.
+        if (red || green || blue)
+        {
+            if (!alpha)
+            {
+                blue = 0;
+                green = 0;
+                red = 0;
+            }
+        }
+        else
+        {
+            alpha = 0;
+        }
+
+        // 0xAARRGGBB
+        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8) | (uint32_t)(uint8_t)blue;
+        return 1;
     }
 
     // 0x00413710
