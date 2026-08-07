@@ -88,6 +88,7 @@ namespace openre::marni
     static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
+    static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
@@ -6583,6 +6584,187 @@ namespace openre::marni
     }
 
     // 0x0040fbe0
+    static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4)
+    {
+        // The object can be re-created in place, so release anything it currently owns.
+        surfacex_vrelease(self);
+
+        // pal_cnt == -1 means a single palette (the usual texture case).
+        self->pal_cnt = (a4 == -1) ? 1 : (int16_t)a4;
+
+        // Round the requested size up to a power of two (8..256).
+        DWORD dwWidth = pDesc->dwWidth;
+        int width;
+        if (dwWidth > 8)
+        {
+            if (dwWidth > 0x10)
+            {
+                if (dwWidth > 0x20)
+                {
+                    if (dwWidth > 0x40)
+                        width = (dwWidth > 0x80) ? 256 : 128;
+                    else
+                        width = 64;
+                }
+                else
+                {
+                    width = 32;
+                }
+            }
+            else
+            {
+                width = 16;
+            }
+        }
+        else
+        {
+            width = 8;
+        }
+
+        DWORD dwHeight = pDesc->dwHeight;
+        int height;
+        if (dwHeight > 8)
+        {
+            if (dwHeight > 0x10)
+            {
+                if (dwHeight > 0x20)
+                {
+                    if (dwHeight > 0x40)
+                        height = (dwHeight > 0x80) ? 256 : 128;
+                    else
+                        height = 64;
+                }
+                else
+                {
+                    height = 32;
+                }
+            }
+            else
+            {
+                height = 16;
+            }
+        }
+        else
+        {
+            height = 8;
+        }
+
+        DDSURFACEDESC desc;
+        memcpy(&desc, pDesc, sizeof(desc));
+        desc.dwHeight = height;
+        desc.dwWidth = width;
+
+        HRESULT hr = pDD->CreateSurface(&desc, (LPDIRECTDRAWSURFACE*)&self->pDDsurface, nullptr);
+        if (hr)
+        {
+            out("failed to generate a surface", "DirectDrawSurface::CreateWork");
+            error(hr);
+            surfacex_vrelease(self);
+            return 0;
+        }
+
+        DDSURFACEDESC a1;
+        get_surface_desc(&a1, (LPDIRECTDRAWSURFACE)self->pDDsurface);
+        self->is_vmem = (a1.ddsCaps.dwCaps & DDSCAPS_VIDEOMEMORY) != 0;
+
+        DDCOLORKEY colorkey = { 0, 0 };
+        // The original passes literal 8 here (DDCKEY_SRCBLT), not
+        // DDCKEY_COLORSPACE (1): the colour-space key is rejected with
+        // E_INVALIDARG on these surfaces, which would leave bOpen cleared and
+        // break the whole texture pipeline.
+        hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)->SetColorKey(DDCKEY_SRCBLT, &colorkey);
+        if (hr)
+        {
+            out("failed to set the color key", "MarniSystem DirectDrawSurface::CreateWork");
+            error(hr);
+            surfacex_vrelease(self);
+            return 0;
+        }
+
+        PALETTEENTRY paletteEntries[256];
+        memset(paletteEntries, 0, sizeof(paletteEntries));
+        self->bpp = (uint8_t)a1.ddpfPixelFormat.dwRGBBitCount;
+        DWORD pixelFormatFlags = a1.ddpfPixelFormat.dwFlags;
+        DWORD paletteFlags;
+        int paletteIndex = 0;
+        HRESULT createPaletteHr = S_OK;
+        // 0x8 = DDPF_PALETTEINDEXED4 (4-bit palette-indexed format).
+        if ((pixelFormatFlags & DDPF_PALETTEINDEXED4) != 0)
+        {
+            self->var_28 = 1;
+            self->var_25 = 32;
+            paletteFlags = DDPCAPS_8BIT;
+        }
+        else
+        {
+            paletteFlags = colorkey.dwColorSpaceLowValue; // 0
+        }
+        // Second check is 0x20 = DDPF_PALETTEINDEXED8 (8-bit palette-indexed).
+        // The flags chosen here (DDPCAPS_4BIT | DDPCAPS_8BITENTRIES) mirror the
+        // original, which looks swapped relative to the format bits.
+        if ((pixelFormatFlags & 0x20) != 0)
+        {
+            self->var_28 = 1;
+            self->var_25 = 32;
+            paletteFlags = DDPCAPS_4BIT | DDPCAPS_8BITENTRIES;
+        }
+
+        if (!self->var_28)
+        {
+            ddrawdesc2surfdesc(&a1, &self->desc);
+            self->pal_cnt = 0;
+            goto done_surface;
+        }
+
+        self->pDDpalette = (void**)operator_new((size_t)(4 * (int)self->pal_cnt));
+        if (self->pal_cnt <= 0)
+            goto done_palettes;
+
+        for (;;)
+        {
+            createPaletteHr = pDD->CreatePalette(
+                paletteFlags, (LPPALETTEENTRY)paletteEntries, (LPDIRECTDRAWPALETTE*)&self->pDDpalette[paletteIndex], nullptr);
+            if (createPaletteHr)
+                break;
+            if (++paletteIndex >= self->pal_cnt)
+                goto done_palettes;
+        }
+        error(createPaletteHr);
+        out("failed to allocate DirectDrawPalette", "MarniSystem DirectDrawSurface::CreateWork");
+        surfacex_vrelease(self);
+        return 0;
+
+    done_palettes:
+        if (((LPDIRECTDRAWSURFACE)self->pDDsurface)->SetPalette((LPDIRECTDRAWPALETTE)self->pDDpalette[0]))
+        {
+            out("failed to establish DirectDrawPalette", "MarniSystem DirectDrawSurface::CreateWork");
+            surfacex_vrelease(self);
+            return 0;
+        }
+        // Paletted surfaces are always read back as 32-bit 0xRRGGBBAA.
+        self->desc.a_shift = 24;
+        self->desc.a_mask = 0xFF;
+        self->desc.a_bitcnt = 8;
+        self->desc.r_shift = 16;
+        self->desc.r_mask = 0xFF;
+        self->desc.r_bitcnt = 8;
+        self->desc.g_shift = 8;
+        self->desc.g_mask = 0xFF;
+        self->desc.g_bitcnt = 8;
+        self->desc.b_shift = 0;
+        self->desc.b_mask = 0xFF;
+        self->desc.b_bitcnt = 8;
+
+    done_surface:
+        self->width = (int16_t)a1.dwWidth;
+        self->pitch = (int16_t)a1.lPitch;
+        self->height = (int16_t)a1.dwHeight;
+        self->bOpen = 1;
+        self->var_27 = 1;
+        self->var_29 = 0;
+        interop::thiscall<void, MarniSurfaceX*>(0x0040FFD0, self);
+        return 1;
+    }
 
     // 0x0040FEF0
     MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self)
@@ -7268,6 +7450,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x0040EE30, &surfacex_load);
+        interop::hookThisCall(0x0040FBE0, &surfacex_create_work);
         interop::hookThisCall(0x0040F9C0, &surfacex_vpalunlock);
         interop::hookThisCall(0x0040F790, &surfacex_vlock);
         interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
