@@ -371,7 +371,7 @@ namespace openre::marni
         self->field_8C8418 = 0;
         self->field_8C8420 = 0;
         self->field_8C841C = 0;
-        auto count_use_gpu0 = 0;                   // textures with GPU_9 + GPU_0 flags
+        auto count_use_gpu0 = 0; // textures with GPU_9 + GPU_0 flags
         self->field_8C8414 = 0;
 
         // Count used entries (index 1..cnt-1) in the 2K buffer.
@@ -851,8 +851,7 @@ namespace openre::marni
             node.height = surfX.height;
             interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                 0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
-            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
-                0x0040EE30, node.surface, &surfX);
+            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
             if (!gGameTable.error)
             {
                 surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -921,8 +920,7 @@ namespace openre::marni
                 surfX.var_2A = 1;
                 interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                     0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
-                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
-                    0x0040EE30, node.surface, &surfX);
+                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
                 if (!gGameTable.error)
                 {
                     surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -997,8 +995,7 @@ namespace openre::marni
                 0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
             for (int i = 0; i < tex.surface.pal_cnt; ++i)
                 surface_pal_blt(node.surface, pSrc, i, i);
-            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
-                0x0040EE30, node.surface, &surfX);
+            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
             if (!gGameTable.error)
             {
                 surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -1061,8 +1058,7 @@ namespace openre::marni
                 surfX.var_2A = 1;
                 interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                     0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
-                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(
-                    0x0040EE30, node.surface, &surfX);
+                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
                 surface_pal_blt(node.surface, pSrc, counter, 0);
                 if (gGameTable.error)
                 {
@@ -2151,7 +2147,8 @@ namespace openre::marni
 
             surface_unlock(pSrc);
             surface_unlock(self);
-            interop::thiscall<int, MarniSurface2*, MarniSurface2*, int, int>((uintptr_t)self->vtbl->pal_blt, self, pSrc, -1, -1);
+            interop::thiscall<int, MarniSurface2*, MarniSurface2*, int, int>(
+                (uintptr_t)self->vtbl->pal_blt, self, pSrc, -1, -1);
             return 1;
         }
 
@@ -2353,7 +2350,8 @@ namespace openre::marni
         texture.head = (uint16_t)v7;
         if (!v7)
         {
-            out("there is no available work of texture object level0. Direct3D::SearchTextureObject1", "Direct3D::SearchTextureObject1");
+            out("there is no available work of texture object level0. Direct3D::SearchTextureObject1",
+                "Direct3D::SearchTextureObject1");
             return 0;
         }
 
@@ -2369,7 +2367,8 @@ namespace openre::marni
                 v10 = texture_node_alloc(self);
                 if (!v10)
                 {
-                    out("there is no available work of texture object level0. Direct3D::SearchTextureObject1", "Direct3D::SearchTextureObject1");
+                    out("there is no available work of texture object level0. Direct3D::SearchTextureObject1",
+                        "Direct3D::SearchTextureObject1");
                     return 0;
                 }
                 self->texture_nodes[v9].next = (uint16_t)v10;
@@ -2455,9 +2454,11 @@ namespace openre::marni
         {
             mode = (mode & ~0x20) | 0x40;
         }
-        else if (pSrcSurface->var_28 &&
-                 (((bpp == 4 && ((gpu_flg & GpuFlags::GPU_1) != 0 || (gpu_flg & GpuFlags::GPU_0) != 0)) ||
-                   (bpp == 8 && (gpu_flg & GpuFlags::GPU_1) != 0))))
+        else if (
+            pSrcSurface->var_28
+            && ((
+                (bpp == 4 && ((gpu_flg & GpuFlags::GPU_1) != 0 || (gpu_flg & GpuFlags::GPU_0) != 0))
+                || (bpp == 8 && (gpu_flg & GpuFlags::GPU_1) != 0))))
         {
             mode |= 0x80;
             if ((gpu_flg & 0x100) == 0)
@@ -2491,7 +2492,12 @@ namespace openre::marni
             {
                 auto& texture = self->textures[texture_id];
                 surface2_create_work(
-                    &texture.surface, pSrcSurface->width, pSrcSurface->height, pSrcSurface->bpp, pSrcSurface->var_25, pal_count);
+                    &texture.surface,
+                    pSrcSurface->width,
+                    pSrcSurface->height,
+                    pSrcSurface->bpp,
+                    pSrcSurface->var_25,
+                    pal_count);
                 surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
                 surface_pal_blt(&texture.surface, pSrcSurface, -1, -1);
                 texture.var_36 = (uint16_t)pal_count;
@@ -2507,15 +2513,18 @@ namespace openre::marni
             {
                 auto& texture = self->textures[texture_id];
                 surface2_create_work(
-                    &texture.surface, pSrcSurface->width, pSrcSurface->height, pSrcSurface->bpp, pSrcSurface->var_25, pal_count);
+                    &texture.surface,
+                    pSrcSurface->width,
+                    pSrcSurface->height,
+                    pSrcSurface->bpp,
+                    pSrcSurface->var_25,
+                    pal_count);
                 surface_blt(&texture.surface, nullptr, nullptr, pSrcSurface, 0, 0);
                 surface_pal_blt(&texture.surface, pSrcSurface, -1, -1);
                 texture.var_36 = 1;
             }
             break;
-        default:
-            out("not supported type...0x%08x Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
-            return 0;
+        default: out("not supported type...0x%08x Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle"); return 0;
         }
 
         self->textures[texture_id].var_00 = mode;
@@ -2731,8 +2740,10 @@ namespace openre::marni
         if (!gGameTable.d3d_devices[self->device_cnt].hwAccelerated)
             pDeviceGuid = &IID_IDirect3DRGBDevice;
 
-        gGameTable.error = ((LPDIRECT3D2)self->pDirect3D2)
-            ->CreateDevice(*pDeviceGuid, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface, (LPDIRECT3DDEVICE2*)&self->pDirectDevice2);
+        gGameTable.error
+            = ((LPDIRECT3D2)self->pDirect3D2)
+                  ->CreateDevice(
+                      *pDeviceGuid, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface, (LPDIRECT3DDEVICE2*)&self->pDirectDevice2);
         if (gGameTable.error)
         {
             error(gGameTable.error);
@@ -2764,8 +2775,7 @@ namespace openre::marni
                         auto* pFormat = (DDSURFACEDESC*)(formats + kFormatEntrySize * i);
                         MarniSurfaceDesc sDesc;
                         ddrawdesc2surfdesc(pFormat, &sDesc);
-                        if (sDesc.r_bitcnt + sDesc.g_bitcnt + sDesc.b_bitcnt >= 15
-                            && sDesc.a_bitcnt != 0
+                        if (sDesc.r_bitcnt + sDesc.g_bitcnt + sDesc.b_bitcnt >= 15 && sDesc.a_bitcnt != 0
                             && (pFormat->ddpfPixelFormat.dwFlags & (DDPF_PALETTEINDEXED4 | DDPF_PALETTEINDEXED8)) == 0)
                         {
                             auto* pDest = (DDSURFACEDESC*)(pTable + kFormatEntrySize * matched);
@@ -2844,8 +2854,7 @@ namespace openre::marni
         DDSURFACEDESC desc;
         memset(&desc, 0, sizeof(desc));
         desc.dwHeight = height;
-        desc.ddsCaps.dwCaps
-            = (backBufferDesc.ddsCaps.dwCaps & (DDSCAPS_SYSTEMMEMORY | DDSCAPS_VIDEOMEMORY)) | DDSCAPS_ZBUFFER;
+        desc.ddsCaps.dwCaps = (backBufferDesc.ddsCaps.dwCaps & (DDSCAPS_SYSTEMMEMORY | DDSCAPS_VIDEOMEMORY)) | DDSCAPS_ZBUFFER;
         desc.dwWidth = width;
         desc.dwSize = sizeof(DDSURFACEDESC);
         desc.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_ZBUFFERBITDEPTH;
@@ -2862,7 +2871,8 @@ namespace openre::marni
             desc.dwZBufferBitDepth = 8;
         else
         {
-            out("it seems that this device can't specify a number of bit of Zbuffer.", "MarniSystem Direct3D::MD3DCreateZBuffer");
+            out("it seems that this device can't specify a number of bit of Zbuffer.",
+                "MarniSystem Direct3D::MD3DCreateZBuffer");
             goto fail;
         }
 
@@ -2901,8 +2911,8 @@ namespace openre::marni
         gGameTable.error = get_surface_desc(&desc, *pDDsurfaceZ);
         if (gGameTable.error)
         {
-            out(
-                "\x83\x54\x81\x5b\x83\x74\x83\x46\x83\x58\x82\xcc\x8f\xf3\x91\xd4\x82\xf0\x8e\xe6\x93\xbe\x82\xc5\x82\xab\x82\xc8\x82\xa9\x82\xc1\x82\xbd", // サーフェスの状態を取得できなかった
+            out("\x83\x54\x81\x5b\x83\x74\x83\x46\x83\x58\x82\xcc\x8f\xf3\x91\xd4\x82\xf0\x8e\xe6\x93\xbe\x82\xc5\x82\xab\x82"
+                "\xc8\x82\xa9\x82\xc1\x82\xbd", // サーフェスの状態を取得できなかった
                 "MarniSystem Direct3D::MD3DCreateZBuffer");
             goto fail;
         }
@@ -3111,15 +3121,24 @@ namespace openre::marni
                 v17[1] = &v14[-1];
                 v17[2] = v14;
                 result = insert_draw_op(
-                    self, filter, a3, srcBlend, dstBlend, textureHandle, zWriteEnable, shadeMode, cullMode, specularEnable,
-                    zFunc, v17);
+                    self,
+                    filter,
+                    a3,
+                    srcBlend,
+                    dstBlend,
+                    textureHandle,
+                    zWriteEnable,
+                    shadeMode,
+                    cullMode,
+                    specularEnable,
+                    zFunc,
+                    v17);
                 v14 += 3;
                 --triangleCount;
             } while (triangleCount);
         }
         return result;
     }
-
 
     // 0x00407690
     static int __stdcall trans_object_ngtin3_vinsnins(Marni* self, MarniOt* pOt, Prim* pPrim)
@@ -3148,7 +3167,8 @@ namespace openre::marni
         {
             if (*(const uint16_t*)(prim + 0x58 + 2 * (i - 1)) != 0)
             {
-                textures[i] = search_texture_object_0_from_1_in_condition(self, textureHandle, *(const uint8_t*)(prim + 0x54 + i));
+                textures[i]
+                    = search_texture_object_0_from_1_in_condition(self, textureHandle, *(const uint8_t*)(prim + 0x54 + i));
                 if (textures[i] == nullptr)
                 {
                     out("invalid clut range.", "Direct3D::TransObjectNgTin3_VinsNins");
@@ -3171,9 +3191,12 @@ namespace openre::marni
         int32_t primB = 2 * *(const uint8_t*)(prim + 0x52);
         int32_t primG = 2 * *(const uint8_t*)(prim + 0x51);
         int32_t primR = 2 * *(const uint8_t*)(prim + 0x50);
-        if (primB >= 256) primB = 255;
-        if (primG >= 256) primG = 255;
-        if (primR >= 256) primR = 255;
+        if (primB >= 256)
+            primB = 255;
+        if (primG >= 256)
+            primG = 255;
+        if (primR >= 256)
+            primR = 255;
 
         uint32_t fallbackColor = 0;
         uint32_t colors[0x400] = { 0 };
@@ -3205,23 +3228,32 @@ namespace openre::marni
                 refer_normal(pObject, n, normal);
 
                 apply_matrix_float(normal, lightMatrix1);
-                if (!(normal[0] >= 0.0f)) normal[0] = 0.0f;
-                if (!(normal[1] >= 0.0f)) normal[1] = 0.0f;
-                if (!(normal[2] >= 0.0f)) normal[2] = 0.0f;
+                if (!(normal[0] >= 0.0f))
+                    normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f))
+                    normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f))
+                    normal[2] = 0.0f;
 
                 apply_matrix_float(normal, lightMatrix2);
-                if (!(normal[0] >= 0.0f)) normal[0] = 0.0f;
-                if (!(normal[1] >= 0.0f)) normal[1] = 0.0f;
-                if (!(normal[2] >= 0.0f)) normal[2] = 0.0f;
+                if (!(normal[0] >= 0.0f))
+                    normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f))
+                    normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f))
+                    normal[2] = 0.0f;
 
                 // The ambient word at field_8C7E90 is packed B,G,R (bytes 0,1,2).
                 normal[0] += (float)ambient[2];
                 normal[1] += (float)ambient[1];
                 normal[2] += (float)ambient[0];
 
-                if (normal[0] >= 255.0f) normal[0] = 255.0f;
-                if (normal[1] >= 255.0f) normal[1] = 255.0f;
-                if (normal[2] >= 255.0f) normal[2] = 255.0f;
+                if (normal[0] >= 255.0f)
+                    normal[0] = 255.0f;
+                if (normal[1] >= 255.0f)
+                    normal[1] = 255.0f;
+                if (normal[2] >= 255.0f)
+                    normal[2] = 255.0f;
 
                 const int nB = (int)normal[0];
                 const int nG = (int)normal[1];
@@ -3267,8 +3299,10 @@ namespace openre::marni
             }
             else
             {
-                a1[0] = (float)(((double)a1[0] * projScale / (double)a1[2] + (double)self->field_8C7EC4) * (double)self->aspect_x);
-                a1[1] = (float)(((double)a1[1] * projScale / (double)a1[2] + (double)self->field_8C7EC8) * (double)self->aspect_y);
+                a1[0] = (float)(((double)a1[0] * projScale / (double)a1[2] + (double)self->field_8C7EC4)
+                                * (double)self->aspect_x);
+                a1[1] = (float)(((double)a1[1] * projScale / (double)a1[2] + (double)self->field_8C7EC8)
+                                * (double)self->aspect_y);
             }
             verts[3 * i + 0] = a1[0];
             verts[3 * i + 1] = a1[1];
@@ -3593,25 +3627,25 @@ namespace openre::marni
     // builder, and the positions are perspective-projected by z.
     struct PrimGradTri : Prim
     {
-        uint32_t texture;               // 0x0008
-        uint32_t var_0C;                // 0x000C
-        int16_t x0;                     // 0x0010
-        int16_t y0;                     // 0x0012
-        int16_t x1;                     // 0x0014
-        int16_t y1;                     // 0x0016
-        int16_t x2;                     // 0x0018
-        int16_t y2;                     // 0x001A
-        int16_t z;                      // 0x001C
-        uint8_t u0;                     // 0x001E
-        uint8_t v0;                     // 0x001F
-        uint8_t u1;                     // 0x0020
-        uint8_t v1;                     // 0x0021
-        uint8_t u2;                     // 0x0022
-        uint8_t v2;                     // 0x0023
-        uint8_t b;                      // 0x0024
-        uint8_t g;                      // 0x0025
-        uint8_t r;                      // 0x0026
-        uint8_t a;                      // 0x0027
+        uint32_t texture; // 0x0008
+        uint32_t var_0C;  // 0x000C
+        int16_t x0;       // 0x0010
+        int16_t y0;       // 0x0012
+        int16_t x1;       // 0x0014
+        int16_t y1;       // 0x0016
+        int16_t x2;       // 0x0018
+        int16_t y2;       // 0x001A
+        int16_t z;        // 0x001C
+        uint8_t u0;       // 0x001E
+        uint8_t v0;       // 0x001F
+        uint8_t u1;       // 0x0020
+        uint8_t v1;       // 0x0021
+        uint8_t u2;       // 0x0022
+        uint8_t v2;       // 0x0023
+        uint8_t b;        // 0x0024
+        uint8_t g;        // 0x0025
+        uint8_t r;        // 0x0026
+        uint8_t a;        // 0x0027
     };
     static_assert(sizeof(PrimGradTri) == 0x28);
 
@@ -3738,28 +3772,28 @@ namespace openre::marni
     // texcoords and a per-quad BGRA colour in bytes 0x28..0x2B.
     struct PrimGouraudQuad : Prim
     {
-        uint32_t texture;               // 0x0008
-        uint32_t var_0C;                // 0x000C
-        int16_t x0;                     // 0x0010
-        int16_t y0;                     // 0x0012
-        int16_t x1;                     // 0x0014
-        int16_t y1;                     // 0x0016
-        int16_t x2;                     // 0x0018
-        int16_t y2;                     // 0x001A
-        int16_t x3;                     // 0x001C
-        int16_t y3;                     // 0x001E
-        uint8_t u0;                     // 0x0020
-        uint8_t v0;                     // 0x0021
-        uint8_t u1;                     // 0x0022
-        uint8_t v1;                     // 0x0023
-        uint8_t u2;                     // 0x0024
-        uint8_t v2;                     // 0x0025
-        uint8_t u3;                     // 0x0026
-        uint8_t v3;                     // 0x0027
-        uint8_t b;                      // 0x0028
-        uint8_t g;                      // 0x0029
-        uint8_t r;                      // 0x002A
-        uint8_t a;                      // 0x002B
+        uint32_t texture; // 0x0008
+        uint32_t var_0C;  // 0x000C
+        int16_t x0;       // 0x0010
+        int16_t y0;       // 0x0012
+        int16_t x1;       // 0x0014
+        int16_t y1;       // 0x0016
+        int16_t x2;       // 0x0018
+        int16_t y2;       // 0x001A
+        int16_t x3;       // 0x001C
+        int16_t y3;       // 0x001E
+        uint8_t u0;       // 0x0020
+        uint8_t v0;       // 0x0021
+        uint8_t u1;       // 0x0022
+        uint8_t v1;       // 0x0023
+        uint8_t u2;       // 0x0024
+        uint8_t v2;       // 0x0025
+        uint8_t u3;       // 0x0026
+        uint8_t v3;       // 0x0027
+        uint8_t b;        // 0x0028
+        uint8_t g;        // 0x0029
+        uint8_t r;        // 0x002A
+        uint8_t a;        // 0x002B
     };
     static_assert(sizeof(PrimGouraudQuad) == 0x2C);
 
@@ -3843,8 +3877,8 @@ namespace openre::marni
                 v12 = r | 0xFFFFFF00;
         }
         const uint32_t color = b | ((g | (v12 << 8)) << 8);
-        const uint32_t specular =
-            specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
+        const uint32_t specular
+            = specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
 
         vertices[0].sx = (float)((double)pQuad->x0 * self->aspect_x);
         vertices[0].sy = (float)((double)pQuad->y0 * self->aspect_y);
@@ -3899,40 +3933,40 @@ namespace openre::marni
     // 0x400000 uses the primitive's own alpha byte.
     struct PrimPolyG4 : Prim
     {
-        uint32_t texture;               // 0x0008
-        uint32_t var_0C;                // 0x000C
-        int16_t x0;                     // 0x0010
-        int16_t y0;                     // 0x0012
-        int16_t x1;                     // 0x0014
-        int16_t y1;                     // 0x0016
-        int16_t x2;                     // 0x0018
-        int16_t y2;                     // 0x001A
-        int16_t x3;                     // 0x001C
-        int16_t y3;                     // 0x001E
-        uint8_t u0;                     // 0x0020
-        uint8_t v0;                     // 0x0021
-        uint8_t u1;                     // 0x0022
-        uint8_t v1;                     // 0x0023
-        uint8_t u2;                     // 0x0024
-        uint8_t v2;                     // 0x0025
-        uint8_t u3;                     // 0x0026
-        uint8_t v3;                     // 0x0027
-        uint8_t b0;                     // 0x0028
-        uint8_t g0;                     // 0x0029
-        uint8_t r0;                     // 0x002A
-        uint8_t a0;                     // 0x002B
-        uint8_t b1;                     // 0x002C
-        uint8_t g1;                     // 0x002D
-        uint8_t r1;                     // 0x002E
-        uint8_t a1;                     // 0x002F
-        uint8_t b2;                     // 0x0030
-        uint8_t g2;                     // 0x0031
-        uint8_t r2;                     // 0x0032
-        uint8_t a2;                     // 0x0033
-        uint8_t b3;                     // 0x0034
-        uint8_t g3;                     // 0x0035
-        uint8_t r3;                     // 0x0036
-        uint8_t a3;                     // 0x0037
+        uint32_t texture; // 0x0008
+        uint32_t var_0C;  // 0x000C
+        int16_t x0;       // 0x0010
+        int16_t y0;       // 0x0012
+        int16_t x1;       // 0x0014
+        int16_t y1;       // 0x0016
+        int16_t x2;       // 0x0018
+        int16_t y2;       // 0x001A
+        int16_t x3;       // 0x001C
+        int16_t y3;       // 0x001E
+        uint8_t u0;       // 0x0020
+        uint8_t v0;       // 0x0021
+        uint8_t u1;       // 0x0022
+        uint8_t v1;       // 0x0023
+        uint8_t u2;       // 0x0024
+        uint8_t v2;       // 0x0025
+        uint8_t u3;       // 0x0026
+        uint8_t v3;       // 0x0027
+        uint8_t b0;       // 0x0028
+        uint8_t g0;       // 0x0029
+        uint8_t r0;       // 0x002A
+        uint8_t a0;       // 0x002B
+        uint8_t b1;       // 0x002C
+        uint8_t g1;       // 0x002D
+        uint8_t r1;       // 0x002E
+        uint8_t a1;       // 0x002F
+        uint8_t b2;       // 0x0030
+        uint8_t g2;       // 0x0031
+        uint8_t r2;       // 0x0032
+        uint8_t a2;       // 0x0033
+        uint8_t b3;       // 0x0034
+        uint8_t g3;       // 0x0035
+        uint8_t r3;       // 0x0036
+        uint8_t a3;       // 0x0037
     };
     static_assert(sizeof(PrimPolyG4) == 0x38);
 
@@ -3951,7 +3985,14 @@ namespace openre::marni
 
         // Fold the doubled B/G/R bytes into the D3D colour, pick the alpha
         // byte from the mode bits and wrap channel overflow into the specular.
-        auto build_vertex = [&](int idx, int16_t x, int16_t y, uint8_t u, uint8_t v, uint8_t bByte, uint8_t gByte, uint8_t rByte,
+        auto build_vertex = [&](int idx,
+                                int16_t x,
+                                int16_t y,
+                                uint8_t u,
+                                uint8_t v,
+                                uint8_t bByte,
+                                uint8_t gByte,
+                                uint8_t rByte,
                                 uint8_t aByte) {
             int32_t b = 2 * (int32_t)bByte;
             int32_t g = 2 * (int32_t)gByte;
@@ -4014,8 +4055,8 @@ namespace openre::marni
                     redAlpha = (uint32_t)r | 0xFFFFFF00;
             }
             const uint32_t color = (uint32_t)b | (((uint32_t)g | (redAlpha << 8)) << 8);
-            const uint32_t specular =
-                specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
+            const uint32_t specular
+                = specularEnable ? ((uint32_t)rOverflow << 16) | ((uint32_t)gOverflow << 8) | (uint32_t)bOverflow : 0;
 
             vertices[idx].sx = (float)((double)x * self->aspect_x);
             vertices[idx].sy = (float)((double)y * self->aspect_y);
@@ -4142,25 +4183,25 @@ namespace openre::marni
     // Prim type 0x1004C quad layout (4 int16 coords, int16 z, 4 texcoord pairs)
     struct PrimPolyFT4 : Prim
     {
-        uint32_t texture;               // 0x0008
-        uint32_t var_0C;                // 0x000C
-        int16_t x0;                     // 0x0010
-        int16_t y0;                     // 0x0012
-        int16_t x1;                     // 0x0014
-        int16_t y1;                     // 0x0016
-        int16_t x2;                     // 0x0018
-        int16_t y2;                     // 0x001A
-        int16_t x3;                     // 0x001C
-        int16_t y3;                     // 0x001E
-        int16_t z;                      // 0x0020
-        uint8_t u0;                     // 0x0022
-        uint8_t v0;                     // 0x0023
-        uint8_t u1;                     // 0x0024
-        uint8_t v1;                     // 0x0025
-        uint8_t u2;                     // 0x0026
-        uint8_t v2;                     // 0x0027
-        uint8_t u3;                     // 0x0028
-        uint8_t v3;                     // 0x0029
+        uint32_t texture; // 0x0008
+        uint32_t var_0C;  // 0x000C
+        int16_t x0;       // 0x0010
+        int16_t y0;       // 0x0012
+        int16_t x1;       // 0x0014
+        int16_t y1;       // 0x0016
+        int16_t x2;       // 0x0018
+        int16_t y2;       // 0x001A
+        int16_t x3;       // 0x001C
+        int16_t y3;       // 0x001E
+        int16_t z;        // 0x0020
+        uint8_t u0;       // 0x0022
+        uint8_t v0;       // 0x0023
+        uint8_t u1;       // 0x0024
+        uint8_t v1;       // 0x0025
+        uint8_t u2;       // 0x0026
+        uint8_t v2;       // 0x0027
+        uint8_t u3;       // 0x0028
+        uint8_t v3;       // 0x0029
     };
     static_assert(sizeof(PrimPolyFT4) == 0x2C); // 0x2A of fields + 2 bytes tail padding
 
@@ -4216,12 +4257,8 @@ namespace openre::marni
         const auto make_sy = [&](int16_t y) {
             return (float)(((double)y * (double)prj / (double)primW + (double)self->field_8C7EC8) * (double)self->aspect_y);
         };
-        const auto make_tu = [&](uint8_t u) {
-            return (float)((double)u * (double)invTexW + (double)adjustV);
-        };
-        const auto make_tv = [&](uint8_t v) {
-            return (float)((double)v * (double)invTexH + (double)adjustV);
-        };
+        const auto make_tu = [&](uint8_t u) { return (float)((double)u * (double)invTexW + (double)adjustV); };
+        const auto make_tv = [&](uint8_t v) { return (float)((double)v * (double)invTexH + (double)adjustV); };
 
         vertices[0].sx = make_sx(*(const int16_t*)(prim + 16));
         vertices[0].sy = make_sy(*(const int16_t*)(prim + 18));
@@ -4284,8 +4321,8 @@ namespace openre::marni
         float invTexW = (float)(1.0 / texture->width);
         float invTexH = (float)(1.0 / texture->height);
 
-        uint32_t v7 = (uint32_t)prim[45] * 2; // G channel
-        uint32_t v8 = (uint32_t)prim[44] * 2; // B channel
+        uint32_t v7 = (uint32_t)prim[45] * 2;  // G channel
+        uint32_t v8 = (uint32_t)prim[44] * 2;  // B channel
         uint32_t v10 = (uint32_t)prim[46] * 2; // R channel
         int hasOverflow = 0;
         uint32_t ovfR = 0, ovfG = 0, ovfB = 0;
@@ -4346,12 +4383,8 @@ namespace openre::marni
         const auto make_sy = [&](int16_t y) {
             return (float)(((double)y * (double)prj / (double)primW + (double)self->field_8C7EC8) * (double)self->aspect_y);
         };
-        const auto make_tu = [&](uint8_t u) {
-            return (float)((double)u * (double)invTexW + (double)adjustV);
-        };
-        const auto make_tv = [&](uint8_t v) {
-            return (float)((double)v * (double)invTexH + (double)adjustV);
-        };
+        const auto make_tu = [&](uint8_t u) { return (float)((double)u * (double)invTexW + (double)adjustV); };
+        const auto make_tv = [&](uint8_t v) { return (float)((double)v * (double)invTexH + (double)adjustV); };
 
         vertices[0].sx = make_sx(*(const int16_t*)(prim + 16));
         vertices[0].sy = make_sy(*(const int16_t*)(prim + 18));
@@ -4487,18 +4520,10 @@ namespace openre::marni
         const int x3t = centreX + *(const int16_t*)(prim + 28) - halfW;
         const int y3t = centreY + *(const int16_t*)(prim + 30) - halfH;
 
-        const auto make_sx = [&](int x) {
-            return (float)((double)x * (double)self->aspect_x + (double)adjustU);
-        };
-        const auto make_sy = [&](int y) {
-            return (float)((double)y * (double)self->aspect_y + (double)adjustU);
-        };
-        const auto make_tu = [&](uint8_t u) {
-            return (float)((double)u * (double)invTexW + (double)adjustV);
-        };
-        const auto make_tv = [&](uint8_t v) {
-            return (float)((double)v * (double)invTexH + (double)adjustV);
-        };
+        const auto make_sx = [&](int x) { return (float)((double)x * (double)self->aspect_x + (double)adjustU); };
+        const auto make_sy = [&](int y) { return (float)((double)y * (double)self->aspect_y + (double)adjustU); };
+        const auto make_tu = [&](uint8_t u) { return (float)((double)u * (double)invTexW + (double)adjustV); };
+        const auto make_tv = [&](uint8_t v) { return (float)((double)v * (double)invTexH + (double)adjustV); };
 
         vertices[0].sx = make_sx(x0t);
         vertices[0].sy = make_sy(y0t);
@@ -4602,18 +4627,10 @@ namespace openre::marni
         const float sz = 1.0f - (float)((double)((int32_t)self->field_8C7EDC / 2) / pQuad->z);
         const float rhw = 1.0f / pQuad->z;
 
-        const auto make_sx = [&](int x) {
-            return (float)((double)x * (double)self->aspect_x + (double)adjustU);
-        };
-        const auto make_sy = [&](int y) {
-            return (float)((double)y * (double)self->aspect_y + (double)adjustU);
-        };
-        const auto make_tu = [&](uint8_t u) {
-            return (float)((double)u * (double)invTexW + (double)adjustV);
-        };
-        const auto make_tv = [&](uint8_t v) {
-            return (float)((double)v * (double)invTexH + (double)adjustV);
-        };
+        const auto make_sx = [&](int x) { return (float)((double)x * (double)self->aspect_x + (double)adjustU); };
+        const auto make_sy = [&](int y) { return (float)((double)y * (double)self->aspect_y + (double)adjustU); };
+        const auto make_tu = [&](uint8_t u) { return (float)((double)u * (double)invTexW + (double)adjustV); };
+        const auto make_tv = [&](uint8_t v) { return (float)((double)v * (double)invTexH + (double)adjustV); };
 
         vertices[0].sx = make_sx(x0t);
         vertices[0].sy = make_sy(y0t);
@@ -4717,12 +4734,10 @@ namespace openre::marni
         const float sz = (float)(1.0 - (double)(self->resolutions[0].height / 2) / (double)primW);
         const float rhw = (float)(1.0 / (double)primW);
 
-        const auto make_sx = [&](int16_t x) {
-            return (float)((double)x * (double)self->aspect_x + (double)self->field_8C701C);
-        };
-        const auto make_sy = [&](int16_t y) {
-            return (float)((double)y * (double)self->aspect_y + (double)self->field_8C701C);
-        };
+        const auto make_sx
+            = [&](int16_t x) { return (float)((double)x * (double)self->aspect_x + (double)self->field_8C701C); };
+        const auto make_sy
+            = [&](int16_t y) { return (float)((double)y * (double)self->aspect_y + (double)self->field_8C701C); };
 
         vertices[0].sx = make_sx(*(const int16_t*)(prim + 8));
         vertices[0].sy = make_sy(*(const int16_t*)(prim + 10));
@@ -5162,17 +5177,17 @@ namespace openre::marni
     // Prim type 0x1002C quad layout (float z projection, 4 int16 coords, 4 texcoords)
     struct PrimSprQuad : Prim
     {
-        uint32_t texture;               // 0x0008
-        uint32_t var_0C;                // 0x000C
-        float z;                        // 0x0010
-        int16_t x0;                     // 0x0014
-        int16_t y0;                     // 0x0016
-        int16_t x1;                     // 0x0018
-        int16_t y1;                     // 0x001A
-        uint8_t u0;                     // 0x001C
-        uint8_t v0;                     // 0x001D
-        uint8_t u1;                     // 0x001E
-        uint8_t v1;                     // 0x001F
+        uint32_t texture; // 0x0008
+        uint32_t var_0C;  // 0x000C
+        float z;          // 0x0010
+        int16_t x0;       // 0x0014
+        int16_t y0;       // 0x0016
+        int16_t x1;       // 0x0018
+        int16_t y1;       // 0x001A
+        uint8_t u0;       // 0x001C
+        uint8_t v0;       // 0x001D
+        uint8_t u1;       // 0x001E
+        uint8_t v1;       // 0x001F
     };
     static_assert(sizeof(PrimSprQuad) == 0x20);
 
@@ -5349,10 +5364,14 @@ namespace openre::marni
         const float offX = (float)self->field_8C7EC4;
         const float offY = (float)self->field_8C7EC8;
 
-        const double left = (((double)cx - (double)xHalf) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
-        const double right = (((double)xHalf + (double)cx) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
-        const double top = (((double)cy - (double)yHalf) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
-        const double bottom = (((double)yHalf + (double)cy) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
+        const double left
+            = (((double)cx - (double)xHalf) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
+        const double right
+            = (((double)xHalf + (double)cx) * (double)invZ * (double)scale + (double)offX) * (double)self->aspect_x;
+        const double top
+            = (((double)cy - (double)yHalf) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
+        const double bottom
+            = (((double)yHalf + (double)cy) * (double)invZ * (double)scale + (double)offY) * (double)self->aspect_y;
         const float sz = 1.0f - (float)((double)((int32_t)self->field_8C7EDC / 2) / (double)z);
         const float rhw = (float)(1.0 / (double)z);
 
@@ -6568,16 +6587,16 @@ namespace openre::marni
 
         // Pack the 0x00RRGGBB color into the surface's native pixel format using its masks/shifts.
         uint32_t packed = ((self->desc.b_mask & ((color & 0xFF) >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift)
-                        | ((self->desc.r_mask & (((color >> 16) & 0xFF) >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
-                        | ((self->desc.g_mask & (((color >> 8) & 0xFF) >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift);
+            | ((self->desc.r_mask & (((color >> 16) & 0xFF) >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
+            | ((self->desc.g_mask & (((color >> 8) & 0xFF) >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift);
 
         DDBLTFX ddbltfx;
         ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
         ddbltfx.dwSize = sizeof(DDBLTFX);
         ddbltfx.dwFillColor = packed;
 
-        HRESULT hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)->Blt(
-            &rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
+        HRESULT hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)
+                         ->Blt(&rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
         if (!hr)
             return 1;
 
@@ -6680,9 +6699,8 @@ namespace openre::marni
                 for (int j = 0; j < paletteSize; j++)
                 {
                     // Pack PALETTEENTRY {peRed, peGreen, peBlue, peFlags} as 0x00RRGGBB.
-                    pPalette[i * paletteSize + j] = ((uint32_t)entries[j].peRed << 16) |
-                                                    ((uint32_t)entries[j].peGreen << 8) |
-                                                    entries[j].peBlue;
+                    pPalette[i * paletteSize + j]
+                        = ((uint32_t)entries[j].peRed << 16) | ((uint32_t)entries[j].peGreen << 8) | entries[j].peBlue;
                 }
             }
 
@@ -6747,8 +6765,7 @@ namespace openre::marni
         for (int v5 = 0; v5 < self->pal_cnt; v5++)
         {
             PALETTEENTRY entries[256];
-            HRESULT hr = ((LPDIRECTDRAWPALETTE)self->pDDpalette[v5])->GetEntries(
-                0, 0, 1 << self->bpp, (LPPALETTEENTRY)entries);
+            HRESULT hr = ((LPDIRECTDRAWPALETTE)self->pDDpalette[v5])->GetEntries(0, 0, 1 << self->bpp, (LPPALETTEENTRY)entries);
             if (hr != 0)
             {
                 out("failed to read the palette from device", "MarniSystem DirectDrawSurface::PalLock");
@@ -7150,21 +7167,15 @@ namespace openre::marni
 
         switch (self->bpp)
         {
-            case 4:
-                if (!self->var_2B)
-                    return (char*)self->pBitmap + x / 2 + y * self->pitch;
-                [[fallthrough]];
-            case 8:
-                return (char*)self->pBitmap + y * self->pitch + x;
-            case 0x10:
-                return (char*)self->pBitmap + 2 * x + y * self->pitch;
-            case 0x18:
-                return (char*)self->pBitmap + 3 * x + y * self->pitch;
-            case 0x20:
-                return (char*)self->pBitmap + 4 * x + y * self->pitch;
-            default:
-                out("this BitPixel isn't supported...%d MarniBits::CalcAddress", "");
-                return nullptr;
+        case 4:
+            if (!self->var_2B)
+                return (char*)self->pBitmap + x / 2 + y * self->pitch;
+            [[fallthrough]];
+        case 8: return (char*)self->pBitmap + y * self->pitch + x;
+        case 0x10: return (char*)self->pBitmap + 2 * x + y * self->pitch;
+        case 0x18: return (char*)self->pBitmap + 3 * x + y * self->pitch;
+        case 0x20: return (char*)self->pBitmap + 4 * x + y * self->pitch;
+        default: out("this BitPixel isn't supported...%d MarniBits::CalcAddress", ""); return nullptr;
         }
     }
 
@@ -7385,7 +7396,8 @@ namespace openre::marni
 
         LONG bottom = src->bottom;
         LONG clipTop = clip->top;
-        if (bottom < clipTop || right - left <= 0 || bottom - top <= 0 || clipRight - clipLeft <= 0 || clipBottom - clipTop <= 0)
+        if (bottom < clipTop || right - left <= 0 || bottom - top <= 0 || clipRight - clipLeft <= 0
+            || clipBottom - clipTop <= 0)
             return 0;
 
         if (left >= clipLeft)
@@ -7472,30 +7484,29 @@ namespace openre::marni
         // depth is the pixel bit depth (-4 = 4-bit paletted, 4 = 4bpp, 8, 16 or 32).
         switch (depth)
         {
-            case -4:
-                self->pBitmap = operator_new((size_t)(height * width));
-                self->pitch = (int16_t)width;
-                self->bpp = 4;
-                self->var_2B = 1;
-                break;
-            case 4:
-                self->pBitmap = operator_new((size_t)(height * width / 2));
-                self->pitch = (int16_t)(width / 2);
-                break;
-            case 8:
-                self->pBitmap = operator_new((size_t)(height * width));
-                self->pitch = (int16_t)width;
-                break;
-            case 16:
-                self->pBitmap = operator_new((size_t)(2 * height * width));
-                self->pitch = (int16_t)(2 * width);
-                break;
-            case 32:
-                self->pBitmap = operator_new((size_t)(4 * height * width));
-                self->pitch = (int16_t)(4 * width);
-                break;
-            default:
-                goto unsupported_format;
+        case -4:
+            self->pBitmap = operator_new((size_t)(height * width));
+            self->pitch = (int16_t)width;
+            self->bpp = 4;
+            self->var_2B = 1;
+            break;
+        case 4:
+            self->pBitmap = operator_new((size_t)(height * width / 2));
+            self->pitch = (int16_t)(width / 2);
+            break;
+        case 8:
+            self->pBitmap = operator_new((size_t)(height * width));
+            self->pitch = (int16_t)width;
+            break;
+        case 16:
+            self->pBitmap = operator_new((size_t)(2 * height * width));
+            self->pitch = (int16_t)(2 * width);
+            break;
+        case 32:
+            self->pBitmap = operator_new((size_t)(4 * height * width));
+            self->pitch = (int16_t)(4 * width);
+            break;
+        default: goto unsupported_format;
         }
 
         if (!self->pBitmap)
@@ -7537,38 +7548,37 @@ namespace openre::marni
         // Fill in the pixel format descriptor for the surface's bit depth.
         switch (self->bpp)
         {
-            case 4:
-            case 8:
-            case 0x10:
-                self->desc.a_shift = 15;
-                self->desc.a_bitcnt = 1;
-                self->desc.a_mask = 1;
-                self->desc.r_shift = 10;
-                self->desc.r_bitcnt = 5;
-                self->desc.r_mask = 31;
-                self->desc.g_shift = 5;
-                self->desc.g_bitcnt = 5;
-                self->desc.g_mask = 31;
-                self->desc.b_bitcnt = 5;
-                self->desc.b_mask = 31;
-                self->desc.b_shift = 0;
-                break;
-            case 0x20:
-                self->desc.a_shift = 24;
-                self->desc.a_bitcnt = 8;
-                self->desc.a_mask = 0xFF;
-                self->desc.r_shift = 16;
-                self->desc.r_bitcnt = 8;
-                self->desc.r_mask = 0xFF;
-                self->desc.g_shift = 8;
-                self->desc.g_bitcnt = 8;
-                self->desc.g_mask = 0xFF;
-                self->desc.b_bitcnt = 8;
-                self->desc.b_mask = 0xFF;
-                self->desc.b_shift = 0;
-                break;
-            default:
-                break;
+        case 4:
+        case 8:
+        case 0x10:
+            self->desc.a_shift = 15;
+            self->desc.a_bitcnt = 1;
+            self->desc.a_mask = 1;
+            self->desc.r_shift = 10;
+            self->desc.r_bitcnt = 5;
+            self->desc.r_mask = 31;
+            self->desc.g_shift = 5;
+            self->desc.g_bitcnt = 5;
+            self->desc.g_mask = 31;
+            self->desc.b_bitcnt = 5;
+            self->desc.b_mask = 31;
+            self->desc.b_shift = 0;
+            break;
+        case 0x20:
+            self->desc.a_shift = 24;
+            self->desc.a_bitcnt = 8;
+            self->desc.a_mask = 0xFF;
+            self->desc.r_shift = 16;
+            self->desc.r_bitcnt = 8;
+            self->desc.r_mask = 0xFF;
+            self->desc.g_shift = 8;
+            self->desc.g_bitcnt = 8;
+            self->desc.g_mask = 0xFF;
+            self->desc.b_bitcnt = 8;
+            self->desc.b_mask = 0xFF;
+            self->desc.b_shift = 0;
+            break;
+        default: break;
         }
 
         self->bOpen = 1;
@@ -7584,18 +7594,18 @@ namespace openre::marni
     // 0x00413950
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode)
     {
-        if (!self->bOpen || (!self->bLocked && !self->bPalLocked) || !self->var_28
-            || (1 << self->bpp) <= col_index || pal_index >= self->pal_cnt)
+        if (!self->bOpen || (!self->bLocked && !self->bPalLocked) || !self->var_28 || (1 << self->bpp) <= col_index
+            || pal_index >= self->pal_cnt)
         {
             out("you tried to use this class regardless of invalid class.", "MarniBits::SetPaletteColor");
             return 0;
         }
 
         // Split the incoming color into its ARGB components.
-        uint32_t v7 = (rgb >> 16) & 0xFF;   // red
-        uint32_t rgba = (rgb >> 8) & 0xFF;  // green
-        uint32_t v9 = (rgb >> 24) & 0xFF;   // alpha
-        uint32_t v10 = rgb & 0xFF;          // blue
+        uint32_t v7 = (rgb >> 16) & 0xFF;  // red
+        uint32_t rgba = (rgb >> 8) & 0xFF; // green
+        uint32_t v9 = (rgb >> 24) & 0xFF;  // alpha
+        uint32_t v10 = rgb & 0xFF;         // blue
 
         if (mode == 128)
         {
@@ -7730,41 +7740,33 @@ namespace openre::marni
         uint32_t color; // value read from the pixel (raw surface pixel, may be a palette index)
         switch (self->bpp)
         {
-            case 4:
-                color = *(uint8_t*)addr;
-                if (self->var_2B)
-                {
-                    // Byte-per-pixel layout; the whole byte is the value.
-                    break;
-                }
-                if (self->var_2A)
-                {
-                    if ((x & 1) == 0)
-                    {
-                        color &= 0xF;
-                        break;
-                    }
-                }
-                else if ((x & 1) != 0)
+        case 4:
+            color = *(uint8_t*)addr;
+            if (self->var_2B)
+            {
+                // Byte-per-pixel layout; the whole byte is the value.
+                break;
+            }
+            if (self->var_2A)
+            {
+                if ((x & 1) == 0)
                 {
                     color &= 0xF;
                     break;
                 }
-                color >>= 4;
+            }
+            else if ((x & 1) != 0)
+            {
                 color &= 0xF;
                 break;
-            case 8:
-                color = *(uint8_t*)addr;
-                break;
-            case 16:
-                color = *(uint16_t*)addr;
-                break;
-            case 32:
-                color = *(uint32_t*)addr;
-                break;
-            default:
-                out("unsupported bit pixel", "MarniBits::GetColor");
-                return 0;
+            }
+            color >>= 4;
+            color &= 0xF;
+            break;
+        case 8: color = *(uint8_t*)addr; break;
+        case 16: color = *(uint16_t*)addr; break;
+        case 32: color = *(uint32_t*)addr; break;
+        default: out("unsupported bit pixel", "MarniBits::GetColor"); return 0;
         }
 
         *color_out = color;
@@ -7848,12 +7850,8 @@ namespace openre::marni
             }
         }
 
-        if (memcmp(&pSrc->desc, &self->desc, 0xC) == 0
-            && self->width == pSrc->width
-            && self->height == pSrc->height
-            && !self->var_28
-            && !pSrc->var_28
-            && self->bpp == pSrc->bpp)
+        if (memcmp(&pSrc->desc, &self->desc, 0xC) == 0 && self->width == pSrc->width && self->height == pSrc->height
+            && !self->var_28 && !pSrc->var_28 && self->bpp == pSrc->bpp)
         {
             // Descriptor matches: do a direct per-row copy.
             surface_lock(self, 0, 0);
@@ -7865,35 +7863,33 @@ namespace openre::marni
                 char* src = surface_calc_address(pSrc, 0, row);
                 switch (self->bpp)
                 {
-                    case 8:
-                        for (int i = 0; i < (int)self->width / 4; ++i)
-                        {
-                            *(uint32_t*)dst = *(uint32_t*)src;
-                            dst += 4;
-                            src += 4;
-                        }
-                        memcpy(dst, src, (size_t)(self->width % 4));
-                        break;
-                    case 16:
-                        for (int i = 0; i < (int)self->width / 2; ++i)
-                        {
-                            *(uint32_t*)dst = *(uint32_t*)src;
-                            dst += 4;
-                            src += 4;
-                        }
-                        memcpy(dst, src, (size_t)(2 * (self->width % 2)));
-                        break;
-                    case 32:
-                        for (int i = 0; i < (int)self->width; ++i)
-                        {
-                            *(uint32_t*)dst = *(uint32_t*)src;
-                            dst += 4;
-                            src += 4;
-                        }
-                        break;
-                    default:
-                        out("it is direct-loaded, not supported.", "MarniBits::operator =");
-                        return 0;
+                case 8:
+                    for (int i = 0; i < (int)self->width / 4; ++i)
+                    {
+                        *(uint32_t*)dst = *(uint32_t*)src;
+                        dst += 4;
+                        src += 4;
+                    }
+                    memcpy(dst, src, (size_t)(self->width % 4));
+                    break;
+                case 16:
+                    for (int i = 0; i < (int)self->width / 2; ++i)
+                    {
+                        *(uint32_t*)dst = *(uint32_t*)src;
+                        dst += 4;
+                        src += 4;
+                    }
+                    memcpy(dst, src, (size_t)(2 * (self->width % 2)));
+                    break;
+                case 32:
+                    for (int i = 0; i < (int)self->width; ++i)
+                    {
+                        *(uint32_t*)dst = *(uint32_t*)src;
+                        dst += 4;
+                        src += 4;
+                    }
+                    break;
+                default: out("it is direct-loaded, not supported.", "MarniBits::operator ="); return 0;
                 }
             }
 
@@ -7948,46 +7944,40 @@ namespace openre::marni
 
         switch (self->bpp)
         {
-            case 4:
+        case 4:
+        {
+            // 4bpp: the color is the palette index; nibble-packed unless var_2B is set.
+            uint8_t old = *(uint8_t*)addr;
+            if (self->var_2B)
             {
-                // 4bpp: the color is the palette index; nibble-packed unless var_2B is set.
-                uint8_t old = *(uint8_t*)addr;
-                if (self->var_2B)
-                {
-                    // Unpacked layout (one byte per pixel). NOTE: mirroring the original
-                    // binary, the byte is written back unchanged — the color is never
-                    // applied for this layout (the value is read and stored as-is).
-                    *(uint8_t*)addr = old;
-                }
-                else if (self->var_2A)
-                {
-                    if ((x & 1) != 0)
-                        *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
-                    else
-                        *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
-                }
-                else
-                {
-                    if ((x & 1) != 0)
-                        *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
-                    else
-                        *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
-                }
-                return 1;
+                // Unpacked layout (one byte per pixel). NOTE: mirroring the original
+                // binary, the byte is written back unchanged — the color is never
+                // applied for this layout (the value is read and stored as-is).
+                *(uint8_t*)addr = old;
             }
-            case 8:
-                *(uint8_t*)addr = (uint8_t)color;
-                return 1;
-            case 16:
-                *(uint16_t*)addr = (uint16_t)color;
-                return 1;
-            case 32:
-                *(uint32_t*)addr = color;
-                return 1;
-            default:
-                // 24bpp (and anything else) is not handled by SetColor.
-                out("not supported", "MarniBits::SetColor");
-                return 1;
+            else if (self->var_2A)
+            {
+                if ((x & 1) != 0)
+                    *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
+                else
+                    *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
+            }
+            else
+            {
+                if ((x & 1) != 0)
+                    *(uint8_t*)addr = (uint8_t)((old & 0xF0) | (color & 0xF));
+                else
+                    *(uint8_t*)addr = (uint8_t)((old & 0xF) | ((color & 0xF) << 4));
+            }
+            return 1;
+        }
+        case 8: *(uint8_t*)addr = (uint8_t)color; return 1;
+        case 16: *(uint16_t*)addr = (uint16_t)color; return 1;
+        case 32: *(uint32_t*)addr = color; return 1;
+        default:
+            // 24bpp (and anything else) is not handled by SetColor.
+            out("not supported", "MarniBits::SetColor");
+            return 1;
         }
     }
 
@@ -8011,41 +8001,33 @@ namespace openre::marni
         uint32_t palette_index; // value read from the pixel (used as the palette entry index)
         switch (bpp)
         {
-            case 4:
-                palette_index = *(uint8_t*)addr;
-                if (self->var_2B)
-                {
-                    // Byte-per-pixel layout; the whole byte is the palette index.
-                    break;
-                }
-                if (self->var_2A)
-                {
-                    if ((x & 1) == 0)
-                    {
-                        palette_index &= 0xF;
-                        break;
-                    }
-                }
-                else if ((x & 1) != 0)
+        case 4:
+            palette_index = *(uint8_t*)addr;
+            if (self->var_2B)
+            {
+                // Byte-per-pixel layout; the whole byte is the palette index.
+                break;
+            }
+            if (self->var_2A)
+            {
+                if ((x & 1) == 0)
                 {
                     palette_index &= 0xF;
                     break;
                 }
-                palette_index >>= 4;
+            }
+            else if ((x & 1) != 0)
+            {
                 palette_index &= 0xF;
                 break;
-            case 8:
-                palette_index = *(uint8_t*)addr;
-                break;
-            case 16:
-                palette_index = *(uint16_t*)addr;
-                break;
-            case 32:
-                palette_index = *(uint32_t*)addr;
-                break;
-            default:
-                out("unsupported bit pixel", "MarniBits::GetIndexColor");
-                return 0;
+            }
+            palette_index >>= 4;
+            palette_index &= 0xF;
+            break;
+        case 8: palette_index = *(uint8_t*)addr; break;
+        case 16: palette_index = *(uint16_t*)addr; break;
+        case 32: palette_index = *(uint32_t*)addr; break;
+        default: out("unsupported bit pixel", "MarniBits::GetIndexColor"); return 0;
         }
 
         // The palette is laid out as [var_22][1 << bpp] (row-major), so the flat
@@ -8056,18 +8038,10 @@ namespace openre::marni
         uint32_t pal_entry;
         switch (self->var_25) // palette bpp
         {
-            case 8:
-                pal_entry = *(uint8_t*)((uint8_t*)self->pPalette + pal_offset);
-                break;
-            case 16:
-                pal_entry = *(uint16_t*)((uint8_t*)self->pPalette + 2 * pal_offset);
-                break;
-            case 32:
-                pal_entry = *(uint32_t*)((uint8_t*)self->pPalette + 4 * pal_offset);
-                break;
-            default:
-                out("unsupported bit pixel (pal)", "MarniBits::GetIndexColor");
-                return 0;
+        case 8: pal_entry = *(uint8_t*)((uint8_t*)self->pPalette + pal_offset); break;
+        case 16: pal_entry = *(uint16_t*)((uint8_t*)self->pPalette + 2 * pal_offset); break;
+        case 32: pal_entry = *(uint32_t*)((uint8_t*)self->pPalette + 4 * pal_offset); break;
+        default: out("unsupported bit pixel (pal)", "MarniBits::GetIndexColor"); return 0;
         }
 
         // Expand the palette entry's bit fields into 8-bit A/R/G/B channels.
@@ -8090,7 +8064,8 @@ namespace openre::marni
             blue |= 255 >> self->desc.b_bitcnt;
 
         // 0xAARRGGBB
-        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8) | (uint32_t)(uint8_t)blue;
+        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8)
+            | (uint32_t)(uint8_t)blue;
         return 1;
     }
 
@@ -8119,36 +8094,28 @@ namespace openre::marni
         uint32_t pixel; // raw pixel value read from the surface
         switch (self->bpp)
         {
-            case 4:
-                pixel = *(uint8_t*)addr;
-                // Two pixels per byte; var_2A selects which nibble is the low pixel.
-                if (self->var_2A)
-                {
-                    if ((x & 1) == 0)
-                        pixel &= 0xF;
-                    else
-                        pixel >>= 4;
-                }
+        case 4:
+            pixel = *(uint8_t*)addr;
+            // Two pixels per byte; var_2A selects which nibble is the low pixel.
+            if (self->var_2A)
+            {
+                if ((x & 1) == 0)
+                    pixel &= 0xF;
                 else
-                {
-                    if ((x & 1) == 0)
-                        pixel >>= 4;
-                    else
-                        pixel &= 0xF;
-                }
-                break;
-            case 8:
-                pixel = *(uint8_t*)addr;
-                break;
-            case 16:
-                pixel = *(uint16_t*)addr;
-                break;
-            case 32:
-                pixel = *(uint32_t*)addr;
-                break;
-            default:
-                out("unsupported bit pixel", "MarniBits::GetColor");
-                return 0;
+                    pixel >>= 4;
+            }
+            else
+            {
+                if ((x & 1) == 0)
+                    pixel >>= 4;
+                else
+                    pixel &= 0xF;
+            }
+            break;
+        case 8: pixel = *(uint8_t*)addr; break;
+        case 16: pixel = *(uint16_t*)addr; break;
+        case 32: pixel = *(uint32_t*)addr; break;
+        default: out("unsupported bit pixel", "MarniBits::GetColor"); return 0;
         }
 
         // Expand the pixel's bit fields into 8-bit A/R/G/B channels.
@@ -8187,7 +8154,8 @@ namespace openre::marni
         }
 
         // 0xAARRGGBB
-        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8) | (uint32_t)(uint8_t)blue;
+        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8)
+            | (uint32_t)(uint8_t)blue;
         return 1;
     }
 
@@ -8253,56 +8221,54 @@ namespace openre::marni
 
         // Pack the channels into the surface pixel format via the field masks.
         uint32_t packed = ((uint32_t)(self->desc.r_mask & (red >> (8 - self->desc.r_bitcnt))) << self->desc.r_shift)
-                        | ((uint32_t)(self->desc.g_mask & (green >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift)
-                        | ((uint32_t)(self->desc.b_mask & (blue >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift)
-                        | ((uint32_t)(self->desc.a_mask & (alpha >> (8 - self->desc.a_bitcnt))) << self->desc.a_shift);
+            | ((uint32_t)(self->desc.g_mask & (green >> (8 - self->desc.g_bitcnt))) << self->desc.g_shift)
+            | ((uint32_t)(self->desc.b_mask & (blue >> (8 - self->desc.b_bitcnt))) << self->desc.b_shift)
+            | ((uint32_t)(self->desc.a_mask & (alpha >> (8 - self->desc.a_bitcnt))) << self->desc.a_shift);
 
         switch (self->bpp)
         {
-            case 8:
-                if (mode & 2)
-                    *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr & packed);
-                else if (mode & 4)
-                    *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr | packed);
-                else
-                    *(uint8_t*)addr = (uint8_t)packed;
-                break;
-            case 16:
-                if (mode & 2)
-                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
-                else if (mode & 4)
-                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
-                else
-                    *(uint16_t*)addr = (uint16_t)packed;
-                break;
-            case 24:
-                if (mode & 2)
-                {
-                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
-                    addr[2] = (uint8_t)(addr[2] & (packed >> 16));
-                }
-                else if (mode & 4)
-                {
-                    *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
-                    addr[2] = (uint8_t)(addr[2] | (packed >> 16));
-                }
-                else
-                {
-                    *(uint16_t*)addr = (uint16_t)packed;
-                    addr[2] = (uint8_t)(packed >> 16);
-                }
-                break;
-            case 32:
-                if (mode & 2)
-                    *(uint32_t*)addr &= packed;
-                else if (mode & 4)
-                    *(uint32_t*)addr |= packed;
-                else
-                    *(uint32_t*)addr = packed;
-                break;
-            default:
-                out("this bitpixel isn't supported", "MarniBits::SetCurrentColor");
-                break;
+        case 8:
+            if (mode & 2)
+                *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr & packed);
+            else if (mode & 4)
+                *(uint8_t*)addr = (uint8_t)(*(uint8_t*)addr | packed);
+            else
+                *(uint8_t*)addr = (uint8_t)packed;
+            break;
+        case 16:
+            if (mode & 2)
+                *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
+            else if (mode & 4)
+                *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
+            else
+                *(uint16_t*)addr = (uint16_t)packed;
+            break;
+        case 24:
+            if (mode & 2)
+            {
+                *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr & packed);
+                addr[2] = (uint8_t)(addr[2] & (packed >> 16));
+            }
+            else if (mode & 4)
+            {
+                *(uint16_t*)addr = (uint16_t)(*(uint16_t*)addr | packed);
+                addr[2] = (uint8_t)(addr[2] | (packed >> 16));
+            }
+            else
+            {
+                *(uint16_t*)addr = (uint16_t)packed;
+                addr[2] = (uint8_t)(packed >> 16);
+            }
+            break;
+        case 32:
+            if (mode & 2)
+                *(uint32_t*)addr &= packed;
+            else if (mode & 4)
+                *(uint32_t*)addr |= packed;
+            else
+                *(uint32_t*)addr = packed;
+            break;
+        default: out("this bitpixel isn't supported", "MarniBits::SetCurrentColor"); break;
         }
         return 1;
     }

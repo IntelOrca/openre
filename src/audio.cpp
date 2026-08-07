@@ -22,23 +22,23 @@ namespace openre::audio
         // buffer's current position is non-zero (i.e. it has been started).
         uint32_t* dword_689DCC = (uint32_t*)0x689DCC;
         uint32_t* dword_689DD0 = (uint32_t*)0x689DD0;
-        int* dword_693B30 = (int*)0x693B30;   // BGM per-slot volume cache, indexed 0..2
-        int* dword_6941C8 = (int*)0x6941C8;   // SBGM per-slot volume cache, indexed 0..1
-        int* dword_6941CC = (int*)0x6941CC;   // SBGM[1] volume cache
+        int* dword_693B30 = (int*)0x693B30; // BGM per-slot volume cache, indexed 0..2
+        int* dword_6941C8 = (int*)0x6941C8; // SBGM per-slot volume cache, indexed 0..1
+        int* dword_6941CC = (int*)0x6941CC; // SBGM[1] volume cache
 
         // Standalone globals used by Snd_sys_init_sub (0x004EC350). All fall
         // in GameTable pad regions.
-        uint32_t* rev_vol = (uint32_t*)0x6940A8;    // SND_VOL {int16 left; int16 right;}
-        uint32_t* revd_vol = (uint32_t*)0x693350;   // SND_VOL {int16 left; int16 right;}
-        uint32_t* main_vol = (uint32_t*)0x69334C;   // SND_VOL {int16 left; int16 right;}
-        uint32_t* cd_vol = (uint32_t*)0x6934CC;     // SND_VOL {int16 left; int16 right;}
+        uint32_t* rev_vol = (uint32_t*)0x6940A8;  // SND_VOL {int16 left; int16 right;}
+        uint32_t* revd_vol = (uint32_t*)0x693350; // SND_VOL {int16 left; int16 right;}
+        uint32_t* main_vol = (uint32_t*)0x69334C; // SND_VOL {int16 left; int16 right;}
+        uint32_t* cd_vol = (uint32_t*)0x6934CC;   // SND_VOL {int16 left; int16 right;}
         int8_t* fade_rtn = (int8_t*)0x693E8C;
         int8_t* byte_693E8D = (int8_t*)0x693E8D; // byte right after fade_rtn (0x693E8C)
         int8_t* fade_time = (int8_t*)0x69346F;
         int32_t* pEdt_adr = (int32_t*)0x693480;     // 6 ints
         int32_t* dword_693B24 = (int32_t*)0x693B24; // SEQ channel table base
         uint16_t* word_693030 = (uint16_t*)0x693030;
-        uint16_t* se_pri = (uint16_t*)0x693000;     // 48-byte array (24 words); loop end sentinel
+        uint16_t* se_pri = (uint16_t*)0x693000; // 48-byte array (24 words); loop end sentinel
 
         // Standalone globals used by Snd_load_core (0x004EC450). The byte
         // buffers hold the loaded core .edh data; dword_6934A0/B0 point to the
@@ -61,12 +61,12 @@ namespace openre::audio
         int16_t* vol_3d_pan = (int16_t*)0x689DE4;
 
         // Standalone globals used by Snd_se_3D (0x004EE780).
-        int32_t* sesz = (int32_t*)0x693818;        // SE 3D distance-scaled value
+        int32_t* sesz = (int32_t*)0x693818;          // SE 3D distance-scaled value
         uint16_t* word_693B3C = (uint16_t*)0x693B3C; // SE 3D direction delta
 
         // Standalone globals used by Snd_se_call (0x004EE350).
-        int* ss_timer = (int*)0x6934C0;          // SE fade countdown timers (3 entries)
-        int16_t* ss_vol = (int16_t*)0x693468;    // SE fade step table (3 word entries, stride 2)
+        int* ss_timer = (int*)0x6934C0;               // SE fade countdown timers (3 entries)
+        int16_t* ss_vol = (int16_t*)0x693468;         // SE fade step table (3 word entries, stride 2)
         uint32_t* dword_689DD8 = (uint32_t*)0x689DD8; // set when the BGM fade completes
         uint32_t* dword_689DDC = (uint32_t*)0x689DDC; // set when the SBGM[0] fade completes
         uint32_t* dword_689DE0 = (uint32_t*)0x689DE0; // set when the SBGM[1] fade completes
@@ -117,38 +117,32 @@ namespace openre::audio
         // mainbmg_name_tbl @ 0x522470: 64 main-BGM names. Entries 50 and 58 are
         // invalid (the original pointers reference a 0xFFFFFFFF sentinel at 0x669F4C).
         constexpr const char* kMainBgmNameTbl[] = {
-            "main00_1", "main01", "main02", "main03", "main04", "main05", "main06", "main07",
-            "main08",   "main09", "main0a", "main00", "main0c", "main0d", "main0e", "main0f",
-            "main10",   "main11", "main12", "main13", "main14", "main15", "main16", "main17",
-            "main18",   "main19", "main1a", "main1b", "main1c", "main1d", "main1e", "main1f",
-            "main20",   "main21", "main22", "main23", "main24", "main25", "main26", "main27",
-            "main28",   "main29", "main2a", "main2b", "main2c", "main2d", "main2e", "main2f",
-            "main30",   "main31", nullptr, "main33", "main34", "main35", "main36", "main37",
-            "main38",   "main39", nullptr, "main00_2", "main04_1", "main0f_1", "main14_1", "main1b_1",
+            "main00_1", "main01",   "main02",   "main03",   "main04", "main05", "main06", "main07", "main08", "main09",
+            "main0a",   "main00",   "main0c",   "main0d",   "main0e", "main0f", "main10", "main11", "main12", "main13",
+            "main14",   "main15",   "main16",   "main17",   "main18", "main19", "main1a", "main1b", "main1c", "main1d",
+            "main1e",   "main1f",   "main20",   "main21",   "main22", "main23", "main24", "main25", "main26", "main27",
+            "main28",   "main29",   "main2a",   "main2b",   "main2c", "main2d", "main2e", "main2f", "main30", "main31",
+            nullptr,    "main33",   "main34",   "main35",   "main36", "main37", "main38", "main39", nullptr,  "main00_2",
+            "main04_1", "main0f_1", "main14_1", "main1b_1",
         };
 
         // subbgm_name_tbl @ 0x522628: 70 sub-BGM names. Entries 25 and 37 are invalid
         // (0xFFFFFFFF sentinel at 0x669F4C); entry 69 is NULL.
         constexpr const char* kSubBgmNameTbl[] = {
-            "sub00",    "sub01",  "sub02",  "sub03",  "sub04",  "sub05",  "sub2f_1", "main16",
-            "main04_1", "sub09",  "sub0a",  "sub0b",  "sub0c",  "sub0d",  "sub0e",   "sub0f",
-            "sub10",    "sub11",  "sub12",  "sub13",  "sub14",  "sub15",  "sub16",   "sub17",
-            "sub18",    nullptr,  "sub1a",  "sub1b",  "sub1c",  "main0f", "sub1e",   "sub1f",
-            "sub20",    "sub21",  "sub22",  "sub23",  "sub24",  nullptr,  "sub26",   "sub27",
-            "sub28",    "sub29",  "sub2a",  "main14", "main1b", "sub2d",  "sub2e",   "sub2f",
-            "sub30",    "main0a", "sub32",  "sub33",  "sub34",  "sub35",  "sub36",   "sub37",
-            "sub36",    "sub39",  "sub3a",  "sub3b",  "main12", "sub20",  "sub3e",   "sub3f",
-            "sub40",    "sub41",  "sub42",  "sub43",  "sub44",  nullptr,
+            "sub00",  "sub01",  "sub02", "sub03", "sub04", "sub05",  "sub2f_1", "main16", "main04_1", "sub09", "sub0a", "sub0b",
+            "sub0c",  "sub0d",  "sub0e", "sub0f", "sub10", "sub11",  "sub12",   "sub13",  "sub14",    "sub15", "sub16", "sub17",
+            "sub18",  nullptr,  "sub1a", "sub1b", "sub1c", "main0f", "sub1e",   "sub1f",  "sub20",    "sub21", "sub22", "sub23",
+            "sub24",  nullptr,  "sub26", "sub27", "sub28", "sub29",  "sub2a",   "main14", "main1b",   "sub2d", "sub2e", "sub2f",
+            "sub30",  "main0a", "sub32", "sub33", "sub34", "sub35",  "sub36",   "sub37",  "sub36",    "sub39", "sub3a", "sub3b",
+            "main12", "sub20",  "sub3e", "sub3f", "sub40", "sub41",  "sub42",   "sub43",  "sub44",    nullptr,
         };
 
         // fs_name_tbl @ 0x522130: 54 footstep-set names.
         constexpr const char* kFsNameTbl[] = {
-            "fs00", "fs01", "fs02", "fs03", "fs04", "fs05", "fs06", "fs07", "fs08", "fs09",
-            "fs10", "fs11", "fs12", "fs13", "fs14", "fs15", "fs16", "fs17", "fs18", "fs19",
-            "fs20", "fs21", "fs22", "fs23", "fs24", "fs25", "fs26", "fs27", "fs28", "fs29",
-            "fs30", "fs31", "fs32", "fs33", "fs34", "fs35", "fs36", "fs37", "fs38", "fs39",
-            "fs40", "fs41", "fs42", "fs43", "fs44", "fs45", "fs46", "fs47", "fs48", "fs49",
-            "fs50", "fs51", "fs52", "fs53",
+            "fs00", "fs01", "fs02", "fs03", "fs04", "fs05", "fs06", "fs07", "fs08", "fs09", "fs10", "fs11", "fs12", "fs13",
+            "fs14", "fs15", "fs16", "fs17", "fs18", "fs19", "fs20", "fs21", "fs22", "fs23", "fs24", "fs25", "fs26", "fs27",
+            "fs28", "fs29", "fs30", "fs31", "fs32", "fs33", "fs34", "fs35", "fs36", "fs37", "fs38", "fs39", "fs40", "fs41",
+            "fs42", "fs43", "fs44", "fs45", "fs46", "fs47", "fs48", "fs49", "fs50", "fs51", "fs52", "fs53",
         };
 
         // bgm_lut @ 0x522570: 61 main-BGM LUT entries (one per BGM slot), each 3
@@ -160,17 +154,15 @@ namespace openre::audio
             int8_t field_2;
         };
         constexpr MainBgmLutEntry kMainBgmLut[] = {
-            {0, 11, 59}, {1, -1, -1}, {2, -1, -1}, {3, -1, -1}, {4, 60, -1}, {5, -1, -1},
-            {6, -1, -1}, {7, -1, -1}, {8, -1, -1}, {-1, -1, -1}, {10, -1, -1}, {0, 59, -1},
-            {12, -1, -1}, {13, -1, -1}, {14, -1, -1}, {15, 61, -1}, {16, -1, -1}, {17, -1, -1},
-            {18, -1, -1}, {19, -1, -1}, {20, 62, -1}, {21, -1, -1}, {22, -1, -1}, {23, -1, -1},
-            {24, -1, -1}, {25, -1, -1}, {26, -1, -1}, {27, -1, -1}, {28, -1, -1}, {29, -1, -1},
-            {30, -1, -1}, {31, -1, -1}, {32, -1, -1}, {33, -1, -1}, {34, -1, -1}, {35, -1, -1},
-            {36, -1, -1}, {37, -1, -1}, {38, -1, -1}, {39, -1, -1}, {40, -1, -1}, {41, -1, -1},
-            {42, -1, -1}, {43, -1, -1}, {44, -1, -1}, {45, -1, -1}, {46, -1, -1}, {47, -1, -1},
-            {48, -1, -1}, {49, -1, -1}, {50, -1, -1}, {51, -1, -1}, {52, -1, -1}, {53, -1, -1},
-            {54, -1, -1}, {55, -1, -1}, {56, -1, -1}, {57, -1, -1}, {58, -1, -1}, {0, 0, 0},
-            {0, 0, 0},
+            { 0, 11, 59 },  { 1, -1, -1 },  { 2, -1, -1 },  { 3, -1, -1 },  { 4, 60, -1 },  { 5, -1, -1 },  { 6, -1, -1 },
+            { 7, -1, -1 },  { 8, -1, -1 },  { -1, -1, -1 }, { 10, -1, -1 }, { 0, 59, -1 },  { 12, -1, -1 }, { 13, -1, -1 },
+            { 14, -1, -1 }, { 15, 61, -1 }, { 16, -1, -1 }, { 17, -1, -1 }, { 18, -1, -1 }, { 19, -1, -1 }, { 20, 62, -1 },
+            { 21, -1, -1 }, { 22, -1, -1 }, { 23, -1, -1 }, { 24, -1, -1 }, { 25, -1, -1 }, { 26, -1, -1 }, { 27, -1, -1 },
+            { 28, -1, -1 }, { 29, -1, -1 }, { 30, -1, -1 }, { 31, -1, -1 }, { 32, -1, -1 }, { 33, -1, -1 }, { 34, -1, -1 },
+            { 35, -1, -1 }, { 36, -1, -1 }, { 37, -1, -1 }, { 38, -1, -1 }, { 39, -1, -1 }, { 40, -1, -1 }, { 41, -1, -1 },
+            { 42, -1, -1 }, { 43, -1, -1 }, { 44, -1, -1 }, { 45, -1, -1 }, { 46, -1, -1 }, { 47, -1, -1 }, { 48, -1, -1 },
+            { 49, -1, -1 }, { 50, -1, -1 }, { 51, -1, -1 }, { 52, -1, -1 }, { 53, -1, -1 }, { 54, -1, -1 }, { 55, -1, -1 },
+            { 56, -1, -1 }, { 57, -1, -1 }, { 58, -1, -1 }, { 0, 0, 0 },    { 0, 0, 0 },
         };
 
         // sbgm_lut @ 0x522740: 56 sub-BGM LUT entries (one per SBGM slot), each 3
@@ -180,16 +172,18 @@ namespace openre::audio
             int8_t field_0[3];
         };
         constexpr SubBgmLutEntry kSubBgmLut[] = {
-            {{0, -1, -1}}, {{1, -1, -1}}, {{2, -1, -1}}, {{3, -1, -1}}, {{4, -1, -1}}, {{5, -1, -1}},
-            {{6, -1, -1}}, {{7, -1, -1}}, {{8, 9, -1}}, {{10, 11, -1}}, {{10, 12, -1}}, {{13, -1, -1}},
-            {{14, -1, -1}}, {{15, -1, -1}}, {{16, -1, -1}}, {{17, 18, -1}}, {{19, -1, -1}}, {{20, 21, -1}},
-            {{22, 23, -1}}, {{20, 24, -1}}, {{26, -1, -1}}, {{27, -1, -1}}, {{32, 28, 29}}, {{35, 43, -1}},
-            {{30, 31, -1}}, {{32, 33, -1}}, {{30, 34, -1}}, {{29, -1, -1}}, {{36, -1, -1}}, {{37, -1, -1}},
-            {{38, -1, -1}}, {{40, -1, -1}}, {{39, 46, -1}}, {{41, -1, -1}}, {{42, -1, -1}}, {{44, -1, -1}},
-            {{45, -1, -1}}, {{47, 48, 6}}, {{49, -1, -1}}, {{50, -1, -1}}, {{50, 51, -1}}, {{50, 52, -1}},
-            {{56, 53, -1}}, {{54, -1, -1}}, {{62, -1, -1}}, {{57, -1, -1}}, {{63, -1, -1}}, {{59, 55, -1}},
-            {{60, -1, -1}}, {{58, -1, -1}}, {{20, 64, -1}}, {{65, 66, -1}}, {{67, -1, -1}}, {{68, -1, -1}},
-            {{37, 11, -1}}, {{0, 0, 0}},
+            { { 0, -1, -1 } },  { { 1, -1, -1 } },  { { 2, -1, -1 } },  { { 3, -1, -1 } },  { { 4, -1, -1 } },
+            { { 5, -1, -1 } },  { { 6, -1, -1 } },  { { 7, -1, -1 } },  { { 8, 9, -1 } },   { { 10, 11, -1 } },
+            { { 10, 12, -1 } }, { { 13, -1, -1 } }, { { 14, -1, -1 } }, { { 15, -1, -1 } }, { { 16, -1, -1 } },
+            { { 17, 18, -1 } }, { { 19, -1, -1 } }, { { 20, 21, -1 } }, { { 22, 23, -1 } }, { { 20, 24, -1 } },
+            { { 26, -1, -1 } }, { { 27, -1, -1 } }, { { 32, 28, 29 } }, { { 35, 43, -1 } }, { { 30, 31, -1 } },
+            { { 32, 33, -1 } }, { { 30, 34, -1 } }, { { 29, -1, -1 } }, { { 36, -1, -1 } }, { { 37, -1, -1 } },
+            { { 38, -1, -1 } }, { { 40, -1, -1 } }, { { 39, 46, -1 } }, { { 41, -1, -1 } }, { { 42, -1, -1 } },
+            { { 44, -1, -1 } }, { { 45, -1, -1 } }, { { 47, 48, 6 } },  { { 49, -1, -1 } }, { { 50, -1, -1 } },
+            { { 50, 51, -1 } }, { { 50, 52, -1 } }, { { 56, 53, -1 } }, { { 54, -1, -1 } }, { { 62, -1, -1 } },
+            { { 57, -1, -1 } }, { { 63, -1, -1 } }, { { 59, 55, -1 } }, { { 60, -1, -1 } }, { { 58, -1, -1 } },
+            { { 20, 64, -1 } }, { { 65, 66, -1 } }, { { 67, -1, -1 } }, { { 68, -1, -1 } }, { { 37, 11, -1 } },
+            { { 0, 0, 0 } },
         };
 
         // footstep_tbl @ 0x522208: 205 footstep entries (FOOTSTEP_TBL), indexed as
@@ -202,41 +196,36 @@ namespace openre::audio
             int8_t field_2;
         };
         constexpr FootstepTblEntry kFootstepTbl[] = {
-            {0, 1, 2}, {-1, -1, 3}, {-1, 4, 2}, {5, 6, 7}, {-1, 1, 2}, {-1, 8, 2},
-            {-1, 9, 10}, {-1, 11, 7}, {-1, 12, 10}, {-1, 14, 13}, {-1, 3, 18}, {-1, 15, 16},
-            {17, 16, 18}, {-1, 19, 3}, {-1, 16, 3}, {-1, -1, 16}, {-1, -1, 20}, {-1, 17, 21},
-            {-1, 17, 18}, {-1, -1, 22}, {-1, 23, 21}, {-1, 24, 25}, {12, 11, 7}, {-1, -1, 20},
-            {26, 27, 28}, {-1, -1, 2}, {-1, 23, 21}, {-1, 27, 2}, {-1, 12, 10}, {20, 29, 29},
-            {-1, -1, 25}, {-1, 30, 25}, {-1, 32, 31}, {-1, 30, 25}, {-1, 36, 33}, {18, 37, 25},
-            {-1, -1, 28}, {-1, 31, 3}, {-1, -1, 33}, {-1, -1, 38}, {-1, 12, 25}, {-1, 15, 16},
-            {39, 21, 10}, {-1, -1, 40}, {-1, 41, 40}, {-1, -1, 40}, {-1, -1, 28}, {-1, -1, 28},
-            {-1, 42, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, 28}, {0, 3, 33}, {-1, 16, 3}, {-1, -1, -1}, {-1, -1, 28}, {-1, -1, 28},
-            {-1, 49, 28}, {-1, 42, 28}, {42, 49, 28}, {7, 42, 28}, {42, 50, 28}, {42, 28, 6},
-            {-1, -1, 28}, {-1, -1, 26}, {0, 49, 28}, {-1, -1, 28}, {-1, -1, 28}, {-1, -1, 28},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, 49, 28}, {-1, 42, 28}, {-1, 49, 28},
-            {-1, 42, 28}, {-1, 51, 42}, {-1, 52, 28}, {-1, -1, -1}, {-1, 52, 28}, {42, -1, 28},
-            {42, -1, 28}, {-1, 42, 28}, {-1, -1, 28}, {-1, 28, 42}, {-1, 53, 26}, {28, 53, 26},
-            {-1, -1, 28}, {-1, 52, 28}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, 34}, {-1, -1, 34}, {-1, 42, 34}, {-1, -1, 35},
-            {-1, 42, 34}, {-1, -1, 42}, {-1, 42, 34}, {-1, 42, 26}, {-1, 42, 34}, {-1, -1, 42},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, 42}, {-1, -1, 43}, {26, 42, 28}, {-1, -1, 42}, {26, 44, -1},
-            {26, 44, 42}, {-1, 42, 34}, {-1, -1, 35}, {-1, 26, 45}, {-1, -1, 43}, {-1, -1, 43},
-            {-1, -1, 28}, {-1, 44, 28}, {-1, -1, 46}, {-1, 26, -1}, {36, 0, 34}, {-1, -1, 28},
-            {-1, 26, 45}, {-1, -1, 47}, {-1, -1, 48}, {26, 42, 28}, {-1, 26, 28}, {28, 42, 47},
-            {-1, 26, 28}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {26, 42, 28}, {12, 42, 28}, {-1, 0, 28}, {26, 42, 28}, {-1, 42, 28}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1},
-            {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {0, 0, 0},
-            {0, 0, 0},
+            { 0, 1, 2 },    { -1, -1, 3 },  { -1, 4, 2 },   { 5, 6, 7 },    { -1, 1, 2 },   { -1, 8, 2 },   { -1, 9, 10 },
+            { -1, 11, 7 },  { -1, 12, 10 }, { -1, 14, 13 }, { -1, 3, 18 },  { -1, 15, 16 }, { 17, 16, 18 }, { -1, 19, 3 },
+            { -1, 16, 3 },  { -1, -1, 16 }, { -1, -1, 20 }, { -1, 17, 21 }, { -1, 17, 18 }, { -1, -1, 22 }, { -1, 23, 21 },
+            { -1, 24, 25 }, { 12, 11, 7 },  { -1, -1, 20 }, { 26, 27, 28 }, { -1, -1, 2 },  { -1, 23, 21 }, { -1, 27, 2 },
+            { -1, 12, 10 }, { 20, 29, 29 }, { -1, -1, 25 }, { -1, 30, 25 }, { -1, 32, 31 }, { -1, 30, 25 }, { -1, 36, 33 },
+            { 18, 37, 25 }, { -1, -1, 28 }, { -1, 31, 3 },  { -1, -1, 33 }, { -1, -1, 38 }, { -1, 12, 25 }, { -1, 15, 16 },
+            { 39, 21, 10 }, { -1, -1, 40 }, { -1, 41, 40 }, { -1, -1, 40 }, { -1, -1, 28 }, { -1, -1, 28 }, { -1, 42, 28 },
+            { -1, -1, 28 }, { -1, -1, 28 }, { -1, -1, 28 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, 28 }, { 0, 3, 33 },
+            { -1, 16, 3 },  { -1, -1, -1 }, { -1, -1, 28 }, { -1, -1, 28 }, { -1, 49, 28 }, { -1, 42, 28 }, { 42, 49, 28 },
+            { 7, 42, 28 },  { 42, 50, 28 }, { 42, 28, 6 },  { -1, -1, 28 }, { -1, -1, 26 }, { 0, 49, 28 },  { -1, -1, 28 },
+            { -1, -1, 28 }, { -1, -1, 28 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, 49, 28 }, { -1, 42, 28 }, { -1, 49, 28 }, { -1, 42, 28 },
+            { -1, 51, 42 }, { -1, 52, 28 }, { -1, -1, -1 }, { -1, 52, 28 }, { 42, -1, 28 }, { 42, -1, 28 }, { -1, 42, 28 },
+            { -1, -1, 28 }, { -1, 28, 42 }, { -1, 53, 26 }, { 28, 53, 26 }, { -1, -1, 28 }, { -1, 52, 28 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, 34 }, { -1, -1, 34 }, { -1, 42, 34 },
+            { -1, -1, 35 }, { -1, 42, 34 }, { -1, -1, 42 }, { -1, 42, 34 }, { -1, 42, 26 }, { -1, 42, 34 }, { -1, -1, 42 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, 42 }, { -1, -1, 43 },
+            { 26, 42, 28 }, { -1, -1, 42 }, { 26, 44, -1 }, { 26, 44, 42 }, { -1, 42, 34 }, { -1, -1, 35 }, { -1, 26, 45 },
+            { -1, -1, 43 }, { -1, -1, 43 }, { -1, -1, 28 }, { -1, 44, 28 }, { -1, -1, 46 }, { -1, 26, -1 }, { 36, 0, 34 },
+            { -1, -1, 28 }, { -1, 26, 45 }, { -1, -1, 47 }, { -1, -1, 48 }, { 26, 42, 28 }, { -1, 26, 28 }, { 28, 42, 47 },
+            { -1, 26, 28 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { 26, 42, 28 },
+            { 12, 42, 28 }, { -1, 0, 28 },  { 26, 42, 28 }, { -1, 42, 28 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 }, { -1, -1, -1 },
+            { 0, 0, 0 },    { 0, 0, 0 },
         };
 
         // ---- .sap file helpers -------------------------------------------
@@ -506,9 +495,8 @@ namespace openre::audio
     // 0x004EF0D0
     static int room_ck_room70a()
     {
-        return gGameTable.current_stage == 6 && !gGameTable.current_room &&
-               gGameTable.current_cut == 10 &&
-               check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE);
+        return gGameTable.current_stage == 6 && !gGameTable.current_room && gGameTable.current_cut == 10
+            && check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE);
     }
 
     // 0x004EEF30
@@ -879,8 +867,7 @@ namespace openre::audio
                 }
             }
             return 1;
-        default:
-            return 1;
+        default: return 1;
         }
     }
 
@@ -1053,8 +1040,7 @@ namespace openre::audio
                 return 0;
             buf = gGameTable.audio_BufferVoice[id];
             break;
-        default:
-            return 1;
+        default: return 1;
         }
 
         // LABEL_67: stop the specific buffer; return 0 if Stop() fails.
@@ -1080,10 +1066,8 @@ namespace openre::audio
             case 21:
             case 23:
             case 26:
-            case 30:
-                return 1;
-            default:
-                return 0;
+            case 30: return 1;
+            default: return 0;
             }
         }
 
@@ -1100,10 +1084,8 @@ namespace openre::audio
         case 27:
         case 34:
         case 51:
-        case 52:
-            return 1;
-        default:
-            return 0;
+        case 52: return 1;
+        default: return 0;
         }
     }
 
@@ -1158,10 +1140,8 @@ namespace openre::audio
                 {
                 case 3:
                 case 7:
-                case 18:
-                    return 1;
-                default:
-                    break;
+                case 18: return 1;
+                default: break;
                 }
                 break;
             case 6:
@@ -1170,8 +1150,7 @@ namespace openre::audio
                 if (room == 4)
                     return 1;
                 break;
-            default:
-                break;
+            default: break;
             }
         }
         else if (room == 15)
@@ -1305,8 +1284,7 @@ namespace openre::audio
         case 7: // ST_VOICE
             return ss_load_sap(7, id, bank, player);
 
-        default:
-            return 1;
+        default: return 1;
         }
     }
 
@@ -1359,8 +1337,7 @@ namespace openre::audio
                 return 0;
             pbuffer = &gGameTable.audio_BufferVoice[sub];
             break;
-        default:
-            return 0;
+        default: return 0;
         }
 
         if (!pbuffer)
@@ -1387,8 +1364,7 @@ namespace openre::audio
             if (gGameTable.current_stage == stage && gGameTable.current_room == room)
                 return 1;
         }
-        else if (gGameTable.current_stage == stage && gGameTable.current_room == room
-                 && gGameTable.current_cut == cut)
+        else if (gGameTable.current_stage == stage && gGameTable.current_room == room && gGameTable.current_cut == cut)
         {
             return 1;
         }
@@ -1474,8 +1450,7 @@ namespace openre::audio
                 return 0;
             v5 = &gGameTable.audio_BufferVoice[index];
             break;
-        default:
-            return 0;
+        default: return 0;
         }
 
         // Shared tail: all paths that resolve a buffer land here.
@@ -1597,8 +1572,7 @@ namespace openre::audio
                 return 0;
             v8 = &gGameTable.audio_BufferVoice[index];
             break;
-        default:
-            return 0;
+        default: return 0;
         }
 
         // Shared tail: all paths that resolve a buffer land here. The original
@@ -1662,8 +1636,7 @@ namespace openre::audio
                 return 0;
             v3 = &gGameTable.audio_BufferVoice[index];
             break;
-        default:
-            return 0;
+        default: return 0;
         }
 
         // Shared tail: all paths that resolve a buffer land here. The original
@@ -2230,13 +2203,13 @@ namespace openre::audio
         if (!gGameTable.enable_dsound)
             return;
 
-        *rev_vol = 0x400040;   // SND_VOL { left = 0x40, right = 0x40 }
+        *rev_vol = 0x400040; // SND_VOL { left = 0x40, right = 0x40 }
         *revd_vol = 0x400040;
-        *main_vol = 0x7F007F;  // SND_VOL { left = 0x7F, right = 0x7F }
+        *main_vol = 0x7F007F; // SND_VOL { left = 0x7F, right = 0x7F }
         *cd_vol = 0x7F007F;
 
-        gGameTable.vab_id[3] = gGameTable.vab_id[2] = gGameTable.vab_id[1] = gGameTable.vab_id[0] =
-            gGameTable.vab_id[6] = gGameTable.vab_id[5] = gGameTable.vab_id[4] = 0xFF;
+        gGameTable.vab_id[3] = gGameTable.vab_id[2] = gGameTable.vab_id[1] = gGameTable.vab_id[0] = gGameTable.vab_id[6]
+            = gGameTable.vab_id[5] = gGameTable.vab_id[4] = 0xFF;
 
         *fade_rtn = 0;
         *fade_time = 0;
@@ -2246,14 +2219,14 @@ namespace openre::audio
         // writing one word plus eight dwords per iteration. The compare
         // happens BEFORE the writes, so when v1 reaches Se_pri (0x693000) the
         // writes are skipped.
-        auto v0 = dword_693B24;  // int32_t*
-        auto v1 = word_693030;   // uint16_t*
+        auto v0 = dword_693B24; // int32_t*
+        auto v1 = word_693030;  // uint16_t*
         do
         {
             v1 -= 1;
             v0 -= 8;
             *v1 = 0;
-            *(v0 - 1) = 0;       // [eax-4]
+            *(v0 - 1) = 0; // [eax-4]
             v0[0] = 0;
             v0[1] = 0;
             v0[2] = 0;
@@ -2281,8 +2254,8 @@ namespace openre::audio
             *dword_693B20 = 0;
             gGameTable.dword_693C4C = 0;
 
-            *bgm_sub = 0xFF;   // Bgm.Sub = -1
-            *bgm_main = 0xFF;  // Bgm.Main = -1
+            *bgm_sub = 0xFF;  // Bgm.Sub = -1
+            *bgm_main = 0xFF; // Bgm.Main = -1
 
             // Walk the SEQCTR table backwards from 0x69381C down to 0x693804
             // (compare happens BEFORE the writes, so the entry at 0x693804 is
@@ -2325,9 +2298,7 @@ namespace openre::audio
             // The original also did a dead strcpy of " !\"#$%&" into a local
             // v12 buffer that was never read again, so it is omitted here.
             const uint8_t core_id_lut[24] = {
-                0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
-                11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                0, 0,
+                0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 0, 0,
             };
 
             char mem[32];
@@ -2505,8 +2476,7 @@ namespace openre::audio
             if (v0)
             {
                 *byte_6941D0 = (uint8_t)(gGameTable.rdt->header.reverb_lv * 4);
-                *dword_693B20 =
-                    (*(uint32_t*)((uint8_t*)v0 + 12) - (*(uint16_t*)((uint8_t*)v0 + 18) << 9) - 2592) & 0xFFFFFFF0;
+                *dword_693B20 = (*(uint32_t*)((uint8_t*)v0 + 12) - (*(uint16_t*)((uint8_t*)v0 + 18) << 9) - 2592) & 0xFFFFFFF0;
                 auto rdt2 = (int32_t)(uintptr_t)gGameTable.rdt->offsets[0];
                 pEdt_adr[5] = rdt2;
                 pEdt_adr[2] = rdt2;
@@ -2693,8 +2663,7 @@ namespace openre::audio
             // Slot control bytes live in two 8-byte-strided pairs.
             for (auto i = 0; i < 2; i++)
             {
-                *((uint8_t*)&gGameTable.byte_69380A + 8 * i)
-                    = (uint8_t)((gGameTable.vab_id[6] >> i) & 1);
+                *((uint8_t*)&gGameTable.byte_69380A + 8 * i) = (uint8_t)((gGameTable.vab_id[6] >> i) & 1);
                 if (bgm_ck_room(0, 4, -1) == 1 || bgm_ck_room(0, 0, -1) == 1)
                     ss_set_vol(6, i, dword_69380C[4 * i]);
                 else
@@ -2727,9 +2696,8 @@ namespace openre::audio
 
                 // Resolve the current stage/room to its BGM-table entry and
                 // latch the requested main/sub ids from it.
-                gGameTable.current_bgm_address = (uint8_t*)&gGameTable
-                                                     .bgm_table[gGameTable.current_room
-                                                         + byte_53C790[gGameTable.current_stage]];
+                gGameTable.current_bgm_address
+                    = (uint8_t*)&gGameTable.bgm_table[gGameTable.current_room + byte_53C790[gGameTable.current_stage]];
                 *main_bgm_id = *((uint8_t*)gGameTable.current_bgm_address);
                 *subb_bmg_id = *((uint8_t*)gGameTable.current_bgm_address + 1);
                 ((uint8_t*)gGameTable.ctcb)[15] = 1;
@@ -2862,9 +2830,7 @@ namespace openre::audio
                 // Resolve the current stage/room to its BGM-table entry (same
                 // index pattern as Snd_bgm_set) and check whether the main/sub
                 // ids in the table still match what is currently playing.
-                auto v0 = (uint8_t*)&gGameTable
-                              .bgm_table[gGameTable.current_room
-                                  + byte_53C790[gGameTable.current_stage]];
+                auto v0 = (uint8_t*)&gGameTable.bgm_table[gGameTable.current_room + byte_53C790[gGameTable.current_stage]];
                 gGameTable.current_bgm_address = v0;
 
                 if (((*bgm_main ^ v0[0]) & 0x3F) != 0)
@@ -2875,14 +2841,12 @@ namespace openre::audio
                 {
                     if (((*bgm_sub ^ v0[1]) & 0x3F) != 0)
                     {
-                        if (gGameTable.byte_693808 == 1
-                            && (ss_get_status(6, 0) & 1) != 0)
+                        if (gGameTable.byte_693808 == 1 && (ss_get_status(6, 0) & 1) != 0)
                         {
                             ss_seq_set_decrescendo(1, 127, 90);
                             gGameTable.byte_693808 = 50;
                         }
-                        if (gGameTable.byte_693810 == 1
-                            && (ss_get_status(6, 1) & 1) != 0)
+                        if (gGameTable.byte_693810 == 1 && (ss_get_status(6, 1) & 1) != 0)
                         {
                             ss_seq_set_decrescendo(2, 127, 90);
                             gGameTable.byte_693810 = 50;
@@ -2903,8 +2867,7 @@ namespace openre::audio
         // 0x004ECCE0
         static void snd_bgm_play_ck()
         {
-            if (gGameTable.dword_99CF6C && gGameTable.enable_dsound
-                && !check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            if (gGameTable.dword_99CF6C && gGameTable.enable_dsound && !check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
             {
                 if (!gGameTable.seq_ctr[1] && gGameTable.seq_ctr[2] > -1)
                 {
@@ -2962,8 +2925,7 @@ namespace openre::audio
                     if (v3 == 1)
                         v2 = 0;
                     break;
-                default:
-                    break;
+                default: break;
                 }
                 break;
             case 1:
@@ -2974,11 +2936,8 @@ namespace openre::audio
                     if (v3 == 2)
                         v2 = 0;
                     break;
-                case 25:
-                    v2 = 0;
-                    break;
-                default:
-                    break;
+                case 25: v2 = 0; break;
+                default: break;
                 }
                 break;
             case 2:
@@ -2993,9 +2952,7 @@ namespace openre::audio
                             v2 = 0;
                     }
                     break;
-                case 1:
-                    v2 = 0;
-                    break;
+                case 1: v2 = 0; break;
                 case 4:
                 case 8:
                 case 10:
@@ -3003,24 +2960,21 @@ namespace openre::audio
                     if (v3 == 1)
                         v2 = 0;
                     break;
-                default:
-                    break;
+                default: break;
                 }
                 break;
             case 3:
                 switch (gGameTable.current_room)
                 {
                 case 0:
-                    if (v3 == 2 && (uint8_t)gGameTable.byte_98E9A6 < 0xA
-                        && (gGameTable.byte_98E9A6 & 1) != 0)
+                    if (v3 == 2 && (uint8_t)gGameTable.byte_98E9A6 < 0xA && (gGameTable.byte_98E9A6 & 1) != 0)
                         v2 = 0;
                     break;
                 case 7:
                     if (v3 == 2)
                         v2 = 0;
                     break;
-                default:
-                    break;
+                default: break;
                 }
                 break;
             case 5:
@@ -3034,12 +2988,10 @@ namespace openre::audio
                     if (v3 == 2)
                         v2 = 0;
                     break;
-                default:
-                    break;
+                default: break;
                 }
                 break;
-            default:
-                break;
+            default: break;
             }
 
             // Common path for every stage/room outcome.
@@ -3062,7 +3014,7 @@ namespace openre::audio
 
                 switch ((a1 >> 24) & 0xF)
                 {
-                case 1: // play
+                case 1:     // play
                     if (v3) // SBGM (type 6)
                     {
                         ss_set_vol(6, v6 - 1, ((uint16_t*)&gGameTable.dword_693804)[4 * v6]);
@@ -3139,8 +3091,7 @@ namespace openre::audio
                     seq_ctr[8 * v6] = 50;
                     break;
 
-                default:
-                    break;
+                default: break;
                 }
 
                 // Volume/pan update, runs after every switch case (including
@@ -3540,18 +3491,10 @@ namespace openre::audio
         int result = 0;
         switch (*byte_69346E)
         {
-        case 0:
-            result = (uint8_t)xa_control_stop();
-            break;
-        case 1:
-            xa_control_init();
-            break;
-        case 2:
-            result = (uint8_t)xa_control_play();
-            break;
-        case 3:
-            result = (uint8_t)xa_control_end();
-            break;
+        case 0: result = (uint8_t)xa_control_stop(); break;
+        case 1: xa_control_init(); break;
+        case 2: result = (uint8_t)xa_control_play(); break;
+        case 3: result = (uint8_t)xa_control_end(); break;
         }
         return result;
     }
@@ -3660,13 +3603,9 @@ namespace openre::audio
             switch (v27 + 2 * (v23 + 2 * v29))
             {
             case 1:
-            case 5:
-                factor = -std::cos(angle);
-                break;
+            case 5: factor = -std::cos(angle); break;
             case 2:
-            case 6:
-                factor = std::cos(angle);
-                break;
+            case 6: factor = std::cos(angle); break;
             default:
                 factor = *(float*)&a2; // unreachable
                 break;
@@ -3703,8 +3642,8 @@ namespace openre::audio
         if (!gGameTable.enable_dsound)
             return;
 
-        int v2 = (a1 >> 24) & 0xFF;      // HIBYTE(a1)
-        int v3 = (a1 >> 16) & 0xFF;      // BYTE2(a1)
+        int v2 = (a1 >> 24) & 0xFF; // HIBYTE(a1)
+        int v3 = (a1 >> 16) & 0xFF; // BYTE2(a1)
         int a1a = a1 & 0xFF;
         int8_t v4 = (int8_t)gGameTable.vab_id[v2];
 
@@ -3932,7 +3871,7 @@ namespace openre::audio
                         {
                             uint16_t left = 127;
                             int v6 = 0;
-                            *main_vol = 8323199;  // 0x7F007F: left=0x7F, right=0x7F
+                            *main_vol = 8323199; // 0x7F007F: left=0x7F, right=0x7F
                             do
                             {
                                 ss_set_vol(5, v6, (left + (uint16_t)mv->right) / 2);

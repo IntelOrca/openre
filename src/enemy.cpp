@@ -252,7 +252,7 @@ namespace openre::enemy
 
     struct PlTimSurface : public MarniSurface
     {
-        uint32_t var_3C;                    // 0x003C
+        uint32_t var_3C; // 0x003C
     };
     static_assert(sizeof(PlTimSurface) == 0x40);
 
@@ -452,7 +452,8 @@ namespace openre::enemy
                 surface_unlock(p_pDDsurface);
 
                 work.bOpen = 1;
-                gPlTextureHandle2[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
+                gPlTextureHandle2[10 * workNo]
+                    = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
             }
 
             p_pDDsurface->width = 256;

@@ -314,7 +314,10 @@ namespace openre::system::audio
         void wr_le32(std::ofstream& file, uint32_t v)
         {
             char b[4] = {
-                (char)(v & 0xFF), (char)((v >> 8) & 0xFF), (char)((v >> 16) & 0xFF), (char)((v >> 24) & 0xFF),
+                (char)(v & 0xFF),
+                (char)((v >> 8) & 0xFF),
+                (char)((v >> 16) & 0xFF),
+                (char)((v >> 24) & 0xFF),
             };
             file.write(b, 4);
         }
@@ -456,10 +459,7 @@ namespace openre::system::audio
                 SDL_AudioSpec dev;
                 if (SDL_GetAudioDeviceFormat(devid, &dev, nullptr))
                     logging::logInfo(
-                        "system_audio: [MIX DUMP] device format {} Hz {} ch fmt {}",
-                        dev.freq,
-                        dev.channels,
-                        (int)dev.format);
+                        "system_audio: [MIX DUMP] device format {} Hz {} ch fmt {}", dev.freq, dev.channels, (int)dev.format);
             }
         }
         dump_mix_init();

@@ -117,23 +117,20 @@ namespace openre::tim
         int depth;
         switch (flags & 7)
         {
-            case 0:
-                depth = 4;
-                if (clutWidth > 0x10)
-                {
-                    marni::out("in fact, this must be 16 as clut_width...%d, but I would recreate it as that the back clut slides into under. TIMObject::In", "");
-                    pTima = 2;
-                }
-                break;
-            case 1:
-                depth = 8;
-                break;
-            case 2:
-                depth = 16;
-                break;
-            default:
-                marni::out("not supported type MarniSystem TIMObject::In", "");
-                return 0;
+        case 0:
+            depth = 4;
+            if (clutWidth > 0x10)
+            {
+                marni::out(
+                    "in fact, this must be 16 as clut_width...%d, but I would recreate it as that the back clut slides into "
+                    "under. TIMObject::In",
+                    "");
+                pTima = 2;
+            }
+            break;
+        case 1: depth = 8; break;
+        case 2: depth = 16; break;
+        default: marni::out("not supported type MarniSystem TIMObject::In", ""); return 0;
         }
 
         int result;

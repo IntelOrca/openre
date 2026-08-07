@@ -2541,8 +2541,7 @@ namespace openre
 
         int xtbl[7] = { 2, 3, 4, 4, 4, 3, 2 };
 
-        interop::thiscall<int, MarniSurface2*, int, int>(
-            (uintptr_t)marni->surface0.vtbl->lock_fn, &marni->surface0, 0, 0);
+        interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)marni->surface0.vtbl->lock_fn, &marni->surface0, 0, 0);
 
         int v1 = 0;
         int v14 = 0;
@@ -2570,8 +2569,7 @@ namespace openre
             v14 = ++v1;
         } while (v1 < 7);
 
-        interop::thiscall<int, MarniSurface2*>(
-            (uintptr_t)marni->surface0.vtbl->unlock_fn, &marni->surface0);
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)marni->surface0.vtbl->unlock_fn, &marni->surface0);
 
         return 1;
     }

@@ -749,7 +749,10 @@ namespace openre::player
             uint16_t v19 = player->pOn_om ? 6 : (uint16_t)((v6 & 0x7F) + a0);
             if (*(int32_t*)((uint8_t*)v5 + 4 * v19) != -1 && a2 != -1)
             {
-                uint8_t* v14 = (uint8_t*)(a3 + 32 * (16 * (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 1) & 0x7F) + (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 2) >> 4) + 0x41));
+                uint8_t* v14 = (uint8_t*)(a3
+                                          + 32
+                                              * (16 * (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 1) & 0x7F)
+                                                 + (*(uint8_t*)((uint8_t*)v5 + 4 * v19 + 2) >> 4) + 0x41));
                 if (*byte_6941D0)
                     v14[1] |= *byte_6941D0;
                 else

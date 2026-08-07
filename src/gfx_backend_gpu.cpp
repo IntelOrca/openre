@@ -1446,8 +1446,7 @@ namespace openre::gfx
                 mStatTextureLoads++;
                 const auto waitT2 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
-                mStatIdleWaitUs
-                    += (SDL_GetPerformanceCounter() - waitT2) * 1000000 / SDL_GetPerformanceFrequency();
+                mStatIdleWaitUs += (SDL_GetPerformanceCounter() - waitT2) * 1000000 / SDL_GetPerformanceFrequency();
                 dstEntry->hasContent = true;
                 dstEntry->contentFromShadow = false; // content arrived via GPU copy
                 logging::logDebug(
@@ -1986,8 +1985,7 @@ namespace openre::gfx
                 // the data before mapping it (simplicity over latency).
                 const auto waitT0 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
-                mStatIdleWaitUs
-                    += (SDL_GetPerformanceCounter() - waitT0) * 1000000 / SDL_GetPerformanceFrequency();
+                mStatIdleWaitUs += (SDL_GetPerformanceCounter() - waitT0) * 1000000 / SDL_GetPerformanceFrequency();
                 void* mapped = SDL_MapGPUTransferBuffer(mDevice, entry.downloadBuffer, false);
                 if (mapped == nullptr)
                 {
@@ -2066,8 +2064,7 @@ namespace openre::gfx
                 }
                 const auto waitT1 = SDL_GetPerformanceCounter();
                 SDL_WaitForGPUIdle(mDevice);
-                mStatIdleWaitUs
-                    += (SDL_GetPerformanceCounter() - waitT1) * 1000000 / SDL_GetPerformanceFrequency();
+                mStatIdleWaitUs += (SDL_GetPerformanceCounter() - waitT1) * 1000000 / SDL_GetPerformanceFrequency();
                 return true;
             }
 
@@ -3045,8 +3042,7 @@ namespace openre::gfx
                 const auto waitT3 = SDL_GetPerformanceCounter();
                 if (!SDL_WaitForGPUFences(mDevice, true, fences, 1))
                     logging::logError("[gfx:gpu] SDL_WaitForGPUFences failed: {}", SDL_GetError());
-                mStatFenceWaitUs
-                    += (SDL_GetPerformanceCounter() - waitT3) * 1000000 / SDL_GetPerformanceFrequency();
+                mStatFenceWaitUs += (SDL_GetPerformanceCounter() - waitT3) * 1000000 / SDL_GetPerformanceFrequency();
                 SDL_ReleaseGPUFence(mDevice, mFrameFence);
                 mFrameFence = nullptr;
             }
