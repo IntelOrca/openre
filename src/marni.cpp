@@ -41,7 +41,7 @@ namespace openre::marni
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
-    void __stdcall surface2_vrelease(MarniSurface2* self);
+    int __stdcall surface2_vrelease(MarniSurface2* self);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -6210,7 +6210,7 @@ namespace openre::marni
     // 0x0040f520
 
     // 0x0040F580
-    static void __stdcall surfacey_vrelease(MarniSurface2* self)
+    static int __stdcall surfacey_vrelease(MarniSurface2* self)
     {
         auto surface = (MarniSurface3*)self;
 
@@ -6239,6 +6239,7 @@ namespace openre::marni
         operator_delete(surface->pDDpalette);
         surface->pDDpalette = nullptr;
         surface2_vrelease(self);
+        return 1;
     }
 
     // 0x0040f600
@@ -6353,7 +6354,7 @@ namespace openre::marni
     }
 
     // 0x00414A40
-    void __stdcall surface2_vrelease(MarniSurface2* self)
+    int __stdcall surface2_vrelease(MarniSurface2* self)
     {
         if (self->bLocked)
         {
@@ -6382,13 +6383,15 @@ namespace openre::marni
         self->bOpen = 0;
         self->var_29 = 0;
         self->var_22 = 0;
+        return 1;
     }
 
     // 0x00414AC0
-    static void __stdcall surface3_vrelease(MarniSurface3* self)
+    static int __stdcall surface3_vrelease(MarniSurface3* self)
     {
         surface2_vrelease(self);
         self->pDDsurface = nullptr;
+        return 1;
     }
 
     // 0x00414AE0
