@@ -86,6 +86,7 @@ namespace openre::marni
     static int __stdcall get_z_buffer_caps(Marni* self);
     static void surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
+    static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
@@ -5969,7 +5970,23 @@ namespace openre::marni
 
     // 0x0040ee00
 
-    // 0x0040ee30
+    // 0x0040EE30
+    static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc)
+    {
+        // IDirect3DTexture2::Load(dst, src) copies the source texture's pixels
+        // into this texture's backing surface. The COM front-end wraps the
+        // IDirect3DTexture2 object and hooks Load (vtable slot 5, offset 0x14)
+        // so the GPU backend replays the copy on its own textures.
+        int result = 0;
+        auto pDDtexture = (LPDIRECT3DTEXTURE2)self->pDDtexture;
+        if (pDDtexture)
+        {
+            result = pDDtexture->Load((LPDIRECT3DTEXTURE2)pSrc->pDDtexture);
+            self->var_2D = pSrc->var_2D;
+            self->var_2C = pSrc->var_2C;
+        }
+        return result;
+    }
 
     // 0x0040EE60
     static int invalidate_window(HWND hWnd, int width, int height, int /*fullscreen*/, LPRECT lpResRect)
@@ -6867,6 +6884,7 @@ namespace openre::marni
         interop::hookThisCall(0x00407020, &create_zbuffer);
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
+        interop::hookThisCall(0x0040EE30, &surfacex_load);
         interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
         interop::hookThisCall(0x00405EC0, &create_texture_handle);
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
