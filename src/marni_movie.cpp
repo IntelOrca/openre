@@ -361,6 +361,112 @@ namespace openre::marni
     // 0x00414FD0
     void __stdcall movie_release(MarniMovie* self)
     {
-        interop::thiscall<int, MarniMovie*>(0x00414FD0, self);
+        movie_seek(self);
+
+        // Keep only the streaming-mode bit; the movie is no longer open.
+        uint32_t streaming = self->flag & 8;
+        self->flag = streaming;
+        self->pos = 0.0;
+
+        if (streaming)
+        {
+            // Streaming mode: stop and release the media stream and samples.
+            if (self->pMediaStream)
+            {
+                auto vtbl = *(uint32_t**)self->pMediaStream;
+                // IAMMultiMediaStream::SetState(STREAMSTATE_STOP) at vtable offset 0x1C
+                auto pfnSetState = (HRESULT(__stdcall*)(void*, uint32_t))vtbl[0x1C / 4];
+                pfnSetState(self->pMediaStream, 0);
+            }
+            if (self->pMediaStream)
+            {
+                auto vtbl = *(uint32_t**)self->pMediaStream;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->pMediaStream);
+            }
+            self->pMediaStream = nullptr;
+
+            if (self->field_90)
+            {
+                auto vtbl = *(uint32_t**)self->field_90;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->field_90);
+            }
+            self->field_90 = nullptr;
+
+            if (self->field_8C)
+            {
+                auto vtbl = *(uint32_t**)self->field_8C;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->field_8C);
+            }
+            self->field_8C = nullptr;
+
+            if (self->field_88)
+            {
+                auto vtbl = *(uint32_t**)self->field_88;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->field_88);
+            }
+            self->field_88 = nullptr;
+        }
+        else
+        {
+            // DirectShow mode: hide and release the video window and graph.
+            if (self->pVideoWindow)
+            {
+                auto vtbl = *(uint32_t**)self->pVideoWindow;
+                // IVideoWindow::put_Visible(FALSE) at vtable offset 0x4C
+                auto pfnVisible = (HRESULT(__stdcall*)(void*, int32_t))vtbl[0x4C / 4];
+                pfnVisible(self->pVideoWindow, 0);
+            }
+            if (self->pVideoWindow)
+            {
+                auto vtbl = *(uint32_t**)self->pVideoWindow;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->pVideoWindow);
+            }
+            self->pVideoWindow = nullptr;
+
+            if (self->field_6C)
+            {
+                auto vtbl = *(uint32_t**)self->field_6C;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->field_6C);
+            }
+            self->field_6C = nullptr;
+
+            if (self->pMediaControl)
+            {
+                auto vtbl = *(uint32_t**)self->pMediaControl;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->pMediaControl);
+            }
+            self->pMediaControl = nullptr;
+
+            if (self->field_78)
+            {
+                auto vtbl = *(uint32_t**)self->field_78;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->field_78);
+            }
+            self->field_78 = nullptr;
+
+            if (self->pMediaPosition)
+            {
+                auto vtbl = *(uint32_t**)self->pMediaPosition;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->pMediaPosition);
+            }
+            self->pMediaPosition = nullptr;
+
+            if (self->pGraphBuilder)
+            {
+                auto vtbl = *(uint32_t**)self->pGraphBuilder;
+                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
+                pfnRelease(self->pGraphBuilder);
+            }
+            self->pGraphBuilder = nullptr;
+        }
     }
 }
