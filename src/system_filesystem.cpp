@@ -118,6 +118,16 @@ namespace openre::system::fs
             return std::string(prefPath) + subPath;
         }
 
+        // Already an absolute path — pass through as-is
+#ifdef _WIN32
+        if ((path[0] && path[1] == ':') || (path[0] == '\\' && path[1] == '\\'))
+#else
+        if (path[0] == '/')
+#endif
+        {
+            return std::string(path);
+        }
+
         // No recognized prefix — fail
         logging::logError("[system::fs::resolvePath] unknown path scheme: {}", path);
         return {};
