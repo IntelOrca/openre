@@ -12,7 +12,7 @@ namespace openre::marni
         if (!(self->flag & 0x01))
             return 0;
 
-        return interop::thiscall<int, MarniMovie*>(0x00414B30, self);
+        return movie_seek(self);
     }
 
     // 0x00414B50
