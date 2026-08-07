@@ -39,6 +39,11 @@ namespace openre::gfx
         virtual HRESULT set_clipper(IUnknown* surface, IUnknown* clipper) = 0;
         virtual HRESULT get_dc(IUnknown* surface, HDC* hdc) = 0;
         virtual HRESULT release_dc(IUnknown* surface, HDC hdc) = 0;
+        // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
+        // surface; the D3D reference performs the real QI and wraps the
+        // returned texture (so its GetHandle/Load reach the backends), the GPU
+        // backend has no interface to hand out.
+        virtual HRESULT query_texture_interface(IUnknown* surface, LPVOID* outTexture) = 0;
 
         // ---- device / scene ----
         virtual void create_device(IUnknown* device) = 0;
@@ -158,6 +163,83 @@ namespace openre::gfx
     {
         const auto hr = backend_d3d()->set_background(viewport, materialHandle);
         backend_gpu()->set_background(viewport, materialHandle);
+        return hr;
+    }
+
+    inline HRESULT surface_is_lost(IUnknown* surface)
+    {
+        const auto hr = backend_d3d()->is_lost(surface);
+        backend_gpu()->is_lost(surface);
+        return hr;
+    }
+
+    inline HRESULT surface_restore(IUnknown* surface)
+    {
+        const auto hr = backend_d3d()->restore(surface);
+        backend_gpu()->restore(surface);
+        return hr;
+    }
+
+    inline HRESULT surface_blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
+    {
+        const auto hr = backend_d3d()->blt(dst, dstRect, src, srcRect, flags, fx);
+        backend_gpu()->blt(dst, dstRect, src, srcRect, flags, fx);
+        return hr;
+    }
+
+    inline HRESULT surface_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc)
+    {
+        const auto hr = backend_d3d()->get_surface_desc(surface, desc);
+        backend_gpu()->get_surface_desc(surface, desc);
+        return hr;
+    }
+
+    inline HRESULT surface_add_attached_surface(IUnknown* surface, IUnknown* attached)
+    {
+        const auto hr = backend_d3d()->add_attached_surface(surface, attached);
+        backend_gpu()->add_attached_surface(surface, attached);
+        return hr;
+    }
+
+    inline HRESULT surface_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key)
+    {
+        const auto hr = backend_d3d()->set_color_key(surface, flags, key);
+        backend_gpu()->set_color_key(surface, flags, key);
+        return hr;
+    }
+
+    inline HRESULT surface_set_palette(IUnknown* surface, IUnknown* palette)
+    {
+        const auto hr = backend_d3d()->set_palette(surface, palette);
+        backend_gpu()->set_palette(surface, palette);
+        return hr;
+    }
+
+    inline HRESULT surface_set_clipper(IUnknown* surface, IUnknown* clipper)
+    {
+        const auto hr = backend_d3d()->set_clipper(surface, clipper);
+        backend_gpu()->set_clipper(surface, clipper);
+        return hr;
+    }
+
+    inline HRESULT surface_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
+    {
+        const auto hr = backend_d3d()->lock(surface, rect, desc, flags, event);
+        backend_gpu()->lock(surface, rect, desc, flags, event);
+        return hr;
+    }
+
+    inline HRESULT surface_unlock(IUnknown* surface, void* lpRect)
+    {
+        const auto hr = backend_d3d()->unlock(surface, lpRect);
+        backend_gpu()->unlock(surface, lpRect);
+        return hr;
+    }
+
+    inline HRESULT surface_query_texture_interface(IUnknown* surface, LPVOID* outTexture)
+    {
+        const auto hr = backend_d3d()->query_texture_interface(surface, outTexture);
+        backend_gpu()->query_texture_interface(surface, outTexture);
         return hr;
     }
 

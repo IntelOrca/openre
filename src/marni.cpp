@@ -500,9 +500,9 @@ namespace openre::marni
     // 0x00402940
     static int __stdcall restore_surfaces(Marni* self)
     {
-        if (((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        if (gfx::surface_is_lost((IUnknown*)self->surface2.pDDsurface) == DDERR_SURFACELOST)
         {
-            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->Restore();
+            gGameTable.error = gfx::surface_restore((IUnknown*)self->surface2.pDDsurface);
             if (gGameTable.error)
             {
                 out("Restoring of a Back surface failed.", "Direct3D::RestoreSurfaces");
@@ -511,9 +511,9 @@ namespace openre::marni
             }
         }
 
-        if (((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        if (gfx::surface_is_lost((IUnknown*)self->surface0.pDDsurface) == DDERR_SURFACELOST)
         {
-            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->Restore();
+            gGameTable.error = gfx::surface_restore((IUnknown*)self->surface0.pDDsurface);
             if (gGameTable.error)
             {
                 out("Restoring of a Back surface failed.", "Direct3D::RestoreSurfaces");
@@ -525,9 +525,9 @@ namespace openre::marni
         if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
             return 1;
 
-        if (((LPDIRECTDRAWSURFACE)self->surfaceZ.pDDsurface)->IsLost() == DDERR_SURFACELOST)
+        if (gfx::surface_is_lost((IUnknown*)self->surfaceZ.pDDsurface) == DDERR_SURFACELOST)
         {
-            gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surfaceZ.pDDsurface)->Restore();
+            gGameTable.error = gfx::surface_restore((IUnknown*)self->surfaceZ.pDDsurface);
             if (gGameTable.error)
             {
                 out("Restoring of a Z surface failed.", "Direct3D::RestoreSurfaces");
@@ -549,7 +549,7 @@ namespace openre::marni
                 continue;
 
             auto v6 = node.surface;
-            if (v6 != nullptr && (v6->bOpen != 1 || ((LPDIRECTDRAWSURFACE)v6->pDDsurface)->IsLost() != DDERR_SURFACELOST))
+            if (v6 != nullptr && (v6->bOpen != 1 || gfx::surface_is_lost((IUnknown*)v6->pDDsurface) != DDERR_SURFACELOST))
                 continue;
 
             for (auto j = 0; j < 256; j++)
@@ -567,8 +567,8 @@ namespace openre::marni
 
     static void __stdcall flip_blt(Marni* self, DWORD width, DWORD height)
     {
-        auto src = ((LPDIRECTDRAWSURFACE2)self->surface0.pDDsurface);
-        auto dst = ((LPDIRECTDRAWSURFACE2)self->surface2.pDDsurface);
+        auto src = (IUnknown*)self->surface0.pDDsurface;
+        auto dst = (IUnknown*)self->surface2.pDDsurface;
 
         RECT srcRect;
         SetRect(&srcRect, 0, 0, width, height);
@@ -581,7 +581,7 @@ namespace openre::marni
         ddbltfx.dwSize = sizeof(DDBLTFX);
         ddbltfx.dwDDFX = DDBLTFX_NOTEARING;
 
-        dst->Blt(&dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
+        gfx::surface_blt(dst, &dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
         gfx::notify_present();
     }
 
@@ -1209,7 +1209,7 @@ namespace openre::marni
             out();
             return 0;
         }
-        gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->SetClipper((LPDIRECTDRAWCLIPPER)self->pClipper);
+        gGameTable.error = gfx::surface_set_clipper((IUnknown*)self->surface2.pDDsurface, (IUnknown*)self->pClipper);
         if (gGameTable.error)
         {
             out();
@@ -1226,7 +1226,8 @@ namespace openre::marni
             DDBLTFX ddbltfx;
             ZeroMemory(&ddbltfx, sizeof(DDBLTFX));
             ddbltfx.dwSize = sizeof(DDBLTFX);
-            ((LPDIRECTDRAWSURFACE)self->surface2.pDDsurface)->Blt(&rc, 0, 0, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
+            gfx::surface_blt(
+                (IUnknown*)self->surface2.pDDsurface, &rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
         }
 
         gGameTable.error = get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface);
@@ -2848,7 +2849,7 @@ namespace openre::marni
         memset(&backBufferDesc, 0, sizeof(backBufferDesc));
         backBufferDesc.dwSize = sizeof(DDSURFACEDESC);
         backBufferDesc.dwFlags = DDSD_CAPS;
-        ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->GetSurfaceDesc(&backBufferDesc);
+        gfx::surface_get_surface_desc((IUnknown*)self->surface0.pDDsurface, &backBufferDesc);
 
         DDSURFACEDESC desc;
         memset(&desc, 0, sizeof(desc));
@@ -2899,7 +2900,7 @@ namespace openre::marni
             }
         }
 
-        gGameTable.error = ((LPDIRECTDRAWSURFACE)self->surface0.pDDsurface)->AddAttachedSurface(*pDDsurfaceZ);
+        gGameTable.error = gfx::surface_add_attached_surface((IUnknown*)self->surface0.pDDsurface, (IUnknown*)*pDDsurfaceZ);
         if (gGameTable.error)
         {
             error(gGameTable.error);
@@ -6270,8 +6271,8 @@ namespace openre::marni
             self->pDDtexture = NULL;
         }
 
-        auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
-        auto hr = pDDsurface->QueryInterface(IID_IDirect3DTexture2, (LPVOID*)&pDDtexture);
+        auto pDDsurface = (IUnknown*)self->pDDsurface;
+        auto hr = gfx::surface_query_texture_interface(pDDsurface, (LPVOID*)&pDDtexture);
         if (FAILED(hr))
         {
             out("", "Direct3DSurface::CreateTextureObject");
@@ -6468,7 +6469,7 @@ namespace openre::marni
     {
         memset(lpDDSurfaceDesc, 0, sizeof(*lpDDSurfaceDesc));
         lpDDSurfaceDesc->dwSize = sizeof(DDSURFACEDESC);
-        return lpDDSurface->GetSurfaceDesc(lpDDSurfaceDesc);
+        return gfx::surface_get_surface_desc((IUnknown*)lpDDSurface, lpDDSurfaceDesc);
     }
 
     // 0x0040F1A0
@@ -6594,8 +6595,8 @@ namespace openre::marni
         ddbltfx.dwSize = sizeof(DDBLTFX);
         ddbltfx.dwFillColor = packed;
 
-        HRESULT hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)
-                         ->Blt(&rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
+        HRESULT hr = gfx::surface_blt(
+            (IUnknown*)self->pDDsurface, &rc, nullptr, nullptr, DDBLT_WAIT | DDBLT_COLORFILL, (LPDDBLTFX)&ddbltfx);
         if (!hr)
             return 1;
 
@@ -6663,8 +6664,8 @@ namespace openre::marni
         memset(&desc, 0, sizeof(desc));
         desc.dwSize = sizeof(DDSURFACEDESC);
 
-        auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
-        if (pDDsurface->Lock(nullptr, &desc, DDLOCK_WAIT, nullptr))
+        auto pDDsurface = (IUnknown*)self->pDDsurface;
+        if (gfx::surface_lock(pDDsurface, nullptr, &desc, DDLOCK_WAIT, nullptr))
             return 0;
 
         self->pBitmap = desc.lpSurface;
@@ -6869,7 +6870,7 @@ namespace openre::marni
             return 0;
         }
 
-        ((LPDIRECTDRAWSURFACE)self->pDDsurface)->Unlock(nullptr);
+        gfx::surface_unlock((IUnknown*)self->pDDsurface, nullptr);
 
         if (!self->var_28) // Is_paletted
         {
@@ -7018,7 +7019,7 @@ namespace openre::marni
         // DDCKEY_COLORSPACE (1): the colour-space key is rejected with
         // E_INVALIDARG on these surfaces, which would leave bOpen cleared and
         // break the whole texture pipeline.
-        hr = ((LPDIRECTDRAWSURFACE)self->pDDsurface)->SetColorKey(DDCKEY_SRCBLT, &colorkey);
+        hr = gfx::surface_set_color_key((IUnknown*)self->pDDsurface, DDCKEY_SRCBLT, &colorkey);
         if (hr)
         {
             out("failed to set the color key", "MarniSystem DirectDrawSurface::CreateWork");
@@ -7081,7 +7082,7 @@ namespace openre::marni
         return 0;
 
     done_palettes:
-        if (((LPDIRECTDRAWSURFACE)self->pDDsurface)->SetPalette((LPDIRECTDRAWPALETTE)self->pDDpalette[0]))
+        if (gfx::surface_set_palette((IUnknown*)self->pDDsurface, (IUnknown*)self->pDDpalette[0]))
         {
             out("failed to establish DirectDrawPalette", "MarniSystem DirectDrawSurface::CreateWork");
             surfacex_vrelease(self);
@@ -7123,7 +7124,7 @@ namespace openre::marni
         DDSURFACEDESC desc = {};
         desc.dwSize = 0x6C; // matches the original (DDSURFACEDESC dwSize on x86)
         desc.dwFlags = DDSD_PIXELFORMAT;
-        ((LPDIRECTDRAWSURFACE)self->pDDsurface)->GetSurfaceDesc(&desc);
+        gfx::surface_get_surface_desc((IUnknown*)self->pDDsurface, &desc);
 
         uint32_t alphaMask = desc.ddpfPixelFormat.dwRGBAlphaBitMask;
         int alphaBits = 0;
@@ -7193,20 +7194,20 @@ namespace openre::marni
         // without alpha (or with a zero mask) are treated as fully opaque.
         if (surface_get_alpha_bits(self))
         {
-            auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
+            auto pDDsurface = (IUnknown*)self->pDDsurface;
 
             DDSURFACEDESC desc;
             memset(&desc, 0, sizeof(desc));
             desc.dwSize = sizeof(DDSURFACEDESC);
             desc.dwFlags = DDSD_PIXELFORMAT;
-            pDDsurface->GetSurfaceDesc(&desc);
+            gfx::surface_get_surface_desc(pDDsurface, &desc);
 
             // Keep the pixel format; the descriptor is reused (re-zeroed) for Lock.
             DDPIXELFORMAT pixelFormat = desc.ddpfPixelFormat;
 
             memset(&desc, 0, sizeof(desc));
             desc.dwSize = sizeof(DDSURFACEDESC);
-            pDDsurface->Lock(nullptr, &desc, DDLOCK_WAIT, nullptr);
+            gfx::surface_lock(pDDsurface, nullptr, &desc, DDLOCK_WAIT, nullptr);
 
             // Scan the locked pixels: for each pixel, test the alpha bits (the mask
             // shifted to the pixel's position) against the surface memory. The row
@@ -7243,7 +7244,7 @@ namespace openre::marni
                 } while (y < height);
             }
 
-            pDDsurface->Unlock(nullptr);
+            gfx::surface_unlock(pDDsurface, nullptr);
         }
 
         self->var_2C = hasTransparency;
@@ -8486,9 +8487,9 @@ namespace openre::marni
             if (index < 0 || index >= texture.surface.pal_cnt)
                 return 0;
 
-            auto pDDsurface = (LPDIRECTDRAWSURFACE2)result->surface->pDDsurface;
-            auto pDDpalette = (LPDIRECTDRAWPALETTE)result->surface->pDDpalette[index];
-            pDDsurface->SetPalette(pDDpalette);
+            auto pDDsurface = (IUnknown*)result->surface->pDDsurface;
+            auto pDDpalette = (IUnknown*)result->surface->pDDpalette[index];
+            gfx::surface_set_palette(pDDsurface, pDDpalette);
             return result;
         }
         default: return nullptr;

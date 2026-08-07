@@ -294,11 +294,7 @@ namespace openre::gfx
             if (FAILED(hr) || ppv == nullptr || *ppv == nullptr)
                 return hr;
             if (IsEqualGUID(riid, IID_IDirect3DTexture2))
-            {
-                auto* texture = reinterpret_cast<IDirect3DTexture2*>(*ppv);
-                textureToSurface()[texture] = baseSurface(self);
-                wrap_texture2(texture);
-            }
+                wrap_texture_from_surface(reinterpret_cast<IDirect3DTexture2*>(*ppv), self);
             else if (
                 IsEqualGUID(riid, IID_IDirectDrawSurface) || IsEqualGUID(riid, IID_IDirectDrawSurface2)
                 || IsEqualGUID(riid, IID_IDirectDrawSurface3) || IsEqualGUID(riid, IID_IDirectDrawSurface4))
@@ -855,6 +851,14 @@ namespace openre::gfx
         newVtbl[slots::TEX_Load] = reinterpret_cast<void*>(&hook_texture_load);
         registry::set(texture, orig, newVtbl);
         *reinterpret_cast<void***>(texture) = newVtbl;
+    }
+
+    void wrap_texture_from_surface(IDirect3DTexture2* texture, IDirectDrawSurface* surface)
+    {
+        if (texture == nullptr || surface == nullptr)
+            return;
+        textureToSurface()[texture] = baseSurface(surface);
+        wrap_texture2(texture);
     }
 
     // ----------------------------------------------------------------------

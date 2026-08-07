@@ -91,4 +91,8 @@ namespace openre::gfx
     void wrap_viewport2(IDirect3DViewport2* viewport);
     void wrap_material2(IDirect3DMaterial2* material);
     void wrap_texture2(IDirect3DTexture2* texture);
+    // Wraps an IDirect3DTexture2 obtained from `surface` via
+    // QueryInterface(IID_IDirect3DTexture2) so its GetHandle/Load reach the
+    // backends, and records the texture -> base surface mapping.
+    void wrap_texture_from_surface(IDirect3DTexture2* texture, IDirectDrawSurface* surface);
 }

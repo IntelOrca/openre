@@ -1158,8 +1158,7 @@ namespace openre::gfx
                 }
 
                 void* bits = nullptr;
-                HBITMAP bmp
-                    = CreateDIBSection(nullptr, reinterpret_cast<BITMAPINFO*>(&bmi), DIB_RGB_COLORS, &bits, nullptr, 0);
+                HBITMAP bmp = CreateDIBSection(nullptr, reinterpret_cast<BITMAPINFO*>(&bmi), DIB_RGB_COLORS, &bits, nullptr, 0);
                 if (bmp == nullptr)
                 {
                     logging::logError(
@@ -1487,6 +1486,15 @@ namespace openre::gfx
                     static_cast<void*>(surface),
                     static_cast<void*>(clipper));
                 return S_OK;
+            }
+
+            HRESULT query_texture_interface(IUnknown* /*surface*/, LPVOID* /*outTexture*/) override
+            {
+                // The GPU backend has no IDirect3DTexture2 object to hand
+                // out; the D3D reference performs the real QI, and texture
+                // creation reaches this backend through the GetHandle/Load
+                // broadcasts.
+                return E_NOINTERFACE;
             }
 
             // ---- device / scene ----

@@ -326,6 +326,26 @@ namespace openre::gfx
                 return E_UNEXPECTED;
             }
 
+            HRESULT query_texture_interface(IUnknown* surface, LPVOID* outTexture) override
+            {
+                // The game obtains IDirect3DTexture2 objects by QI-ing a
+                // surface; forward to the real QI and wrap the returned
+                // texture so its GetHandle/Load reach the backends.
+                if (const auto* e = registry::find(surface); e != nullptr)
+                {
+                    using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, REFIID, void**);
+                    const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::SURF_QueryInterface])(
+                        reinterpret_cast<IDirectDrawSurface*>(surface), IID_IDirect3DTexture2, outTexture);
+                    if (SUCCEEDED(hr) && outTexture != nullptr && *outTexture != nullptr)
+                    {
+                        wrap_texture_from_surface(
+                            reinterpret_cast<IDirect3DTexture2*>(*outTexture), reinterpret_cast<IDirectDrawSurface*>(surface));
+                    }
+                    return hr;
+                }
+                return E_UNEXPECTED;
+            }
+
             HRESULT get_dc(IUnknown* surface, HDC* hdc) override
             {
                 // GDI text bridge (save screen). The GPU backend supplies the
