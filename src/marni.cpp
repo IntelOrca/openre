@@ -6290,6 +6290,99 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x0040F790
+    static int __stdcall surfacex_vlock(MarniSurfaceX* self, int* a2, int* a3)
+    {
+        if (!self->bOpen)
+        {
+            out("this class is invalid.", "DirectDrawSurface::Lock");
+            return 0;
+        }
+        if (self->bLocked == 1)
+        {
+            out("you are about to try the lock double.", "DirectDrawSurface::Lock");
+            return 0;
+        }
+        if (self->bPalLocked == 1)
+        {
+            out("you must unlock for the palette before calling this function.", "DirectDrawSurface::Lock");
+            return 0;
+        }
+
+        DDSURFACEDESC desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.dwSize = sizeof(DDSURFACEDESC);
+
+        auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
+        if (pDDsurface->Lock(nullptr, &desc, DDLOCK_WAIT, nullptr))
+            return 0;
+
+        self->pBitmap = desc.lpSurface;
+        self->width = (int16_t)desc.dwWidth;
+        self->pitch = (int16_t)desc.lPitch;
+        self->height = (int16_t)desc.dwHeight;
+        self->bpp = (uint8_t)desc.ddpfPixelFormat.dwRGBBitCount;
+
+        if (self->var_28)
+        {
+            // Is_paletted: make room for pal_cnt palettes of 1 << bpp DWORD entries each.
+            self->pPalette = operator_new(4 * self->pal_cnt * (1 << self->bpp));
+            if (!self->pPalette)
+            {
+                out("failed to allocate the work for palette.", "MarniSystem DirectDrawSurface::Lock");
+                return 0;
+            }
+
+            PALETTEENTRY entries[256];
+            for (int i = 0; i < self->pal_cnt; i++)
+            {
+                auto pDDpalette = (LPDIRECTDRAWPALETTE)self->pDDpalette[i];
+                if (pDDpalette->GetEntries(0, 0, 1 << self->bpp, entries))
+                {
+                    out("failed to read the palette from device.", "MarniSystem DirectDrawSurface::Lock");
+                    return 0;
+                }
+
+                int paletteSize = 1 << self->bpp;
+                auto pPalette = (uint32_t*)self->pPalette;
+                for (int j = 0; j < paletteSize; j++)
+                {
+                    // Pack PALETTEENTRY {peRed, peGreen, peBlue, peFlags} as 0x00RRGGBB.
+                    pPalette[i * paletteSize + j] = ((uint32_t)entries[j].peRed << 16) |
+                                                    ((uint32_t)entries[j].peGreen << 8) |
+                                                    entries[j].peBlue;
+                }
+            }
+
+            // Force the surface description to 8-8-8-8 RGBA (the palette entries
+            // were converted to full-colour DWORDs above).
+            self->desc.a_shift = 24;
+            self->desc.a_mask = 0xFF;
+            self->desc.a_bitcnt = 8;
+            self->desc.r_shift = 16;
+            self->desc.r_mask = 0xFF;
+            self->desc.r_bitcnt = 8;
+            self->desc.g_shift = 8;
+            self->desc.g_mask = 0xFF;
+            self->desc.g_bitcnt = 8;
+            self->desc.b_shift = 0;
+            self->desc.b_mask = 0xFF;
+            self->desc.b_bitcnt = 8;
+        }
+        else if ((desc.ddsCaps.dwCaps & 0x20000) == 0) // DDSCAPS_ZBUFFER
+        {
+            ddrawdesc2surfdesc(&desc, &self->desc);
+        }
+
+        if (a2)
+            *a2 = (int)self->pBitmap;
+        if (a3)
+            *a3 = (int)self->pPalette;
+
+        self->bLocked = 1;
+        return 1;
+    }
+
     // 0x0040f600
 
     // 0x0040f9c0
@@ -6997,6 +7090,7 @@ namespace openre::marni
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x0040EE30, &surfacex_load);
+        interop::hookThisCall(0x0040F790, &surfacex_vlock);
         interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
         interop::hookThisCall(0x00405EC0, &create_texture_handle);
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
