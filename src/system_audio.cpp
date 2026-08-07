@@ -563,12 +563,12 @@ namespace openre::system::audio
         logging::logInfo("system_audio: format set to {} Hz, {} channel(s)", frequency, channels);
     }
 
-    bool load_sap(const uint8_t* data, int size, int type, int sub)
+    uint32_t load_sap(const uint8_t* data, int size, int type, int sub)
     {
         if (!data || size < 12)
-            return false;
+            return 0;
         if (std::memcmp(data, "RIFF", 4) != 0 || std::memcmp(data + 8, "WAVE", 4) != 0)
-            return false;
+            return 0;
 
         // Walk the RIFF chunk list: "fmt " then "data", in any order.
         size_t pos = 12;
@@ -580,12 +580,12 @@ namespace openre::system::audio
             const uint8_t* h = data + pos;
             size_t ckSize = rd_u32(h + 4);
             if (ckSize > (size_t)size - (pos + 8))
-                return false; // truncated chunk
+                return 0; // truncated chunk
             const uint8_t* body = h + 8;
             if (std::memcmp(h, "fmt ", 4) == 0)
             {
                 if (!parse_wave_fmt(body, ckSize, fmt))
-                    return false;
+                    return 0;
             }
             else if (std::memcmp(h, "data", 4) == 0)
             {
@@ -596,7 +596,7 @@ namespace openre::system::audio
         }
 
         if (!pcm || pcmSize == 0 || fmt.samplesPerSec <= 0 || fmt.channels < 1 || fmt.channels > 2)
-            return false;
+            return 0;
 
         std::vector<int16_t> decoded;
         if (fmt.formatTag == 2)
@@ -604,13 +604,13 @@ namespace openre::system::audio
         else
             decoded = decode_pcm(pcm, pcmSize, fmt);
         if (decoded.empty())
-            return false;
+            return 0;
 
         // decoded holds frames * channels interleaved samples.
         int frames = (int)(decoded.size() / (size_t)fmt.channels);
         uint32_t handle = create_buffer(type, sub, decoded.data(), (int)decoded.size(), fmt.samplesPerSec, fmt.channels, false);
         if (handle == 0)
-            return false;
+            return 0;
         logging::logInfo(
             "system_audio: loaded sap type={} sub={} ({} Hz, {} ch, {} frames, tag {})",
             type,
@@ -619,7 +619,7 @@ namespace openre::system::audio
             fmt.channels,
             frames,
             fmt.formatTag);
-        return true;
+        return handle;
     }
 
     uint32_t create_buffer(int type, int sub, const void* pcm, int num_samples, int frequency, int channels, bool loop)

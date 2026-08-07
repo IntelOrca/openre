@@ -23,9 +23,10 @@ namespace openre::system::audio
     void set_format(int frequency, int channels);
 
     // Decodes a .sap file (a RIFF WAV container holding MS-ADPCM or PCM data,
-    // no mmio/ACM involved) and registers it as the voice for (type, sub).
-    // Returns false on malformed data or unsupported formats.
-    bool load_sap(const uint8_t* data, int size, int type, int sub);
+    // no mmio/ACM involved) and registers it as the voice for (type, sub),
+    // replacing any existing voice in that slot. Returns the opaque handle for
+    // the new voice, or 0 on malformed data or unsupported formats.
+    uint32_t load_sap(const uint8_t* data, int size, int type, int sub);
 
     // Registers decoded interleaved s16 PCM as the voice for (type, sub),
     // replacing any existing voice in that slot. `num_samples` is the total

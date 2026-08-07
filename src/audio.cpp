@@ -5,18 +5,19 @@
 #include "openre.h"
 #include "scheduler.h"
 #include "system_audio.h"
+#include "system_filesystem.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <dsound.h>
-#include <malloc.h>
-#include <mmsystem.h>
 #include <string>
 #include <windows.h>
 
-#include <mmreg.h>
-#include <msacm.h>
+// <mmsystem.h> only supplies mmioOpenA/mmioRead/mmioSeek for the HMMIO
+// wrapper entry points (ss_create_buffer / ss_voice_parse) that keep the
+// original calling convention for their hooks; all real file reading goes
+// through system::fs.
+#include <mmsystem.h>
 
 using namespace openre::file;
 
@@ -245,16 +246,43 @@ namespace openre::audio
             {0, 0, 0},
         };
 
-        // Releases a memory block previously obtained from GlobalAlloc/GlobalLock.
-        // Matches the original double GlobalHandle()/GlobalUnlock/GlobalFree idiom.
-        void free_hglobal_pointer(void* p)
+        // ---- .sap file helpers -------------------------------------------
+        // .sap files start with an 8-byte mask header (two little-endian
+        // int32 bitmasks) followed by one RIFF WAV chunk per set bit. The
+        // original decoded these via mmio/ACM; the raw bytes are now handed
+        // straight to system::audio, which parses the RIFF header itself.
+
+        uint32_t read_le32(const uint8_t* p)
         {
-            if (p == nullptr)
-                return;
-            HGLOBAL h = ::GlobalHandle(p);
-            ::GlobalUnlock(h);
-            h = ::GlobalHandle(p);
-            ::GlobalFree(h);
+            return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        }
+
+        uint16_t read_le16(const uint8_t* p)
+        {
+            return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+        }
+
+        // Total length of the RIFF WAV chunk at `p` (8-byte chunk header plus
+        // contents plus any pad byte), or 0 when the data is not a valid RIFF
+        // chunk. The original obtained this implicitly through mmio.
+        uint32_t riff_chunk_length(const uint8_t* p)
+        {
+            if (!p || std::memcmp(p, "RIFF", 4) != 0)
+                return 0;
+            uint32_t cksize = read_le32(p + 4);
+            return 8 + cksize + (cksize & 1);
+        }
+
+        // Same as riff_chunk_length, bounds-checked against the file buffer;
+        // returns 0 when the chunk at `pos` is truncated or malformed.
+        size_t sap_chunk_size(const std::vector<uint8_t>& data, size_t pos)
+        {
+            if (pos + 12 > data.size())
+                return 0;
+            uint32_t length = riff_chunk_length(data.data() + pos);
+            if (length == 0 || pos + length > data.size())
+                return 0;
+            return length;
         }
     }
 
@@ -263,10 +291,42 @@ namespace openre::audio
     static int ss_stop_all();
     static int ss_stop_group(int type, int id);
     static int ss_shutdown();
+    static int ss_create_buffer_data(const uint8_t* data, int size, DWORD type, DWORD sub);
     static int ss_load_sap(DWORD type, int id, int bank, int player);
     static int ss_load_steps(const char* name, int a2);
     static int ss_load_bgm(const char* name, DWORD type, int sample);
-    static BOOL CALLBACK acmDriverEnumCallback(HACMDRIVERID hadid, DWORD_PTR dwInstance, DWORD fdwSupport);
+
+    // Registers every buffer described by an .sap payload (8-byte mask header
+    // followed by one RIFF WAV chunk per set bit, in ascending bit order) with
+    // system_audio. mask0 covers subs subBase..subBase+31, mask1 covers
+    // subBase+32..subBase+47. Mirrors the original's per-bit ss_create_buffer
+    // calls.
+    static void sap_load_masked(const std::vector<uint8_t>& data, DWORD type, int subBase, uint32_t mask0, uint32_t mask1)
+    {
+        size_t pos = 8;
+        for (int b = 0; b < 32; b++)
+        {
+            if ((mask0 >> b) & 1)
+            {
+                size_t ck = sap_chunk_size(data, pos);
+                if (!ck)
+                    return;
+                ss_create_buffer_data(data.data() + pos, (int)ck, type, subBase + b);
+                pos += ck;
+            }
+        }
+        for (int b = 0; b < 16; b++)
+        {
+            if ((mask1 >> b) & 1)
+            {
+                size_t ck = sap_chunk_size(data, pos);
+                if (!ck)
+                    return;
+                ss_create_buffer_data(data.data() + pos, (int)ck, type, subBase + 32 + b);
+                pos += ck;
+            }
+        }
+    }
 
     static uint8_t get_bgm_slot(int index, int kind)
     {
@@ -280,30 +340,6 @@ namespace openre::audio
         return 0;
     }
 
-    // 0x00433870
-    static int ss_set_coop_level(int mode)
-    {
-        if (!gGameTable.audio_pMarniSnd)
-            return 1;
-
-        auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
-        DWORD level = (mode == 1) ? DSSCL_NORMAL : DSSCL_EXCLUSIVE;
-        if (ds->SetCooperativeLevel((HWND)gGameTable.hwnd, level))
-            return 0;
-        return 1;
-    }
-
-    // 0x004338B0
-    static int ss_set_stereo_mono(int is_mono)
-    {
-        if (!gGameTable.audio_pMarniSnd)
-            return 1;
-
-        auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
-        DWORD config = (is_mono == 1) ? DSSPEAKER_MONO : DSSPEAKER_STEREO;
-        return (ds->SetSpeakerConfig(config) == DS_OK) ? 1 : 0;
-    }
-
     // 0x00433740
     static int ss_init()
     {
@@ -313,17 +349,23 @@ namespace openre::audio
             return 1;
         }
 
-        if (DirectSoundCreate(nullptr, (LPDIRECTSOUND*)&gGameTable.audio_pMarniSnd, nullptr))
+        // The original created the DirectSound object, set a cooperative
+        // level and configured the speaker layout; SDL3 has none of those.
+        // The mixer output format is derived from the game's frequency and
+        // speaker-config globals (1 = mono, 2 = stereo), which the original
+        // only used to drive the ACM resample stage.
+        system::audio::set_format(gGameTable.MarniSnd_Frequency, gGameTable.audio_SpeakerConfig);
+        if (!system::audio::init())
         {
             gGameTable.audio_pMarniSnd = nullptr;
             return 0;
         }
 
-        int result = ss_set_coop_level((~gGameTable.pMarni->gpu_flag >> 10) & 1);
-        if (!result)
-            return result;
+        // Keep the "audio enabled" gate non-null (the original stored the
+        // DirectSound object here) so the `if (!audio_pMarniSnd) return 1;`
+        // guards throughout the ss_* layer keep working.
+        gGameTable.audio_pMarniSnd = (void*)1;
 
-        ss_set_stereo_mono(gGameTable.audio_SpeakerConfig);
         memset(gGameTable.audio_BufferArms, 0, sizeof(gGameTable.audio_BufferArms));
         memset(gGameTable.audio_BufferCore, 0, sizeof(gGameTable.audio_BufferCore));
         memset(gGameTable.audio_BufferEnemy, 0, sizeof(gGameTable.audio_BufferEnemy));
@@ -615,25 +657,20 @@ namespace openre::audio
             }
             break;
         }
-        default:
-            return;
+        default: return;
         }
     }
 
-    // 0x00435930
-    static int ss_create_buffer(HMMIO hmmio, DWORD type, DWORD sub)
+    // Data-based implementation of SsCreateBuffer (0x00435930). `data` points
+    // at a complete RIFF WAV (.sap payload) and `size` is its length.
+    static int ss_create_buffer_data(const uint8_t* data, int size, DWORD type, DWORD sub)
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;
 
         uint32_t* pbuffer = nullptr;
-        void* readBuffer = nullptr;   // intermediate buffer holding compressed source data
-        BYTE* decompressed = nullptr; // stage 1 (ADPCM->PCM) decoded audio buffer
-        void* resampled = nullptr;    // stage 2 (resample to target) output buffer
-        HACMSTREAM phas = nullptr;    // stage 1 ACM stream handle
-        HACMSTREAM has = nullptr;     // stage 2 ACM stream handle
 
-        // Select the DirectSoundBuffer slot for this (type, sub).
+        // Select the GameTable slot for this (type, sub).
         switch (type)
         {
         case 0:
@@ -689,317 +726,43 @@ namespace openre::audio
             break;
         }
         default:
-            // Original falls through here with pbuffer == nullptr (degenerate case
-            // the game never triggers; subsequent DirectSound calls would crash).
-            break;
+            // Original fell through here with pbuffer == nullptr (degenerate
+            // case the game never triggers). Bail out instead of crashing.
+            return 0;
         }
 
-        // Alias references to the global ACM driver handles so writes go straight
-        // into the GameTable slots, matching the original `&had`/`&phad` usage.
-        auto had_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.had);
-        auto phad_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.phad);
+        // The original parsed the RIFF WAV with mmio and decoded MS-ADPCM via
+        // ACM (optionally resampling to the game's frequency / speaker config);
+        // system_audio does all of that internally and returns an opaque handle
+        // for the voice registered at (type, slotSub).
+        int slotSub = (int)sub;
+        if (type == 7)
+            slotSub = gGameTable.XA_idx;
 
-        MMCKINFO ckwav{};
-        MMCKINFO ckdata{};
+        uint32_t handle = system::audio::load_sap(data, size, (int)type, slotSub);
+        if (handle == 0)
+            return 0;
 
-        ckwav.fccType = mmioFOURCC('W', 'A', 'V', 'E');
-        if (mmioDescend(hmmio, &ckwav, nullptr, MMIO_FINDRIFF))
-            return 0; // no WAVE chunk; nothing allocated yet, so just bail
-        if (mmioDescend(hmmio, &ckdata, &ckwav, 0))
-        {
-            // WAVE chunk empty (no sub-chunks); nothing to decode.
-            mmioAscend(hmmio, &ckwav, 0);
-            return 1;
-        }
-
-        LPWAVEFORMATEX pwfxSrc = nullptr;           // set when a 'fmt ' chunk is parsed
-        DWORD finalBytes = 0;                       // size used for lock/create
-        const WAVEFORMATEX* fmtForBuffer = nullptr; // pwfx passed to CreateSoundBuffer
-        const void* audioForBuffer = nullptr;       // source audio buffer for the lock copy
-        bool needResample = false;
-
-        do
-        {
-            DWORD cksize = ckdata.cksize;
-
-            // Bounds check: chunk must not extend past the WAVE chunk's end.
-            if (ckdata.cksize + ckdata.dwDataOffset > ckwav.dwDataOffset + ckwav.cksize)
-                goto fail_cleanup;
-
-            if (ckdata.ckid == mmioFOURCC('f', 'm', 't', ' '))
-            {
-                // Store the source WAVEFORMATEX into a stack-allocated scratch
-                // area large enough to hold the chunk (rounded up to a 4-byte
-                // multiple to keep esp aligned).
-                size_t aligned = (cksize + 3) & ~size_t{ 3 };
-                pwfxSrc = (LPWAVEFORMATEX)_alloca(aligned);
-                if (mmioRead(hmmio, (HPSTR)pwfxSrc, cksize) != (LONG)cksize)
-                    goto fail_cleanup;
-            }
-            else if (ckdata.ckid == mmioFOURCC('d', 'a', 't', 'a'))
-            {
-                // (1) Discover the appropriate ACM driver for this source format:
-                //     MS-ADPCM for compressed streams (wFormatTag != 1),
-                //     MS-PCM for already-decoded PCM streams (wFormatTag == 1).
-                bool want_pcm = (pwfxSrc != nullptr && pwfxSrc->wFormatTag == WAVE_FORMAT_PCM);
-                acmDriverEnum(acmDriverEnumCallback, want_pcm ? 1u : 0u, 0);
-                if (acmDriverOpen(had_ptr, reinterpret_cast<HACMDRIVERID>(gGameTable.hadid), 0))
-                {
-                    MessageBoxA(0, "Error. OpenDriver.", 0, 0);
-                    return 0;
-                }
-
-                // (2) Ask the driver for the maximum destination-format size so we
-                //     can allocate a scratch WAVEFORMATEX to receive its suggestion.
-                DWORD pMetric = 0;
-                acmMetrics(nullptr, ACM_METRIC_MAX_SIZE_FORMAT, &pMetric);
-                size_t alignedMetric = (size_t)((pMetric + 3) & ~3u);
-
-                // (3) Stage 1: build a PCM destination format biased towards the
-                //     target depth and let acmFormatSuggest fill the rest in.
-                auto wfx1 = (LPWAVEFORMATEX)_alloca(alignedMetric);
-                wfx1->wFormatTag = WAVE_FORMAT_PCM;
-                wfx1->cbSize = 0;
-                wfx1->wBitsPerSample = gGameTable.MarniSnd_SoundDepth;
-                if (acmFormatSuggest(*had_ptr, pwfxSrc, wfx1, pMetric, 0x90000u))
-                    goto fail_cleanup;
-                if (acmStreamOpen(&phas, *had_ptr, pwfxSrc, wfx1, nullptr, 0, 0, 0))
-                {
-                    MessageBoxA(0, "StreamOpen Error.", 0, 0);
-                    goto fail_cleanup;
-                }
-
-                // (4) Determine the size of the decompressed output buffer.
-                DWORD decodedSize = 0;
-                if (acmStreamSize(phas, cksize, &decodedSize, 0))
-                {
-                    MessageBoxA(0, "StreamSize Error.", 0, 0);
-                    goto fail_cleanup;
-                }
-
-                // (5) Decide whether a second-stage resample is needed: if the
-                //     suggested PCM rate differs from MarniSnd's target rate, or
-                //     the target channel count (clamped to SpeakerConfig) is below
-                //     the source's, we need another PCM->PCM conversion pass.
-                WORD suggestedChannels = wfx1->nChannels;
-                DWORD targetChannels = (DWORD)gGameTable.audio_SpeakerConfig;
-                if (targetChannels > suggestedChannels)
-                    targetChannels = suggestedChannels;
-                if ((DWORD)gGameTable.MarniSnd_Frequency != wfx1->nSamplesPerSec || targetChannels != suggestedChannels)
-                    needResample = true;
-
-                // (6) Allocate source (compressed) and destination (decompressed)
-                //     buffers via GlobalAlloc.
-                HGLOBAL hg = GlobalAlloc(0x42, cksize);
-                void* srcPtr = GlobalLock(hg);
-                readBuffer = srcPtr;
-
-                hg = GlobalAlloc(0x42, decodedSize);
-                decompressed = (BYTE*)GlobalLock(hg);
-
-                // (7) Configure and run the stage 1 ACM stream conversion.
-                ACMSTREAMHEADER ash1{};
-                ash1.cbStruct = sizeof(ash1);
-                ash1.fdwStatus = 0x10000;
-                ash1.pbSrc = (LPBYTE)srcPtr;
-                ash1.cbSrcLength = cksize;
-                ash1.dwSrcUser = cksize;
-                ash1.pbDst = decompressed;
-                ash1.cbDstLength = decodedSize;
-                ash1.dwDstUser = decodedSize;
-
-                acmStreamPrepareHeader(phas, &ash1, 0);
-                mmioRead(hmmio, (HPSTR)srcPtr, cksize);
-                if (acmStreamConvert(phas, &ash1, ACM_STREAMCONVERTF_BLOCKALIGN))
-                {
-                    acmStreamUnprepareHeader(phas, &ash1, 0);
-                    goto fail_cleanup;
-                }
-
-                decodedSize = ash1.cbDstLengthUsed;
-                free_hglobal_pointer(srcPtr);
-                readBuffer = nullptr;
-                acmStreamUnprepareHeader(phas, &ash1, 0);
-
-                // (8) Optional stage 2: resample/channel-convert to the target PCM
-                //     format (MarniSnd_Frequency and target channels).
-                if (needResample)
-                {
-                    acmDriverEnum(acmDriverEnumCallback, 1u, 0);
-                    if (acmDriverOpen(phad_ptr, reinterpret_cast<HACMDRIVERID>(gGameTable.hadid), 0))
-                    {
-                        MessageBoxA(0, "Error. OpenDriver.", 0, 0);
-                        return 0;
-                    }
-
-                    auto wfx2 = (LPWAVEFORMATEX)_alloca(alignedMetric);
-                    wfx2->wFormatTag = WAVE_FORMAT_PCM;
-                    wfx2->cbSize = 0;
-                    wfx2->wBitsPerSample = gGameTable.MarniSnd_SoundDepth;
-                    wfx2->nSamplesPerSec = (DWORD)gGameTable.MarniSnd_Frequency;
-                    wfx2->nChannels = (WORD)targetChannels;
-                    if (acmFormatSuggest(*phad_ptr, wfx1, wfx2, pMetric, 0xF0000u))
-                        goto fail_cleanup;
-                    if (acmStreamOpen(&has, nullptr, wfx1, wfx2, nullptr, 0, 0, 0))
-                    {
-                        MessageBoxA(0, "StreamOpen Error.", 0, 0);
-                        goto fail_cleanup;
-                    }
-
-                    DWORD resampledSize = 0;
-                    if (acmStreamSize(has, decodedSize, &resampledSize, 0))
-                    {
-                        MessageBoxA(0, "StreamSize Error.", 0, 0);
-                        goto fail_cleanup;
-                    }
-
-                    hg = GlobalAlloc(0x42, resampledSize);
-                    auto dst = (BYTE*)GlobalLock(hg);
-                    resampled = dst;
-
-                    ACMSTREAMHEADER ash2{};
-                    ash2.cbStruct = sizeof(ash2);
-                    ash2.fdwStatus = 0x10000;
-                    ash2.pbSrc = decompressed;
-                    ash2.cbSrcLength = decodedSize;
-                    ash2.dwSrcUser = decodedSize;
-                    ash2.pbDst = dst;
-                    ash2.cbDstLength = resampledSize;
-                    ash2.dwDstUser = resampledSize;
-                    acmStreamPrepareHeader(has, &ash2, 0);
-                    if (acmStreamConvert(has, &ash2, ACM_STREAMCONVERTF_BLOCKALIGN))
-                    {
-                        acmStreamUnprepareHeader(has, &ash2, 0);
-                        goto fail_cleanup;
-                    }
-                    resampledSize = ash2.cbDstLengthUsed;
-                    free_hglobal_pointer(decompressed);
-                    decompressed = nullptr;
-                    acmStreamUnprepareHeader(has, &ash2, 0);
-
-                    finalBytes = resampledSize;
-                    fmtForBuffer = wfx2;
-                    audioForBuffer = resampled;
-                }
-                else
-                {
-                    finalBytes = decodedSize;
-                    fmtForBuffer = wfx1;
-                    audioForBuffer = decompressed;
-                }
-
-                // (9) Create the DirectSound buffer using the chosen PCM format.
-                DSBUFFERDESC ddesc{};
-                ddesc.dwSize = sizeof(DSBUFFERDESC);
-                ddesc.dwFlags = 0xE0; // CTRLFREQUENCY | CTRLPAN | CTRLVOLUME
-                ddesc.dwBufferBytes = finalBytes;
-                ddesc.lpwfxFormat = const_cast<LPWAVEFORMATEX>(fmtForBuffer);
-
-                auto ds = (LPDIRECTSOUND)gGameTable.audio_pMarniSnd;
-                if (ds->CreateSoundBuffer(&ddesc, (LPDIRECTSOUNDBUFFER*)pbuffer, nullptr))
-                {
-                    MessageBoxA(0, "CreateSoundBuffer Error.", 0, 0);
-                    goto fail_cleanup;
-                }
-
-                // (10) Lock the buffer and copy the PCM data into DirectSound,
-                //      restoring-and-retrying once on DSERR_BUFFERLOST before finally
-                //      bailing out if the second attempt also loses the buffer.
-                auto pDSB = (LPDIRECTSOUNDBUFFER)*pbuffer;
-                LPVOID audioPtr1 = nullptr;
-                LPVOID audioPtr2 = nullptr;
-                DWORD audioBytes1 = 0;
-                DWORD audioBytes2 = 0;
-
-                HRESULT hr = pDSB->Lock(0, finalBytes, &audioPtr1, &audioBytes1, &audioPtr2, &audioBytes2, 0);
-                if (hr == DSERR_BUFFERLOST)
-                {
-                    pDSB->Restore();
-                    hr = pDSB->Lock(0, finalBytes, &audioPtr1, &audioBytes1, &audioPtr2, &audioBytes2, 0);
-                    if (hr == DSERR_BUFFERLOST)
-                        goto fail_cleanup;
-                }
-                if (hr == DS_OK)
-                {
-                    auto src = (const BYTE*)audioForBuffer;
-                    if (audioPtr1 != nullptr && audioBytes1 != 0)
-                        memcpy(audioPtr1, src, audioBytes1);
-                    if (audioPtr2 != nullptr && audioBytes2 != 0)
-                        memcpy(audioPtr2, src + audioBytes1, audioBytes2);
-                }
-                if (pDSB->Unlock(audioPtr1, audioBytes1, audioPtr2, audioBytes2))
-                    goto fail_cleanup;
-
-                // (11) Free intermediate source buffers that are no longer needed.
-                if (needResample)
-                {
-                    free_hglobal_pointer(resampled);
-                    resampled = nullptr;
-                }
-                else
-                {
-                    free_hglobal_pointer(decompressed);
-                    decompressed = nullptr;
-                }
-            }
-
-            mmioAscend(hmmio, &ckdata, 0);
-
-            // Close any streams/drivers used for this chunk so the globals stay
-            // balanced across iterations; the next chunk will reopen as needed.
-            if (phas)
-            {
-                acmStreamClose(phas, 0);
-                phas = nullptr;
-            }
-            if (needResample && has)
-            {
-                acmStreamClose(has, 0);
-                has = nullptr;
-            }
-            if (*had_ptr)
-            {
-                acmDriverClose(*had_ptr, 0);
-                *had_ptr = nullptr;
-            }
-            if (needResample && *phad_ptr)
-            {
-                acmDriverClose(*phad_ptr, 0);
-                *phad_ptr = nullptr;
-            }
-
-        } while (!mmioDescend(hmmio, &ckdata, &ckwav, 0));
-
-        // Success: ascend the WAVE chunk, free any remaining intermediates.
-        mmioAscend(hmmio, &ckwav, 0);
-        free_hglobal_pointer(readBuffer);
-        free_hglobal_pointer(decompressed);
-        free_hglobal_pointer(resampled);
+        *pbuffer = handle;
         return 1;
+    }
 
-    fail_cleanup:
-        mmioAscend(hmmio, &ckdata, 0);
-        mmioAscend(hmmio, &ckwav, 0);
-        if (*had_ptr)
-        {
-            acmDriverClose(*had_ptr, 0);
-            *had_ptr = nullptr;
-        }
-        if (*phad_ptr)
-        {
-            acmDriverClose(*phad_ptr, 0);
-            *phad_ptr = nullptr;
-        }
-        if (pbuffer && (LPDIRECTSOUNDBUFFER)*pbuffer)
-        {
-            auto pDSB = (LPDIRECTSOUNDBUFFER)*pbuffer;
-            pDSB->Release();
-            *pbuffer = 0;
-        }
-        free_hglobal_pointer(readBuffer);
-        free_hglobal_pointer(decompressed);
-        free_hglobal_pointer(resampled);
-        return 0;
+    // 0x00435930
+    static int ss_create_buffer(HMMIO hmmio, DWORD type, DWORD sub)
+    {
+        // Original entry point. Every in-game caller is hooked and reworked to
+        // pass raw bytes to ss_create_buffer_data, so this wrapper only keeps
+        // the original calling convention alive. The mmio file read below is
+        // the last Win32 surface in this file (see top-of-file note).
+        LONG pos = mmioSeek(hmmio, 0, SEEK_CUR);
+        LONG end = mmioSeek(hmmio, 0, SEEK_END);
+        if (end <= pos)
+            return 0;
+        mmioSeek(hmmio, pos, SEEK_SET);
+        std::vector<uint8_t> data((size_t)(end - pos));
+        if (mmioRead(hmmio, (HPSTR)data.data(), end - pos) != end - pos)
+            return 0;
+        return ss_create_buffer_data(data.data(), (int)data.size(), type, sub);
     }
 
     // 0x00435540
@@ -1007,26 +770,14 @@ namespace openre::audio
     {
         auto& ss = gGameTable.ss_file_string;
         logging::logInfo("[AUDIO OPEN] {}", ss.data);
-        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
-        if (!hmmio)
-            return mmioClose(nullptr, 0);
+        std::vector<uint8_t> data = system::fs::readAllBytes(ss.data);
+        if (data.size() < 8)
+            return MMSYSERR_INVALHANDLE;
 
-        int32_t mask0, mask1;
-        if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4 || mmioRead(hmmio, (HPSTR)&mask1, 4) != 4)
-            return mmioClose(hmmio, 0);
-
-        for (int i = 0; i < 32; i++)
-        {
-            if ((mask0 >> i) & 1)
-                ss_create_buffer(hmmio, type, i);
-        }
-        for (int j = 0; j < 16; j++)
-        {
-            if ((mask1 >> j) & 1)
-                ss_create_buffer(hmmio, type, j + 32);
-        }
-
-        return mmioClose(hmmio, 0);
+        uint32_t mask0 = read_le32(data.data());
+        uint32_t mask1 = read_le32(data.data() + 4);
+        sap_load_masked(data, type, 0, mask0, mask1);
+        return 0;
     }
 
     // 0x00433F10
@@ -2004,29 +1755,13 @@ namespace openre::audio
             return 0;
         }
 
-        HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
-        if (!hmmio)
+        std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+        if (data.size() < 8)
             return 0;
 
-        int32_t mask0, mask1;
-        if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4 || mmioRead(hmmio, (HPSTR)&mask1, 4) != 4)
-        {
-            mmioClose(hmmio, 0);
-            return 0;
-        }
-
-        for (int i = 0; i < 32; i++)
-        {
-            if ((mask0 >> i) & 1)
-                ss_create_buffer(hmmio, type, i);
-        }
-        for (int j = 0; j < 16; j++)
-        {
-            if ((mask1 >> j) & 1)
-                ss_create_buffer(hmmio, type, j + 32);
-        }
-
-        mmioClose(hmmio, 0);
+        uint32_t mask0 = read_le32(data.data());
+        uint32_t mask1 = read_le32(data.data() + 4);
+        sap_load_masked(data, type, 0, mask0, mask1);
         return 1;
     }
 
@@ -2047,15 +1782,6 @@ namespace openre::audio
             return 0;
         }
 
-        auto& ss = gGameTable.ss_file_string;
-        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
-        if (!hmmio)
-        {
-            mmioClose(0, 0);
-            logging::logInfo("[AUDIO] mmioOpen ERROR: dsound.cpp");
-            return 0;
-        }
-
         int base;
         switch (a2)
         {
@@ -2065,27 +1791,13 @@ namespace openre::audio
         default: base = 0; break; // unreachable
         }
 
-        int bitmask;
-        if (mmioRead(hmmio, (HPSTR)&bitmask, 4) != 4)
-        {
-            mmioClose(hmmio, 0);
+        std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+        if (data.size() < 8)
             return 0;
-        }
 
-        char unused[4];
-        if (mmioRead(hmmio, unused, 4) != 4)
-        {
-            mmioClose(hmmio, 0);
-            return 0;
-        }
-
-        for (int i = 0; i < 32; i++)
-        {
-            if ((bitmask >> i) & 1)
-                ss_create_buffer(hmmio, 2, i + base);
-        }
-
-        mmioClose(hmmio, 0);
+        uint32_t mask0 = read_le32(data.data());
+        uint32_t mask1 = read_le32(data.data() + 4);
+        sap_load_masked(data, 2, base, mask0, mask1);
         return 1;
     }
 
@@ -2109,13 +1821,13 @@ namespace openre::audio
             return 0;
         }
 
-        auto& ss = gGameTable.ss_file_string;
-        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
-        if (!hmmio)
+        // BGM/SBGM .sap files are plain RIFF WAVs (no mask header); the
+        // original passed the open file straight to SsCreateBuffer.
+        std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+        if (data.size() < 12)
             return 0;
 
-        ss_create_buffer(hmmio, type, sample);
-        mmioClose(hmmio, 0);
+        ss_create_buffer_data(data.data(), (int)data.size(), type, sample);
         return 1;
     }
 
@@ -2203,32 +1915,13 @@ namespace openre::audio
                 return 0;
             }
 
-            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
-            if (!hmmio)
+            std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+            if (data.size() < 8)
                 return 0;
 
-            int32_t mask0 = 0;
-            if (mmioRead(hmmio, (HPSTR)&mask0, 4) != 4)
-            {
-                mmioClose(hmmio, 0);
-                return 0;
-            }
-
-            int32_t unusedMask1 = 0;
-            if (mmioRead(hmmio, (HPSTR)&unusedMask1, 4) != 4)
-            {
-                mmioClose(hmmio, 0);
-                return 0;
-            }
-
-            int base = stepBase[i];
-            for (int j = 0; j < 32; j++)
-            {
-                if (((int32_t)mask0 >> j) & 1)
-                    ss_create_buffer(hmmio, 2, j + base);
-            }
-
-            mmioClose(hmmio, 0);
+            uint32_t mask0 = read_le32(data.data());
+            uint32_t mask1 = read_le32(data.data() + 4);
+            sap_load_masked(data, 2, stepBase[i], mask0, mask1);
         }
 
         // Arms (type 1)
@@ -2265,7 +1958,8 @@ namespace openre::audio
             ss_init_buffers(3);
         }
 
-        // BGM (type 5, up to 3 entries)
+        // BGM (type 5, up to 3 entries) / SBGM (type 6, up to 2 entries)
+        int anyBgmLoaded = 0;
         for (int i = 0; i < 3; i++)
         {
             char* name = &gGameTable.ss_name_bgm[260 * i];
@@ -2278,15 +1972,14 @@ namespace openre::audio
                 return 0;
             }
 
-            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
-            if (!hmmio)
+            std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+            if (data.size() < 12)
                 return 0;
 
-            ss_create_buffer(hmmio, 5, i);
-            mmioClose(hmmio, 0);
+            ss_create_buffer_data(data.data(), (int)data.size(), 5, i);
+            anyBgmLoaded = 1;
         }
 
-        // SBGM (type 6, up to 2 entries)
         for (int i = 0; i < 2; i++)
         {
             char* name = &gGameTable.ss_name_sbgm[260 * i];
@@ -2299,20 +1992,22 @@ namespace openre::audio
                 return 0;
             }
 
-            HMMIO hmmio = mmioOpenA(gGameTable.ss_file_string.data, nullptr, MMIO_ALLOCBUF);
-            if (!hmmio)
+            std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+            if (data.size() < 12)
                 return 0;
 
-            ss_create_buffer(hmmio, 6, i);
-            mmioClose(hmmio, 0);
+            ss_create_buffer_data(data.data(), (int)data.size(), 6, i);
+            anyBgmLoaded = 1;
         }
 
-        sub_4eee40();
+        if (anyBgmLoaded)
+            sub_4eee40();
 
         return 1;
     }
 
     static float ss_voice_parse(HMMIO hmmio);
+    static float ss_voice_parse_data(const uint8_t* data, int size);
 
     // 0x00436470
     static int ss_voice_load(int room_id, int voice)
@@ -2327,137 +2022,84 @@ namespace openre::audio
             return 0;
         }
 
-        auto& ss = gGameTable.ss_file_string;
-        HMMIO hmmio = mmioOpenA(ss.data, nullptr, MMIO_ALLOCBUF);
-        if (!hmmio)
-        {
-            mmioClose(0, 0);
-            logging::logInfo("[AUDIO] mmioOpen ERROR: dsound.cpp");
+        std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
+        if (data.size() < 12)
             return 0;
-        }
 
-        int pch;
-        char unused[4];
-        if (mmioRead(hmmio, (HPSTR)&pch, 4) == 4 && mmioRead(hmmio, (HPSTR)unused, 4) == 4)
+        // The 8-byte mask header is only skipped here; the voice buffers
+        // themselves are loaded later through ss_load_sap(7, ...).
+        float duration = ss_voice_parse_data(data.data() + 8, (int)data.size() - 8);
+        int fps = 60 >> gGameTable.vsync_rate;
+        return (int)(fps * duration);
+    }
+
+    // 0x00436590
+    static float ss_voice_parse_data(const uint8_t* data, int size)
+    {
+        if (!data || size < 12 || std::memcmp(data, "RIFF", 4) != 0 || std::memcmp(data + 8, "WAVE", 4) != 0)
+            return 0.0f;
+
+        uint32_t fmtTag = 0, channels = 0, samplesPerSec = 0, blockAlign = 0, bitsPerSample = 0;
+        uint32_t samplesPerBlock = 0;
+        uint32_t dataSize = 0;
+        size_t pos = 12;
+        while (pos + 8 <= (size_t)size)
         {
-            float duration = ss_voice_parse(hmmio);
-            int fps = 60 >> gGameTable.vsync_rate;
-            mmioClose(hmmio, 0);
-            return (int)(fps * duration);
+            uint32_t ckSize = read_le32(data + pos + 4);
+            if (ckSize > (uint32_t)size - (uint32_t)(pos + 8))
+                break;
+            const uint8_t* body = data + pos + 8;
+            if (std::memcmp(data + pos, "fmt ", 4) == 0)
+            {
+                fmtTag = read_le16(body);
+                channels = read_le16(body + 2);
+                samplesPerSec = read_le32(body + 4);
+                blockAlign = read_le16(body + 12);
+                bitsPerSample = read_le16(body + 14);
+                if (fmtTag == 2 && ckSize >= 20) // WAVE_FORMAT_ADPCM
+                    samplesPerBlock = read_le16(body + 18);
+            }
+            else if (std::memcmp(data + pos, "data", 4) == 0)
+            {
+                dataSize = ckSize;
+            }
+            pos += 8 + ckSize + (ckSize & 1);
         }
 
-        mmioClose(hmmio, 0);
-        return 0;
+        if (fmtTag == 1 && blockAlign && bitsPerSample && samplesPerSec)
+        {
+            // PCM: mirrors the original's (16 / nBlockAlign) * dataSize / (bits * rate).
+            int64_t num = (16 / blockAlign) * (int64_t)dataSize;
+            return (float)((double)num / (double)(bitsPerSample * samplesPerSec));
+        }
+        if (fmtTag == 2 && blockAlign && samplesPerBlock && channels && samplesPerSec)
+        {
+            // MS-ADPCM: the original decoded the data chunk via ACM into 16-bit
+            // PCM (nBlockAlign = channels * 2) and fed the output size through
+            // the same formula; compute that closed form directly.
+            int64_t pcmBytes = (dataSize / blockAlign) * (int64_t)(samplesPerBlock * channels * 2);
+            int64_t num = (16 / (int)(channels * 2)) * pcmBytes;
+            return (float)((double)num / (double)(16 * samplesPerSec));
+        }
+        return 0.0f;
     }
 
     // 0x00436590
     static float ss_voice_parse(HMMIO hmmio)
     {
-        float cbInput = 0.0f;
-        WAVEFORMATEX* wf = nullptr;
-
-        MMCKINFO pmmcki = {};
-        pmmcki.fccType = mmioFOURCC('W', 'A', 'V', 'E');
-
-        if (mmioDescend(hmmio, &pmmcki, nullptr, MMIO_FINDRIFF))
+        // Original entry point. Only SsVoiceLoad called it, and that is hooked
+        // and reworked to ss_voice_parse_data, so this wrapper only keeps the
+        // original calling convention alive. The mmio read below is the last
+        // Win32 surface in this file (see top-of-file note).
+        LONG pos = mmioSeek(hmmio, 0, SEEK_CUR);
+        LONG end = mmioSeek(hmmio, 0, SEEK_END);
+        if (end <= pos)
             return 0.0f;
-
-        MMCKINFO v15 = {};
-        if (mmioDescend(hmmio, &v15, &pmmcki, 0))
-            goto ascend_parent;
-
-        while (1)
-        {
-            DWORD cksize = v15.cksize;
-            if (cksize + v15.dwDataOffset > pmmcki.dwDataOffset + pmmcki.cksize)
-                break;
-
-            if (v15.ckid == mmioFOURCC('f', 'm', 't', ' '))
-            {
-                DWORD allocSize = (std::max<DWORD>(cksize, sizeof(WAVEFORMATEX)) + 3) & ~3u;
-                void* buf = _alloca(allocSize);
-                wf = (WAVEFORMATEX*)buf;
-                if (!wf || mmioRead(hmmio, (HPSTR)wf, cksize) != (LRESULT)cksize)
-                    break;
-            }
-            else if (v15.ckid == mmioFOURCC('d', 'a', 't', 'a'))
-            {
-                cbInput = (float)cksize;
-                if (wf && wf->wFormatTag == WAVE_FORMAT_PCM)
-                {
-                    int64_t num = (16 / wf->nBlockAlign) * (int64_t)cksize;
-                    int32_t den = wf->wBitsPerSample * wf->nSamplesPerSec;
-                    cbInput = (float)((double)num / (double)den);
-                }
-                else if (wf)
-                {
-                    acmDriverEnum(acmDriverEnumCallback, 0, 0);
-                    auto had_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.had);
-                    auto hadid = reinterpret_cast<HACMDRIVERID>(gGameTable.hadid);
-                    if (acmDriverOpen(had_ptr, hadid, 0))
-                        break;
-
-                    DWORD pMetric = 0;
-                    acmMetrics(nullptr, ACM_METRIC_MAX_SIZE_FORMAT, &pMetric);
-                    DWORD allocSize = (pMetric + 3) & ~3u;
-                    void* buf = _alloca(allocSize);
-                    auto wfxDst = (WAVEFORMATEX*)buf;
-
-                    wfxDst->wFormatTag = WAVE_FORMAT_PCM;
-                    wfxDst->cbSize = 0;
-                    wfxDst->wBitsPerSample = 16;
-
-                    HACMSTREAM phas = nullptr;
-                    DWORD pdwOutputBytes = 0;
-                    bool acmFailed = false;
-
-                    if (acmFormatSuggest(*had_ptr, wf, wfxDst, pMetric, ACM_FORMATSUGGESTF_WFORMATTAG)
-                        || acmStreamOpen(&phas, *had_ptr, wf, wfxDst, nullptr, 0, 0, 0)
-                        || acmStreamSize(phas, (DWORD)cbInput, &pdwOutputBytes, 0))
-                    {
-                        acmFailed = true;
-                    }
-
-                    if (phas)
-                    {
-                        acmStreamClose(phas, 0);
-                        phas = nullptr;
-                    }
-                    if (*had_ptr)
-                    {
-                        acmDriverClose(*had_ptr, 0);
-                        *had_ptr = nullptr;
-                    }
-
-                    if (acmFailed)
-                        break;
-
-                    int64_t num = (16 / wfxDst->nBlockAlign) * (int64_t)pdwOutputBytes;
-                    int32_t den = wfxDst->nSamplesPerSec * wfxDst->wBitsPerSample;
-                    cbInput = (float)((double)num / (double)den);
-                }
-            }
-
-            mmioAscend(hmmio, &v15, 0);
-            if (mmioDescend(hmmio, &v15, &pmmcki, 0))
-                goto ascend_parent;
-        }
-
-        // Break/error: ascend child before parent
-        mmioAscend(hmmio, &v15, 0);
-
-    ascend_parent:
-        mmioAscend(hmmio, &pmmcki, 0);
-
-        // Cleanup global ACM driver handle
-        auto had_ptr = reinterpret_cast<HACMDRIVER*>(&gGameTable.had);
-        if (*had_ptr)
-        {
-            acmDriverClose(*had_ptr, 0);
-            *had_ptr = nullptr;
-        }
-
-        return cbInput;
+        mmioSeek(hmmio, pos, SEEK_SET);
+        std::vector<uint8_t> data((size_t)(end - pos));
+        if (mmioRead(hmmio, (HPSTR)data.data(), end - pos) != end - pos)
+            return 0.0f;
+        return ss_voice_parse_data(data.data(), (int)data.size());
     }
 
     // START SND
@@ -4421,34 +4063,8 @@ namespace openre::audio
         }
     }
 
-    // 0x004329B0
-    static BOOL __stdcall acmDriverEnumCallback(HACMDRIVERID hadid, DWORD dwInstance, DWORD fdwSupport)
-    {
-        ACMDRIVERDETAILSA padd{};
-        padd.cbStruct = sizeof(ACMDRIVERDETAILSA);
-
-        acmDriverDetailsA(hadid, &padd, 0);
-
-        if (dwInstance)
-        {
-            auto v3 = strstr(padd.szShortName, "MS-PCM");
-            if (!v3)
-                return TRUE;
-        }
-        else
-        {
-            auto v3 = strstr(padd.szShortName, "MS-ADPCM");
-            if (!v3)
-                return TRUE;
-        }
-
-        gGameTable.hadid = hadid;
-        return FALSE;
-    }
-
     void bgm_init_hooks()
     {
-        interop::writeJmp(0x004329B0, &acmDriverEnumCallback);
         interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x004338F0, &ss_play);
         interop::writeJmp(0x00433C40, &ss_stop_all);
