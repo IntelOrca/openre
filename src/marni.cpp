@@ -89,6 +89,7 @@ namespace openre::marni
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
+    static char* surface_calc_address(MarniSurface* self, int x, int y);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
     static int __stdcall insert_draw_op(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
@@ -6764,6 +6765,47 @@ namespace openre::marni
         self->var_29 = 0;
         interop::thiscall<void, MarniSurfaceX*>(0x0040FFD0, self);
         return 1;
+    }
+
+    // 0x004134C0
+    static char* surface_calc_address(MarniSurface* self, int x, int y)
+    {
+        if (!self->bOpen)
+        {
+            out("this Bits is invalid but you are trying to use the service.", "MarniBits::CalcAddress");
+            return nullptr;
+        }
+
+        if (!self->bLocked)
+        {
+            out("this Bits doesn't be the Lock. You need to lock before doing this operation. MarniBits::CalcAddress", "");
+            return nullptr;
+        }
+
+        if (self->width <= x || self->height <= y || x < 0 || y < 0)
+        {
+            out("the coordinate you specified is wrong...x=%d y=%d MarniBits::CalcAddress", "");
+            return nullptr;
+        }
+
+        switch (self->bpp)
+        {
+            case 4:
+                if (!self->var_2B)
+                    return (char*)self->pBitmap + x / 2 + y * self->pitch;
+                [[fallthrough]];
+            case 8:
+                return (char*)self->pBitmap + y * self->pitch + x;
+            case 0x10:
+                return (char*)self->pBitmap + 2 * x + y * self->pitch;
+            case 0x18:
+                return (char*)self->pBitmap + 3 * x + y * self->pitch;
+            case 0x20:
+                return (char*)self->pBitmap + 4 * x + y * self->pitch;
+            default:
+                out("this BitPixel isn't supported...%d MarniBits::CalcAddress", "");
+                return nullptr;
+        }
     }
 
     // 0x0040FEF0
