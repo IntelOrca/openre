@@ -2255,7 +2255,8 @@ namespace openre::marni
     // 0x00407480
     static void __stdcall sub_407480(Marni* self, Prim* pOt)
     {
-        interop::thiscall<int, Marni*, Prim*>(0x00407480, self, pOt);
+        memcpy(&self->field_8C7E10, (uint8_t*)pOt + 8, 0x40);
+        memcpy(&self->field_8C7E50, (uint8_t*)pOt + 72, 0x40);
     }
 
     // 0x004074C0
@@ -2653,7 +2654,7 @@ namespace openre::marni
     // 0x0040DF60
     static int __stdcall sub_40DF60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
-        return interop::thiscall<int, Marni*, Prim*, DrawInfo*>(0x0040DF60, self, pPrim, drawInfo);
+        return 1;
     }
 
     // 0x0040DF70
@@ -2972,7 +2973,24 @@ namespace openre::marni
     // 0x0040E770
     static void set_filtering(Marni* self, uint8_t a2)
     {
-        interop::thiscall<int, Marni*, uint8_t>(0x0040E770, self, a2);
+        // NOTE: states 17/18 are the retired D3DRENDERSTATE_TEXTUREMAG/TEXTUREMIN
+        // renderstates; the values are D3DTEXTUREFILTER modes (see d3dtypes.h).
+        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREADDRESS, D3DTADDRESS_WRAP);
+        if (a2 && gGameTable.marni_config.bilinear)
+        {
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_LINEAR);
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_LINEARMIPLINEAR);
+        }
+        else
+        {
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_NEAREST);
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_NEAREST);
+        }
+        if (a2 && gGameTable.marni_config.perswrap)
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
+        else
+            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 0);
     }
 
     // 0x0040E800
