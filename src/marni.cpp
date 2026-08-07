@@ -46,6 +46,7 @@ namespace openre::marni
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
     static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode);
+    static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -7145,6 +7146,109 @@ namespace openre::marni
     {
         surface2_vrelease(self);
         self->pDDsurface = nullptr;
+        return 1;
+    }
+
+    // 0x004144E0
+    static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out)
+    {
+        auto* addr = surface_calc_address((MarniSurface*)self, x, y);
+        if (!addr)
+        {
+            out("initialization failed", "MarniBits::GetIndexColor");
+            return 0;
+        }
+
+        if (!self->var_28)
+        {
+            out("not a palette-index surface", "MarniBits::GetIndexColor");
+            return 0;
+        }
+
+        int bpp = self->bpp;
+        uint32_t palette_index; // value read from the pixel (used as the palette entry index)
+        switch (bpp)
+        {
+            case 4:
+                palette_index = *(uint8_t*)addr;
+                if (self->var_2B)
+                {
+                    // Byte-per-pixel layout; the whole byte is the palette index.
+                    break;
+                }
+                if (self->var_2A)
+                {
+                    if ((x & 1) == 0)
+                    {
+                        palette_index &= 0xF;
+                        break;
+                    }
+                }
+                else if ((x & 1) != 0)
+                {
+                    palette_index &= 0xF;
+                    break;
+                }
+                palette_index >>= 4;
+                palette_index &= 0xF;
+                break;
+            case 8:
+                palette_index = *(uint8_t*)addr;
+                break;
+            case 16:
+                palette_index = *(uint16_t*)addr;
+                break;
+            case 32:
+                palette_index = *(uint32_t*)addr;
+                break;
+            default:
+                out("unsupported bit pixel", "MarniBits::GetIndexColor");
+                return 0;
+        }
+
+        // The palette is laid out as [var_22][1 << bpp] (row-major), so the flat
+        // entry index is palette_index + var_22 * (1 << bpp). The shift count is
+        // masked to 5 bits, matching the original `shl` instruction semantics.
+        int palette_stride = 1 << (bpp & 31);
+        int pal_offset = palette_index + palette_stride * self->var_22;
+        uint32_t pal_entry;
+        switch (self->var_25) // palette bpp
+        {
+            case 8:
+                pal_entry = *(uint8_t*)((uint8_t*)self->pPalette + pal_offset);
+                break;
+            case 16:
+                pal_entry = *(uint16_t*)((uint8_t*)self->pPalette + 2 * pal_offset);
+                break;
+            case 32:
+                pal_entry = *(uint32_t*)((uint8_t*)self->pPalette + 4 * pal_offset);
+                break;
+            default:
+                out("unsupported bit pixel (pal)", "MarniBits::GetIndexColor");
+                return 0;
+        }
+
+        // Expand the palette entry's bit fields into 8-bit A/R/G/B channels.
+        int a_bitcnt = self->desc.a_bitcnt;
+        int alpha = 255;
+        if (a_bitcnt != 0)
+        {
+            alpha = (int)((self->desc.a_mask & (pal_entry >> self->desc.a_shift)) << (8 - a_bitcnt));
+            if (alpha != 0)
+                alpha |= 255 >> a_bitcnt;
+        }
+        int red = (int)((self->desc.r_mask & (pal_entry >> self->desc.r_shift)) << (8 - self->desc.r_bitcnt));
+        if (red != 0)
+            red |= 255 >> self->desc.r_bitcnt;
+        int green = (int)((self->desc.g_mask & (pal_entry >> self->desc.g_shift)) << (8 - self->desc.g_bitcnt));
+        if (green != 0)
+            green |= 255 >> self->desc.g_bitcnt;
+        int blue = (int)((self->desc.b_mask & (pal_entry >> self->desc.b_shift)) << (8 - self->desc.b_bitcnt));
+        if (blue != 0)
+            blue |= 255 >> self->desc.b_bitcnt;
+
+        // 0xAARRGGBB
+        *color_out = ((uint32_t)(uint8_t)alpha << 24) | ((uint32_t)(uint8_t)red << 16) | ((uint32_t)(uint8_t)green << 8) | (uint32_t)(uint8_t)blue;
         return 1;
     }
 
