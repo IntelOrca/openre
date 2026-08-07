@@ -48,6 +48,7 @@ namespace openre::marni
     static int surface_get_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t* color_out);
     static int surface_set_palette_color(MarniSurface2* self, int col_index, int pal_index, uint32_t rgb, int mode);
     static int surface_apply_hue(MarniSurface2* self, int col_index, uint32_t rgb, int mode);
+    static int __stdcall surface_operator_eq(MarniSurface* self, MarniSurface* pSrc);
     static int surface_get_index_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
@@ -7753,6 +7754,150 @@ namespace openre::marni
         return surface_set_palette_color(self, col_index, self->var_22, rgb, mode);
     }
 
+    // 0x004130D0
+    static int __stdcall surface_operator_eq(MarniSurface* self, MarniSurface* pSrc)
+    {
+        if (!pSrc->bOpen)
+        {
+            out("this Bits is invalid but you are trying to use the service.", "MarniBits::operator =");
+            return 0;
+        }
+
+        if (!self->var_27)
+        {
+            // Shallow copy: the destination shares the source's buffers.
+            if (!pSrc->var_29)
+            {
+                out("this Bits is not in memory, so the no-copy copy is not possible.", "MarniBits::operator =");
+                return 0;
+            }
+
+            self->pBitmap = pSrc->pBitmap;
+            self->pPalette = pSrc->pPalette;
+            *(uint32_t*)&self->desc = *(uint32_t*)&pSrc->desc;
+            pSrc->bLocked = 0;
+            *(uint32_t*)&self->desc.g_mask = *(uint32_t*)&pSrc->desc.g_mask;
+            *(uint32_t*)&self->desc.b_bitcnt = *(uint32_t*)&pSrc->desc.b_bitcnt;
+            self->bpp = pSrc->bpp;
+            self->var_25 = pSrc->var_25;
+            self->width = pSrc->width;
+            self->height = pSrc->height;
+            self->pitch = pSrc->pitch;
+            self->var_28 = pSrc->var_28;
+            self->var_2A = pSrc->var_2A;
+            self->pal_cnt = pSrc->pal_cnt;
+            self->var_2B = pSrc->var_2B;
+            self->var_2D = pSrc->var_2D;
+            self->var_2C = pSrc->var_2C;
+            self->var_27 = 0;
+            self->bOpen = 1;
+            self->var_29 = 1;
+            self->bLocked = 0;
+            return 1;
+        }
+
+        if (!self->bOpen)
+            return 0;
+
+        if (self->var_28)
+        {
+            if (pSrc->var_28)
+            {
+                if (self->bpp != pSrc->bpp)
+                {
+                    out("palette conversion was specified (8-4)", "MarniBits::operator =");
+                    goto fail;
+                }
+                surface_pal_blt(self, pSrc, -1, -1);
+            }
+            else
+            {
+                if (!surface_lock(self, 0, 0))
+                {
+                    out("failed to lock.", "MarniBits::operator =");
+                    goto fail;
+                }
+                for (uint32_t i = 0; i < (uint32_t)(1u << self->bpp); ++i)
+                {
+                    surface_apply_hue(self, i, (i & 3 | (32 * (i & 0x1C | (32 * (i & 0xE0))))) << 6, 0);
+                }
+                surface_unlock(self);
+            }
+        }
+
+        if (memcmp(&pSrc->desc, &self->desc, 0xC) == 0
+            && self->width == pSrc->width
+            && self->height == pSrc->height
+            && !self->var_28
+            && !pSrc->var_28
+            && self->bpp == pSrc->bpp)
+        {
+            // Descriptor matches: do a direct per-row copy.
+            surface_lock(self, 0, 0);
+            surface_lock(pSrc, 0, 0);
+
+            for (int row = 0; row < (int)self->height; ++row)
+            {
+                char* dst = surface_calc_address(self, 0, row);
+                char* src = surface_calc_address(pSrc, 0, row);
+                switch (self->bpp)
+                {
+                    case 8:
+                        for (int i = 0; i < (int)self->width / 4; ++i)
+                        {
+                            *(uint32_t*)dst = *(uint32_t*)src;
+                            dst += 4;
+                            src += 4;
+                        }
+                        memcpy(dst, src, (size_t)(self->width % 4));
+                        break;
+                    case 16:
+                        for (int i = 0; i < (int)self->width / 2; ++i)
+                        {
+                            *(uint32_t*)dst = *(uint32_t*)src;
+                            dst += 4;
+                            src += 4;
+                        }
+                        memcpy(dst, src, (size_t)(2 * (self->width % 2)));
+                        break;
+                    case 32:
+                        for (int i = 0; i < (int)self->width; ++i)
+                        {
+                            *(uint32_t*)dst = *(uint32_t*)src;
+                            dst += 4;
+                            src += 4;
+                        }
+                        break;
+                    default:
+                        out("it is direct-loaded, not supported.", "MarniBits::operator =");
+                        return 0;
+                }
+            }
+
+            surface_unlock(self);
+            surface_unlock(pSrc);
+            return 1;
+        }
+
+        // Fall back to a hardware blit of the full rectangles.
+        RECT rc;
+        RECT v18;
+        SetRect(&rc, 0, 0, self->width - 1, self->height - 1);
+        SetRect(&v18, 0, 0, pSrc->width - 1, pSrc->height - 1);
+        if (surface2_blt(self, &rc, &v18, pSrc, 0, 0))
+        {
+            return 1;
+        }
+
+        out("copy failed.", "MarniBits::operator =");
+
+    fail:
+        surface_unlock(self);
+        surface_unlock(pSrc);
+        self->bOpen = 0;
+        return 0;
+    }
+
     // 0x00414AC0
     static int __stdcall surface3_vrelease(MarniSurface3* self)
     {
@@ -8691,5 +8836,6 @@ namespace openre::marni
         interop::hookThisCall(0x0040F600, &surfacex_vpallock);
         interop::hookThisCall(0x0040FAD0, &surfacex_vunlock);
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
+        interop::hookThisCall(0x004130D0, &surface_operator_eq);
     }
 }
