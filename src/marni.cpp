@@ -40,6 +40,7 @@ namespace openre::marni
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
+    static int adjust_rect(RECT* clip, const RECT* src, RECT* out);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
     static int __stdcall surface_set_index_color(int x, int y, uint32_t color, int mode);
@@ -6234,7 +6235,7 @@ namespace openre::marni
         if (pRect)
         {
             SetRect(&rect, 0, 0, self->width - 1, self->height - 1);
-            if (!interop::call<int, RECT*, RECT*, RECT*>(0x00411590, &rect, pRect, &rc))
+            if (!adjust_rect(&rect, pRect, &rc))
                 return 0;
             ++rc.right;
             ++rc.bottom;
@@ -7042,6 +7043,46 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x00411590
+    static int adjust_rect(RECT* clip, const RECT* src, RECT* out)
+    {
+        // Returns 1 if src and clip overlap with positive area; writes the intersection to out. Returns 0 otherwise.
+        LONG left = src->left;
+        LONG clipRight = clip->right;
+        if (left > clipRight)
+            return 0;
+
+        LONG top = src->top;
+        LONG clipBottom = clip->bottom;
+        if (top > clipBottom)
+            return 0;
+
+        LONG right = src->right;
+        LONG clipLeft = clip->left;
+        if (right < clipLeft)
+            return 0;
+
+        LONG bottom = src->bottom;
+        LONG clipTop = clip->top;
+        if (bottom < clipTop || right - left <= 0 || bottom - top <= 0 || clipRight - clipLeft <= 0 || clipBottom - clipTop <= 0)
+            return 0;
+
+        if (left >= clipLeft)
+            clipLeft = left;
+        if (top < clipTop)
+            top = clipTop;
+        if (right > clipRight)
+            right = clipRight;
+        if (bottom <= clipBottom)
+            clipBottom = bottom;
+
+        out->right = right;
+        out->left = clipLeft;
+        out->top = top;
+        out->bottom = clipBottom;
+        return 1;
+    }
+
     // 0x00412BD0
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
     {
@@ -7056,7 +7097,7 @@ namespace openre::marni
         if (pSrcRect)
         {
             SetRect(&rect, 0, 0, self->width - 1, self->height - 1);
-            if (!interop::call<int, RECT*, RECT*, RECT*>(0x00411590, &rect, pSrcRect, &rc))
+            if (!adjust_rect(&rect, pSrcRect, &rc))
                 return 0;
         }
         else
