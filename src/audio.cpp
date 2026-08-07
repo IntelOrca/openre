@@ -9,7 +9,6 @@
 
 #include <cmath>
 #include <cstring>
-#include <dsound.h>
 #include <string>
 #include <windows.h>
 
@@ -287,7 +286,7 @@ namespace openre::audio
     }
 
     // Forward declarations of functions defined later in this file.
-    static LPDIRECTSOUNDBUFFER ss_get_status(int type, int sub);
+    static int ss_get_status(int type, int sub);
     static int ss_stop_all();
     static int ss_stop_group(int type, int id);
     static int ss_shutdown();
@@ -295,6 +294,7 @@ namespace openre::audio
     static int ss_load_sap(DWORD type, int id, int bank, int player);
     static int ss_load_steps(const char* name, int a2);
     static int ss_load_bgm(const char* name, DWORD type, int sample);
+    static void snd_sys_init_sub();
 
     // Registers every buffer described by an .sap payload (8-byte mask header
     // followed by one RIFF WAV chunk per set bit, in ascending bit order) with
@@ -535,12 +535,12 @@ namespace openre::audio
         if (!gGameTable.audio_pMarniSnd)
             return;
 
-        // Looping is a per-voice property in system_audio; DSBPLAY_LOOPING
-        // (bit 0 of dwFlags) is applied before the voice is started. play()
-        // resumes a paused voice from its current position and rewinds a voice
-        // that already reached the end, covering the original's
-        // GetStatus/Stop/SetCurrentPosition dance.
-        const bool loop = (dwFlags & DSBPLAY_LOOPING) != 0;
+        // Looping is a per-voice property in system_audio; the loop flag is
+        // bit 0 of dwFlags (DSBPLAY_LOOPING in the original). It is applied
+        // before the voice is started. play() resumes a paused voice from its
+        // current position and rewinds a voice that already reached the end,
+        // covering the original's GetStatus/Stop/SetCurrentPosition dance.
+        const bool loop = (dwFlags & 1) != 0;
 
         switch (type)
         {
@@ -714,7 +714,7 @@ namespace openre::audio
                 return 0;
             int v4 = 0;
             for (int i = 0; i < 2; i++)
-                v4 += (int)ss_get_status(7, i) << i;
+                v4 += ss_get_status(7, i) << i;
             switch (v4)
             {
             case 3: gGameTable.XA_idx = gGameTable.XA_idx == 0; break;
@@ -1324,70 +1324,72 @@ namespace openre::audio
     }
 
     // 0x004347B0
-    static LPDIRECTSOUNDBUFFER ss_get_status(int type, int sub)
+    static int ss_get_status(int type, int sub)
     {
         if (!gGameTable.audio_pMarniSnd)
-            return nullptr;
+            return 0;
 
         uint32_t* pbuffer = nullptr;
         switch (type)
         {
         case 0: // door (0..3)
             if ((unsigned int)sub >= 4)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferDoor[sub];
             break;
         case 1: // arms (0..0x1F)
             if ((unsigned int)sub >= 0x20)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferArms[sub];
             break;
         case 2: // room (0..0x2F)
             if ((unsigned int)sub >= 0x30)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferRoom[sub];
             break;
         case 3: // enemy (0..0x1F)
             if ((unsigned int)sub >= 0x20)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferEnemy[sub];
             break;
         case 4: // core (0..0x15)
             if ((unsigned int)sub > 0x15)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferCore[sub];
             break;
         case 5: // bgm (0..2)
             if ((unsigned int)sub > 2)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferBgm[sub];
             break;
         case 6: // sbgm (0..1)
             if ((unsigned int)sub > 1)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferSBgm[sub];
             break;
         case 7: // voice (0..1)
             if ((unsigned int)sub > 1)
-                return nullptr;
+                return 0;
             pbuffer = &gGameTable.audio_BufferVoice[sub];
             break;
         default:
-            return nullptr;
+            return 0;
         }
 
         if (!pbuffer)
-            return nullptr;
+            return 0;
 
         uint32_t handle = *pbuffer;
         if (handle)
         {
             // The original returned the DirectSound status bits cast to a
             // pointer (bit 0 = DSBSTATUS_PLAYING), so callers test `& 1`;
-            // the SDL3 module reports just the playing state.
-            return (LPDIRECTSOUNDBUFFER)(uintptr_t)(system::audio::get_status(handle) ? 1 : 0);
+            // the SDL3 module reports just the playing state. The playing
+            // flag is returned directly (preserving the pointer-value 1/0
+            // ABI for original-binary callers through the hook).
+            return system::audio::get_status(handle) ? 1 : 0;
         }
-        return nullptr;
+        return 0;
     }
 
     // 0x004EF070
@@ -1407,10 +1409,10 @@ namespace openre::audio
     }
 
     // 0x004348F0
-    static LPDIRECTSOUNDBUFFER ss_set_pan(int type, unsigned int index, int pan)
+    static int ss_set_pan(int type, unsigned int index, int pan)
     {
         if (!gGameTable.audio_pMarniSnd)
-            return (LPDIRECTSOUNDBUFFER)1;
+            return 1;
 
         // Clamp pan to [-10000, 10000] (the original scales by 23 first).
         int v4 = 23 * pan;
@@ -1433,27 +1435,27 @@ namespace openre::audio
         {
         case 0: // door (0..3)
             if (index >= 4)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferDoor[index];
             break;
         case 1: // arms (0..0x1F)
             if (index >= 0x20)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferArms[index];
             break;
         case 2: // room (0..0x2F)
             if (index >= 0x30)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferRoom[index];
             break;
         case 3: // enemy (0..0x1F)
             if (index >= 0x20)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferEnemy[index];
             break;
         case 4: // core (0..0x15)
             if (index > 0x15)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferCore[index];
             break;
         case 5: // bgm (0..2)
@@ -1463,16 +1465,16 @@ namespace openre::audio
                 break;
             }
             if (bgm_ck_room(0, 8, -1) == 1)
-                return nullptr;
+                return 0;
             bgm_ck_room(0, 9, -1);
-            return nullptr;
+            return 0;
         case 6: // sbgm (0..1)
             if (index > 1)
             {
                 if (bgm_ck_room(3, 0, -1) == 1)
-                    return nullptr;
+                    return 0;
                 if (bgm_ck_room(0, 9, -1) != 1)
-                    return nullptr;
+                    return 0;
                 v5 = &gGameTable.audio_BufferSBgm[1];
             }
             else
@@ -1482,25 +1484,25 @@ namespace openre::audio
             break;
         case 7: // voice (0..1)
             if (index > 1)
-                return nullptr;
+                return 0;
             v5 = &gGameTable.audio_BufferVoice[index];
             break;
         default:
-            return nullptr;
+            return 0;
         }
 
         // Shared tail: all paths that resolve a buffer land here.
         if (!v5)
-            return nullptr;
+            return 0;
 
         uint32_t handle = *v5;
         if (handle)
         {
-            // S_OK (0) is returned as pointer value 1 so callers can test
-            // truthiness.
-            return (LPDIRECTSOUNDBUFFER)(system::audio::set_pan(handle, v4) ? 1 : 0);
+            // The original returned S_OK (0) as pointer value 1 so callers
+            // could test truthiness; the int return keeps that ABI.
+            return system::audio::set_pan(handle, v4) ? 1 : 0;
         }
-        return nullptr;
+        return 0;
     }
 
     // 0x00434AB0
@@ -2111,9 +2113,7 @@ namespace openre::audio
         {
             ss_init();
             gGameTable.cd_vol_0 = 120;
-            using Snd_sys_init_sub_t = void (*)();
-            auto Snd_sys_init_sub = (Snd_sys_init_sub_t)0x004EC350;
-            Snd_sys_init_sub();
+            snd_sys_init_sub();
         }
     }
 
@@ -2155,16 +2155,21 @@ namespace openre::audio
         };
     }
 
+    // 0x00442EA0
+    static void registry_set_flag(int index, int sub)
+    {
+        auto* flags = reinterpret_cast<uint32_t*>(&gGameTable.pad_68059C);
+        flags[index + (sub >> 5)] |= 0x80000000 >> (sub & 0x1F);
+    }
+
     // 0x00442E60
     void snd_sys_stereo()
     {
         for (auto& entry : s_stereo_config)
         {
-            using Set_registry_flg_t = void (*)(int, uint8_t);
-            auto Set_registry_flg = (Set_registry_flg_t)0x00442EA0;
             for (int j = 0; j < entry.count; j++)
             {
-                Set_registry_flg(entry.offset, entry.data[j]);
+                registry_set_flag(entry.offset, entry.data[j]);
             }
         }
     }
@@ -2187,7 +2192,7 @@ namespace openre::audio
                 {
                     if (seq_ctr[8 * i])
                     {
-                        v0 = (char)(uintptr_t)ss_get_status(5, i);
+                        v0 = (char)ss_get_status(5, i);
                         if ((v0 & 1) != 0)
                             v0 = (char)ss_stop_group(5, i);
                         seq_ctr[8 * i] = 0;
@@ -2663,7 +2668,7 @@ namespace openre::audio
             {
                 if (gGameTable.byte_693808)
                 {
-                    if (((DWORD)ss_get_status(6, 0) & 1) != 0)
+                    if ((ss_get_status(6, 0) & 1) != 0)
                         ss_stop_group(6, 0);
                     gGameTable.byte_693808 = 0;
                 }
@@ -2675,7 +2680,7 @@ namespace openre::audio
             {
                 if (gGameTable.byte_693810)
                 {
-                    if (((DWORD)ss_get_status(6, 1) & 1) != 0)
+                    if ((ss_get_status(6, 1) & 1) != 0)
                         ss_stop_group(6, 1);
                     gGameTable.byte_693810 = 0;
                 }
@@ -2901,13 +2906,13 @@ namespace openre::audio
                     if (((*bgm_sub ^ v0[1]) & 0x3F) != 0)
                     {
                         if (gGameTable.byte_693808 == 1
-                            && ((DWORD)ss_get_status(6, 0) & 1) != 0)
+                            && (ss_get_status(6, 0) & 1) != 0)
                         {
                             ss_seq_set_decrescendo(1, 127, 90);
                             gGameTable.byte_693808 = 50;
                         }
                         if (gGameTable.byte_693810 == 1
-                            && ((DWORD)ss_get_status(6, 1) & 1) != 0)
+                            && (ss_get_status(6, 1) & 1) != 0)
                         {
                             ss_seq_set_decrescendo(2, 127, 90);
                             gGameTable.byte_693810 = 50;
@@ -3109,13 +3114,13 @@ namespace openre::audio
                     {
                         if (v3) // SBGM
                         {
-                            if (((uintptr_t)ss_get_status(6, v6 - 1) & 1) != 0)
+                            if ((ss_get_status(6, v6 - 1) & 1) != 0)
                             {
                                 ss_set_vol(6, v6 - 1, ((uint16_t*)&gGameTable.dword_693804)[4 * v6]);
                                 ss_stop_group(6, v6 - 1);
                             }
                         }
-                        else if (((uintptr_t)ss_get_status(5, 0) & 1) != 0)
+                        else if ((ss_get_status(5, 0) & 1) != 0)
                         {
                             for (int j = 0; j < 3; j++)
                                 ss_set_vol(5, j, (uint16_t)gGameTable.dword_693804);
@@ -3194,13 +3199,13 @@ namespace openre::audio
                         if (((a1 >> 16) & 0xFF) != 0)
                         {
                             v18[16 * ((a1 >> 16) & 0xFF) + 20] = v19 - 1;
-                            result = (char)(uint8_t)(uintptr_t)ss_set_pan(6, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
+                            result = (char)(uint8_t)ss_set_pan(6, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
                         }
                         else
                         {
                             v18[25] = v19 - 1;
                             for (int i = 0; i < 2; i++)
-                                result = (char)(uint8_t)(uintptr_t)ss_set_pan(6, i, v19 - 1);
+                                result = (char)(uint8_t)ss_set_pan(6, i, v19 - 1);
                         }
                     }
                 }
@@ -3235,13 +3240,13 @@ namespace openre::audio
                         if (((a1 >> 16) & 0xFF) != 0)
                         {
                             v18[16 * ((a1 >> 16) & 0xFF) + 20] = v19 - 1;
-                            result = (char)(uint8_t)(uintptr_t)ss_set_pan(5, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
+                            result = (char)(uint8_t)ss_set_pan(5, ((a1 >> 16) & 0xFF) - 1, v19 - 1);
                         }
                         else
                         {
                             v18[25] = v19 - 1;
                             for (int i = 0; i < 3; i++)
-                                result = (char)(uint8_t)(uintptr_t)ss_set_pan(5, i, v19 - 1);
+                                result = (char)(uint8_t)ss_set_pan(5, i, v19 - 1);
                         }
                     }
                 }
@@ -3287,7 +3292,7 @@ namespace openre::audio
         {
             if (gGameTable.seq_ctr[0] != 0)
             {
-                auto uVar3 = (DWORD)ss_get_status(5, 0);
+                auto uVar3 = ss_get_status(5, 0);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(5, 0xffffffff);
@@ -3313,7 +3318,7 @@ namespace openre::audio
         {
             if (gGameTable.byte_693808 != 0)
             {
-                auto uVar3 = (DWORD)ss_get_status(5, 1);
+                auto uVar3 = ss_get_status(5, 1);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(6, 0);
@@ -3328,7 +3333,7 @@ namespace openre::audio
         {
             if (gGameTable.byte_693810 != 0)
             {
-                auto uVar3 = (DWORD)ss_get_status(5, 2);
+                auto uVar3 = ss_get_status(5, 2);
                 if ((uVar3 & 1) != 0)
                 {
                     ss_stop_group(6, 1);
@@ -3519,7 +3524,7 @@ namespace openre::audio
             int v1 = 0;
             for (;;)
             {
-                result = (int)(uintptr_t)ss_get_status(7, v1);
+                result = ss_get_status(7, v1);
                 if ((result & 1) != 0)
                     break;
                 if (++v1 >= 2)
@@ -3939,7 +3944,7 @@ namespace openre::audio
                             gGameTable.seq_ctr[0] = 0;
                             for (int i = 0; i < 3; ++i)
                             {
-                                if (((DWORD)ss_get_status(5, i) & 1) != 0)
+                                if ((ss_get_status(5, i) & 1) != 0)
                                     ss_stop_group(5, i);
                             }
                         }
@@ -3949,7 +3954,7 @@ namespace openre::audio
                             if (p693808[8 * j])
                             {
                                 p693808[8 * j] = 0;
-                                if (((DWORD)ss_get_status(6, j) & 1) != 0)
+                                if ((ss_get_status(6, j) & 1) != 0)
                                     ss_stop_group(6, j);
                             }
                         }
@@ -3989,7 +3994,7 @@ namespace openre::audio
                     gGameTable.seq_ctr[0] = 0;
                     for (int k = 0; k < 3; ++k)
                     {
-                        if (((DWORD)ss_get_status(5, k) & 1) != 0)
+                        if ((ss_get_status(5, k) & 1) != 0)
                             ss_stop_group(5, k);
                         *dword_689DD8 = 0;
                     }
@@ -3997,7 +4002,7 @@ namespace openre::audio
                 if (gGameTable.byte_693808 > 5 && --gGameTable.byte_693808 == 5)
                 {
                     gGameTable.byte_693808 = 0;
-                    if (((DWORD)ss_get_status(6, 0) & 1) != 0)
+                    if ((ss_get_status(6, 0) & 1) != 0)
                     {
                         ss_stop_group(6, 0);
                         *dword_689DDC = 0;
@@ -4006,7 +4011,7 @@ namespace openre::audio
                 if ((uint8_t)gGameTable.byte_693810 > 5 && --gGameTable.byte_693810 == 5)
                 {
                     gGameTable.byte_693810 = 0;
-                    if (((DWORD)ss_get_status(6, 1) & 1) != 0)
+                    if ((ss_get_status(6, 1) & 1) != 0)
                     {
                         ss_stop_group(6, 1);
                         *dword_689DE0 = 0;
