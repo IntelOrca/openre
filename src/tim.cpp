@@ -121,7 +121,7 @@ namespace openre::tim
                 depth = 4;
                 if (clutWidth > 0x10)
                 {
-                    marni::out("in fact, this must be 16 as clut_width. TIMObject::In", "");
+                    marni::out("in fact, this must be 16 as clut_width...%d, but I would recreate it as that the back clut slides into under. TIMObject::In", "");
                     pTima = 2;
                 }
                 break;
