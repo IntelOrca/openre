@@ -408,3 +408,5 @@ FodyWeavers.xsd
 # Claude AI files
 /CLAUDE.md
 /.cursor/rules/byterover-rules.mdc
+
+dump/

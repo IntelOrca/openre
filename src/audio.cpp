@@ -729,6 +729,17 @@ namespace openre::audio
         // ACM (optionally resampling to the game's frequency / speaker config);
         // system_audio does all of that internally and returns an opaque handle
         // for the voice registered at (type, slotSub).
+        //
+        // Most .sap files carry an 8-byte mask header before the WAV body; the
+        // original skipped it implicitly because SsCreateBuffer located the
+        // WAV with mmioDescend(MMIO_FINDRIFF), which scans forward for the
+        // "RIFF" marker. Mirror that here.
+        if (size >= 12 && std::memcmp(data, "RIFF", 4) != 0)
+        {
+            data += 8;
+            size -= 8;
+        }
+
         int slotSub = (int)sub;
         if (type == 7)
             slotSub = gGameTable.XA_idx;
@@ -1799,8 +1810,10 @@ namespace openre::audio
             return 0;
         }
 
-        // BGM/SBGM .sap files are plain RIFF WAVs (no mask header); the
-        // original passed the open file straight to SsCreateBuffer.
+        // BGM/SBGM .sap files carry the same 8-byte mask header as the rest
+        // (the original passed the open file to SsCreateBuffer, whose
+        // mmioDescend(MMIO_FINDRIFF) scan skipped it); ss_create_buffer_data
+        // handles the skip.
         std::vector<uint8_t> data = system::fs::readAllBytes(gGameTable.ss_file_string.data);
         if (data.size() < 12)
             return 0;

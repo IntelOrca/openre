@@ -97,6 +97,7 @@
     <ClCompile Include="marni_movie.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />
+    <ClCompile Include="msadpcm.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
@@ -139,6 +140,7 @@
     <ClInclude Include="marni_movie.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
+    <ClInclude Include="msadpcm.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
