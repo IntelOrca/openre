@@ -437,7 +437,14 @@ namespace openre::gfx
             using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3D2*, LPDIRECT3DMATERIAL2*, IUnknown*);
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::D3D2_CreateMaterial])(self, material, outer);
             if (SUCCEEDED(hr) && material != nullptr && *material != nullptr)
+            {
+                // A previous material destroyed during a mode/resolution change
+                // may have had its address reused by the allocator; the stale
+                // registry entry would make wrap_material2 silently skip
+                // re-hooking the new object. Start from a clean slate.
+                registry::erase(*material);
                 wrap_material2(*material);
+            }
             return hr;
         }
 
@@ -450,7 +457,12 @@ namespace openre::gfx
             using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3D2*, LPDIRECT3DVIEWPORT2*, IUnknown*);
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::D3D2_CreateViewport])(self, viewport, outer);
             if (SUCCEEDED(hr) && viewport != nullptr && *viewport != nullptr)
+            {
+                // See hook_d3d2_create_material: a destroyed viewport's address
+                // may be reused by a new viewport on a mode/resolution change.
+                registry::erase(*viewport);
                 wrap_viewport2(*viewport);
+            }
             return hr;
         }
 
@@ -464,6 +476,13 @@ namespace openre::gfx
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::D3D2_CreateDevice])(self, cls, surface, device);
             if (SUCCEEDED(hr) && device != nullptr && *device != nullptr)
             {
+                // A resolution change destroys the old device and creates a new
+                // one, and the heap may hand back the same address. The stale
+                // registry entry (and its wrapped vtable) would make
+                // wrap_device2 silently skip re-hooking the new device, so all
+                // its draw/state calls would stop reaching the GPU backend
+                // (permanent black screen). Erase it before re-wrapping.
+                registry::erase(*device);
                 backend_d3d()->create_device(*device);
                 backend_gpu()->create_device(*device);
                 // The game creates the device against the render target surface

@@ -954,6 +954,27 @@ separately:
      from ~64/frame to startup-only, and the status screen runs at ~54fps
      (was 12-13fps).
 
+7. **GPU resolution change → permanent black screen** (post-`0cc2e19`). A
+   resolution change in the options menu destroys and recreates the
+   `IDirect3DDevice2`/`IDirect3DViewport2`/`IDirect3DMaterial2` COM objects,
+   and Windows' heap allocator handed the new device back the *same address*
+   as the destroyed one. The COM wrapping registry in `src/gfx_d3d2.cpp` is
+   keyed by raw pointer and was only cleaned up for surfaces (the `d59e70f`
+   fix) — never for devices/viewports/materials. `wrap_device2`'s
+   "already wrapped" guard then hit the stale entry, skipped re-patching the
+   vtable, and every `DrawPrimitive`/`SetRenderTarget`/`SetRenderState` the
+   game made against the new device silently went to the original unwrapped
+   implementation, never reaching the GPU backend (`queueDraw` never called →
+   `draws=0` → black screen).
+   - **Fix**: `hook_d3d2_create_device` (and `create_viewport`/
+     `create_material`) now `registry::erase()` the freshly-created object's
+     address before wrapping it, so a stale entry from a destroyed object at
+     the same address can never suppress re-hooking. Verified at runtime with
+     an auto-triggered `ChangeDisplayMode` (0x00403060): draw stats went from
+     `draws=0` before the change to `draws=35/33/33...` after it, FPS recovered
+     to ~40, and the game rendered the new resolution (960x720) until clean
+     shutdown.
+
 ## Out of scope (separate later workstreams)
 - Movie playback (DirectShow/DirectDrawMediaStream) → SDL media + decoder.
 - Audio (DirectSound8) → SDL3 audio.
