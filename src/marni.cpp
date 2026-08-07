@@ -6248,6 +6248,21 @@ namespace openre::marni
 
     // 0x0040fad0
 
+    // MarniSurfaceX::vRelease (0x40EE00) — the release_fn slot of MarniSurfaceX::vTbl
+    // (0x517358). Releases the D3D texture if one is attached, then delegates to
+    // MarniSurfaceY::vRelease (0x40F580). Used by surfacex_create_work to drop any
+    // existing surface when the object is (re-)created in place.
+    static void surfacex_vrelease(MarniSurfaceX* self)
+    {
+        auto pDDtexture = (LPDIRECT3DTEXTURE2)self->pDDtexture;
+        if (pDDtexture)
+        {
+            pDDtexture->Release();
+            self->pDDtexture = nullptr;
+        }
+        surfacey_vrelease((MarniSurface2*)self);
+    }
+
     // 0x0040fbe0
 
     // 0x0040FEF0
