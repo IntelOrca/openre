@@ -7,6 +7,7 @@
 #include "rdt.h"
 #include <array>
 #include <cstring>
+#include <windows.h>
 
 using namespace openre::file;
 using namespace openre::rdt;
@@ -118,6 +119,14 @@ namespace openre::enemy
                                      360,  374,  387,  399,  410,  420,  429,  437,  444,  450,  455,  459,  462,  464,  465,
                                      180,  354,  522,  684,  840,  990,  1134, 1272, 1404, 1530, 1650, 1764, 1872, 1974, 2070,
                                      2160, 2244, 2322, 2394, 2460, 2520, 2574, 2622, 2664, 2700, 2730, 2754, 2772, 2784, 2790 };
+
+    // Marni work-table for the player textures: base 0x00680898, 40 bytes (10 dwords) per entry.
+    static int32_t& gPlTextureMode = *((int32_t*)0x00525178);
+    static int32_t* gPlTpageHandle = (int32_t*)0x006808A0;
+    static int32_t* gPlClutHandle = (int32_t*)0x006808A4;
+    static uint32_t* gPlTextureHandle = (uint32_t*)0x006808A8;
+    static uint32_t* gPlTextureHandle1 = (uint32_t*)0x006808AC;
+    static uint32_t* gPlTextureHandle2 = (uint32_t*)0x006808B0;
 
     // 0x004B1DD0
     void em_move_tbl_set()
@@ -241,10 +250,218 @@ namespace openre::enemy
         return interop::call<void, int>(0x00442F50, id);
     }
 
+    struct PlTimSurface : public MarniSurface
+    {
+        uint32_t var_3C;                    // 0x003C
+    };
+    static_assert(sizeof(PlTimSurface) == 0x40);
+
+    // 0x00413630
+    static uint16_t* calc_pal_address(MarniSurface2* self, int a2, int a3)
+    {
+        return (uint16_t*)interop::thiscall<int, MarniSurface2*, int, int>(0x00413630, self, a2, a3);
+    }
+
+    // 0x00412F70
+    static void set_pal_address(MarniSurface2* self, void* addr)
+    {
+        interop::thiscall<int, MarniSurface2*, void*>(0x00412F70, self, addr);
+    }
+
+    // 0x00412F30
+    static void set_address_0(MarniSurface2* self, void* addr)
+    {
+        interop::thiscall<int, MarniSurface2*, void*>(0x00412F30, self, addr);
+    }
+
+    // 0x00412580
+    static int surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6)
+    {
+        return interop::thiscall<int, MarniSurface2*, RECT*, RECT*, MarniSurface2*, int, int>(
+            0x00412580, self, pDstRect, pSrcRect, pSrc, a5, a6);
+    }
+
+    // 0x004130D0
+    static int surface_operator_eq(MarniSurface2* self, MarniSurface2* pSrc)
+    {
+        return interop::thiscall<int, MarniSurface2*, MarniSurface2*>(0x004130D0, self, pSrc);
+    }
+
+    static int surface_lock(MarniSurface2* self, int a2, int a3)
+    {
+        return interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)self->vtbl->lock_fn, self, a2, a3);
+    }
+
+    static void surface_unlock(MarniSurface2* self)
+    {
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl->unlock_fn, self);
+    }
+
+    // 0x0042FE50
+    static void timobject_ctor(MarniSurface2* self, const char* path)
+    {
+        interop::thiscall<int, MarniSurface2*, const char*>(0x0042FE50, self, path);
+    }
+
+    // 0x0042FB70
+    static int timobject_in(MarniSurface2* self, void* pTim)
+    {
+        return interop::thiscall<int, MarniSurface2*, void*>(0x0042FB70, self, pTim);
+    }
+
+    // 0x0042FEB0
+    static void timobject_dtor(MarniSurface2* self)
+    {
+        interop::thiscall<int, MarniSurface2*>(0x0042FEB0, self);
+    }
+
     // 0x00443F70
     static void pl_load_texture(int workNo, void* pTim, int tpage, int clut, int id)
     {
-        return interop::call<void, int, void*, int, int, int>(0x00443F70, workNo, pTim, tpage, clut, id);
+        PlTimSurface tim;
+        MarniSurface2 work;
+        MarniSurface2 surface;
+        MarniSurface2* p_pDDsurface;
+        RECT rect;
+
+        timobject_ctor(&tim, nullptr);
+        marni::surface2_ctor(&surface);
+
+        if (gPlTextureHandle[10 * workNo])
+        {
+            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle[10 * workNo]);
+            gPlTextureHandle[10 * workNo] = 0;
+        }
+        if (gPlTextureHandle1[10 * workNo])
+        {
+            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle1[10 * workNo]);
+            gPlTextureHandle1[10 * workNo] = 0;
+        }
+        if (gPlTextureHandle2[10 * workNo])
+        {
+            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle2[10 * workNo]);
+            gPlTextureHandle2[10 * workNo] = 0;
+        }
+
+        gPlTpageHandle[10 * workNo] = tpage;
+        gPlClutHandle[10 * workNo] = clut;
+        gPlTextureMode = (-(gGameTable.graphics_ptr_data != 2) & 0x20) + 17;
+
+        timobject_in(&tim, pTim);
+
+        if (gGameTable.graphics_ptr_data == 2)
+        {
+            int width = tim.width;
+            int height = tim.height;
+            int palCnt = tim.pal_cnt;
+
+            marni::surface2_create_work(&surface, width, height, 16, 0, -1);
+
+            rect.left = 0;
+            rect.top = 0;
+            rect.right = 127;
+            rect.bottom = height - 1;
+
+            surface_lock(&tim, 0, 0);
+
+            if (palCnt > 0)
+            {
+                for (int palette = 0; palette < palCnt; palette++)
+                {
+                    for (int i = 1; i < 256; i++)
+                    {
+                        uint16_t* p = calc_pal_address(&tim, i, palette);
+                        if (*p == 0x8000)
+                            *p = 0x8001;
+                    }
+                }
+            }
+
+            surface_unlock(&tim);
+
+            if (id == 54)
+            {
+                if (rect.right >= width)
+                    rect.right = width - 1;
+                surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
+                rect.left += 128;
+                rect.right += 128;
+            }
+
+            do
+            {
+                if (rect.right >= width)
+                    rect.right = width - 1;
+                surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
+                rect.left += 128;
+                rect.right += 128;
+            } while (width > rect.left);
+
+            p_pDDsurface = &surface;
+        }
+        else
+        {
+            p_pDDsurface = &tim;
+        }
+
+        if (p_pDDsurface->width > 256)
+        {
+            marni::surface2_ctor(&work);
+            surface_operator_eq(&work, p_pDDsurface);
+            work.bOpen = 0;
+
+            surface_lock(p_pDDsurface, 0, 0);
+
+            char* v13 = marni::surface_calc_address((MarniSurface*)p_pDDsurface, 256, 0);
+
+            uint16_t* v14;
+            if (id == 54)
+            {
+                v14 = calc_pal_address(p_pDDsurface, 0, 1);
+                work.pal_cnt--;
+            }
+            else
+            {
+                v14 = calc_pal_address(p_pDDsurface, 0, 2);
+                work.pal_cnt -= 2;
+            }
+            set_pal_address(&work, v14);
+
+            surface_unlock(p_pDDsurface);
+
+            set_address_0(&work, v13);
+
+            work.width -= 256;
+            work.bOpen = 1;
+            gPlTextureHandle1[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
+
+            if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
+            {
+                surface_operator_eq(&work, p_pDDsurface);
+                work.bOpen = 0;
+
+                surface_lock(p_pDDsurface, 0, 0);
+
+                char* v16 = marni::surface_calc_address((MarniSurface*)p_pDDsurface, 128, 0);
+                work.width = 256;
+                set_address_0(&work, v16);
+                work.pal_cnt = 2;
+                uint16_t* v17 = calc_pal_address(p_pDDsurface, 0, 1);
+                set_pal_address(&work, v17);
+
+                surface_unlock(p_pDDsurface);
+
+                work.bOpen = 1;
+                gPlTextureHandle2[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
+            }
+
+            p_pDDsurface->width = 256;
+            marni::surface2_release(&work);
+        }
+
+        gPlTextureHandle[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, p_pDDsurface, gPlTextureMode);
+        marni::surface2_release(&surface);
+        timobject_dtor(&tim);
     }
 
     static int get_customised_emd_id(int id)
@@ -896,5 +1113,6 @@ namespace openre::enemy
         interop::writeJmp(0x004B1DD0, em_move_tbl_set);
         interop::writeJmp(0x004C5230, bomb_parts_sort_gt);
         interop::writeJmp(0x004EDE30, &snd_se_enem);
+        interop::writeJmp(0x00443F70, pl_load_texture);
     }
 }
