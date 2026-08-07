@@ -1344,7 +1344,7 @@ namespace openre::marni
             vp.dvClipHeight = 2.0;
             vp.dvMinZ = 0.0;
             vp.dvMaxZ = 1.0;
-            gGameTable.error = ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetViewport2(&vp);
+            gGameTable.error = gfx::viewport_set_viewport2((IUnknown*)self->pViewport, &vp);
             if (gGameTable.error)
                 error(gGameTable.error);
 
@@ -1376,7 +1376,7 @@ namespace openre::marni
             mat.emissive.r = 0.0;
             mat.dwRampSize = 32;
             ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
-            ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetBackground(self->MaterialHandle);
+            gfx::viewport_set_background((IUnknown*)self->pViewport, self->MaterialHandle);
             self->is_gpu_active = 1;
             return 1;
         }
@@ -1416,8 +1416,6 @@ namespace openre::marni
         if ((self->pMovie->flag & 2) != 0)
             return 1;
 
-        auto pViewport = (LPDIRECT3DVIEWPORT)self->pViewport;
-
         D3DRECT rect;
         rect.x1 = 0;
         rect.y1 = 0;
@@ -1429,14 +1427,15 @@ namespace openre::marni
         {
             if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
             {
-                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER);
+                gGameTable.error = gfx::viewport_clear((IUnknown*)self->pViewport, 1, &rect, D3DCLEAR_ZBUFFER);
             }
         }
         else
         {
             if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
             {
-                gGameTable.error = pViewport->Clear(1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
+                gGameTable.error
+                    = gfx::viewport_clear((IUnknown*)self->pViewport, 1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
             }
             else
             {
@@ -1455,20 +1454,20 @@ namespace openre::marni
         if (self->gpu_flag & GpuFlags::GPU_13)
             return;
 
-        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        if (pD3D2 == nullptr || self->pViewport == nullptr)
+        auto* device = (IUnknown*)self->pDirectDevice2;
+        if (device == nullptr || self->pViewport == nullptr)
         {
             out("tried to render regardless of not initializint to viewport or device", "Direct3D::do_render");
             return;
         }
 
-        gGameTable.error = pD3D2->BeginScene();
+        gGameTable.error = gfx::device_begin_scene(device);
         sub_40E800(self, sub_416670(pOt));
-        pD3D2->SetRenderState(D3DRENDERSTATE_ANISOTROPY, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_EDGEANTIALIAS, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_ANTIALIAS, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_SUBPIXEL, 0);
-        pD3D2->SetRenderState(D3DRENDERSTATE_LASTPIXEL, 1);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ANISOTROPY, 0);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_EDGEANTIALIAS, 0);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ANTIALIAS, 0);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SUBPIXEL, 0);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_LASTPIXEL, 1);
         if (FAILED(gGameTable.error))
         {
             d3d_error_routine(gGameTable.error);
@@ -1477,7 +1476,7 @@ namespace openre::marni
 
         trans_priority_list(self, pOt);
         sub_40EC10(self);
-        gGameTable.error = pD3D2->EndScene();
+        gGameTable.error = gfx::device_end_scene(device);
         if (FAILED(gGameTable.error))
         {
             d3d_error_routine(gGameTable.error);
@@ -1487,7 +1486,7 @@ namespace openre::marni
         D3DSTATS stats;
         ZeroMemory(&stats, sizeof(D3DSTATS));
         stats.dwSize = sizeof(D3DSTATS);
-        pD3D2->GetStats(&stats);
+        gfx::device_get_stats(device, &stats);
         self->triangles_drawn = stats.dwTrianglesDrawn - gGameTable.d3d_triangles_drawn;
         self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
         gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
@@ -3069,7 +3068,7 @@ namespace openre::marni
                 mat.emissive.a = 1.0f;
                 mat.dwRampSize = 32;
                 ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
-                ((LPDIRECT3DVIEWPORT2)self->pViewport)->SetBackground(self->MaterialHandle);
+                gfx::viewport_set_background((IUnknown*)self->pViewport, self->MaterialHandle);
             }
         }
 
@@ -3405,7 +3404,7 @@ namespace openre::marni
             return 1;
 
         // Draw each section (texture) of the primitive list.
-        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        auto* device = (IUnknown*)self->pDirectDevice2;
         for (int i = 0; i < splitCount; i++)
         {
             int vertexCount;
@@ -3427,25 +3426,25 @@ namespace openre::marni
             if (vertexCount == 0)
                 continue;
 
-            gGameTable.error = dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
-            dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, 1);
-            dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, D3DSHADE_GOURAUD);
+            gGameTable.error = gfx::device_set_current_viewport(device, (IUnknown*)self->pViewport);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, 1);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_SHADEMODE, D3DSHADE_GOURAUD);
 
             // Allow the drawing-op path only when the base texture has no overlay
             // flag and the primitive does not request texture blending.
             const uint8_t v99 = (textures[0]->var_14 & 4) == 0 && (pPrim->type & 0x10000000) == 0;
 
-            dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, 0);
-            dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, 0);
-            dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
-            dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_COLORKEYENABLE, 0);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_SPECULARENABLE, 0);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
 
             const uint32_t texHandle = textures[i]->surface->texture_handle;
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, texHandle);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREHANDLE, texHandle);
 
             const uint32_t cullMode = (~(uint32_t)primType & 0x40000000 | 0x20000000) >> 29;
-            dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, cullMode);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_CULLMODE, cullMode);
 
             set_filtering(self, 1);
 
@@ -3492,8 +3491,8 @@ namespace openre::marni
             }
             else
             {
-                dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, 0);
-                dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, vertexPtr, vertexCount, D3DDP_WAIT);
+                gfx::device_set_render_state(device, D3DRENDERSTATE_ALPHABLENDENABLE, 0);
+                gfx::device_draw_primitive(device, D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, vertexPtr, vertexCount, D3DDP_WAIT);
             }
 
             if (gGameTable.error)
@@ -4800,8 +4799,8 @@ namespace openre::marni
     // bounding rectangle (no such line exists today).
     static void draw_line_gpu(Marni* self, int x0, int y0, int x1, int y1, uint32_t color0, uint32_t color1, int type)
     {
-        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        if (dd2 == nullptr)
+        auto* device = (IUnknown*)self->pDirectDevice2;
+        if (device == nullptr)
             return;
 
         const bool doubled = (type & 1) != 0;
@@ -4809,15 +4808,15 @@ namespace openre::marni
 
         // Untextured, no depth interaction, solid overwrite (or ONE/ONE
         // additive for flg&2 lines, mirroring DrawLine's GetCurrentColor+add).
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, 0);
-        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
-        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, additive ? TRUE : FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREHANDLE, 0);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ALPHABLENDENABLE, additive ? TRUE : FALSE);
         if (additive)
         {
-            dd2->SetRenderState(D3DRENDERSTATE_SRCBLEND, D3DBLEND_ONE);
-            dd2->SetRenderState(D3DRENDERSTATE_DESTBLEND, D3DBLEND_ONE);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_SRCBLEND, D3DBLEND_ONE);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_DESTBLEND, D3DBLEND_ONE);
         }
 
         // Endpoint blocks are inclusive: the first sample covers [2*x0, 2*x0+2),
@@ -4889,7 +4888,7 @@ namespace openre::marni
                 cbuf);
         }
 
-        dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, v, 4, D3DDP_WAIT);
+        gfx::device_draw_primitive(device, D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, v, 4, D3DDP_WAIT);
     }
 
     // 0x0040C6E0
@@ -5996,17 +5995,17 @@ namespace openre::marni
         if (!v27)
             return 1;
 
-        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, textureHandle);
-        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, drawInfo.zWriteEnable);
-        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
-        dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
+        auto* device = (IUnknown*)self->pDirectDevice2;
+        gfx::device_set_current_viewport(device, (IUnknown*)self->pViewport);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREHANDLE, textureHandle);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, drawInfo.zWriteEnable);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZFUNC, D3DCMP_LESSEQUAL);
         auto v32 = v41 && (pPrim->type & 0x10000000) == 0;
-        dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, drawInfo.shadeMode);
-        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
-        dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, drawInfo.specularEnable);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_COLORKEYENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SHADEMODE, drawInfo.shadeMode);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SPECULARENABLE, drawInfo.specularEnable);
         auto v33 = pPrim->type & 0xF00000;
         if (v33 > 0x400000)
         {
@@ -6059,10 +6058,10 @@ namespace openre::marni
             dstBlend = D3DBLEND_INVSRCALPHA;
             goto LABEL_91;
         }
-        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ALPHABLENDENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
         set_filtering(self, 0);
-        dd2->DrawPrimitive(D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, vertices, drawInfo.vertexCount, D3DDP_WAIT);
+        gfx::device_draw_primitive(device, D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, vertices, drawInfo.vertexCount, D3DDP_WAIT);
     LABEL_94:
         if (!gGameTable.error)
             return 1;
@@ -6077,22 +6076,22 @@ namespace openre::marni
     {
         // NOTE: states 17/18 are the retired D3DRENDERSTATE_TEXTUREMAG/TEXTUREMIN
         // renderstates; the values are D3DTEXTUREFILTER modes (see d3dtypes.h).
-        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREADDRESS, D3DTADDRESS_WRAP);
+        auto* device = (IUnknown*)self->pDirectDevice2;
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREADDRESS, D3DTADDRESS_WRAP);
         if (a2 && gGameTable.marni_config.bilinear)
         {
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_LINEAR);
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_LINEARMIPLINEAR);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_LINEAR);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_LINEARMIPLINEAR);
         }
         else
         {
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_NEAREST);
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_NEAREST);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMAG, D3DFILTER_NEAREST);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMIN, D3DFILTER_NEAREST);
         }
         if (a2 && gGameTable.marni_config.perswrap)
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
         else
-            dd2->SetRenderState(D3DRENDERSTATE_TEXTUREPERSPECTIVE, 0);
+            gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREPERSPECTIVE, 0);
     }
 
     // 0x0040E800
@@ -6215,29 +6214,29 @@ namespace openre::marni
     static int __stdcall do_draw_op(Marni* self, int index)
     {
         auto op = self->draw_op_ptrs[index];
-        auto dd2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
+        auto* device = (IUnknown*)self->pDirectDevice2;
         set_filtering(self, op->filter);
-        dd2->SetCurrentViewport((LPDIRECT3DVIEWPORT2)self->pViewport);
-        dd2->SetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
-        dd2->SetRenderState(D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
-        dd2->SetRenderState(D3DRENDERSTATE_COLORKEYENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
-        dd2->SetRenderState(D3DRENDERSTATE_TEXTUREHANDLE, op->texture_handle);
-        dd2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_ZFUNC, op->z_func);
-        dd2->SetRenderState(D3DRENDERSTATE_SHADEMODE, op->shade_mode);
-        dd2->SetRenderState(D3DRENDERSTATE_CULLMODE, op->cull_mode);
-        dd2->SetRenderState(D3DRENDERSTATE_SPECULARENABLE, FALSE);
-        dd2->SetRenderState(D3DRENDERSTATE_SRCBLEND, op->src_blend);
-        dd2->SetRenderState(D3DRENDERSTATE_DESTBLEND, op->dst_blend);
-        return dd2->DrawPrimitive(D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
+        gfx::device_set_current_viewport(device, (IUnknown*)self->pViewport);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZENABLE, D3DZB_TRUE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_COLORKEYENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATEALPHA);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREHANDLE, op->texture_handle);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZFUNC, op->z_func);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SHADEMODE, op->shade_mode);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_CULLMODE, op->cull_mode);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SPECULARENABLE, FALSE);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_SRCBLEND, op->src_blend);
+        gfx::device_set_render_state(device, D3DRENDERSTATE_DESTBLEND, op->dst_blend);
+        return gfx::device_draw_primitive(device, D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
     }
 
     // 0x0040EC10
     static void __stdcall sub_40EC10(Marni* self)
     {
-        auto pD3D2 = (LPDIRECT3DDEVICE2)self->pDirectDevice2;
-        pD3D2->SetRenderState(D3DRENDERSTATE_ZWRITEENABLE, FALSE);
+        auto* device = (IUnknown*)self->pDirectDevice2;
+        gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, FALSE);
         for (auto i = 0; i < self->num_draw_ops; i++)
         {
             do_draw_op(self, i);

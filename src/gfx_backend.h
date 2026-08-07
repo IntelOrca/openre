@@ -86,6 +86,79 @@ namespace openre::gfx
     GfxBackend* backend_d3d();
     GfxBackend* backend_gpu();
 
+    // ---------------------------------------------------------------------
+    // Broadcast helpers for the decompiled render path
+    // ---------------------------------------------------------------------
+    // Decompiled code used to reach the backends through the wrapped COM
+    // device vtable (gfx_d3d2.cpp). These helpers forward a call to every
+    // registered backend directly, so decompiled code no longer needs the
+    // COM front-end for the hot render path.
+
+    inline HRESULT device_set_current_viewport(IUnknown* device, IUnknown* viewport)
+    {
+        const auto hr = backend_d3d()->set_current_viewport(device, viewport);
+        backend_gpu()->set_current_viewport(device, viewport);
+        return hr;
+    }
+
+    inline HRESULT device_set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value)
+    {
+        const auto hr = backend_d3d()->set_render_state(device, state, value);
+        backend_gpu()->set_render_state(device, state, value);
+        return hr;
+    }
+
+    inline HRESULT device_draw_primitive(
+        IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
+        DWORD flags)
+    {
+        const auto hr = backend_d3d()->draw_primitive(device, primType, vertexType, vertices, vertexCount, flags);
+        backend_gpu()->draw_primitive(device, primType, vertexType, vertices, vertexCount, flags);
+        return hr;
+    }
+
+    inline HRESULT device_begin_scene(IUnknown* device)
+    {
+        const auto hr = backend_d3d()->begin_scene(device);
+        backend_gpu()->begin_scene(device);
+        return hr;
+    }
+
+    inline HRESULT device_end_scene(IUnknown* device)
+    {
+        const auto hr = backend_d3d()->end_scene(device);
+        backend_gpu()->end_scene(device);
+        return hr;
+    }
+
+    inline HRESULT device_get_stats(IUnknown* device, D3DSTATS* stats)
+    {
+        const auto hr = backend_d3d()->get_stats(device, stats);
+        backend_gpu()->get_stats(device, stats);
+        return hr;
+    }
+
+    inline HRESULT viewport_set_viewport2(IUnknown* viewport, const D3DVIEWPORT2* vp)
+    {
+        const auto hr = backend_d3d()->set_viewport(viewport, vp);
+        backend_gpu()->set_viewport(viewport, vp);
+        return hr;
+    }
+
+    inline HRESULT viewport_clear(IUnknown* viewport, DWORD count, const D3DRECT* rects, DWORD flags)
+    {
+        const auto hr = backend_d3d()->clear(viewport, count, rects, flags);
+        backend_gpu()->clear(viewport, count, rects, flags);
+        return hr;
+    }
+
+    inline HRESULT viewport_set_background(IUnknown* viewport, D3DMATERIALHANDLE materialHandle)
+    {
+        const auto hr = backend_d3d()->set_background(viewport, materialHandle);
+        backend_gpu()->set_background(viewport, materialHandle);
+        return hr;
+    }
+
     // 0 = D3D reference, 1 = GPU. Hotkey wired in M2.
     void set_active_backend(int index);
     int active_backend();
