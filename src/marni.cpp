@@ -41,6 +41,7 @@ namespace openre::marni
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
+    void __stdcall surface2_vrelease(MarniSurface2* self);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -6254,7 +6255,33 @@ namespace openre::marni
     // 0x00414A40
     void __stdcall surface2_vrelease(MarniSurface2* self)
     {
-        interop::thiscall<int, MarniSurface2*>(0x00414A40, self);
+        if (self->bLocked)
+        {
+            surface_unlock(self);
+        }
+        if (self->var_27 && self->var_29)
+        {
+            operator_delete(self->pBitmap);
+            operator_delete(self->pPalette);
+        }
+
+        self->pPalette = nullptr;
+        self->pBitmap = nullptr;
+        self->bPalLocked = 0;
+        self->bLocked = 0;
+        std::memset(&self->desc, 0, sizeof(self->desc));
+        self->var_25 = 0;
+        self->bpp = 0;
+        self->pitch = 0;
+        self->height = 0;
+        self->width = 0;
+        self->var_2B = 0;
+        self->var_2A = 0;
+        self->var_28 = 0;
+        self->var_27 = 0;
+        self->bOpen = 0;
+        self->var_29 = 0;
+        self->var_22 = 0;
     }
 
     // 0x00414AC0
@@ -6815,5 +6842,6 @@ namespace openre::marni
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, &set_gpu_flag);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
+        interop::hookThisCall(0x00414A40, &surface2_vrelease);
     }
 }
