@@ -94,6 +94,7 @@ namespace openre::marni
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
+    static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
     static char* surface_calc_address(MarniSurface* self, int x, int y);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
@@ -6769,7 +6770,7 @@ namespace openre::marni
         self->bOpen = 1;
         self->var_27 = 1;
         self->var_29 = 0;
-        interop::thiscall<void, MarniSurfaceX*>(0x0040FFD0, self);
+        surfacex_create_surface(self);
         return 1;
     }
 
@@ -6843,6 +6844,77 @@ namespace openre::marni
                 out("this BitPixel isn't supported...%d MarniBits::CalcAddress", "");
                 return nullptr;
         }
+    }
+
+    // 0x0040FFD0
+    // MarniSurfaceX::CreateSurface — called by surfacex_create_work right after the
+    // DirectDraw surface has been created. First validates the surface's pixel format
+    // (surface_get_alpha_bits returns the bit depth of dwRGBAlphaBitMask), then locks
+    // the surface and scans every pixel's alpha bits. If any alpha bit is clear the
+    // surface is not fully opaque, and self->var_2C is set so the texture is drawn
+    // through the alpha-blended draw-op path (see trans_spr_poly / tex_spr).
+    static void surfacex_create_surface(MarniSurfaceX* self)
+    {
+        uint8_t hasTransparency = 0;
+
+        // Only surfaces whose format carries an alpha mask are scanned; surfaces
+        // without alpha (or with a zero mask) are treated as fully opaque.
+        if (surface_get_alpha_bits(self))
+        {
+            auto pDDsurface = (LPDIRECTDRAWSURFACE)self->pDDsurface;
+
+            DDSURFACEDESC desc;
+            memset(&desc, 0, sizeof(desc));
+            desc.dwSize = sizeof(DDSURFACEDESC);
+            desc.dwFlags = DDSD_PIXELFORMAT;
+            pDDsurface->GetSurfaceDesc(&desc);
+
+            // Keep the pixel format; the descriptor is reused (re-zeroed) for Lock.
+            DDPIXELFORMAT pixelFormat = desc.ddpfPixelFormat;
+
+            memset(&desc, 0, sizeof(desc));
+            desc.dwSize = sizeof(DDSURFACEDESC);
+            pDDsurface->Lock(nullptr, &desc, DDLOCK_WAIT, nullptr);
+
+            // Scan the locked pixels: for each pixel, test the alpha bits (the mask
+            // shifted to the pixel's position) against the surface memory. The row
+            // base is lpSurface + lPitch, mirroring the original code.
+            DWORD height = desc.dwHeight;
+            if (height != 0)
+            {
+                DWORD width = desc.dwWidth;
+                DWORD y = 0;
+                do
+                {
+                    if (hasTransparency)
+                        break;
+
+                    const uint8_t* row = (const uint8_t*)desc.lpSurface + desc.lPitch;
+                    if (width != 0)
+                    {
+                        DWORD x = 0;
+                        uint32_t bit = 0;
+                        do
+                        {
+                            if (hasTransparency)
+                                break;
+
+                            DWORD mask = pixelFormat.dwRGBAlphaBitMask << (bit & 7);
+                            if ((*(const DWORD*)(row + (bit >> 3)) & mask) != mask)
+                                hasTransparency = 1;
+
+                            x++;
+                            bit += pixelFormat.dwRGBBitCount;
+                        } while (x < width);
+                    }
+                    y++;
+                } while (y < height);
+            }
+
+            pDDsurface->Unlock(nullptr);
+        }
+
+        self->var_2C = hasTransparency;
     }
 
     // 0x0040FEF0
