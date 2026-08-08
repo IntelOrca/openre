@@ -5,6 +5,7 @@
 #include "re2.h"
 #include "str.h"
 #include "system_config.h"
+#include "system_input.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -97,6 +98,23 @@ namespace openre::marni
             const char* group = get_registry_path(self);
             return system::config::set_binary(group, name, data, size);
         }
+
+        // 0x0050ABE0
+        // Returns the name of the default (first) gamepad as an OldStdString,
+        // or "default" when no gamepad is present. Replaces joyGetDevCapsA.
+        static OldStdString* __stdcall sub_50ABE0(OldStdString* a1)
+        {
+            OldStdString tmp;
+            str::string_ctor_from_cstr(&tmp, "default");
+
+            const char* name = system::input::get_gamepad_name(0);
+            if (name && *name)
+                str::string_assign_cstr(&tmp, name);
+
+            str::string_assign(a1, &tmp);
+            str::string_dtor(&tmp);
+            return a1;
+        }
     }
 
     void marni_config_init_hooks()
@@ -109,5 +127,6 @@ namespace openre::marni
         interop::hookThisCall(0x0050B7D0, &MarniConfig_WriteString);
         interop::hookThisCall(0x0050B820, &MarniConfig_WriteDword);
         interop::hookThisCall(0x0050B8B0, &MarniConfig_WriteBinary);
+        interop::writeJmp(0x0050ABE0, &sub_50ABE0);
     }
 }
