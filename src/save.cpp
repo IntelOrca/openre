@@ -1878,6 +1878,24 @@ namespace openre::save
         }
     }
 
+    // 0x00509860
+    // Builds the default save path into the OG save-path scratch string at
+    // 0x689F44 and returns the index of its last character. The original
+    // resolved the running module's directory via GetModuleFileNameA; here we
+    // use the resolved save:// physical path instead so the original save
+    // code observes the same folder as GetSaveFolder().
+    static int build_default_save_path()
+    {
+        std::string folder = system::fs::info("save://").physicalPath;
+        if (folder.empty())
+            folder = "savedata\\";
+        if (folder.back() != '\\')
+            folder += '\\';
+
+        str::string_copy(save_path_string(), folder.c_str());
+        return str::string_sjis_len(save_path_string()) - 1;
+    }
+
     // 0x00509840
     // Returns the save folder. The load/save menu always operates on the proper
     // save folder (the physical path of the save:// root), so this never changes.
@@ -1946,5 +1964,6 @@ namespace openre::save
     {
         interop::writeJmp(0x004C57E0, &mem_card);
         interop::writeJmp(0x00432080, &rsrc_release);
+        interop::writeJmp(0x00509860, &build_default_save_path);
     }
 }
