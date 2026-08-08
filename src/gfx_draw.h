@@ -139,7 +139,7 @@ namespace openre::gfx_draw
 
     void reset_geom();
     int add_sprt(Sprt* p, uint32_t page, int z, int add_back);
-    int add_sprt_v(int x, int y, int w, int h, int u, int v, uint16_t clut, uint32_t page, int z, int is_back);
+    int add_sprt_v(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back);
     void add_poly_ft4(PolyFt4* p, int page, int z, int add_back);
     int add_mask(Sprt* p, int page, int z);
     int add_bg_scaled(int bg, int z);
