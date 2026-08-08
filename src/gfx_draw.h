@@ -13,118 +13,118 @@ namespace openre::gfx_draw
 
     struct Sprt
     {
-        uint32_t tag;    // 0x00
-        uint8_t r;       // 0x04
-        uint8_t g;       // 0x05
-        uint8_t b;       // 0x06
-        uint8_t code;    // 0x07
-        int16_t x0;      // 0x08
-        int16_t y0;      // 0x0A
-        uint8_t u0;      // 0x0C
-        uint8_t v0;      // 0x0D
-        uint16_t clut;   // 0x0E
-        uint16_t w;      // 0x10
-        uint16_t h;      // 0x12
+        uint32_t tag;  // 0x00
+        uint8_t r;     // 0x04
+        uint8_t g;     // 0x05
+        uint8_t b;     // 0x06
+        uint8_t code;  // 0x07
+        int16_t x0;    // 0x08
+        int16_t y0;    // 0x0A
+        uint8_t u0;    // 0x0C
+        uint8_t v0;    // 0x0D
+        uint16_t clut; // 0x0E
+        uint16_t w;    // 0x10
+        uint16_t h;    // 0x12
     };
     static_assert(sizeof(Sprt) == 0x14);
 
     struct Tile
     {
-        uint32_t tag;    // 0x00
-        uint8_t r;       // 0x04
-        uint8_t g;       // 0x05
-        uint8_t b;       // 0x06
-        uint8_t code;    // 0x07
-        int16_t x0;      // 0x08
-        int16_t y0;      // 0x0A
-        int16_t w;       // 0x0C
-        int16_t h;       // 0x0E
+        uint32_t tag; // 0x00
+        uint8_t r;    // 0x04
+        uint8_t g;    // 0x05
+        uint8_t b;    // 0x06
+        uint8_t code; // 0x07
+        int16_t x0;   // 0x08
+        int16_t y0;   // 0x0A
+        int16_t w;    // 0x0C
+        int16_t h;    // 0x0E
     };
     static_assert(sizeof(Tile) == 0x10);
 
     struct PolyFt4
     {
-        uint32_t tag;     // 0x00
-        uint8_t r0;       // 0x04
-        uint8_t g0;       // 0x05
-        uint8_t b0;       // 0x06
-        uint8_t code;     // 0x07
-        int16_t x0;       // 0x08
-        int16_t y0;       // 0x0A
-        uint8_t u0;       // 0x0C
-        uint8_t v0;       // 0x0D
-        int16_t clut;     // 0x0E
-        int16_t x1;       // 0x10
-        int16_t y1;       // 0x12
-        uint8_t u1;       // 0x14
-        uint8_t v1;       // 0x15
-        int16_t tpage;    // 0x16
-        int16_t x2;       // 0x18
-        int16_t y2;       // 0x1A
-        uint8_t u2;       // 0x1C
-        uint8_t v2;       // 0x1D
-        uint8_t pad1;     // 0x1E
-        int16_t x3;       // 0x20
-        int16_t y3;       // 0x22
-        uint8_t u3;       // 0x24
-        uint8_t v3;       // 0x25
-        uint8_t pad2;     // 0x26
+        uint32_t tag;  // 0x00
+        uint8_t r0;    // 0x04
+        uint8_t g0;    // 0x05
+        uint8_t b0;    // 0x06
+        uint8_t code;  // 0x07
+        int16_t x0;    // 0x08
+        int16_t y0;    // 0x0A
+        uint8_t u0;    // 0x0C
+        uint8_t v0;    // 0x0D
+        int16_t clut;  // 0x0E
+        int16_t x1;    // 0x10
+        int16_t y1;    // 0x12
+        uint8_t u1;    // 0x14
+        uint8_t v1;    // 0x15
+        int16_t tpage; // 0x16
+        int16_t x2;    // 0x18
+        int16_t y2;    // 0x1A
+        uint8_t u2;    // 0x1C
+        uint8_t v2;    // 0x1D
+        uint8_t pad1;  // 0x1E
+        int16_t x3;    // 0x20
+        int16_t y3;    // 0x22
+        uint8_t u3;    // 0x24
+        uint8_t v3;    // 0x25
+        uint8_t pad2;  // 0x26
     };
     static_assert(sizeof(PolyFt4) == 0x28);
 
     struct PolyGt4
     {
-        uint32_t tag;     // 0x00
-        uint8_t r0;       // 0x04
-        uint8_t g0;       // 0x05
-        uint8_t b0;       // 0x06
-        uint8_t code;     // 0x07
-        int16_t x0;       // 0x08
-        int16_t y0;       // 0x0A
-        uint8_t u0;       // 0x0C
-        uint8_t v0;       // 0x0D
-        uint16_t clut;    // 0x0E
-        uint8_t r1;       // 0x10
-        uint8_t g1;       // 0x11
-        uint8_t b1;       // 0x12
-        uint8_t p1;       // 0x13
-        int16_t x1;       // 0x14
-        int16_t y1;       // 0x16
-        uint8_t u1;       // 0x18
-        uint8_t v1;       // 0x19
-        int16_t tpage;    // 0x1A
-        uint8_t r2;       // 0x1C
-        uint8_t g2;       // 0x1D
-        uint8_t b2;       // 0x1E
-        uint8_t p2;       // 0x1F
-        int16_t x2;       // 0x20
-        int16_t y2;       // 0x22
-        uint8_t u2;       // 0x24
-        uint8_t v2;       // 0x25
-        uint8_t pad2;     // 0x26
-        uint8_t r3;       // 0x28
-        uint8_t g3;       // 0x29
-        uint8_t b3;       // 0x2A
-        uint8_t p3;       // 0x2B
-        int16_t x3;       // 0x2C
-        int16_t y3;       // 0x2E
-        uint8_t u3;       // 0x30
-        uint8_t v3;       // 0x31
-        uint8_t pad3;     // 0x32
+        uint32_t tag;  // 0x00
+        uint8_t r0;    // 0x04
+        uint8_t g0;    // 0x05
+        uint8_t b0;    // 0x06
+        uint8_t code;  // 0x07
+        int16_t x0;    // 0x08
+        int16_t y0;    // 0x0A
+        uint8_t u0;    // 0x0C
+        uint8_t v0;    // 0x0D
+        uint16_t clut; // 0x0E
+        uint8_t r1;    // 0x10
+        uint8_t g1;    // 0x11
+        uint8_t b1;    // 0x12
+        uint8_t p1;    // 0x13
+        int16_t x1;    // 0x14
+        int16_t y1;    // 0x16
+        uint8_t u1;    // 0x18
+        uint8_t v1;    // 0x19
+        int16_t tpage; // 0x1A
+        uint8_t r2;    // 0x1C
+        uint8_t g2;    // 0x1D
+        uint8_t b2;    // 0x1E
+        uint8_t p2;    // 0x1F
+        int16_t x2;    // 0x20
+        int16_t y2;    // 0x22
+        uint8_t u2;    // 0x24
+        uint8_t v2;    // 0x25
+        uint8_t pad2;  // 0x26
+        uint8_t r3;    // 0x28
+        uint8_t g3;    // 0x29
+        uint8_t b3;    // 0x2A
+        uint8_t p3;    // 0x2B
+        int16_t x3;    // 0x2C
+        int16_t y3;    // 0x2E
+        uint8_t u3;    // 0x30
+        uint8_t v3;    // 0x31
+        uint8_t pad3;  // 0x32
     };
     static_assert(sizeof(PolyGt4) == 0x34);
 
     struct LineF2
     {
-        uint32_t tag;     // 0x00
-        uint8_t r0;       // 0x04
-        uint8_t g0;       // 0x05
-        uint8_t b0;       // 0x06
-        uint8_t code;     // 0x07
-        int16_t x0;       // 0x08
-        int16_t y0;       // 0x0A
-        int16_t x1;       // 0x0C
-        int16_t y1;       // 0x0E
+        uint32_t tag; // 0x00
+        uint8_t r0;   // 0x04
+        uint8_t g0;   // 0x05
+        uint8_t b0;   // 0x06
+        uint8_t code; // 0x07
+        int16_t x0;   // 0x08
+        int16_t y0;   // 0x0A
+        int16_t x1;   // 0x0C
+        int16_t y1;   // 0x0E
     };
     static_assert(sizeof(LineF2) == 0x10);
 

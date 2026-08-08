@@ -14,14 +14,19 @@ namespace openre::gfx_draw
     // These are ORed into the primitive type to select the MARNI prim
     // variant (see marni.cpp draw-op dispatch).
     constexpr uint32_t s_type_mod_524E24[8] = {
-        0x100000, 0x200000, 0x100000, 0x100000,
-        0x400000, 0x100000, 0x100000, 0x100000,
+        0x100000, 0x200000, 0x100000, 0x100000, 0x400000, 0x100000, 0x100000, 0x100000,
     };
     constexpr uint32_t s_type_mod_524E44[4] = {
-        0x100000, 0x200000, 0x100000, 0x300000,
+        0x100000,
+        0x200000,
+        0x100000,
+        0x300000,
     };
     constexpr uint32_t s_type_mod_524E5C[4] = {
-        0x100000, 0x200000, 0x400000, 0x300000,
+        0x100000,
+        0x200000,
+        0x400000,
+        0x300000,
     };
 
     namespace
@@ -126,16 +131,8 @@ namespace openre::gfx_draw
     {
         MarniPrim* prim = scratch_ptr();
 
-        if (page >= 41
-            || gGameTable.texture_pages[page].handle == 0
-            || gGameTable.texture_pages[page].var_08 == 1
-            || prim + 1 > scratch_end()
-            || w <= 0
-            || h <= 0
-            || w + u - 1 > 255
-            || h + v - 1 > 255
-            || u < 0
-            || v < 0)
+        if (page >= 41 || gGameTable.texture_pages[page].handle == 0 || gGameTable.texture_pages[page].var_08 == 1
+            || prim + 1 > scratch_end() || w <= 0 || h <= 0 || w + u - 1 > 255 || h + v - 1 > 255 || u < 0 || v < 0)
         {
             return 0;
         }
@@ -171,9 +168,7 @@ namespace openre::gfx_draw
         MarniPrim* v4 = scratch_ptr();
         MarniPrim* v5 = scratch_ptr();
 
-        if (page < 41
-            && gGameTable.texture_pages[page].handle != 0
-            && gGameTable.texture_pages[page].var_08 != 1
+        if (page < 41 && gGameTable.texture_pages[page].handle != 0 && gGameTable.texture_pages[page].var_08 != 1
             && (uintptr_t)scratch_ptr() + 0x20 <= (uintptr_t)scratch_end())
         {
             // Clamp the CLUT to 0 if it is past the texture page's CLUT table.
@@ -472,17 +467,17 @@ namespace openre::gfx_draw
             out->y1 = p->y1;
             *(int16_t*)&out->u0 = p->x2;
             *(int16_t*)&out->u1 = p->y2;
-            *(int16_t*)&tail[0] = p->x3;         // LOWORD(out[1].pNext)
-            *(int16_t*)&tail[2] = p->y3;         // HIWORD(out[1].pNext)
-            *(uint16_t*)&tail[4] = (uint16_t)z;  // LOWORD(out[1].type)
-            tail[6] = p->u0;                     // BYTE2(out[1].type)
-            tail[7] = p->v0;                     // HIBYTE(out[1].type)
-            tail[8] = p->u1;                     // LOBYTE(out[1].pTexture)
-            tail[9] = p->v1;                     // BYTE1(out[1].pTexture)
-            tail[10] = p->u2;                    // BYTE2(out[1].pTexture)
-            tail[11] = p->v2;                    // HIBYTE(out[1].pTexture)
-            tail[12] = p->u3;                    // LOBYTE(out[1].field_C)
-            tail[13] = p->v3;                    // BYTE1(out[1].field_C)
+            *(int16_t*)&tail[0] = p->x3;        // LOWORD(out[1].pNext)
+            *(int16_t*)&tail[2] = p->y3;        // HIWORD(out[1].pNext)
+            *(uint16_t*)&tail[4] = (uint16_t)z; // LOWORD(out[1].type)
+            tail[6] = p->u0;                    // BYTE2(out[1].type)
+            tail[7] = p->v0;                    // HIBYTE(out[1].type)
+            tail[8] = p->u1;                    // LOBYTE(out[1].pTexture)
+            tail[9] = p->v1;                    // BYTE1(out[1].pTexture)
+            tail[10] = p->u2;                   // BYTE2(out[1].pTexture)
+            tail[11] = p->v2;                   // HIBYTE(out[1].pTexture)
+            tail[12] = p->u3;                   // LOBYTE(out[1].field_C)
+            tail[13] = p->v3;                   // BYTE1(out[1].field_C)
             out->texture = gGameTable.texture_pages[page].handle;
             out->var_0C = (uint16_t)p->clut;
         }
@@ -501,17 +496,17 @@ namespace openre::gfx_draw
             out->y1 = p->y1;
             *(int16_t*)&out->u0 = p->x2;
             *(int16_t*)&out->u1 = p->y2;
-            *(int16_t*)&tail[0] = p->x3;         // LOWORD(out[1].pNext)
-            *(int16_t*)&tail[2] = p->y3;         // HIWORD(out[1].pNext)
-            *(uint16_t*)&tail[4] = (uint16_t)z;  // LOWORD(out[1].type)
-            tail[6] = p->u0;                     // BYTE2(out[1].type)
-            tail[7] = p->v0;                     // HIBYTE(out[1].type)
-            tail[8] = p->u1;                     // LOBYTE(out[1].pTexture)
-            tail[9] = p->v1;                     // BYTE1(out[1].pTexture)
-            tail[10] = p->u2;                    // BYTE2(out[1].pTexture)
-            tail[11] = p->v2;                    // HIBYTE(out[1].pTexture)
-            tail[12] = p->u3;                    // LOBYTE(out[1].field_C)
-            tail[13] = p->v3;                    // BYTE1(out[1].field_C)
+            *(int16_t*)&tail[0] = p->x3;        // LOWORD(out[1].pNext)
+            *(int16_t*)&tail[2] = p->y3;        // HIWORD(out[1].pNext)
+            *(uint16_t*)&tail[4] = (uint16_t)z; // LOWORD(out[1].type)
+            tail[6] = p->u0;                    // BYTE2(out[1].type)
+            tail[7] = p->v0;                    // HIBYTE(out[1].type)
+            tail[8] = p->u1;                    // LOBYTE(out[1].pTexture)
+            tail[9] = p->v1;                    // BYTE1(out[1].pTexture)
+            tail[10] = p->u2;                   // BYTE2(out[1].pTexture)
+            tail[11] = p->v2;                   // HIBYTE(out[1].pTexture)
+            tail[12] = p->u3;                   // LOBYTE(out[1].field_C)
+            tail[13] = p->v3;                   // BYTE1(out[1].field_C)
             out->texture = gGameTable.texture_pages[page].handle;
             out->var_0C = (uint16_t)p->clut;
         }
