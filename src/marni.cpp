@@ -95,12 +95,13 @@ namespace openre::marni
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static void __stdcall surface3_dtor(MarniSurface3* self);
     static void __stdcall surfacex_dtor(MarniSurfaceX* self);
+    static MarniSurfaceX* __stdcall surfacex_ctor(MarniSurfaceX* self);
     static int __stdcall get_z_buffer_caps(Marni* self);
     static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device);
-    static void surfacex_vrelease(MarniSurfaceX* self);
+    static void __stdcall surfacex_vrelease(MarniSurfaceX* self);
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
@@ -780,7 +781,7 @@ namespace openre::marni
         ddesc.dwHeight = tex.surface.height;
 
         MarniSurfaceX surfX;
-        interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, &surfX);
+        surfacex_ctor(&surfX);
 
         auto compress_create = [&](MarniTextureNode& node) {
             if (node.surface->is_vmem)
@@ -829,7 +830,7 @@ namespace openre::marni
             }
             node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
-                interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                surfacex_ctor(node.surface);
             interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
                 0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
             if (!node.surface->bOpen)
@@ -892,7 +893,7 @@ namespace openre::marni
                 }
                 node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
-                    interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                    surfacex_ctor(node.surface);
                 interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
                     0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
                 if (!node.surface->bOpen)
@@ -966,7 +967,7 @@ namespace openre::marni
             }
             node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
-                interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                surfacex_ctor(node.surface);
             interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
                 0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, tex.surface.pal_cnt);
             if (!node.surface->bOpen)
@@ -1035,7 +1036,7 @@ namespace openre::marni
                 }
                 node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
-                    interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                    surfacex_ctor(node.surface);
                 interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
                     0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
                 if (!node.surface->bOpen)
@@ -6321,15 +6322,29 @@ namespace openre::marni
         return 0;
     }
 
-    // 0x0040ed90
-
-    // 0x0040edb0
-    static void __stdcall surfacex_dtor(MarniSurfaceX* self)
+    // 0x0040ED90
+    static MarniSurfaceX* __stdcall surfacex_ctor(MarniSurfaceX* self)
     {
-        interop::thiscall<int, MarniSurfaceX*>(0x0040EDB0, self);
+        // MarniSurfaceX::Ctor — MarniSurfaceY::Ctor then override the vtbl with
+        // MarniSurfaceX::vTbl (0x517358) and clear the D3D texture fields.
+        surfacey_ctor((MarniSurfaceY*)self);
+        self->vtbl = (MarniSurfaceVTBL*)0x00517358;
+        self->texture_handle = 0;
+        self->pDDtexture = nullptr;
+        return self;
     }
 
-    // 0x0040ee00
+    // 0x0040EDB0
+    static void __stdcall surfacex_dtor(MarniSurfaceX* self)
+    {
+        // MarniSurfaceX::Dtor — restore the X vtbl, release the D3D texture plus
+        // the base surface, then run the MarniSurfaceY dtor chain.
+        self->vtbl = (MarniSurfaceVTBL*)0x00517358;
+        surfacex_vrelease(self);
+        surfacey_dtor((MarniSurface2*)self);
+    }
+
+    // 0x0040EE00
 
     // 0x0040EE30
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc)
@@ -6928,7 +6943,7 @@ namespace openre::marni
     // (0x517358). Releases the D3D texture if one is attached, then delegates to
     // MarniSurfaceY::vRelease (0x40F580). Used by surfacex_create_work to drop any
     // existing surface when the object is (re-)created in place.
-    static void surfacex_vrelease(MarniSurfaceX* self)
+    static void __stdcall surfacex_vrelease(MarniSurfaceX* self)
     {
         auto pDDtexture = (LPDIRECT3DTEXTURE2)self->pDDtexture;
         if (pDDtexture)
@@ -8627,7 +8642,7 @@ namespace openre::marni
         a3.dwSize = 0x6C;
 
         MarniSurfaceX pSrc;
-        interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, &pSrc);
+        surfacex_ctor(&pSrc);
 
         for (int i = 0; i < 256; ++i)
         {
@@ -8666,7 +8681,7 @@ namespace openre::marni
 
             node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
-                interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                surfacex_ctor(node.surface);
 
             a3.ddsCaps.dwCaps = DDSCAPS_ALLOCONLOAD | DDSCAPS_TEXTURE;
             interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -8704,7 +8719,7 @@ namespace openre::marni
                 }
                 node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
-                    interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
+                    surfacex_ctor(node.surface);
 
                 a3.ddsCaps.dwCaps = DDSCAPS_ALLOCONLOAD | DDSCAPS_TEXTURE;
                 interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -8924,6 +8939,9 @@ namespace openre::marni
         interop::hookThisCall(0x0040EE30, &surfacex_load);
         interop::hookThisCall(0x0040ED20, &surfacex_get_texture_handle);
         interop::hookThisCall(0x0040FBE0, &surfacex_create_work);
+        interop::hookThisCall(0x0040ED90, &surfacex_ctor);
+        interop::hookThisCall(0x0040EDB0, &surfacex_dtor);
+        interop::hookThisCall(0x0040EE00, &surfacex_vrelease);
         interop::hookThisCall(0x0040F9C0, &surfacex_vpalunlock);
         interop::hookThisCall(0x0040F790, &surfacex_vlock);
         interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
