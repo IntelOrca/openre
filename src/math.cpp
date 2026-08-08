@@ -463,6 +463,20 @@ namespace openre::math
         return result;
     }
 
+    // 0x00451660
+    // Interpolates two 16-bit vectors: a5 = a1*(a3/4096) + a2*(a4/4096)
+    static int load_average_short12(const Vec16* a1, const Vec16* a2, int16_t a3, int16_t a4, Vec16* a5)
+    {
+        int v6 = muldiv(a1->x, a3, 4096);
+        a5->x = static_cast<int16_t>(muldiv(a2->x, a4, 4096) + v6);
+        int a3a = muldiv(a1->y, a3, 4096);
+        a5->y = static_cast<int16_t>(muldiv(a2->y, a4, 4096) + a3a);
+        int v5 = muldiv(a1->z, a3, 4096);
+        int result = muldiv(a2->z, a4, 4096);
+        a5->z = static_cast<int16_t>(result + v5);
+        return result;
+    }
+
     // 0x00451780
     unsigned int square_root_0(int a0)
     {
@@ -509,5 +523,6 @@ namespace openre::math
         interop::writeJmp(0x00451450, &set_color_matrix);
         interop::writeJmp(0x00451430, &set_light_matrix);
         interop::writeJmp(0x004515C0, &load_average12);
+        interop::writeJmp(0x00451660, &load_average_short12);
     }
 }
