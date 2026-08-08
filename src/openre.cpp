@@ -30,6 +30,8 @@
 #include "window.h"
 #include <ddraw.h>
 
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <windows.h>
 
@@ -185,6 +187,19 @@ namespace openre
             result = 5 * rng_state + 425147303;
             rng_state = result;
         }
+        return result;
+    }
+
+    // 0x0050C800
+    // CRT sprintf. The OG implementation routes through __flsbuf -> __write ->
+    // WriteFile (an OS call we want dead), so redirect all OG callers to our own
+    // vsprintf. cdecl varargs; returns the number of characters written.
+    static int __cdecl sprintf_hook(char* buffer, const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        int result = vsprintf(buffer, format, args);
+        va_end(args);
         return result;
     }
 
@@ -3010,6 +3025,7 @@ void onAttach()
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x0050C800, &sprintf_hook);
     interop::writeJmp(0x0050B930, &sub_50B930);
     interop::writeJmp(0x00509CF0, ck_installkey);
     interop::writeJmp(0x004C3C70, psx_main);
