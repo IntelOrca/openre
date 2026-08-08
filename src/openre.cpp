@@ -33,6 +33,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <windows.h>
 
@@ -883,13 +884,13 @@ namespace openre
     // 0x0050AA00
     void* operator_new(const size_t size)
     {
-        return interop::call<void*, size_t>(0x0050AA00, size);
+        return malloc(size);
     }
 
     // 0x0050AA10
     void operator_delete(void* memoryBlock)
     {
-        interop::call<void*>(0x0050AA10, memoryBlock);
+        free(memoryBlock);
     }
 
     // 0x004E97C0
@@ -3034,6 +3035,8 @@ void onAttach()
     interop::writeJmp(0x004315D0, save_menu_draw);
     interop::writeJmp(0x00442920, draw_monitor_effect);
     interop::writeJmp(0x004427E0, &update_timer);
+    interop::writeJmp(0x0050AA00, &operator_new);
+    interop::writeJmp(0x0050AA10, &operator_delete);
 
     scheduler_init_hooks();
     title_init_hooks();

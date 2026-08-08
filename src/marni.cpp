@@ -115,13 +115,13 @@ namespace openre::marni
     // 0x0050D905
     void* cstd_malloc(size_t len)
     {
-        return interop::call<void*, size_t>(0x0050D905, len);
+        return malloc(len);
     }
 
     // 0x0050D89C
     void cstd_free(void* mem)
     {
-        interop::call<void, void*>(0x0050D89C, mem);
+        free(mem);
     }
 
     // 0x0050CC9E
@@ -759,7 +759,7 @@ namespace openre::marni
             if (node.surface)
             {
                 surfacex_dtor(node.surface);
-                interop::call<void, void*>(0x0050AA10, node.surface);
+                operator_delete(node.surface);
             }
             node.surface = nullptr;
             v6 = node.next;
@@ -825,9 +825,9 @@ namespace openre::marni
             if (node.surface)
             {
                 surfacex_dtor(node.surface);
-                interop::call<void, void*>(0x0050AA10, node.surface);
+                operator_delete(node.surface);
             }
-            node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+            node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
                 interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
             interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -838,7 +838,7 @@ namespace openre::marni
                 if (node.surface)
                 {
                     surfacex_dtor(node.surface);
-                    interop::call<void, void*>(0x0050AA10, node.surface);
+                    operator_delete(node.surface);
                 }
                 node.surface = nullptr;
                 surfacex_dtor(&surfX);
@@ -888,9 +888,9 @@ namespace openre::marni
                 if (node.surface)
                 {
                     surfacex_dtor(node.surface);
-                    interop::call<void, void*>(0x0050AA10, node.surface);
+                    operator_delete(node.surface);
                 }
-                node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+                node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
                     interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
                 interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -901,7 +901,7 @@ namespace openre::marni
                     if (node.surface)
                     {
                         surfacex_dtor(node.surface);
-                        interop::call<void, void*>(0x0050AA10, node.surface);
+                        operator_delete(node.surface);
                     }
                     node.surface = nullptr;
                     surfacex_dtor(&surfX);
@@ -962,9 +962,9 @@ namespace openre::marni
             if (node.surface)
             {
                 surfacex_dtor(node.surface);
-                interop::call<void, void*>(0x0050AA10, node.surface);
+                operator_delete(node.surface);
             }
-            node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+            node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
                 interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
             interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -975,7 +975,7 @@ namespace openre::marni
                 if (node.surface)
                 {
                     surfacex_dtor(node.surface);
-                    interop::call<void, void*>(0x0050AA10, node.surface);
+                    operator_delete(node.surface);
                 }
                 node.surface = nullptr;
                 surfacex_dtor(&surfX);
@@ -1031,9 +1031,9 @@ namespace openre::marni
                 if (node.surface)
                 {
                     surfacex_dtor(node.surface);
-                    interop::call<void, void*>(0x0050AA10, node.surface);
+                    operator_delete(node.surface);
                 }
-                node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+                node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
                     interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
                 interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
@@ -1044,7 +1044,7 @@ namespace openre::marni
                     if (node.surface)
                     {
                         surfacex_dtor(node.surface);
-                        interop::call<void, void*>(0x0050AA10, node.surface);
+                        operator_delete(node.surface);
                     }
                     node.surface = nullptr;
                     surfacex_dtor(&surfX);
@@ -8661,10 +8661,10 @@ namespace openre::marni
             if (node.surface)
             {
                 surfacex_dtor(node.surface);
-                interop::call<void, void*>(0x0050AA10, node.surface);
+                operator_delete(node.surface);
             }
 
-            node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+            node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
                 interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
 
@@ -8700,9 +8700,9 @@ namespace openre::marni
                 if (node.surface)
                 {
                     surfacex_dtor(node.surface);
-                    interop::call<void, void*>(0x0050AA10, node.surface);
+                    operator_delete(node.surface);
                 }
-                node.surface = (MarniSurfaceX*)interop::call<void*, size_t>(0x0050AA00, 0x44);
+                node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
                     interop::thiscall<void, MarniSurfaceX*>(0x0040ED90, node.surface);
 
