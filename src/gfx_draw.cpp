@@ -71,7 +71,8 @@ namespace openre::gfx_draw
     // 0x004416F0
     static void set_geom_offset(int cx, int cy)
     {
-        interop::call<void, int, int>(0x004416F0, cx, cy);
+        gGameTable.global_cx = (uint32_t)cx;
+        gGameTable.global_cy = (uint32_t)cy;
     }
 
     // 0x00440250
