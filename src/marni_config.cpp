@@ -109,9 +109,10 @@ namespace openre::marni
 
             const char* name = system::input::get_gamepad_name(0);
             if (name && *name)
-                str::string_assign_cstr(&tmp, name);
+                str::string_copy(&tmp, name);
 
-            str::string_assign(a1, &tmp);
+            // a1 is an unconstructed string; op_assign reinitializes it first.
+            str::string_op_assign(a1, &tmp);
             str::string_dtor(&tmp);
             return a1;
         }

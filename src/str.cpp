@@ -40,6 +40,14 @@ namespace openre::str
         return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50C400, self, other);
     }
 
+    // 0x0050BBD0
+    // Reinitializes the destination (zeroes it) before copying, so it is safe
+    // to use on a string that has not been constructed yet.
+    OldStdString* string_op_assign(OldStdString* self, const OldStdString* other)
+    {
+        return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50BBD0, self, other);
+    }
+
     OldStdString* string_assign(OldStdString* self, const std::string& s)
     {
         string_assign_cstr(self, s.c_str());
