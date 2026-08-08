@@ -158,6 +158,36 @@ namespace openre
         return rnd() % v;
     }
 
+    // 0x0050B930
+    // Time-seeded LCG used by the Capcom logo / title screens. The first call
+    // seeds the state from the high resolution tick counter (bit-reversed),
+    // subsequent calls advance the LCG. Replaces timeGetTime().
+    static uint32_t sub_50B930()
+    {
+        static uint8_t& rng_seed_flag = *reinterpret_cast<uint8_t*>(0x540CE8);
+        static uint32_t& rng_state = *reinterpret_cast<uint32_t*>(0x689FB0);
+
+        uint32_t result;
+        if (rng_seed_flag)
+        {
+            auto time = system::window::get_ticks();
+
+            uint32_t v1 = 0;
+            for (int i = 0; i < 32; ++i)
+                v1 |= ((time >> i) & 1) << (31 - i);
+
+            result = 5 * v1 + 425147303;
+            rng_seed_flag = 0;
+            rng_state = result;
+        }
+        else
+        {
+            result = 5 * rng_state + 425147303;
+            rng_state = result;
+        }
+        return result;
+    }
+
     // 0x00502DB0
     void set_view(const Vec32p& pVp, const Vec32p& pVr)
     {
@@ -2980,11 +3010,13 @@ void onAttach()
     interop::writeJmp(0x004DE650, load_init_table_2);
     interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
+    interop::writeJmp(0x0050B930, &sub_50B930);
     interop::writeJmp(0x00509CF0, ck_installkey);
     interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
     interop::writeJmp(0x004315D0, save_menu_draw);
     interop::writeJmp(0x00442920, draw_monitor_effect);
+    interop::writeJmp(0x004427E0, &update_timer);
 
     scheduler_init_hooks();
     title_init_hooks();
