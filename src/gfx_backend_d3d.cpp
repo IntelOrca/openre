@@ -29,6 +29,22 @@ namespace openre::gfx
         // 0x0040F580/0x00412BD0/0x00414750, restore_surfaces) depends on the
         // real DirectDraw surface state, and the GPU backend adopts the real
         // surface size/format from the desc those calls fill.
+
+        // ddraw.dll replaces a wrapped surface's vtable with its own
+        // IDirectDrawSurface7 template once primary-surface creation settles
+        // (observed on the primary surface). Our saved origVtbl then points at
+        // a stale intermediate template whose slot implementations do not obey
+        // the standard IDirectDrawSurface7 calling conventions (e.g.
+        // GetSurfaceDesc/SetClipper become 3/4-arg helpers), which trips the
+        // Debug /RTC CheckEsp assert. Dispatch through the surface's current
+        // vtable when it is no longer the one we installed - the same functions
+        // the original game's own vtable dispatch reaches.
+        void** surface_vtable_for_dispatch(void* surface, const registry::Entry* e)
+        {
+            auto** live = *reinterpret_cast<void***>(surface);
+            return live == e->newVtbl ? e->origVtbl : live;
+        }
+
         class GfxBackendD3D final : public GfxBackend
         {
         public:
@@ -210,7 +226,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPRECT, LPDDSURFACEDESC, DWORD, HANDLE);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_Lock])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Lock])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), rect, desc, flags, event);
                 }
                 return E_UNEXPECTED;
@@ -221,7 +237,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, void*);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_Unlock])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Unlock])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), lpRect);
                 }
                 return E_UNEXPECTED;
@@ -238,7 +254,7 @@ namespace openre::gfx
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(
                         IDirectDrawSurface*, LPRECT, LPDIRECTDRAWSURFACE, LPRECT, DWORD, LPDDBLTFX);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_Blt])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(dst, e)[slots::SURF_Blt])(
                         reinterpret_cast<IDirectDrawSurface*>(dst),
                         dstRect,
                         reinterpret_cast<LPDIRECTDRAWSURFACE>(src),
@@ -254,8 +270,8 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDDSURFACEDESC);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_GetSurfaceDesc])(
-                        reinterpret_cast<IDirectDrawSurface*>(surface), desc);
+                    auto fn = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_GetSurfaceDesc]);
+                    return fn(reinterpret_cast<IDirectDrawSurface*>(surface), desc);
                 }
                 return E_UNEXPECTED;
             }
@@ -265,7 +281,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_IsLost])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_IsLost])(
                         reinterpret_cast<IDirectDrawSurface*>(surface));
                 }
                 return E_UNEXPECTED;
@@ -276,7 +292,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_Restore])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Restore])(
                         reinterpret_cast<IDirectDrawSurface*>(surface));
                 }
                 return E_UNEXPECTED;
@@ -287,7 +303,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDIRECTDRAWSURFACE);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_AddAttachedSurface])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_AddAttachedSurface])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWSURFACE>(attached));
                 }
                 return E_UNEXPECTED;
@@ -320,8 +336,8 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDIRECTDRAWCLIPPER);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_SetClipper])(
-                        reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWCLIPPER>(clipper));
+                    auto fn = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_SetClipper]);
+                    return fn(reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWCLIPPER>(clipper));
                 }
                 return E_UNEXPECTED;
             }
@@ -334,7 +350,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, REFIID, void**);
-                    const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::SURF_QueryInterface])(
+                    const auto hr = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_QueryInterface])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), IID_IDirect3DTexture2, outTexture);
                     if (SUCCEEDED(hr) && outTexture != nullptr && *outTexture != nullptr)
                     {
@@ -360,7 +376,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, HDC*);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_GetDC])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_GetDC])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), hdc);
                 }
                 return E_UNEXPECTED;
@@ -375,7 +391,7 @@ namespace openre::gfx
                 if (const auto* e = registry::find(surface); e != nullptr)
                 {
                     using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, HDC);
-                    return reinterpret_cast<Fn>(e->origVtbl[slots::SURF_ReleaseDC])(
+                    return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_ReleaseDC])(
                         reinterpret_cast<IDirectDrawSurface*>(surface), hdc);
                 }
                 return E_UNEXPECTED;
