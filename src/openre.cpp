@@ -8,6 +8,7 @@
 #include "error.h"
 #include "file.h"
 #include "gfx_backend.h"
+#include "gfx_draw.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -3059,6 +3060,7 @@ void onAttach()
     {
         input_init_hooks();
         marni::init_hooks();
+        gfx_draw::init_hooks();
     }
 }
 
