@@ -1009,6 +1009,10 @@ declare     dword_671424            u32[10]                 0x00671424
 declare     obj_tex_handle          u8[0x2A90]              0x00671620
 declare     dword_674DF0            u32                     0x00674DF0
 declare     dword_674DF4            u32                     0x00674DF4
+declare     dword_674E60            u32[2]                  0x00674E60
+declare     bg_tex0                 u32                     0x0067C728
+declare     bg_tex1                 u32                     0x0067C72C
+declare     bg_prims                PrimSprite[6]           0x0067C730
 declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     global_cx               u32                     0x0067C9C4
 declare     global_cy               u32                     0x0067C9C8

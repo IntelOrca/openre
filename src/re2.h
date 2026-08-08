@@ -1298,7 +1298,12 @@ struct GameTable
     uint8_t pad_6740B0[3392];           // 0x6740B0
     uint32_t dword_674DF0;              // 0x674DF0
     uint32_t dword_674DF4;              // 0x674DF4
-    uint8_t pad_674DF8[31200];          // 0x674DF8
+    uint8_t pad_674DF8[104];            // 0x674DF8
+    uint32_t dword_674E60[2];           // 0x674E60
+    uint8_t pad_674E68[30912];          // 0x674E68
+    uint32_t bg_tex0;                   // 0x67C728
+    uint32_t bg_tex1;                   // 0x67C72C
+    PrimSprite bg_prims[6];             // 0x67C730
     TexturePage texture_pages[41];      // 0x67C7D8
     uint32_t global_cx;                 // 0x67C9C4
     uint32_t global_cy;                 // 0x67C9C8

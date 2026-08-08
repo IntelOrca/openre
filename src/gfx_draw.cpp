@@ -142,7 +142,8 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::Sprt, z, (int)page, p->clut, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
+        record_call(
+            DrawKind::Sprt, z, (int)page, p->clut, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)(uintptr_t)((uint8_t*)prim + 0x20);
         return 1;
@@ -179,7 +180,8 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, depth);
 
-        record_call(DrawKind::SprtV, depth, (int)page, (int)clut, (int16_t)x, (int16_t)y, (int16_t)(w + x - 1), (int16_t)(h + y - 1));
+        record_call(
+            DrawKind::SprtV, depth, (int)page, (int)clut, (int16_t)x, (int16_t)y, (int16_t)(w + x - 1), (int16_t)(h + y - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C += sizeof(MarniPrim); // advance one MARNI_PRIM (0x1C)
         return 1;
@@ -321,10 +323,6 @@ namespace openre::gfx_draw
         return 1;
     }
 
-    // Full-screen background (bg0) texture handle. Not present in GameTable,
-    // so it is exposed here as a direct reference to the fixed address.
-    static uint32_t& th_bg0 = *reinterpret_cast<uint32_t*>(0x0067C728);
-
     // 0x00440950
     // AddBgScaled - draws a full-screen scaled background quad (bg0) using the
     // shared scratch buffer. `bg` points at a descriptor whose interesting
@@ -335,7 +333,7 @@ namespace openre::gfx_draw
     {
         MarniPrim* prim = scratch_ptr();
 
-        if (th_bg0 == 0)
+        if (gGameTable.bg_tex0 == 0)
             return 0;
 
         // Bounds check: the 0x20-byte record must fit before the end cap
@@ -363,16 +361,140 @@ namespace openre::gfx_draw
 
         // Store the z depth as a float scale over the x0/y0 fields.
         *(float*)&prim->x0 = (float)z;
-        prim->texture = th_bg0;
+        prim->texture = gGameTable.bg_tex0;
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)prim, z >> 4);
 
-        record_call(DrawKind::BgScaled, z, -1, 0, *(int16_t*)(bg + 8), *(int16_t*)(bg + 0x0A),
-            (int16_t)(*(int16_t*)(bg + 8) + *(int16_t*)(bg + 16) - 1), (int16_t)(*(int16_t*)(bg + 0x0A) + *(int16_t*)(bg + 18) - 1));
+        record_call(
+            DrawKind::BgScaled,
+            z,
+            -1,
+            0,
+            *(int16_t*)(bg + 8),
+            *(int16_t*)(bg + 0x0A),
+            (int16_t)(*(int16_t*)(bg + 8) + *(int16_t*)(bg + 16) - 1),
+            (int16_t)(*(int16_t*)(bg + 0x0A) + *(int16_t*)(bg + 18) - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x20;
 
         return 1;
+    }
+
+    // Draws the shared full-screen background (bg_tex0) and right edge strip
+    // (bg_tex1) quads at the given screen-space origin, using the static
+    // bg_prims scratch records. Used by both add_bg and add_bg_2.
+    static void add_bg_prims(int16_t x_off, int16_t y_off)
+    {
+        if (gGameTable.bg_tex0 != 0)
+        {
+            auto& prim = gGameTable.bg_prims[0];
+            prim.type = 36;
+            prim.texture = gGameTable.bg_tex0;
+            prim.x0 = x_off;
+            prim.y0 = y_off;
+            prim.x1 = x_off + 255;
+            prim.y1 = y_off + 239;
+            prim.u0 = 0;
+            prim.v0 = 0;
+            prim.u1 = 255;
+            prim.v1 = 239;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim, 15);
+        }
+
+        if (gGameTable.bg_tex1 != 0)
+        {
+            auto& prim = gGameTable.bg_prims[1];
+            prim.type = 36;
+            prim.texture = gGameTable.bg_tex1;
+            prim.x0 = x_off + 0x100;
+            prim.y0 = y_off;
+            prim.x1 = x_off + 0x13F;
+            prim.y1 = y_off + 0x7F;
+            prim.u0 = 0;
+            prim.v0 = 0;
+            prim.u1 = 0x3F;
+            prim.v1 = 0x7F;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim, 15);
+
+            auto& prim2 = gGameTable.bg_prims[2];
+            prim2.type = 36;
+            prim2.texture = gGameTable.bg_tex1;
+            prim2.x0 = x_off + 0x100;
+            prim2.y0 = y_off + 0x80;
+            prim2.x1 = x_off + 0x13F;
+            prim2.y1 = y_off + 0xEF;
+            prim2.u0 = 0x40;
+            prim2.v0 = 0;
+            prim2.u1 = 0x7F;
+            prim2.v1 = 0x6F;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim2, 15);
+        }
+    }
+
+    // 0x0043FB30
+    // AddBg - draws the full-screen background (bg_tex0) followed by the right
+    // edge strip (bg_tex1) at the current global camera offset, using the
+    // static bg_prims scratch records.
+    void add_bg()
+    {
+        add_bg_prims((int16_t)gGameTable.global_cx, (int16_t)gGameTable.global_cy);
+        gGameTable.byte_6805B4 = 1;
+    }
+
+    // 0x0043FCB0
+    // AddBg2 - same as AddBg but the background is scrolled by `scroll_y`, and
+    // an extra pair of strips (from dword_674E60) is drawn below the visible
+    // frame to fill in during a vertical scroll transition.
+    void add_bg_2(int16_t scroll_y)
+    {
+        add_bg_prims(0, scroll_y);
+
+        if (gGameTable.dword_674E60[0] != 0)
+        {
+            auto& prim = gGameTable.bg_prims[3];
+            prim.type = 36;
+            prim.texture = gGameTable.dword_674E60[0];
+            prim.x0 = 0;
+            prim.y0 = scroll_y - 0xF0;
+            prim.x1 = 255;
+            prim.y1 = scroll_y - 1;
+            prim.u0 = 0;
+            prim.v0 = 0;
+            prim.u1 = 255;
+            prim.v1 = 239;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim, 15);
+        }
+
+        if (gGameTable.dword_674E60[1] != 0)
+        {
+            auto& prim = gGameTable.bg_prims[4];
+            prim.type = 36;
+            prim.texture = gGameTable.dword_674E60[1];
+            prim.x0 = 0x100;
+            prim.y0 = scroll_y - 0xF0;
+            prim.x1 = 0x13F;
+            prim.y1 = scroll_y - 0x71;
+            prim.u0 = 0;
+            prim.v0 = 0;
+            prim.u1 = 0x3F;
+            prim.v1 = 0x7F;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim, 15);
+
+            auto& prim2 = gGameTable.bg_prims[5];
+            prim2.type = 36;
+            prim2.texture = gGameTable.dword_674E60[1];
+            prim2.x0 = 0x100;
+            prim2.y0 = scroll_y - 0x70;
+            prim2.x1 = 0x13F;
+            prim2.y1 = scroll_y - 1;
+            prim2.u0 = 0x40;
+            prim2.v0 = 0;
+            prim2.u1 = 0x7F;
+            prim2.v1 = 0x6F;
+            marni::add_primitive_back(gGameTable.pMarni, (Prim*)&prim2, 15);
+        }
+
+        gGameTable.byte_6805B4 = 1;
     }
 
     // 0x00440A20
@@ -740,8 +862,15 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::PolyF4, z, -1, 0, (int16_t)p->x0, (int16_t)p->y0,
-            (int16_t)(*(uint16_t*)&p[1].r - 1), (int16_t)(*(uint16_t*)&p[1].b - 1));
+        record_call(
+            DrawKind::PolyF4,
+            z,
+            -1,
+            0,
+            (int16_t)p->x0,
+            (int16_t)p->y0,
+            (int16_t)(*(uint16_t*)&p[1].r - 1),
+            (int16_t)(*(uint16_t*)&p[1].b - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x14;
         return 1;
@@ -852,5 +981,7 @@ namespace openre::gfx_draw
         interop::writeJmp(0x00440600, &add_poly_ft4);
         interop::writeJmp(0x00440B70, &add_scaled_poly);
         interop::writeJmp(0x00440A20, &add_scaled_sprite);
+        interop::writeJmp(0x0043FB30, &add_bg);
+        interop::writeJmp(0x0043FCB0, &add_bg_2);
     }
 }

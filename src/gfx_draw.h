@@ -191,6 +191,8 @@ namespace openre::gfx_draw
     void add_poly_ft4(PolyFt4* p, int page, int z, int add_back);
     int add_mask(Sprt* p, int page, int z);
     int add_bg_scaled(int bg, int z);
+    void add_bg();
+    void add_bg_2(int16_t scroll_y);
     int add_scaled_sprite(int prim, int page, int z);
     int add_scaled_poly(int prim, int page, int z);
     int add_poly_gt4(PolyGt4* p, int page, int z);
