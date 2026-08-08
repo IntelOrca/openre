@@ -6,6 +6,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -19,6 +20,9 @@ namespace openre::debug
         uint32_t s_fps_last_ticks = 0;
         uint32_t s_fps_frame_count = 0;
         uint32_t s_fps = 0;
+
+        // Scroll offset (lines) into the per-frame draw-call log.
+        int s_log_scroll = 0;
     }
 
     // Queues a formatted string for the top-most GDI text layer (drawn by
@@ -144,16 +148,31 @@ namespace openre::debug
             y += lineHeight;
         }
 
-        // Draw-call statistics (per-frame counts of the decompiled Add* family)
+        // Draw-call log (most recent first, scrollable with PgUp/PgDn)
         const auto& stats = gfx_draw::draw_stats();
+        print(margin, y, color, "Draw calls: %d", stats.log_count);
+        y += lineHeight;
+
+        // Cap the scroll at the oldest entry.
+        const int maxScroll = stats.log_count > 0 ? stats.log_count - 1 : 0;
+        if (s_log_scroll > maxScroll)
+            s_log_scroll = maxScroll;
+
         const char* names[static_cast<int>(gfx_draw::DrawKind::Count)] = {
             "Sprt", "SprtV", "FT4", "Mask", "BgScl", "SclSprt", "SubB70", "GT4", "FT4_2", "F4", "Tile", "Line",
         };
-        print(margin, y, color, "Draw calls: %d", stats.log_count);
-        y += lineHeight;
-        for (int i = 0; i < static_cast<int>(gfx_draw::DrawKind::Count); i++)
+
+        // Show the last ~20 entries that fit on screen.
+        const int visible = (pMarni->ysize - y) / lineHeight - 1;
+        const int rows = (std::min)(visible, 20);
+        for (int i = stats.log_count - 1 - s_log_scroll, row = 0; i >= 0 && row < rows; i--, row++)
         {
-            print(margin, y, color, "  %s: %u", names[i], stats.counts[i]);
+            const auto& rec = stats.log[i % gfx_draw::DRAW_CALL_LOG_SIZE];
+            const char* name = names[static_cast<int>(rec.kind)];
+            if (rec.page == 0xFFFF)
+                print(margin, y, color, "%s z=%d (%d,%d)-(%d,%d)", name, rec.z, rec.x0, rec.y0, rec.x1, rec.y1);
+            else
+                print(margin, y, color, "%s z=%d p=%d (%d,%d)-(%d,%d)", name, rec.z, rec.page, rec.x0, rec.y0, rec.x1, rec.y1);
             y += lineHeight;
         }
 
@@ -171,6 +190,16 @@ namespace openre::debug
     void toggle()
     {
         s_enabled = !s_enabled;
+    }
+
+    void scroll_log(int lines)
+    {
+        if (!s_enabled)
+            return;
+        if (lines < 0 && s_log_scroll > 0)
+            s_log_scroll = (std::max)(0, s_log_scroll + lines);
+        else if (lines > 0)
+            s_log_scroll += lines;
     }
 
     bool enabled()

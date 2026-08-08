@@ -53,12 +53,17 @@ namespace openre::gfx_draw
         DrawStats s_stats;
 
         // Records a successful primitive submission for the current frame.
-        static void record_call(DrawKind kind, int z)
+        static void record_call(DrawKind kind, int z, int page, int clut, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
         {
             s_stats.counts[static_cast<int>(kind)]++;
             auto& slot = s_stats.log[s_stats.log_count % DRAW_CALL_LOG_SIZE];
             slot.kind = kind;
             slot.z = z;
+            slot.page = page < 0 ? 0xFFFF : (uint16_t)page;
+            slot.x0 = x0;
+            slot.y0 = y0;
+            slot.x1 = x1;
+            slot.y1 = y1;
             s_stats.log_count++;
         }
     }
@@ -136,7 +141,7 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::Sprt, z);
+        record_call(DrawKind::Sprt, z, (int)page, p->clut, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)(uintptr_t)((uint8_t*)prim + 0x20);
         return 1;
@@ -173,7 +178,7 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, depth);
 
-        record_call(DrawKind::SprtV, depth);
+        record_call(DrawKind::SprtV, depth, (int)page, (int)clut, (int16_t)x, (int16_t)y, (int16_t)(w + x - 1), (int16_t)(h + y - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C += sizeof(MarniPrim); // advance one MARNI_PRIM (0x1C)
         return 1;
@@ -244,7 +249,7 @@ namespace openre::gfx_draw
             else
                 marni::add_primitive_front(gGameTable.pMarni, (Prim*)scratch_ptr(), z);
 
-            record_call(DrawKind::PolyFt4, z);
+            record_call(DrawKind::PolyFt4, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
             ++gGameTable.dword_67C9CC;
             gGameTable.off_524E1C = (uint32_t)((uintptr_t)scratch_ptr() + 0x20);
         }
@@ -308,7 +313,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)prim, z >> 4);
 
-        record_call(DrawKind::Mask, z);
+        record_call(DrawKind::Mask, z, page, p->clut, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x24;
 
@@ -361,7 +366,8 @@ namespace openre::gfx_draw
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)prim, z >> 4);
 
-        record_call(DrawKind::BgScaled, z);
+        record_call(DrawKind::BgScaled, z, -1, 0, *(int16_t*)(bg + 8), *(int16_t*)(bg + 0x0A),
+            (int16_t)(*(int16_t*)(bg + 8) + *(int16_t*)(bg + 16) - 1), (int16_t)(*(int16_t*)(bg + 0x0A) + *(int16_t*)(bg + 18) - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x20;
 
@@ -439,7 +445,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)out, z >> 4);
 
-        record_call(DrawKind::ScaledSprite, z);
+        record_call(DrawKind::ScaledSprite, z, page, p->clut, p->x0, p->y0, (int16_t)(p->x3 - 1), (int16_t)(p->y3 - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)((uintptr_t)out + 0x24);
 
@@ -534,7 +540,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)out, z >> 4);
 
-        record_call(DrawKind::Sub440B70, z);
+        record_call(DrawKind::Sub440B70, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)((uintptr_t)out + 0x30);
 
@@ -624,7 +630,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::PolyGt4, z);
+        record_call(DrawKind::PolyGt4, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)((uint8_t*)prim + 0x38);
         return 1;
@@ -685,7 +691,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::PolyFt4_2, z);
+        record_call(DrawKind::PolyFt4_2, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x2C;
         return 1;
@@ -733,7 +739,8 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::PolyF4, z);
+        record_call(DrawKind::PolyF4, z, -1, 0, (int16_t)p->x0, (int16_t)p->y0,
+            (int16_t)(*(uint16_t*)&p[1].r - 1), (int16_t)(*(uint16_t*)&p[1].b - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uintptr_t)prim + 0x14;
         return 1;
@@ -785,7 +792,7 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::Tile, z);
+        record_call(DrawKind::Tile, z, -1, 0, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)((char*)prim + 0x14);
 
@@ -818,7 +825,7 @@ namespace openre::gfx_draw
         else
             marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
 
-        record_call(DrawKind::LineF2, z);
+        record_call(DrawKind::LineF2, z, -1, 0, p->x0, p->y0, p->x1, p->y1);
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)(uintptr_t)(prim + 1);
         return 1;

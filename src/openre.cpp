@@ -2476,6 +2476,8 @@ namespace openre
             SetFocus(hWnd);
             break;
         case VK_F6: debug::toggle(); break;
+        case VK_PRIOR: debug::scroll_log(-1); break;
+        case VK_NEXT: debug::scroll_log(1); break;
         case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
         case VK_F8:
             if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery

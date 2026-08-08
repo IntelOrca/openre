@@ -158,12 +158,15 @@ namespace openre::gfx_draw
     };
 
     // Rolling ring buffer of the most recent primitive submissions this frame.
-    constexpr int DRAW_CALL_LOG_SIZE = 256;
+    constexpr int DRAW_CALL_LOG_SIZE = 1024;
 
     struct DrawCallRecord
     {
-        DrawKind kind;
-        int z;
+        DrawKind kind; // which Add* function submitted this call
+        int z;         // draw depth passed to the OT
+        uint16_t page; // texture page, 0xFFFF when not applicable
+        int16_t x0, y0;
+        int16_t x1, y1;
     };
 
     // Per-frame draw-call statistics, reset by reset_geom at the start of

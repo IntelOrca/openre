@@ -17,6 +17,9 @@ namespace openre::debug
     // Toggles the overlay on/off.
     void toggle();
 
+    // Scrolls the draw-call log by `lines` (negative = up).
+    void scroll_log(int lines);
+
     // Whether the overlay is currently shown.
     bool enabled();
 }
