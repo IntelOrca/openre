@@ -1,5 +1,6 @@
 #include "marni.h"
 #include "gfx_backend.h"
+#include "gfx_draw.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "marni_movie.h"
@@ -307,7 +308,7 @@ namespace openre::marni
     // 0x004021B0
 
     // 0x004021C0
-    static int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z)
+    int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -335,7 +336,7 @@ namespace openre::marni
     }
 
     // 0x00402240
-    static int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z)
+    int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -8741,7 +8742,7 @@ namespace openre::marni
     // 0x00441270
     void add_tile(void* primPtr, int z, int is_back)
     {
-        interop::call<void, void*, int, int>(0x00441270, primPtr, z, is_back);
+        gfx_draw::add_tile((gfx_draw::Tile*)primPtr, z, is_back);
     }
 
     // 0x00442E40

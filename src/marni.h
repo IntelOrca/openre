@@ -37,6 +37,8 @@ namespace openre::marni
     bool __stdcall toggle_fullscreen(Marni* self);
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
     void __stdcall unload_texture(Marni* self, int handle);
+    int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z);
+    int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z);
     int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z);
     void __stdcall draw(Marni* self);
     int __stdcall clear(Marni* self);

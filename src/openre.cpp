@@ -2640,7 +2640,7 @@ namespace openre
     // 0x00440250
     static void reset_geom()
     {
-        interop::call(0x00440250);
+        gfx_draw::reset_geom();
     }
 
     // 0x00442A50

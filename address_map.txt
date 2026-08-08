@@ -915,6 +915,8 @@ struct      GameTable
 declare     byte_524E07             u8                      0x00524E07
 declare     dword_524E08            u32                     0x00524E08
 declare     dword_524E0C            u32                     0x00524E0C
+declare     off_524E1C              u32                     0x00524E1C
+declare     off_524E20              u32                     0x00524E20
 declare     cheat_cmds              char*[13]               0x00524E80
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
@@ -1010,6 +1012,7 @@ declare     dword_674DF4            u32                     0x00674DF4
 declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     global_cx               u32                     0x0067C9C4
 declare     global_cy               u32                     0x0067C9C8
+declare     dword_67C9CC            u32                     0x0067C9CC
 declare     file_buffer             void*                   0x0067C9D0
 declare     pAllocator0             void*                   0x0067C9D4
 declare     pAllocator1             void*                   0x0067C9D8

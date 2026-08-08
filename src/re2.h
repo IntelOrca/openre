@@ -1161,7 +1161,10 @@ struct GameTable
     uint8_t byte_524E07;                // 0x524E07
     uint32_t dword_524E08;              // 0x524E08
     uint32_t dword_524E0C;              // 0x524E0C
-    uint8_t pad_524E10[112];            // 0x524E10
+    uint8_t pad_524E10[12];             // 0x524E10
+    uint32_t off_524E1C;                // 0x524E1C
+    uint32_t off_524E20;                // 0x524E20
+    uint8_t pad_524E24[92];             // 0x524E24
     char* cheat_cmds[13];               // 0x524E80
     uint8_t cheat0;                     // 0x524EB4
     uint8_t cheat1;                     // 0x524EB5
@@ -1299,7 +1302,7 @@ struct GameTable
     TexturePage texture_pages[41];      // 0x67C7D8
     uint32_t global_cx;                 // 0x67C9C4
     uint32_t global_cy;                 // 0x67C9C8
-    uint8_t pad_67C9CC[4];              // 0x67C9CC
+    uint32_t dword_67C9CC;              // 0x67C9CC
     void* file_buffer;                  // 0x67C9D0
     void* pAllocator0;                  // 0x67C9D4
     void* pAllocator1;                  // 0x67C9D8
