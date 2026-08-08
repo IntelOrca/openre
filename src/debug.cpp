@@ -1,4 +1,5 @@
 #include "debug.h"
+#include "gfx_draw.h"
 #include "openre.h"
 #include "re2.h"
 #include "system_window.h"
@@ -140,6 +141,19 @@ namespace openre::debug
             print(margin, y, color, "Pos: %d, %d, %d", player->m.pos.x, player->m.pos.y, player->m.pos.z);
             y += lineHeight;
             print(margin, y, color, "HP: %d/%d", player->life, player->max_life);
+            y += lineHeight;
+        }
+
+        // Draw-call statistics (per-frame counts of the decompiled Add* family)
+        const auto& stats = gfx_draw::draw_stats();
+        const char* names[static_cast<int>(gfx_draw::DrawKind::Count)] = {
+            "Sprt", "SprtV", "FT4", "Mask", "BgScl", "SclSprt", "SubB70", "GT4", "FT4_2", "F4", "Tile", "Line",
+        };
+        print(margin, y, color, "Draw calls: %d", stats.log_count);
+        y += lineHeight;
+        for (int i = 0; i < static_cast<int>(gfx_draw::DrawKind::Count); i++)
+        {
+            print(margin, y, color, "  %s: %u", names[i], stats.counts[i]);
             y += lineHeight;
         }
 

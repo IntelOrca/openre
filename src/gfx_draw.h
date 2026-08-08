@@ -3,6 +3,7 @@
 #include "re2.h"
 
 #include <cstdint>
+#include <cstring>
 
 namespace openre::gfx_draw
 {
@@ -132,6 +133,50 @@ namespace openre::gfx_draw
     // laid out identically to PrimSprite (see re2.h) and is followed by a
     // per-type colour tail.
     using MarniPrim = PrimSprite;
+
+    // ── Draw-call instrumentation ──────────────────────────────────────
+    // Each decompiled Add* function records every primitive it submits to the
+    // shared scratch buffer so the per-frame draw workload can be visualised
+    // in the debug overlay.
+
+    // Identifies which Add* function submitted a draw call.
+    enum class DrawKind : uint8_t
+    {
+        Sprt,
+        SprtV,
+        PolyFt4,
+        Mask,
+        BgScaled,
+        ScaledSprite,
+        Sub440B70,
+        PolyGt4,
+        PolyFt4_2,
+        PolyF4,
+        Tile,
+        LineF2,
+        Count,
+    };
+
+    // Rolling ring buffer of the most recent primitive submissions this frame.
+    constexpr int DRAW_CALL_LOG_SIZE = 256;
+
+    struct DrawCallRecord
+    {
+        DrawKind kind;
+        int z;
+    };
+
+    // Per-frame draw-call statistics, reset by reset_geom at the start of
+    // each frame.
+    struct DrawStats
+    {
+        uint32_t counts[static_cast<int>(DrawKind::Count)] = {}; // per-kind submissions this frame
+        DrawCallRecord log[DRAW_CALL_LOG_SIZE] = {};             // ring buffer of recent submissions
+        int log_count = 0;                                       // total submissions this frame
+    };
+
+    // Returns the current frame's draw-call statistics.
+    const DrawStats& draw_stats();
 
     // Decompiled Add* family (originally all __cdecl in the 0x00440xxx range).
     // These replace the original binary functions; init_hooks() routes all
