@@ -2,12 +2,15 @@
 #include "gfx.h"
 #include "interop.hpp"
 #include "openre.h"
+#include "save.h"
 #include "str.h"
 #include "stream.h"
 #include "system_filesystem.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <windows.h>
 
 // Memory card save structures (forward-declared in file.h)
 // Must be packed to match the original binary's 1-byte alignment.
@@ -74,9 +77,59 @@ namespace openre::file
     // --- File I/O wrapper with error dialog suppression and logging ---
 
     // 0x005092A0
+    // Scans the installed drives for the game disc marker (disc.id) and records
+    // the drive root in the disc-path string global (0x689F34), mirroring the
+    // original. Returns true only when the recorded path changed to a non-empty
+    // value. The reimplementation serves all game data from data://, so the
+    // marker is never found on disk and this simply clears the disc path.
     static bool check_disk_id()
     {
-        // We are not implementing this function
+        auto* discPath = reinterpret_cast<OldStdString*>(0x689F34);
+
+        uint32_t logicalDrives = GetLogicalDrives();
+        int foundDrive = -1;
+        for (int i = 0; i < 0x20; i++)
+        {
+            if (((1u << i) & logicalDrives) == 0)
+                continue;
+
+            char fileName[128];
+            sprintf(fileName, "%c:\\disc.id", i + 'A');
+
+            auto data = system::fs::readAllBytes(fileName);
+            if (data.empty())
+                continue;
+
+            // The original read the file into a buffer and treated it as a
+            // NUL-terminated string, then stripped one trailing "\r\n" or "\n".
+            std::string content(reinterpret_cast<const char*>(data.data()), data.size());
+            auto nul = content.find('\0');
+            if (nul != std::string::npos)
+                content.resize(nul);
+            if (content.size() >= 2 && content[content.size() - 2] == '\r' && content[content.size() - 1] == '\n')
+                content.resize(content.size() - 2);
+            else if (content.size() >= 1 && content.back() == '\n')
+                content.pop_back();
+
+            if (content == "bio2.658b45ea117473d4.disc")
+            {
+                foundDrive = i;
+                break;
+            }
+        }
+
+        std::string root;
+        if (foundDrive >= 0)
+        {
+            root += (char)('A' + foundDrive);
+            root += ":\\";
+        }
+
+        if (root != (discPath->data ? discPath->data : ""))
+        {
+            str::string_assign_cstr(discPath, root.c_str());
+            return str::string_sjis_len(discPath) > 0;
+        }
         return false;
     }
 
@@ -263,6 +316,55 @@ namespace openre::file
         auto info = system::fs::info((std::string("data://") + path).c_str());
         str::string_assign_cstr(&gGameTable.ss_file_string, info.physicalPath.c_str());
         return info.kind != system::fs::FileKind::none ? 1 : 0;
+    }
+
+    // 0x00509630
+    // Finds the first free "capt%04d.bmp" screenshot name in the save folder
+    // (0000..9999) and stores it in the output string. Returns 1 when a name was
+    // found, 0 when all 10000 names are taken. The original probed the candidate
+    // names with fopen("rb"); the BMP data itself is written later by
+    // MarniBits::FileOut.
+    static char FileWriteScreen(OldStdString* outPath)
+    {
+        std::string path = save::GetSaveFolder();
+        if (path.empty() || path.back() != '\\')
+            path += '\\';
+        path += "capt";
+
+        char name[128];
+        for (int i = 0; i < 10000; i++)
+        {
+            sprintf(name, "%04d.bmp", i);
+            auto candidate = path + name;
+            if (system::fs::info(candidate.c_str()).kind != system::fs::FileKind::file)
+            {
+                str::string_assign_cstr(outPath, candidate.c_str());
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    // 0x00509040
+    // Resolves a game data file and stores its physical path in the output
+    // string. The original probed the install directory, the module directory
+    // and the game disc for "path" / "data\path" and returned a Win32 HANDLE
+    // that only the original ReadFile/CloseHandle consumers used. Every one of
+    // those callers (open_handle, FileExists, Bg_cache_roomptr) has been
+    // reimplemented on system::fs, so this only reports success — writing the
+    // resolved data:// path to the output string and returning -1 (mirroring
+    // INVALID_HANDLE_VALUE) on failure.
+    static int open_file(OldStdString* outPath, const char* filename, int /*mode*/, char /*silent*/)
+    {
+        auto info = system::fs::info((std::string("data://") + filename).c_str());
+        str::string_assign_cstr(outPath, info.physicalPath.c_str());
+        return info.kind == system::fs::FileKind::file ? 1 : -1;
+    }
+
+    // 0x00509020
+    static int open_handle(const char* filename, int mode)
+    {
+        return open_file(&gGameTable.ss_file_string, filename, mode, 0);
     }
 
     // 0x00441630
@@ -569,9 +671,13 @@ namespace openre::file
         interop::writeJmp(0x00435430, &save_open_fp);
         interop::writeJmp(0x00442D50, &CreateSaveFolder);
         interop::writeJmp(0x004DD360, &osp_read);
+        interop::writeJmp(0x00509020, &open_handle);
+        interop::writeJmp(0x00509040, &open_file);
+        interop::writeJmp(0x005092A0, &check_disk_id);
         interop::writeJmp(0x005094B0, &bufferize_file_0);
         interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
         interop::writeJmp(0x005095D0, &file_exists);
+        interop::writeJmp(0x00509630, &FileWriteScreen);
         interop::writeJmp(0x00509780, &file_read_save);
         interop::writeJmp(0x005097E0, &file_write_save);
     }
