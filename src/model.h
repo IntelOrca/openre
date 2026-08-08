@@ -39,4 +39,5 @@ namespace openre
     constexpr uint8_t MODEL_FLAG_6 = 1 << 6;
 
     size_t mapping_tmd(int a1, Md1* md1, int page, int clut);
+    void model_init_hooks();
 }

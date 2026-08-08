@@ -17,6 +17,7 @@
 #include "marni.h"
 #include "marni_config.h"
 #include "math.h"
+#include "model.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
@@ -3046,6 +3047,7 @@ void onAttach()
     enemy_init_hooks();
     file_init_hooks();
     save_init_hooks();
+    model_init_hooks();
     marni_config_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
