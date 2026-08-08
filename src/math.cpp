@@ -428,6 +428,41 @@ namespace openre::math
         memcpy(&gGameTable.ll_matrix, &m, sizeof(Mat16));
     }
 
+    // Mirrors the rounding of the Win32 MulDiv API: the product is computed
+    // with full precision, rounded half away from zero, then divided.
+    static int32_t muldiv(int32_t n, int32_t d, int32_t m)
+    {
+        int sign = 1;
+        if (n < 0)
+        {
+            n = -n;
+            sign = -sign;
+        }
+        if (d < 0)
+        {
+            d = -d;
+            sign = -sign;
+        }
+
+        // m is always positive (4096) at every call site here
+        int64_t result = (static_cast<int64_t>(n) * d + m / 2) / m;
+        return static_cast<int32_t>(result * sign);
+    }
+
+    // 0x004515C0
+    // Interpolates two 32-bit vectors: a5 = a1*(p0/4096) + a2*(p1/4096)
+    static int load_average12(const Vec32* a1, const Vec32* a2, int16_t p0, int16_t p1, Vec32* a5)
+    {
+        int v6 = muldiv(a1->x, p0, 4096);
+        a5->x = muldiv(a2->x, p1, 4096) + v6;
+        int p0a = muldiv(a1->y, p0, 4096);
+        a5->y = muldiv(a2->y, p1, 4096) + p0a;
+        int v7 = muldiv(a1->z, p0, 4096);
+        int result = muldiv(a2->z, p1, 4096);
+        a5->z = result + v7;
+        return result;
+    }
+
     // 0x00451780
     unsigned int square_root_0(int a0)
     {
@@ -473,5 +508,6 @@ namespace openre::math
         interop::writeJmp(0x00451490, &transpose_matrix);
         interop::writeJmp(0x00451450, &set_color_matrix);
         interop::writeJmp(0x00451430, &set_light_matrix);
+        interop::writeJmp(0x004515C0, &load_average12);
     }
 }
