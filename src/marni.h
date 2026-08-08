@@ -2,6 +2,11 @@
 
 #include "re2.h"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include <cstdint>
 
 struct Md1;
@@ -48,6 +53,7 @@ namespace openre::marni
     void __stdcall surface2_release(MarniSurface2* self);
     int __stdcall surface2_vrelease(MarniSurface2* self);
     int __stdcall surface2_create_work(MarniSurface2* self, int width, int height, int depth, int palBpp, int palCnt);
+    int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6);
 
     void config_flip_filter(MarniConfig* self);
     void config_read_all(MarniConfig* self);

@@ -274,13 +274,6 @@ namespace openre::enemy
         interop::thiscall<int, MarniSurface2*, void*>(0x00412F30, self, addr);
     }
 
-    // 0x00412580
-    static int surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6)
-    {
-        return interop::thiscall<int, MarniSurface2*, RECT*, RECT*, MarniSurface2*, int, int>(
-            0x00412580, self, pDstRect, pSrcRect, pSrc, a5, a6);
-    }
-
     // 0x004130D0
     static int surface_operator_eq(MarniSurface2* self, MarniSurface2* pSrc)
     {
@@ -383,7 +376,7 @@ namespace openre::enemy
             {
                 if (rect.right >= width)
                     rect.right = width - 1;
-                surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
+                marni::surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
                 rect.left += 128;
                 rect.right += 128;
             }
@@ -392,7 +385,7 @@ namespace openre::enemy
             {
                 if (rect.right >= width)
                     rect.right = width - 1;
-                surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
+                marni::surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
                 rect.left += 128;
                 rect.right += 128;
             } while (width > rect.left);

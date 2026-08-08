@@ -53,7 +53,7 @@ namespace openre::marni
     static int surface_get_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_set_current_color(MarniSurface2* self, int x, int y, uint32_t color, int mode);
-    static int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6);
+    int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6);
     static void __stdcall destroy(Marni* marni);
     static int __stdcall do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
@@ -2015,7 +2015,7 @@ namespace openre::marni
     // vertically, plus the blending flags passed through to Set*Color. When a6
     // is non-NULL it points to a 4-float table used to scale each colour
     // channel (R, G, B, A) before the pixel is written.
-    static int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6)
+    int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6)
     {
         if (!self->bOpen || !pSrc->bOpen)
         {
@@ -2039,7 +2039,10 @@ namespace openre::marni
         }
         else
         {
-            SetRect(&rc, 0, 0, pSrc->width - 1, pSrc->height - 1);
+            rc.left = 0;
+            rc.top = 0;
+            rc.right = pSrc->width - 1;
+            rc.bottom = pSrc->height - 1;
         }
 
         // Destination rectangle: clipped against the destination surface.
@@ -2055,13 +2058,19 @@ namespace openre::marni
             v15 = pDstRect->right;
             v16 = pDstRect->bottom;
 
-            SetRect(&a1[0], 0, 0, self->width - 1, self->height - 1);
+            a1[0].left = 0;
+            a1[0].top = 0;
+            a1[0].right = self->width - 1;
+            a1[0].bottom = self->height - 1;
             if (!adjust_rect(&a1[0], pDstRect, &a3))
                 return 0;
         }
         else
         {
-            SetRect(&a3, 0, 0, self->width - 1, self->height - 1);
+            a3.left = 0;
+            a3.top = 0;
+            a3.right = self->width - 1;
+            a3.bottom = self->height - 1;
             left = a3.left;
             v13 = a3.top;
             v15 = a3.right;
@@ -8828,5 +8837,6 @@ namespace openre::marni
         interop::hookThisCall(0x00414A40, &surface2_vrelease);
         interop::hookThisCall(0x004130D0, &surface_operator_eq);
         interop::hookThisCall(0x004123D0, &surface_pal_blt);
+        interop::hookThisCall(0x00412580, &surface2_blt);
     }
 }
