@@ -101,12 +101,15 @@ namespace openre
     }
 
     // 0x004427E0
-    void update_timer()
+    // GetLastTime - refreshes the global timers from the high resolution tick
+    // counter and returns the current tick value (replaces timeGetTime()).
+    uint32_t update_timer()
     {
         auto time = system::window::get_ticks();
         gGameTable.timer_current = time;
         gGameTable.timer_last = time;
         gGameTable.timer_10 = time * 10;
+        return time;
     }
 
     // 0x004FAF80
