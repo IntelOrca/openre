@@ -792,8 +792,7 @@ namespace openre::marni
             {
                 while (interop::thiscall<int, Marni*>(0x004170F0, self))
                 {
-                    interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                        0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                    surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
                     if (node.surface->is_vmem)
                     {
                         node.var_14 |= 0x0100;
@@ -813,8 +812,7 @@ namespace openre::marni
         {
             ddesc.ddsCaps.dwCaps |= 0x800;
             uint16_t nodeIndex = tex.head;
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_work(&surfX, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
             surfacex_create_texture_object(&surfX);
             ddesc.ddsCaps.dwCaps &= ~0x800;
             tex.surface.var_22 = 0;
@@ -831,8 +829,7 @@ namespace openre::marni
             node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
                 surfacex_ctor(node.surface);
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
             if (!node.surface->bOpen)
             {
                 out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
@@ -852,7 +849,7 @@ namespace openre::marni
             node.height = surfX.height;
             interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                 0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
-            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
+            gGameTable.error = surfacex_load(node.surface, &surfX);
             if (!gGameTable.error)
             {
                 surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -873,8 +870,7 @@ namespace openre::marni
         {
             ddesc.ddsCaps.dwCaps |= 0x800;
             uint16_t nodeIndex = tex.head;
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_work(&surfX, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
             surfacex_create_texture_object(&surfX);
             ddesc.ddsCaps.dwCaps &= ~0x800;
             tex.surface.var_22 = 0;
@@ -894,8 +890,7 @@ namespace openre::marni
                 node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
                     surfacex_ctor(node.surface);
-                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                    0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
                 if (!node.surface->bOpen)
                 {
                     out("failed to generate the surface. Direct3D::ReloadTexture", "");
@@ -921,7 +916,7 @@ namespace openre::marni
                 surfX.var_2A = 1;
                 interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                     0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
-                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
+                gGameTable.error = surfacex_load(node.surface, &surfX);
                 if (!gGameTable.error)
                 {
                     surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -950,8 +945,7 @@ namespace openre::marni
         {
             ddesc.ddsCaps.dwCaps |= 0x800;
             uint16_t nodeIndex = tex.head;
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_work(&surfX, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
             surfacex_create_texture_object(&surfX);
             ddesc.ddsCaps.dwCaps &= ~0x800;
             tex.surface.var_22 = 0;
@@ -968,8 +962,7 @@ namespace openre::marni
             node.surface = (MarniSurfaceX*)operator_new(0x44);
             if (node.surface)
                 surfacex_ctor(node.surface);
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, tex.surface.pal_cnt);
+            surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, tex.surface.pal_cnt);
             if (!node.surface->bOpen)
             {
                 out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
@@ -996,7 +989,7 @@ namespace openre::marni
                 0x0040F370, &surfX, &rc, &pRectDst, pSrc, 0, 0);
             for (int i = 0; i < tex.surface.pal_cnt; ++i)
                 surface_pal_blt(node.surface, pSrc, i, i);
-            gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
+            gGameTable.error = surfacex_load(node.surface, &surfX);
             if (!gGameTable.error)
             {
                 surfacex_get_texture_handle(node.surface, (LPDIRECT3DDEVICE2)self->pDirectDevice2);
@@ -1016,8 +1009,7 @@ namespace openre::marni
         {
             ddesc.ddsCaps.dwCaps |= 0x800;
             uint16_t nodeIndex = tex.head;
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, &surfX, self->pDirectDraw2, &ddesc, -1);
+            surfacex_create_work(&surfX, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
             surfacex_create_texture_object(&surfX);
             ddesc.ddsCaps.dwCaps &= ~0x800;
             tex.surface.var_22 = 0;
@@ -1037,8 +1029,7 @@ namespace openre::marni
                 node.surface = (MarniSurfaceX*)operator_new(0x44);
                 if (node.surface)
                     surfacex_ctor(node.surface);
-                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                    0x0040EC90, node.surface, self->pDirectDraw2, &ddesc, -1);
+                surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &ddesc, -1);
                 if (!node.surface->bOpen)
                 {
                     out("failed to generate the surface. Direct3D::CreateTextureObject0Surface", "");
@@ -1059,7 +1050,7 @@ namespace openre::marni
                 surfX.var_2A = 1;
                 interop::thiscall<void, MarniSurfaceX*, RECT*, RECT*, MarniSurface2*, int, int>(
                     0x0040F370, &surfX, nullptr, nullptr, pSrc, 0, 0);
-                gGameTable.error = interop::thiscall<int, MarniSurfaceX*, MarniSurfaceX*>(0x0040EE30, node.surface, &surfX);
+                gGameTable.error = surfacex_load(node.surface, &surfX);
                 surface_pal_blt(node.surface, pSrc, counter, 0);
                 if (gGameTable.error)
                 {
@@ -8395,7 +8386,7 @@ namespace openre::marni
     // 0x00401EF0
     void __stdcall movie_kill(Marni* self)
     {
-        interop::thiscall<void, Marni*>(0x00401EF0, self);
+        kill_movie(self);
     }
 
     // 0x004164C0
@@ -8660,7 +8651,7 @@ namespace openre::marni
 
             auto& tex = self->textures[node.texture_id];
 
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(0x0040EC90, &pSrc, self->pDirectDraw2, &a3, -1);
+            surfacex_create_work(&pSrc, (LPDIRECTDRAW)self->pDirectDraw2, &a3, -1);
             surfacex_create_texture_object(&pSrc);
 
             tex.surface.var_22 = node.page;
@@ -8684,8 +8675,7 @@ namespace openre::marni
                 surfacex_ctor(node.surface);
 
             a3.ddsCaps.dwCaps = DDSCAPS_ALLOCONLOAD | DDSCAPS_TEXTURE;
-            interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                0x0040EC90, node.surface, self->pDirectDraw2, &a3, -1);
+            surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &a3, -1);
             surfacex_create_texture_object(node.surface);
             gGameTable.error = surfacex_load(node.surface, &pSrc);
 
@@ -8701,8 +8691,7 @@ namespace openre::marni
                 a3.dwWidth >>= 1;
                 a3.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_SYSTEMMEMORY;
 
-                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                    0x0040EC90, &pSrc, self->pDirectDraw2, &a3, -1);
+                surfacex_create_work(&pSrc, (LPDIRECTDRAW)self->pDirectDraw2, &a3, -1);
                 surfacex_create_texture_object(&pSrc);
 
                 rc.left = 0;
@@ -8722,8 +8711,7 @@ namespace openre::marni
                     surfacex_ctor(node.surface);
 
                 a3.ddsCaps.dwCaps = DDSCAPS_ALLOCONLOAD | DDSCAPS_TEXTURE;
-                interop::thiscall<int, MarniSurfaceX*, void*, DDSURFACEDESC*, int>(
-                    0x0040EC90, node.surface, self->pDirectDraw2, &a3, -1);
+                surfacex_create_work(node.surface, (LPDIRECTDRAW)self->pDirectDraw2, &a3, -1);
                 surfacex_create_texture_object(node.surface);
                 gGameTable.error = surfacex_load(node.surface, &pSrc);
                 if (gGameTable.error)
