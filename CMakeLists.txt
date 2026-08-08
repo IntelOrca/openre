@@ -15,7 +15,7 @@ file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm imm32 ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
+target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm imm32 mfplat mfuuid d3d11 dxgi ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
 

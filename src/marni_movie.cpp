@@ -4,8 +4,114 @@
 #include "openre.h"
 #include "re2.h"
 
+#include <cstring>
+
+#include <d3d11.h>
+#include <dxgi1_2.h>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfmediaengine.h>
+#include <mfobjects.h>
+#include <oleauto.h>
+
+// Movie playback is implemented with the Windows Media Foundation media engine
+// (IMFMediaEngine), which renders the video into its own child window swapchain
+// and plays the audio track, replacing the legacy DirectShow / DirectDraw
+// streaming implementation. The MarniMovie COM pointer fields are reused to
+// hold the media engine and its helper objects; the game never reads them.
+
 namespace openre::marni
 {
+    namespace
+    {
+        // Window class of the child window the media engine presents into.
+        constexpr char kMovieWindowClass[] = "OpenREMovieWindow";
+
+        // Playback layout of the movie window, stored in the MarniMovie surf_pad
+        // (the game does not use those bytes).
+        struct MovieWindowLayout
+        {
+            LONG left;
+            LONG top;
+            LONG width;
+            LONG height;
+        };
+
+        // Minimal IMFMediaEngineNotify: the engine requires a callback at
+        // creation. Playback itself is driven by polling from the game loop.
+        class MovieEngineNotify final : public IMFMediaEngineNotify
+        {
+            LONG ref_count_ = 1;
+
+        public:
+            STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override
+            {
+                if (riid == IID_IUnknown || riid == IID_IMFMediaEngineNotify)
+                {
+                    *ppvObject = static_cast<IMFMediaEngineNotify*>(this);
+                    AddRef();
+                    return S_OK;
+                }
+                *ppvObject = nullptr;
+                return E_NOINTERFACE;
+            }
+
+            STDMETHODIMP_(ULONG) AddRef() override
+            {
+                return (ULONG)InterlockedIncrement(&ref_count_);
+            }
+
+            STDMETHODIMP_(ULONG) Release() override
+            {
+                LONG refs = InterlockedDecrement(&ref_count_);
+                if (refs == 0)
+                    delete this;
+                return (ULONG)refs;
+            }
+
+            STDMETHODIMP EventNotify(DWORD event, DWORD_PTR, DWORD) override
+            {
+                if (event == MF_MEDIA_ENGINE_EVENT_ERROR)
+                    out("media engine reported an error while playing the movie", "MarniMovie::EventNotify");
+                return S_OK;
+            }
+        };
+
+        LRESULT CALLBACK movie_window_proc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+        {
+            switch (message)
+            {
+            case WM_PAINT:
+            {
+                PAINTSTRUCT ps;
+                BeginPaint(hWnd, &ps);
+                FillRect(ps.hdc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
+                EndPaint(hWnd, &ps);
+                return 0;
+            }
+            case WM_ERASEBKGND: return 1; // background is painted in WM_PAINT
+            default: return DefWindowProcA(hWnd, message, wParam, lParam);
+            }
+        }
+
+        bool register_movie_window_class()
+        {
+            static bool registered = false;
+            if (registered)
+                return true;
+
+            WNDCLASSEXA wc = {};
+            wc.cbSize = sizeof(wc);
+            wc.lpfnWndProc = &movie_window_proc;
+            wc.hInstance = GetModuleHandleA(nullptr);
+            wc.hCursor = LoadCursorA(nullptr, (LPCSTR)IDC_ARROW);
+            wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+            wc.lpszClassName = kMovieWindowClass;
+            registered = RegisterClassExA(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+            return registered;
+        }
+    }
+
     // 0x00414B30
     int __stdcall sub_414B30(MarniMovie* self)
     {
@@ -22,47 +128,37 @@ namespace openre::marni
         if ((flag & 1) == 0)
             return 0;
 
-        if ((flag & 8) != 0)
-        {
-            // Streaming mode: IAMMultiMediaStream::SetState(STREAMSTATE_RUN = 1)
-            // SetState is at vtable offset 0x1C (index 7)
-            auto pStream = self->pMediaStream;
-            auto vtbl = *(uint32_t**)pStream;
-            auto pfnSetState = (HRESULT(__stdcall*)(void*, uint32_t))vtbl[0x1C / 4];
-            pfnSetState(pStream, 1);
-        }
-        else
-        {
-            // DirectShow mode
-            auto pMC = self->pMediaControl;
-            auto vtblMC = *(uint32_t**)pMC;
+        auto pEngine = (IMFMediaEngine*)self->pGraphBuilder;
+        if (pEngine == nullptr)
+            return 0;
 
-            // IMediaControl::Run at vtable offset 0x1C (index 7)
-            auto pfnRun = (HRESULT(__stdcall*)(void*))vtblMC[0x1C / 4];
-            if (pfnRun(pMC) == 1) // S_FALSE = 1 (graph is transitioning)
+        // Start playback once the engine is ready. IsPaused() also returns
+        // TRUE before playback has started; Play() is a no-op while playing.
+        if (pEngine->IsPaused())
+            pEngine->Play();
+
+        // Refresh the duration; GetDuration() returns NaN until metadata loads.
+        self->duration = pEngine->GetDuration();
+
+        // Re-assert the child window layout if it moved.
+        HWND hMovieWnd = (HWND)self->field_6C;
+        HWND hParent = (HWND)self->field_8C;
+        if (hMovieWnd != nullptr && hParent != nullptr)
+        {
+            MovieWindowLayout layout;
+            memcpy(&layout, self->surf_pad, sizeof(layout));
+
+            RECT current = {};
+            if (GetWindowRect(hMovieWnd, &current))
             {
-                // IMediaControl::GetState at vtable offset 0x28 (index 10)
-                auto pfnGetState = (HRESULT(__stdcall*)(void*, int32_t, int32_t*))vtblMC[0x28 / 4];
-                int32_t state;
-                do
+                POINT origin = { 0, 0 };
+                ClientToScreen(hParent, &origin);
+                if (current.left != origin.x + layout.left || current.top != origin.y + layout.top
+                    || current.right - current.left != layout.width || current.bottom - current.top != layout.height)
                 {
-                    pfnGetState(pMC, -1, &state);
-                } while (state != 2 && pfnRun(pMC) == 1); // State_Running = 2
+                    MoveWindow(hMovieWnd, layout.left, layout.top, layout.width, layout.height, TRUE);
+                }
             }
-
-            // IMediaPosition::get_Duration at vtable offset 0x1C (index 7)
-            auto pMP = self->pMediaPosition;
-            auto vtblMP = *(uint32_t**)pMP;
-            auto pfngetDuration = (HRESULT(__stdcall*)(void*, double*))vtblMP[0x1C / 4];
-            pfngetDuration(pMP, &self->duration);
-
-            // IVideoWindow::get_Owner at vtable offset 0x78 (index 30)
-            auto pVW = self->pVideoWindow;
-            auto vtblVW = *(uint32_t**)pVW;
-            auto pfngetOwner = (HRESULT(__stdcall*)(void*, HWND*))vtblVW[0x78 / 4];
-            HWND hWnd;
-            if (pfngetOwner(pVW, &hWnd) >= 0) // S_OK or success
-                UpdateWindow(hWnd);
         }
 
         self->flag |= 2;
@@ -78,26 +174,12 @@ namespace openre::marni
         if ((flag & 1) == 0 || (flag & 2) == 0)
             return 1;
 
-        if ((flag & 8) != 0)
-        {
-            // Streaming mode: present the next sample via
-            // IDirectDrawMediaStreamSample::Update (vtable offset 0x18, index 6).
-            auto pSample = self->field_90;
-            auto vtbl = *(uint32_t**)pSample;
-            auto pfnUpdate = (HRESULT(__stdcall*)(void*, uint32_t, void*, void*, void*))vtbl[0x18 / 4];
-            pfnUpdate(pSample, 0, nullptr, nullptr, nullptr);
+        auto pEngine = (IMFMediaEngine*)self->pGraphBuilder;
+        if (pEngine == nullptr)
             return 1;
-        }
 
-        // DirectShow mode: track the current position and loop at the end.
-        auto pMP = self->pMediaPosition;
-        auto vtblMP = *(uint32_t**)pMP;
-
-        // IMediaPosition::get_CurrentPosition at vtable offset 0x24 (index 9)
-        auto pfnGetPos = (HRESULT(__stdcall*)(void*, double*))vtblMP[0x24 / 4];
-        if (pfnGetPos(pMP, &self->pos))
-            out("error reading the position. MarniMovie::Update", "");
-
+        // Track the current position and loop at the end.
+        self->pos = pEngine->GetCurrentTime();
         if (self->duration <= self->pos)
             movie_seek(self);
 
@@ -107,225 +189,214 @@ namespace openre::marni
     // 0x00414C80
     int __stdcall movie_seek(MarniMovie* self)
     {
-        // Restarts the movie at position 0.
+        // Pause and rewind the movie to position 0, matching the original
+        // DirectShow movie_seek (IMediaControl::Stop + put_CurrentPosition(0)).
+        // Playback is restarted by movie_update_window on the next frame;
+        // calling Play() here would keep the movie running (with audio) after
+        // kill_movie, which expects the movie to stop.
         uint32_t flag = self->flag;
         if ((flag & 1) == 0)
             return 0;
 
-        if ((flag & 8) != 0)
+        auto pEngine = (IMFMediaEngine*)self->pGraphBuilder;
+        if (pEngine != nullptr)
         {
-            // Streaming mode
-            auto pStream = self->pMediaStream;
-            auto vtbl = *(uint32_t**)pStream;
-
-            // IAMMultiMediaStream::SetState(STREAMSTATE_STOP) at vtable offset 0x1C
-            auto pfnSetState = (HRESULT(__stdcall*)(void*, uint32_t))vtbl[0x1C / 4];
-            pfnSetState(pStream, 0); // STREAMSTATE_STOP = 0
-
-            // IAMMultiMediaStream::Seek(0) at vtable offset 0x28
-            auto pfnSeek = (HRESULT(__stdcall*)(void*, int64_t, uint32_t))vtbl[0x28 / 4];
-            pfnSeek(pStream, 0, 0);
-        }
-        else
-        {
-            // DirectShow mode
-            auto pMC = self->pMediaControl;
-            auto vtblMC = *(uint32_t**)pMC;
-
-            // IMediaControl::Stop at vtable offset 0x24
-            auto pfnStop = (HRESULT(__stdcall*)(void*))vtblMC[0x24 / 4];
-            pfnStop(pMC);
-
-            auto pMP = self->pMediaPosition;
-            auto vtblMP = *(uint32_t**)pMP;
-
-            // IMediaPosition::put_CurrentPosition(0) at vtable offset 0x20
-            auto pfnPutPos = (HRESULT(__stdcall*)(void*, double))vtblMP[0x20 / 4];
-            pfnPutPos(pMP, 0.0);
+            pEngine->Pause();
+            pEngine->SetCurrentTime(0.0);
         }
 
         self->flag = (flag & ~2u) | 4u;
         return 1;
     }
 
-    // DirectShow CLSID/IID GUIDs used by movie_open (from binary rdata)
-    // CLSID_FilterGraph {E436EBB3-524F-11CE-9F53-0020AF0BA770}
-    static const GUID CLSID_FilterGraph_Movie
-        = { 0xE436EBB3, 0x524F, 0x11CE, { 0x9F, 0x53, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
-    // IID_IGraphBuilder {56A868A9-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IGraphBuilder_Movie
-        = { 0x56A868A9, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
-    // IID_IMediaControl {56A868B1-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IMediaControl_Movie
-        = { 0x56A868B1, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
-    // IID_IVideoWindow {56A868B4-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IVideoWindow_Movie
-        = { 0x56A868B4, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
-    // IID_IMediaPosition {56A868B2-0AD4-11CE-B03A-0020AF0BA770}
-    static const GUID IID_IMediaPosition_Movie
-        = { 0x56A868B2, 0x0AD4, 0x11CE, { 0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70 } };
-    // MSPID_PrimaryVideo {A35FF56A-9FDA-11D0-8FDF-00C04FD9189D}
-    static const GUID MSPID_PrimaryVideo_Movie
-        = { 0xA35FF56A, 0x9FDA, 0x11D0, { 0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
-    // MSPID_PrimaryAudio {A35FF56B-9FDA-11D0-8FDF-00C04FD9189D}
-    static const GUID MSPID_PrimaryAudio_Movie
-        = { 0xA35FF56B, 0x9FDA, 0x11D0, { 0x8F, 0xDF, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
-    // CLSID_AMMultiMediaStream {49C47CE5-9BA4-11D0-8212-00C04FC32C45}
-    static const GUID CLSID_AMMultiMediaStream_Movie
-        = { 0x49C47CE5, 0x9BA4, 0x11D0, { 0x82, 0x12, 0x00, 0xC0, 0x4F, 0xC3, 0x2C, 0x45 } };
-    // IID_IAMMultiMediaStream {BEBE595C-9A6F-11D0-8FDE-00C04FD9189D}
-    static const GUID IID_IAMMultiMediaStream_Movie
-        = { 0xBEBE595C, 0x9A6F, 0x11D0, { 0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
-    // IID_IDirectDrawMediaStream {F4104FCE-9A70-11D0-8FDE-00C04FD9189D}
-    static const GUID IID_IDirectDrawMediaStream_Movie
-        = { 0xF4104FCE, 0x9A70, 0x11D0, { 0x8F, 0xDE, 0x00, 0xC0, 0x4F, 0xD9, 0x18, 0x9D } };
-
     // 0x00414CF0
     int __stdcall
     movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
     {
+        // The DirectDraw parameters are kept only for ABI compatibility with
+        // the original caller in marni.cpp; the media engine does not use them.
+        (void)pDD2;
+        (void)pSurface;
+
         movie_release(self);
 
-        WCHAR widePath[260];
-        MultiByteToWideChar(0, 0, path, -1, widePath, 260);
-
-        void* pGraphBuilder = nullptr;
-        auto hr = CoCreateInstance(CLSID_FilterGraph_Movie, nullptr, 1u, IID_IGraphBuilder_Movie, &pGraphBuilder);
-        if (FAILED(hr))
+        if (path == nullptr || pRect == nullptr)
         {
-            out("failed to generate Filter Graph. MarniMovie::Open", "");
+            out("invalid movie parameters. MarniMovie::Open", "");
             return 0;
         }
 
-        self->pGraphBuilder = pGraphBuilder;
-
-        if ((self->flag & 8) != 0)
+        WCHAR widePath[260];
+        if (MultiByteToWideChar(CP_ACP, 0, path, -1, widePath, 260) == 0)
         {
-            // Streaming mode
-            void* pAMStream = nullptr;
-            CoCreateInstance(CLSID_AMMultiMediaStream_Movie, nullptr, 1u, IID_IAMMultiMediaStream_Movie, &pAMStream);
-            if (!pAMStream)
-            {
-                out("failed to generate Filter Graph. MarniMovie::Open", "");
-                return 0;
-            }
-
-            auto vtblAM = *(uint32_t**)pAMStream;
-
-            // IAMMultiMediaStream::Initialize at vtable offset 0x30 (index 12)
-            auto pfnInit = (HRESULT(__stdcall*)(void*, uint32_t, uint32_t, void*))vtblAM[0x30 / 4];
-            pfnInit(pAMStream, 0, 0, nullptr); // STREAMTYPE_READ = 0
-
-            // IAMMultiMediaStream::AddMediaStream at vtable offset 0x3C (index 15)
-            auto pfnAddStream = (HRESULT(__stdcall*)(void*, IUnknown*, const GUID*, uint32_t, void*))vtblAM[0x3C / 4];
-            pfnAddStream(pAMStream, (IUnknown*)pDD2, &MSPID_PrimaryVideo_Movie, 0, nullptr);
-            pfnAddStream(pAMStream, nullptr, &MSPID_PrimaryAudio_Movie, 1, nullptr); // AMMSF_ADDDEFAULTRENDERER = 1
-
-            WCHAR widePath2[260];
-            MultiByteToWideChar(0, 0, path, -1, widePath2, 260);
-
-            // IAMMultiMediaStream::OpenFile at vtable offset 0x40 (index 16)
-            auto pfnOpenFile = (HRESULT(__stdcall*)(void*, const WCHAR*, uint32_t))vtblAM[0x40 / 4];
-            if (FAILED(pfnOpenFile(pAMStream, widePath2, 0)))
-            {
-                out("failed to open the movie file. MarniMovie2::Open", "");
-                return 0;
-            }
-
-            self->pMediaStream = pAMStream;
-
-            // IAMMultiMediaStream::AddRef at vtable offset 0x04
-            auto pfnAddRef = (ULONG(__stdcall*)(void*))vtblAM[0x04 / 4];
-            pfnAddRef(pAMStream);
-
-            // IAMMultiMediaStream::Release at vtable offset 0x08
-            auto pfnRelease = (ULONG(__stdcall*)(void*))vtblAM[0x08 / 4];
-            pfnRelease(pAMStream);
-
-            // IAMMultiMediaStream::GetMediaStream at vtable offset 0x10 (index 4)
-            auto pfnGetStream = (HRESULT(__stdcall*)(void*, const GUID*, void**))vtblAM[0x10 / 4];
-            void* pVideoStream = nullptr;
-            pfnGetStream(pAMStream, &MSPID_PrimaryVideo_Movie, &pVideoStream);
-            self->field_88 = pVideoStream;
-
-            // IMediaStream::QueryInterface at vtable offset 0x00
-            auto vtblVS = *(uint32_t**)pVideoStream;
-            auto pfnQI = (HRESULT(__stdcall*)(void*, const GUID*, void**))vtblVS[0x00 / 4];
-            void* pDDStream = nullptr;
-            pfnQI(pVideoStream, &IID_IDirectDrawMediaStream_Movie, &pDDStream);
-            self->field_8C = pDDStream;
-
-            // Set up legacy DDSURFACEDESC (108 bytes) at start of MarniMovie struct (offset 0)
-            *(uint32_t*)((uint8_t*)self + 0) = 108; // dwSize = 108
-
-            // IDirectDrawMediaStream::GetFormat at vtable offset 0x24 (index 9)
-            auto vtblDD = *(uint32_t**)pDDStream;
-            auto pfnGetFormat = (HRESULT(__stdcall*)(void*, void*, void*, void*, uint32_t*))vtblDD[0x24 / 4];
-            pfnGetFormat(pDDStream, self, nullptr, nullptr, nullptr);
-
-            uint32_t dwWidth = *(uint32_t*)((uint8_t*)self + 12);
-            uint32_t dwHeight = *(uint32_t*)((uint8_t*)self + 8);
-
-            RECT rect;
-            rect.left = 0;
-            rect.top = 0;
-            rect.right = dwWidth;
-            rect.bottom = dwHeight;
-
-            // IDirectDrawMediaStream::CreateSample at vtable offset 0x34 (index 13)
-            auto pfnCreateSample = (HRESULT(__stdcall*)(void*, void*, RECT*, uint32_t, void**))vtblDD[0x34 / 4];
-            void* pSample = nullptr;
-            if (FAILED(pfnCreateSample(pDDStream, pSurface, &rect, 0, &pSample)))
-            {
-                out("failed to generate movie object. MarniMovie2::Start", "");
-                return 0;
-            }
-            self->field_90 = pSample;
+            out("failed to convert the movie path. MarniMovie::Open", "");
+            return 0;
         }
-        else
+
+        // --- D3D11 device + DXGI device manager for the media engine ---
+        UINT resetToken = 0;
+        IMFDXGIDeviceManager* pDXGIManager = nullptr;
+        HRESULT hr = MFCreateDXGIDeviceManager(&resetToken, &pDXGIManager);
+        if (FAILED(hr))
         {
-            // DirectShow mode
-            auto vtblGB = *(uint32_t**)pGraphBuilder;
-            auto pfnQI = (HRESULT(__stdcall*)(void*, const GUID*, void**))vtblGB[0x00 / 4];
+            out("failed to create the DXGI device manager. MarniMovie::Open", "");
+            return 0;
+        }
+        self->field_78 = pDXGIManager;
 
-            void* pMC = nullptr;
-            pfnQI(pGraphBuilder, &IID_IMediaControl_Movie, &pMC);
-            self->pMediaControl = pMC;
+        // BGRA support is required for the engine's default video output format
+        // (DXGI_FORMAT_B8G8R8A8_UNORM) and the swapchain it creates.
+        const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
+        ID3D11Device* pD3DDevice = nullptr;
+        hr = D3D11CreateDevice(
+            nullptr,
+            D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+            featureLevels,
+            1,
+            D3D11_SDK_VERSION,
+            &pD3DDevice,
+            nullptr,
+            nullptr);
+        if (FAILED(hr))
+        {
+            out("failed to create the D3D11 device. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->pVideoWindow = pD3DDevice;
 
-            void* pVW = nullptr;
-            pfnQI(pGraphBuilder, &IID_IVideoWindow_Movie, &pVW);
-            self->pVideoWindow = pVW;
+        hr = pDXGIManager->ResetDevice(pD3DDevice, resetToken);
+        if (FAILED(hr))
+        {
+            out("failed to reset the DXGI device manager. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
 
-            void* pMP = nullptr;
-            pfnQI(pGraphBuilder, &IID_IMediaPosition_Movie, &pMP);
-            self->pMediaPosition = pMP;
+        // --- child window the engine presents into ---
+        if (!register_movie_window_class())
+        {
+            out("failed to register the movie window class. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
 
-            // IGraphBuilder::RenderFile at vtable offset 0x34 (index 13)
-            auto pfnRender = (HRESULT(__stdcall*)(void*, const WCHAR*, void*))vtblGB[0x34 / 4];
-            pfnRender(pGraphBuilder, widePath, nullptr);
+        // The game passes (left, top, width, height) in pRect; the right/bottom
+        // fields hold the width/height, matching the original DirectShow call.
+        const MovieWindowLayout layout = { pRect->left, pRect->top, pRect->right, pRect->bottom };
+        memcpy(self->surf_pad, &layout, sizeof(layout));
 
-            // IVideoWindow methods
-            auto vtblVW = *(uint32_t**)pVW;
+        HWND hMovieWnd = CreateWindowExA(
+            0,
+            kMovieWindowClass,
+            "",
+            WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
+            layout.left,
+            layout.top,
+            layout.width,
+            layout.height,
+            hWnd,
+            nullptr,
+            GetModuleHandleA(nullptr),
+            nullptr);
+        if (hMovieWnd == nullptr)
+        {
+            out("failed to create the movie window. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->field_6C = hMovieWnd;
+        self->field_8C = hWnd;
 
-            // put_Owner at vtable offset 0x74 (index 29)
-            auto pfnPutOwner = (HRESULT(__stdcall*)(void*, HWND))vtblVW[0x74 / 4];
-            pfnPutOwner(pVW, hWnd);
+        // --- engine attributes ---
+        IMFAttributes* pAttributes = nullptr;
+        hr = MFCreateAttributes(&pAttributes, 3);
+        if (FAILED(hr))
+        {
+            out("failed to create the media engine attributes. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->field_88 = pAttributes;
 
-            // put_WindowStyle at vtable offset 0x24 (index 9)
-            auto pfnPutStyle = (HRESULT(__stdcall*)(void*, int32_t))vtblVW[0x24 / 4];
-            pfnPutStyle(pVW, 0x46000000); // WS_CHILD | WS_CLIPSIBLINGS
+        pAttributes->SetUnknown(MF_MEDIA_ENGINE_DXGI_MANAGER, pDXGIManager);
+        pAttributes->SetUINT64(MF_MEDIA_ENGINE_PLAYBACK_HWND, (UINT64)(UINT_PTR)hMovieWnd);
 
-            // SetWindowPosition at vtable offset 0x9C (index 39)
-            auto pfnSetPos = (HRESULT(__stdcall*)(void*, int32_t, int32_t, int32_t, int32_t))vtblVW[0x9C / 4];
-            pfnSetPos(pVW, pRect->left, pRect->top, pRect->right, pRect->bottom);
+        MovieEngineNotify* pNotify = new MovieEngineNotify();
+        self->pMediaPosition = pNotify;
+        pAttributes->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, pNotify);
 
-            // put_AutoShow at vtable offset 0x34 (index 13)
-            auto pfnAutoShow = (HRESULT(__stdcall*)(void*, int32_t))vtblVW[0x34 / 4];
-            pfnAutoShow(pVW, -1); // OATRUE
+        // --- create the engine ---
+        IMFMediaEngineClassFactory* pFactory = nullptr;
+        hr = CoCreateInstance(CLSID_MFMediaEngineClassFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFactory));
+        if (FAILED(hr))
+        {
+            out("failed to create the media engine class factory. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
 
-            // put_Visible at vtable offset 0x4C (index 19)
-            auto pfnVisible = (HRESULT(__stdcall*)(void*, int32_t))vtblVW[0x4C / 4];
-            pfnVisible(pVW, -1); // OATRUE
+        IMFMediaEngine* pEngine = nullptr;
+        hr = pFactory->CreateInstance(0, pAttributes, &pEngine);
+        pFactory->Release();
+        if (FAILED(hr))
+        {
+            out("failed to create the media engine. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->pGraphBuilder = pEngine;
+
+        IMFMediaEngineEx* pEngineEx = nullptr;
+        hr = pEngine->QueryInterface(IID_IMFMediaEngineEx, (void**)&pEngineEx);
+        if (FAILED(hr))
+        {
+            out("failed to query the media engine ex interface. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->pMediaControl = pEngineEx;
+
+        // --- load the movie file (kept alive for the engine's lifetime) ---
+        IMFByteStream* pByteStream = nullptr;
+        hr = MFCreateFile(MF_ACCESSMODE_READ, MF_OPENMODE_FAIL_IF_NOT_EXIST, MF_FILEFLAGS_NONE, widePath, &pByteStream);
+        if (FAILED(hr))
+        {
+            out("failed to open the movie file. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+        self->pMediaStream = pByteStream;
+
+        BSTR url = SysAllocString(widePath);
+        hr = pEngineEx->SetSourceFromByteStream(pByteStream, url);
+        if (url != nullptr)
+            SysFreeString(url);
+        if (FAILED(hr))
+        {
+            out("failed to set the movie source. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
+        }
+
+        // --- wait (bounded) for the engine to load the source ---
+        constexpr int kMaxWaitMs = 2000;
+        constexpr int kPollMs = 10;
+        for (int waited = 0; waited < kMaxWaitMs && pEngine->GetReadyState() < MF_MEDIA_ENGINE_READY_HAVE_CURRENT_DATA;
+             waited += kPollMs)
+        {
+            Sleep(kPollMs);
+        }
+        if (pEngine->GetReadyState() < MF_MEDIA_ENGINE_READY_HAVE_CURRENT_DATA)
+        {
+            IMFMediaError* pError = nullptr;
+            if (SUCCEEDED(pEngine->GetError(&pError)) && pError != nullptr)
+                pError->Release();
+            out("failed to load the movie file. MarniMovie::Open", "");
+            movie_release(self);
+            return 0;
         }
 
         self->flag |= 1;
@@ -335,19 +406,10 @@ namespace openre::marni
     // 0x00414F50
     MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode)
     {
+        memset(self, 0, sizeof(MarniMovie));
         self->flag = (mode != 0) ? 8 : 0;
-        self->pos = 0.0;
-        self->field_6C = nullptr;
-        self->pGraphBuilder = nullptr;
-        self->pMediaControl = nullptr;
-        self->field_78 = nullptr;
-        self->pVideoWindow = nullptr;
-        self->pMediaPosition = nullptr;
-        self->pMediaStream = nullptr;
-        self->field_90 = nullptr;
-        self->field_8C = nullptr;
-        self->field_88 = nullptr;
         CoInitialize(nullptr);
+        MFStartup(MF_VERSION);
         return self;
     }
 
@@ -355,6 +417,7 @@ namespace openre::marni
     void __stdcall movie_dtor(MarniMovie* self)
     {
         movie_release(self);
+        MFShutdown();
         CoUninitialize();
     }
 
@@ -363,110 +426,65 @@ namespace openre::marni
     {
         movie_seek(self);
 
-        // Keep only the streaming-mode bit; the movie is no longer open.
-        uint32_t streaming = self->flag & 8;
-        self->flag = streaming;
-        self->pos = 0.0;
-
-        if (streaming)
+        // Stop and shut down the media engine.
+        auto pEngine = (IMFMediaEngine*)self->pGraphBuilder;
+        if (pEngine != nullptr)
         {
-            // Streaming mode: stop and release the media stream and samples.
-            if (self->pMediaStream)
-            {
-                auto vtbl = *(uint32_t**)self->pMediaStream;
-                // IAMMultiMediaStream::SetState(STREAMSTATE_STOP) at vtable offset 0x1C
-                auto pfnSetState = (HRESULT(__stdcall*)(void*, uint32_t))vtbl[0x1C / 4];
-                pfnSetState(self->pMediaStream, 0);
-            }
-            if (self->pMediaStream)
-            {
-                auto vtbl = *(uint32_t**)self->pMediaStream;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->pMediaStream);
-            }
-            self->pMediaStream = nullptr;
-
-            if (self->field_90)
-            {
-                auto vtbl = *(uint32_t**)self->field_90;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->field_90);
-            }
-            self->field_90 = nullptr;
-
-            if (self->field_8C)
-            {
-                auto vtbl = *(uint32_t**)self->field_8C;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->field_8C);
-            }
-            self->field_8C = nullptr;
-
-            if (self->field_88)
-            {
-                auto vtbl = *(uint32_t**)self->field_88;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->field_88);
-            }
-            self->field_88 = nullptr;
+            pEngine->Pause();
+            pEngine->Shutdown();
         }
-        else
+
+        // Destroy the child window the engine presented into.
+        if (self->field_6C != nullptr)
         {
-            // DirectShow mode: hide and release the video window and graph.
-            if (self->pVideoWindow)
-            {
-                auto vtbl = *(uint32_t**)self->pVideoWindow;
-                // IVideoWindow::put_Visible(FALSE) at vtable offset 0x4C
-                auto pfnVisible = (HRESULT(__stdcall*)(void*, int32_t))vtbl[0x4C / 4];
-                pfnVisible(self->pVideoWindow, 0);
-            }
-            if (self->pVideoWindow)
-            {
-                auto vtbl = *(uint32_t**)self->pVideoWindow;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->pVideoWindow);
-            }
-            self->pVideoWindow = nullptr;
-
-            if (self->field_6C)
-            {
-                auto vtbl = *(uint32_t**)self->field_6C;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->field_6C);
-            }
+            DestroyWindow((HWND)self->field_6C);
             self->field_6C = nullptr;
+        }
 
-            if (self->pMediaControl)
-            {
-                auto vtbl = *(uint32_t**)self->pMediaControl;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->pMediaControl);
-            }
+        // Release the COM objects, engine first (the others may be referenced
+        // by it).
+        if (self->pMediaControl != nullptr)
+        {
+            ((IMFMediaEngineEx*)self->pMediaControl)->Release();
             self->pMediaControl = nullptr;
-
-            if (self->field_78)
-            {
-                auto vtbl = *(uint32_t**)self->field_78;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->field_78);
-            }
-            self->field_78 = nullptr;
-
-            if (self->pMediaPosition)
-            {
-                auto vtbl = *(uint32_t**)self->pMediaPosition;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->pMediaPosition);
-            }
-            self->pMediaPosition = nullptr;
-
-            if (self->pGraphBuilder)
-            {
-                auto vtbl = *(uint32_t**)self->pGraphBuilder;
-                auto pfnRelease = (ULONG(__stdcall*)(void*))vtbl[0x08 / 4];
-                pfnRelease(self->pGraphBuilder);
-            }
+        }
+        if (pEngine != nullptr)
+        {
+            pEngine->Release();
             self->pGraphBuilder = nullptr;
         }
+        if (self->pMediaPosition != nullptr)
+        {
+            ((IMFMediaEngineNotify*)self->pMediaPosition)->Release();
+            self->pMediaPosition = nullptr;
+        }
+        if (self->pMediaStream != nullptr)
+        {
+            ((IMFByteStream*)self->pMediaStream)->Release();
+            self->pMediaStream = nullptr;
+        }
+        if (self->field_88 != nullptr)
+        {
+            ((IMFAttributes*)self->field_88)->Release();
+            self->field_88 = nullptr;
+        }
+        if (self->field_78 != nullptr)
+        {
+            ((IMFDXGIDeviceManager*)self->field_78)->Release();
+            self->field_78 = nullptr;
+        }
+        if (self->pVideoWindow != nullptr)
+        {
+            ((ID3D11Device*)self->pVideoWindow)->Release();
+            self->pVideoWindow = nullptr;
+        }
+
+        self->field_8C = nullptr;
+        self->field_90 = nullptr;
+
+        // Keep only the legacy streaming-mode bit; the movie is no longer open.
+        self->flag = self->flag & 8;
+        self->pos = 0.0;
+        self->duration = 0.0;
     }
 }
