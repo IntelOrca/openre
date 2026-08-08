@@ -2,9 +2,11 @@
 #include "interop.hpp"
 #include "marni.h"
 #include "openre.h"
+#include "system_filesystem.h"
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 namespace openre::tim
 {
@@ -171,19 +173,15 @@ namespace openre::tim
     {
         marni::surface2_vrelease(self);
 
-        FILE* fp = fopen(path, "rb");
-        if (fp == nullptr)
+        auto data = system::fs::readAllBytes((std::string("data://") + path).c_str());
+        if (data.empty())
         {
             marni::out("failed to open the file. TIMObject::Create", "");
             return 0;
         }
 
-        fseek(fp, 0, SEEK_END);
-        long size = ftell(fp);
-        void* buffer = operator_new((size_t)(4 * (size / 4) + 4));
-        fseek(fp, 0, SEEK_SET);
-        fread(buffer, 1, size, fp);
-        fclose(fp);
+        void* buffer = operator_new((size_t)(4 * ((int)data.size() / 4) + 4));
+        std::memcpy(buffer, data.data(), data.size());
 
         int result = timobject_in(self, (Tim*)buffer);
         operator_delete(buffer);
