@@ -148,7 +148,7 @@ namespace openre::gfx_draw
         Mask,
         BgScaled,
         ScaledSprite,
-        Sub440B70,
+        ScaledPoly,
         PolyGt4,
         PolyFt4_2,
         PolyF4,
@@ -192,7 +192,7 @@ namespace openre::gfx_draw
     int add_mask(Sprt* p, int page, int z);
     int add_bg_scaled(int bg, int z);
     int add_scaled_sprite(int prim, int page, int z);
-    int sub_440B70(int prim, int page, int z);
+    int add_scaled_poly(int prim, int page, int z);
     int add_poly_gt4(PolyGt4* p, int page, int z);
     int add_poly_ft4_2(PolyFt4* p, int page, int z);
     int add_poly_f4(Tile* p, int z, int is_back);

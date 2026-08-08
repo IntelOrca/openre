@@ -459,7 +459,7 @@ namespace openre::gfx_draw
     // x2/y2 written over the u0/v0 and u1/v1 words) and the remaining vertex
     // data (x3,y3 + the per-vertex u/v) plus the z depth are packed into the
     // 0x1C-byte tail that follows the MarniPrim record.
-    int sub_440B70(int prim, int page, int z)
+    int add_scaled_poly(int prim, int page, int z)
     {
         PolyFt4* p = (PolyFt4*)prim;
         MarniPrim* out = scratch_ptr();
@@ -541,7 +541,7 @@ namespace openre::gfx_draw
 
         marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)out, z >> 4);
 
-        record_call(DrawKind::Sub440B70, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
+        record_call(DrawKind::ScaledPoly, z, page, p->clut, p->x0, p->y0, p->x3, p->y3);
         ++gGameTable.dword_67C9CC;
         gGameTable.off_524E1C = (uint32_t)((uintptr_t)out + 0x30);
 
@@ -850,7 +850,7 @@ namespace openre::gfx_draw
         interop::writeJmp(0x00440DD0, &add_poly_gt4);
         interop::writeJmp(0x00440FF0, &add_poly_ft4_2);
         interop::writeJmp(0x00440600, &add_poly_ft4);
-        interop::writeJmp(0x00440B70, &sub_440B70);
+        interop::writeJmp(0x00440B70, &add_scaled_poly);
         interop::writeJmp(0x00440A20, &add_scaled_sprite);
     }
 }
