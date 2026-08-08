@@ -642,7 +642,7 @@ namespace openre::gfx_draw
             p->g0 = 0x80;
         if (p->b0 > 0x80)
             p->b0 = 0x80;
-        // Colour packed into the second prim's var_0C: r | (g << 8) | (b << 16).
+        // Colour packed into the second prim's var_0C: b | (g << 8) | (r << 16).
         prim[1].var_0C = ((uint32_t)p->r0 << 16) | ((uint32_t)p->g0 << 8) | p->b0;
         if ((p->code & 2) != 0)
             prim->type |= s_type_mod_524E44[p->tag & 3];
