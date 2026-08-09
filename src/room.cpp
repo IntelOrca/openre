@@ -39,90 +39,13 @@ namespace openre::room
     // 0x004450C0
     static void sub_4450C0(int a0)
     {
-        interop::call<void, int>(0x004450C0, a0);
+        marni::unload_register_surfaces(a0);
     }
 
     // 0x0043DF40
     static int sub_43DF40()
     {
-        auto* marni = gGameTable.pMarni;
-
-        // Iterate over OBJ_TEXTURE array (32 entries, 85 dwords each, starting at 0x671620)
-        auto* pTex = reinterpret_cast<int*>(gGameTable.obj_tex_handle + 16); // obj_tex_handle[0].Tex_handle2
-        auto* end = reinterpret_cast<int*>(gGameTable.obj_tex_handle + 0x2A90);
-
-        while (pTex < end)
-        {
-            // Unload texture 1 if present
-            if (pTex[-1])
-            {
-                gfx_draw::g_renderer->unloadTexture(pTex[-1]);
-                pTex[-1] = 0;
-            }
-
-            // Unload texture 2 if present
-            if (pTex[0])
-            {
-                gfx_draw::g_renderer->unloadTexture(pTex[0]);
-                pTex[0] = 0;
-            }
-
-            // Destroy object 1 if present
-            if (pTex[1])
-            {
-                interop::thiscall<void, void*, int>(0x00404CA0, marni, pTex[1]);
-                pTex[1] = 0;
-            }
-
-            // Destroy object 2 if present
-            if (pTex[2])
-            {
-                interop::thiscall<void, void*, int>(0x00404CA0, marni, pTex[2]);
-                pTex[2] = 0;
-            }
-
-            // Reset linked list pointers to self
-            auto* self = pTex - 4; // back to OBJ_TEXTURE start
-            pTex[3] = reinterpret_cast<int>(self);
-            pTex[4] = reinterpret_cast<int>(self);
-
-            // Clear various fields
-            pTex[70] = 0;
-            pTex[71] = 0;
-            pTex[72] = 0;
-            pTex[73] = 0;
-            pTex[74] = 0;
-
-            // Clear trailing 24 bytes (last portion of the struct)
-            memset(pTex + 75, 0, 0x18);
-
-            // Advance to next entry (sizeof(OBJ_TEXTURE) = 85 dwords)
-            pTex += 85;
-        }
-
-        // Destroy objects in secondary array (dword_671424..dword_67144C)
-        auto* pObj = reinterpret_cast<int*>(&gGameTable.dword_671424[0]);
-        auto* objEnd = reinterpret_cast<int*>(&gGameTable.dword_671424[10]);
-        while (pObj < objEnd)
-        {
-            if (*pObj)
-            {
-                interop::thiscall<void, void*, int>(0x00404CA0, marni, *pObj);
-                *pObj = 0;
-            }
-            ++pObj;
-        }
-
-        // Unload final texture if present
-        int result = gGameTable.dword_674DF0;
-        if (result)
-        {
-            gfx_draw::g_renderer->unloadTexture(result);
-            gGameTable.dword_674DF0 = 0;
-        }
-
-        gGameTable.dword_674DF4 = 0;
-        return result;
+        return marni::release_object_textures();
     }
 
     // 0x00502190

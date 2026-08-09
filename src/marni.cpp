@@ -178,7 +178,505 @@ namespace openre::marni
     // 0x00401000
     int error(HRESULT hr)
     {
-        return interop::call(0x00401000);
+        // DirectDraw / Direct3D error handler. The original function walks a
+        // binary-search decision tree over the HRESULT and dispatches through
+        // five jump tables (s36/s71/s141/s243/s197) to message strings, then
+        // tail-calls MarniOut with the selected message.
+        const char* message;
+        switch ((uint32_t)hr)
+        {
+        case 0x80004005:
+            message = "Generic failure. DDErrorRoutine";
+            break;
+        case 0x80004001:
+            message = "Action not supported. DDErrorRoutine";
+            break;
+        case 0x800401F0:
+            message = "An attempt was made to invoke an interface member of a DirectDraw object created by CoCreateInstance() before it was initialized. DDErrorRoutine";
+            break;
+        case 0x8007000E:
+            message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine";
+            break;
+        case 0x80070057:
+            message = "One or more of the parameters passed to the callback function are incorrect. DDErrorRoutine";
+            break;
+        case 0x88760037:
+            message = "An exception was encountered while performing the requested operation DDErrorRoutine";
+            break;
+        case 0x887600AA:
+            message = "There is no 3D present. DDErrorRoutine";
+            break;
+        case 0x8876014A:
+            message = "Operation could not be carried out because there is no texture mapping hardware present or available. DDErrorRoutine";
+            break;
+        case 0x88760242:
+            message = "returned when GetOverlayPosition is called on a overlay that UpdateOverlay has never been called on to establish a destionation. DDErrorRoutine";
+            break;
+
+        // s36: 0x88760005..0x88760028
+        case 0x88760005:
+            message = "This object is already initialized DDErrorRoutine";
+            break;
+        case 0x8876000A:
+            message = "This surface can not be attached to the requested surface. DDErrorRoutine";
+            break;
+        case 0x88760014:
+            message = "This surface can not be detached from the requested surface. DDErrorRoutine";
+            break;
+        case 0x88760028:
+            message = "Support is currently not available. DDErrorRoutine";
+            break;
+
+        // s71: 0x8876005A..0x887600A0
+        case 0x8876005A:
+            message = "Height of rectangle provided is not a multiple of reqd alignment DDErrorRoutine";
+            break;
+        case 0x8876005F:
+            message = "Unable to match primary surface creation request with existing primary surface. DDErrorRoutine";
+            break;
+        case 0x88760064:
+            message = "One or more of the caps bits passed to the callback are incorrect. DDErrorRoutine";
+            break;
+        case 0x8876006E:
+            message = "DirectDraw does not support provided Cliplist. DDErrorRoutine";
+            break;
+        case 0x88760078:
+            message = "DirectDraw does not support the requested mode DDErrorRoutine";
+            break;
+        case 0x88760082:
+            message = "DirectDraw received a pointer that was an invalid DIRECTDRAW object. DDErrorRoutine";
+            break;
+        case 0x88760091:
+            message = "pixel format was invalid as specified DDErrorRoutine";
+            break;
+        case 0x88760096:
+            message = "Rectangle provided was invalid. DDErrorRoutine";
+            break;
+        case 0x887600A0:
+            message = "Operation could not be carried out because one or more surfaces are locked DDErrorRoutine";
+            break;
+
+        // s141: 0x887600B4..0x88760140
+        case 0x887600B4:
+            message = "Operation could not be carried out because there is no alpha accleration hardware present or available. DDErrorRoutine";
+            break;
+        case 0x887600CD:
+            message = "no clip list available DDErrorRoutine";
+            break;
+        case 0x887600D2:
+            message = "Operation could not be carried out because there is no color conversion hardware present or available. DDErrorRoutine";
+            break;
+        case 0x887600D4:
+            message = "Create function called without DirectDraw object method SetCooperativeLevel being called. DDErrorRoutine";
+            break;
+        case 0x887600D7:
+            message = "Surface doesn't currently have a color key DDErrorRoutine";
+            break;
+        case 0x887600DC:
+            message = "Operation could not be carried out because there is no hardware support of the dest color key. DDErrorRoutine";
+            break;
+        case 0x887600DE:
+            message = "No DirectDraw support possible with current display driver DDErrorRoutine";
+            break;
+        case 0x887600E1:
+            message = "Operation requires the application to have exclusive mode but the application does not have exclusive mode. DDErrorRoutine";
+            break;
+        case 0x887600E6:
+            message = "Flipping visible surfaces is not supported. DDErrorRoutine";
+            break;
+        case 0x887600F0:
+            message = "There is no GDI present. DDErrorRoutine";
+            break;
+        case 0x887600FA:
+            message = "Operation could not be carried out because there is no hardware present or available. DDErrorRoutine";
+            break;
+        case 0x887600FF:
+            message = "Requested item was not found DDErrorRoutine";
+            break;
+        case 0x88760104:
+            message = "Operation could not be carried out because there is no overlay hardware present or available. DDErrorRoutine";
+            break;
+        case 0x88760118:
+            message = "Operation could not be carried out because there is no appropriate raster op hardware present or available. DDErrorRoutine";
+            break;
+        case 0x88760122:
+            message = "Operation could not be carried out because there is no rotation hardware present or available. DDErrorRoutine";
+            break;
+        case 0x88760136:
+            message = "Operation could not be carried out because there is no hardware support for stretching DDErrorRoutine";
+            break;
+        case 0x8876013C:
+            message = "DirectDrawSurface is not in 4 bit color palette and the requested operation requires 4 bit color palette. DDErrorRoutine";
+            break;
+        case 0x8876013D:
+            message = "DirectDrawSurface is not in 4 bit color index palette and the requested operation requires 4 bit color index palette. DDErrorRoutine";
+            break;
+        case 0x88760140:
+            message = "DirectDraw Surface is not in 8 bit color mode and the requested operation requires 8 bit color. DDErrorRoutine";
+            break;
+
+        // s243: 0x8876014F..0x88760241
+        case 0x8876014F:
+            message = "Operation could not be carried out because there is no hardware support for vertical blank synchronized operations. DDErrorRoutine";
+            break;
+        case 0x88760154:
+            message = "Operation could not be carried out because there is no hardware support for zbuffer blting. DDErrorRoutine";
+            break;
+        case 0x8876015E:
+            message = "Overlay surfaces could not be z layered based on their BltOrder because the hardware does not support z layering of overlays. DDErrorRoutine";
+            break;
+        case 0x88760168:
+            message = "The hardware needed for the requested operation has already been allocated. DDErrorRoutine";
+            break;
+        case 0x8876017C:
+            message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine";
+            break;
+        case 0x8876017E:
+            message = "hardware does not support clipped overlays DDErrorRoutine";
+            break;
+        case 0x88760183:
+            message = "Access to this palette is being refused because the palette is already locked by another thread. DDErrorRoutine";
+            break;
+        case 0x88760190:
+            message = "No src color key specified for this operation. DDErrorRoutine";
+            break;
+        case 0x8876019A:
+            message = "This surface is already attached to the surface it is being attached to. DDErrorRoutine";
+            break;
+        case 0x887601A4:
+            message = "This surface is already a dependency of the surface it is being made a dependency of. DDErrorRoutine";
+            break;
+        case 0x887601AE:
+            message = "Access to this surface is being refused because the surface is already locked by another thread. DDErrorRoutine";
+            break;
+        case 0x887601B3:
+            message = "Access to this surface is being refused because no driver exists which can supply a pointer to the surface. This is most likely to happen when attempting to lock the primary surface when no DCI provider is present. Will also happen on attempts to lock an optimized surface. DDErrorRoutine";
+            break;
+        case 0x887601B8:
+            message = "Access to Surface refused because Surface is obscured. DDErrorRoutine";
+            break;
+        case 0x887601C2:
+            message = "Access to this surface is being refused because the surface is gone. The DIRECTDRAWSURFACE object representing this surface should have Restore called on it. DDErrorRoutine";
+            break;
+        case 0x887601CC:
+            message = "The requested surface is not attached. DDErrorRoutine";
+            break;
+        case 0x887601D6:
+            message = "Height requested by DirectDraw is too large. DDErrorRoutine";
+            break;
+        case 0x887601E0:
+            message = "Size requested by DirectDraw is too large --\t The individual height and width are OK. DDErrorRoutine";
+            break;
+        case 0x887601EA:
+            message = "Width requested by DirectDraw is too large. DDErrorRoutine";
+            break;
+        case 0x887601FE:
+            message = "FOURCC format requested is unsupported by DirectDraw DDErrorRoutine";
+            break;
+        case 0x88760208:
+            message = "Bitmask in the pixel format requested is unsupported by DirectDraw DDErrorRoutine";
+            break;
+        case 0x88760219:
+            message = "vertical blank is in progress DDErrorRoutine";
+            break;
+        case 0x8876021C:
+            message = "Informs DirectDraw that the previous Blt which is transfering information to or from this Surface is incomplete. DDErrorRoutine";
+            break;
+        case 0x88760230:
+            message = "Rectangle provided was not horizontally aligned on reqd. boundary DDErrorRoutine";
+            break;
+        case 0x88760231:
+            message = "The GUID passed to DirectDrawCreate is not a valid DirectDraw driver identifier. DDErrorRoutine";
+            break;
+        case 0x88760232:
+            message = "A DirectDraw object representing this driver has already been created for this process. DDErrorRoutine";
+            break;
+        case 0x88760233:
+            message = "A hardware only DirectDraw object creation was attempted but the driver did not support any hardware. DDErrorRoutine";
+            break;
+        case 0x88760235:
+            message = "software emulation not available. DDErrorRoutine";
+            break;
+        case 0x88760236:
+            message = "region passed to Clipper::GetClipList is too small. DDErrorRoutine";
+            break;
+        case 0x88760237:
+            message = "an attempt was made to set a clip list for a clipper objec that is already monitoring an hwnd. DDErrorRoutine";
+            break;
+        case 0x88760238:
+            message = "No clipper object attached to surface object DDErrorRoutine";
+            break;
+        case 0x88760239:
+            message = "Clipper notification requires an HWND or no HWND has previously been set as the CooperativeLevel HWND. DDErrorRoutine";
+            break;
+        case 0x8876023A:
+            message = "HWND used by DirectDraw CooperativeLevel has been subclassed, this prevents DirectDraw from restoring state. DDErrorRoutine";
+            break;
+        case 0x8876023B:
+            message = "The CooperativeLevel HWND has already been set. It can not be reset while the process has surfaces or palettes created. DDErrorRoutine";
+            break;
+        case 0x8876023C:
+            message = "No palette object attached to this surface. DDErrorRoutine";
+            break;
+        case 0x8876023D:
+            message = "No hardware support for 16 or 256 color palettes. DDErrorRoutine";
+            break;
+        case 0x8876023E:
+            message = "If a clipper object is attached to the source surface passed into a BltFast call. DDErrorRoutine";
+            break;
+        case 0x8876023F:
+            message = "No blter. DDErrorRoutine";
+            break;
+        case 0x88760240:
+            message = "No DirectDraw ROP hardware. DDErrorRoutine";
+            break;
+        case 0x88760241:
+            message = "returned when GetOverlayPosition is called on a hidden overlay DDErrorRoutine";
+            break;
+
+        // s197: 0x88760243..0x88760307
+        case 0x88760243:
+            message = "returned when the position of the overlay on the destionation is no longer legal for that destionation. DDErrorRoutine";
+            break;
+        case 0x88760244:
+            message = "returned when an overlay member is called for a non-overlay surface DDErrorRoutine";
+            break;
+        case 0x88760245:
+            message = "An attempt was made to set the cooperative level when it was already set to exclusive. DDErrorRoutine";
+            break;
+        case 0x88760246:
+            message = "An attempt has been made to flip a surface that is not flippable. DDErrorRoutine";
+            break;
+        case 0x88760247:
+            message = "Can't duplicate primary & 3D surfaces, or surfaces that are implicitly created. DDErrorRoutine";
+            break;
+        case 0x88760248:
+            message = "Surface was not locked.  An attempt to unlock a surface that was not locked at all, or by this process, has been attempted. DDErrorRoutine";
+            break;
+        case 0x88760249:
+            message = "Windows can not create any more DCs DDErrorRoutine";
+            break;
+        case 0x8876024A:
+            message = "No DC was ever created for this surface. DDErrorRoutine";
+            break;
+        case 0x8876024B:
+            message = "This surface can not be restored because it was created in a different mode. DDErrorRoutine";
+            break;
+        case 0x8876024C:
+            message = "This surface can not be restored because it is an implicitly created surface. DDErrorRoutine";
+            break;
+        case 0x8876024D:
+            message = "The surface being used is not a palette-based surface DDErrorRoutine";
+            break;
+        case 0x8876024E:
+            message = "The display is currently in an unsupported mode DDErrorRoutine";
+            break;
+        case 0x8876024F:
+            message = "Operation could not be carried out because there is no mip-map texture mapping hardware present or available. DDErrorRoutine";
+            break;
+        case 0x88760250:
+            message = "The requested action could not be performed because the surface was of the wrong type. DDErrorRoutine";
+            break;
+        case 0x88760258:
+            message = "Device does not support optimized surfaces, therefore no video memory optimized surfaces DDErrorRoutine";
+            break;
+        case 0x88760259:
+            message = "Surface is an optimized surface, but has not yet been allocated any memory DDErrorRoutine";
+            break;
+        case 0x8876026C:
+            message = "A DC has already been returned for this surface. Only one DC can be retrieved per surface. DDErrorRoutine";
+            break;
+        case 0x88760276:
+            message = "An attempt was made to allocate non-local video memory from a device that does not support non-local video memory. DDErrorRoutine";
+            break;
+        case 0x88760280:
+            message = "The attempt to page lock a surface failed. DDErrorRoutine";
+            break;
+        case 0x88760294:
+            message = "The attempt to page unlock a surface failed. DDErrorRoutine";
+            break;
+        case 0x887602A8:
+            message = "An attempt was made to page unlock a surface with no outstanding page locks. DDErrorRoutine";
+            break;
+        case 0x887602B2:
+            message = "There is more data available than the specified buffer size could hold DDErrorRoutine";
+            break;
+        case 0x887602B7:
+            message = "The video port is not active DDErrorRoutine";
+            break;
+        case 0x887602BB:
+            message = "Surfaces created by one direct draw device cannot be used directly by another direct draw device. DDErrorRoutine";
+            break;
+        case 0x887602BC:
+            message = "D3DERR_BADMAJORVERSION";
+            break;
+        case 0x887602BD:
+            message = "D3DERR_BADMINORVERSION";
+            break;
+        case 0x887602C1:
+            message = "D3DERR_INVALID_DEVICE";
+            break;
+        case 0x887602C2:
+            message = "D3DERR_INITFAILED  ";
+            break;
+        case 0x887602C3:
+            message = "D3DERR_DEVICEAGGREGATED";
+            break;
+        case 0x887602C6:
+            message = "D3DERR_EXECUTE_CREATE_FAILED";
+            break;
+        case 0x887602C7:
+            message = "D3DERR_EXECUTE_DESTROY_FAILED";
+            break;
+        case 0x887602C8:
+            message = "D3DERR_EXECUTE_LOCK_FAILED";
+            break;
+        case 0x887602C9:
+            message = "D3DERR_EXECUTE_UNLOCK_FAILED";
+            break;
+        case 0x887602CA:
+            message = "D3DERR_EXECUTE_LOCKED";
+            break;
+        case 0x887602CB:
+            message = "D3DERR_EXECUTE_NOT_LOCKED";
+            break;
+        case 0x887602CC:
+            message = "D3DERR_EXECUTE_FAILED";
+            break;
+        case 0x887602CD:
+            message = "D3DERR_EXECUTE_CLIPPED_FAILED";
+            break;
+        case 0x887602D0:
+            message = "D3DERR_TEXTURE_NO_SUPPORT";
+            break;
+        case 0x887602D1:
+            message = "D3DERR_TEXTURE_CREATE_FAILED";
+            break;
+        case 0x887602D2:
+            message = "D3DERR_TEXTURE_DESTROY_FAILED";
+            break;
+        case 0x887602D3:
+            message = "D3DERR_TEXTURE_LOCK_FAILED";
+            break;
+        case 0x887602D4:
+            message = "D3DERR_TEXTURE_UNLOCK_FAILED";
+            break;
+        case 0x887602D5:
+            message = "D3DERR_TEXTURE_LOAD_FAILED";
+            break;
+        case 0x887602D6:
+            message = "D3DERR_TEXTURE_SWAP_FAILED";
+            break;
+        case 0x887602D7:
+            message = "D3DERR_TEXTURE_LOCKED";
+            break;
+        case 0x887602D8:
+            message = "D3DERR_TEXTURE_NOT_LOCKED";
+            break;
+        case 0x887602D9:
+            message = "D3DERR_TEXTURE_GETSURF_FAILED";
+            break;
+        case 0x887602DA:
+            message = "D3DERR_MATRIX_CREATE_FAILED";
+            break;
+        case 0x887602DB:
+            message = "D3DERR_MATRIX_DESTROY_FAILED";
+            break;
+        case 0x887602DC:
+            message = "D3DERR_MATRIX_SETDATA_FAILED";
+            break;
+        case 0x887602DD:
+            message = "D3DERR_MATRIX_GETDATA_FAILED";
+            break;
+        case 0x887602DE:
+            message = "D3DERR_SETVIEWPORTDATA_FAILED";
+            break;
+        case 0x887602DF:
+            message = "D3DERR_INVALIDCURRENTVIEWPORT";
+            break;
+        case 0x887602E0:
+            message = "D3DERR_INVALIDPRIMITIVETYPE";
+            break;
+        case 0x887602E1:
+            message = "D3DERR_INVALIDVERTEXTYPE";
+            break;
+        case 0x887602E2:
+            message = "D3DERR_TEXTURE_BADSIZE";
+            break;
+        case 0x887602E3:
+            message = "D3DERR_INVALIDRAMPTEXTURE";
+            break;
+        case 0x887602E4:
+            message = "D3DERR_MATERIAL_CREATE_FAILED";
+            break;
+        case 0x887602E5:
+            message = "D3DERR_MATERIAL_DESTROY_FAILED";
+            break;
+        case 0x887602E6:
+            message = "D3DERR_MATERIAL_SETDATA_FAILED";
+            break;
+        case 0x887602E7:
+            message = "D3DERR_MATERIAL_GETDATA_FAILED";
+            break;
+        case 0x887602E8:
+            message = "D3DERR_INVALIDPALETTE";
+            break;
+        case 0x887602E9:
+            message = "D3DERR_ZBUFF_NEEDS_SYSTEMMEMORY";
+            break;
+        case 0x887602EA:
+            message = "D3DERR_ZBUFF_NEEDS_VIDEOMEMORY";
+            break;
+        case 0x887602EB:
+            message = "D3DERR_SURFACENOTINVIDMEM";
+            break;
+        case 0x887602EE:
+            message = "D3DERR_LIGHT_SET_FAILED";
+            break;
+        case 0x887602EF:
+            message = "D3DERR_LIGHTHASVIEWPORT";
+            break;
+        case 0x887602F0:
+            message = "D3DERR_LIGHTNOTINTHISVIEWPORT";
+            break;
+        case 0x887602F8:
+            message = "D3DERR_SCENE_IN_SCENE";
+            break;
+        case 0x887602F9:
+            message = "D3DERR_SCENE_NOT_IN_SCENE";
+            break;
+        case 0x887602FA:
+            message = "D3DERR_SCENE_BEGIN_FAILED";
+            break;
+        case 0x887602FB:
+            message = "D3DERR_SCENE_END_FAILED";
+            break;
+        case 0x88760302:
+            message = "D3DERR_INBEGIN";
+            break;
+        case 0x88760303:
+            message = "D3DERR_NOTINBEGIN";
+            break;
+        case 0x88760304:
+            message = "D3DERR_NOVIEWPORTS";
+            break;
+        case 0x88760305:
+            message = "D3DERR_VIEWPORTDATANOTSET";
+            break;
+        case 0x88760306:
+            message = "D3DERR_VIEWPORTHASNODEVICE";
+            break;
+        case 0x88760307:
+            message = "D3DERR_NOCURRENTVIEWPORT";
+            break;
+
+        default:
+            message = "there is no match error code at present. DDErrorRoutine";
+            break;
+        }
+
+        out(message, "");
+        return 0;
     }
 
     // 0x00401E40
@@ -1384,7 +1882,18 @@ namespace openre::marni
 
     // 0x00404bb0
 
-    // 0x00404ca0
+    // 0x00404CA0
+    static int destroy_object(Marni* self, int index)
+    {
+        auto* obj = self->polygons[index];
+        if (obj)
+        {
+            polygon_object_dtor(obj);
+            operator_delete(obj);
+            self->polygons[index] = 0;
+        }
+        return 1;
+    }
 
     // 0x00404CE0
     void __stdcall unload_texture(Marni* self, int handle)
@@ -2694,9 +3203,54 @@ namespace openre::marni
         return pDD->QueryInterface(IID_IDirectDraw2, (LPVOID*)lpDD2);
     }
 
-    // 0x00406880
-
     // 0x00406920
+    static HRESULT CALLBACK cb_enum_texture_format(LPDDSURFACEDESC desc, LPVOID context)
+    {
+        auto* ctx = (int*)context;
+        if (ctx[0] < ctx[1])
+        {
+            memcpy(&ctx[27 * ctx[0] + 2], desc, 0x6C);
+            ctx[0]++;
+            return 1;
+        }
+        else
+        {
+            out();
+            return 0;
+        }
+    }
+
+    // 0x00406880
+    static int d3d_enum_texture_formats(LPDIRECT3DDEVICE2 p3dDevice, int maxFormats, LPDDSURFACEDESC outFormats)
+    {
+        // The enumeration context is a {count, max} header followed by the
+        // format entries; the original places both on the stack so that the
+        // callback writes the 0x6C-byte entries directly after the header.
+        struct EnumContext
+        {
+            int count;
+            int max;
+            uint8_t entries[20 * 0x6C];
+        } ctx;
+
+        ctx.count = 0;
+        ctx.max = maxFormats;
+
+        const HRESULT hr = p3dDevice->EnumTextureFormats(cb_enum_texture_format, &ctx);
+
+        const int count = ctx.count;
+        if (hr != 0 || maxFormats <= count)
+        {
+            out();
+            return 0;
+        }
+
+        if (count > 0)
+        {
+            memcpy(outFormats, ctx.entries, 108 * count);
+        }
+        return count;
+    }
 
     // 0x00406970
     static int D3DIBPPToDDBD(int bpp)
@@ -2765,9 +3319,9 @@ namespace openre::marni
             constexpr size_t kMaxFormats = 20;
             uint8_t formats[kMaxFormats * kFormatEntrySize];
 
-            // D3DEnumTextureFormats (0x00406880), not yet decompiled.
-            int formatCount = interop::call<int, LPDIRECT3DDEVICE2, int, LPDDSURFACEDESC>(
-                0x00406880, (LPDIRECT3DDEVICE2)self->pDirectDevice2, (int)kMaxFormats, (LPDDSURFACEDESC)formats);
+            // D3DEnumTextureFormats (0x00406880).
+            int formatCount = d3d_enum_texture_formats(
+                (LPDIRECT3DDEVICE2)self->pDirectDevice2, (int)kMaxFormats, (LPDDSURFACEDESC)formats);
             if (formatCount != 0)
             {
                 int matched = 0;
@@ -8577,16 +9131,167 @@ namespace openre::marni
             0x0042F1D0, surface, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16);
     }
 
+    // 0x0044462E0 (matrix fill helper for the door scaler prims)
+    static int set_door_prim(PrimScaler* scaler)
+    {
+        struct DoorMatrix
+        {
+            int16_t m[3][3]; // 0x0000
+            int16_t pad;     // 0x0012
+            int32_t t[3];    // 0x0014
+        };
+        static auto* s_rcMatrix = (DoorMatrix*)0x99CE80;
+        static auto* s_llMatrix = (DoorMatrix*)0x99CE40;
+        static auto* s_lcMatrix = (DoorMatrix*)0x99CE60;
+
+        // Scale factor 1/4096 applied to the 16-bit matrix elements.
+        constexpr double kScale = 0.000244140625;
+
+        // rcMatrix row 0
+        *(float*)&scaler[0].rgb0 = (float)(s_rcMatrix->m[0][0] * kScale);
+        *(float*)&scaler[0].rgb1 = (float)(s_rcMatrix->m[0][1] * kScale);
+        scaler[0].c_y = 0;
+        *(float*)&scaler[0].c_x = (float)(s_rcMatrix->m[0][2] * kScale);
+        // rcMatrix row 1
+        scaler[0].rate_x = (float)(s_rcMatrix->m[1][0] * kScale);
+        scaler[0].rate_y = (float)(s_rcMatrix->m[1][1] * kScale);
+        scaler[0].var_28 = 0;
+        *(float*)&scaler[0].var_24 = (float)(s_rcMatrix->m[1][2] * kScale);
+        // rcMatrix row 2
+        *(float*)&scaler[0].var_2C = (float)(s_rcMatrix->m[2][0] * kScale);
+        *(float*)&scaler[0].var_30 = (float)(s_rcMatrix->m[2][1] * kScale);
+        scaler[1].type = 0;
+        scaler[1].prj = 0;
+        scaler[1].rgb0 = 0;
+        scaler[1].rgb1 = 0;
+        *(float*)&scaler[1].pNext = (float)(s_rcMatrix->m[2][2] * kScale);
+        // rcMatrix translation
+        *(float*)&scaler[0].c_y = (float)s_rcMatrix->t[0];
+        *(float*)&scaler[0].var_28 = (float)s_rcMatrix->t[1];
+        scaler[1].c_x = 1065353216; // 1.0f
+        *(float*)&scaler[1].type = (float)s_rcMatrix->t[2];
+
+        // llMatrix row 0
+        *(float*)&scaler[1].var_2C = (float)(s_llMatrix->m[0][0] * kScale);
+        *(float*)&scaler[1].var_30 = (float)(-(s_llMatrix->m[0][1] * kScale));
+        scaler[2].type = 0;
+        *(float*)&scaler[2].pNext = (float)(s_llMatrix->m[0][2] * kScale);
+        // llMatrix row 1
+        *(float*)&scaler[2].prj = (float)(s_llMatrix->m[1][0] * kScale);
+        *(float*)&scaler[2].rgb0 = (float)(-(s_llMatrix->m[1][1] * kScale));
+        scaler[2].c_x = 0;
+        *(float*)&scaler[2].rgb1 = (float)(s_llMatrix->m[1][2] * kScale);
+        // llMatrix row 2
+        *(float*)&scaler[2].c_y = (float)(s_llMatrix->m[2][0] * kScale);
+        scaler[2].rate_x = (float)(-(s_llMatrix->m[2][1] * kScale));
+        scaler[2].var_28 = 0;
+        scaler[2].var_2C = 0;
+        scaler[2].var_30 = 0;
+        scaler[2].type = 0;
+        scaler[2].c_x = 0;
+        scaler[2].var_24 = 0;
+        scaler[3].pNext = 0;
+        scaler[2].rate_y = (float)(s_llMatrix->m[2][2] * kScale);
+
+        // lcMatrix (16-bit, values shifted right by 4)
+        *(float*)&scaler[3].type = (float)(s_lcMatrix->m[0][0] >> 4);
+        *(float*)&scaler[3].prj = (float)(s_lcMatrix->m[0][1] >> 4);
+        scaler[3].rgb1 = 0;
+        *(float*)&scaler[3].rgb0 = (float)(s_lcMatrix->m[0][2] >> 4);
+        *(float*)&scaler[3].c_x = (float)(s_lcMatrix->m[1][0] >> 4);
+        *(float*)&scaler[3].c_y = (float)(s_lcMatrix->m[1][1] >> 4);
+        scaler[3].rate_y = 0.0f;
+        scaler[3].rate_x = (float)(s_lcMatrix->m[1][2] >> 4);
+        *(float*)&scaler[3].var_24 = (float)(s_lcMatrix->m[2][0] >> 4);
+        *(float*)&scaler[3].var_28 = (float)(s_lcMatrix->m[2][1] >> 4);
+        scaler[4].pNext = 0;
+        scaler[4].type = 0;
+        scaler[4].prj = 0;
+        scaler[3].rgb1 = 0;
+        scaler[3].rate_y = 0.0f;
+        scaler[3].var_30 = 0;
+        *(float*)&scaler[3].var_2C = (float)(s_lcMatrix->m[2][2] >> 4);
+        scaler[4].rgb0 = 0;
+
+        const int result = s_rcMatrix->t[2] >> 4;
+        if (result < 0)
+            return 0;
+        if (result > 4096)
+            return 4096;
+        return result;
+    }
+
     // 0x00432BB0
     void unload_door_texture()
     {
-        interop::call(0x00432BB0);
+        static auto* pDoorWork = (uint32_t*)0x669B28;     // door work pointer array
+        static auto* pDoorWorkEnd = (uint32_t*)0x669B58;  // door work object handles [12]
+        static auto* pDoorScalerBlock = (uint32_t*)0x669B88; // door scaler block pointer
+        static auto* pDoorMdlh = (uint32_t*)0x669B8C;     // Door_mdlh[12]
+        static auto* pDoorVar94 = (uint32_t*)0x669BBC;
+        static auto* pDoorVarC4 = (uint32_t*)0x669BEC;    // door texture handle
+
+        if (*pDoorVarC4)
+        {
+            unload_texture(gGameTable.pMarni, *pDoorVarC4);
+            *pDoorVarC4 = 0;
+        }
+
+        for (int i = 0; i < 12; i++)
+        {
+            if (pDoorMdlh[i])
+            {
+                destroy_object(gGameTable.pMarni, pDoorMdlh[i]);
+                pDoorMdlh[i] = 0;
+            }
+            if (pDoorWorkEnd[i])
+            {
+                destroy_object(gGameTable.pMarni, pDoorWorkEnd[i]);
+                pDoorWorkEnd[i] = 0;
+            }
+        }
+
+        if (*pDoorScalerBlock)
+        {
+            operator_delete((void*)*pDoorScalerBlock);
+            *pDoorScalerBlock = 0;
+        }
+
+        auto* v1 = pDoorWork;
+        while (v1 < pDoorWorkEnd)
+        {
+            if (*v1)
+            {
+                operator_delete((void*)*v1);
+                *v1 = 0;
+            }
+            ++v1;
+        }
+
+        memset(pDoorVar94, 0, 0x30);
     }
 
     // 0x00432C60
     void door_disp0(int doorId, int a1, int a2, int a3)
     {
-        interop::call<void, int, int, int>(0x00432C60, doorId, a1, a2, a3);
+        static auto* pDoorScalerBlock = (uint32_t*)0x669B88;
+
+        if (doorId >= 12)
+            return;
+
+        auto* scaler = (PrimScaler*)((char*)*pDoorScalerBlock + 224 * doorId);
+        const int32_t type = scaler->type;
+        *(uint32_t*)&scaler[1].rate_x = 0x00808080;
+        scaler->type = type & 0xFF8FFFFF;
+
+        int v7 = set_door_prim(scaler);
+        if (a1)
+        {
+            scaler->type |= 0x200000;
+            v7 = 2;
+        }
+
+        add_primitive_scaler(gGameTable.pMarni, (Prim*)scaler, a3 + (v7 >> 7));
     }
 
     // 0x00432CD0
@@ -8620,10 +9325,13 @@ namespace openre::marni
         }
     }
 
+    // 0x00416D40
+    static int __stdcall flush_surfaces_marni(Marni* self);
+
     // 0x00441710
     void flush_surfaces()
     {
-        interop::call(0x00441710);
+        flush_surfaces_marni(gGameTable.pMarni);
     }
 
     // 0x00416D40
@@ -8733,10 +9441,179 @@ namespace openre::marni
         return 1;
     }
 
+    // 0x004450C0
+    // Releases the registered "work" surface streams. a1 selects the set:
+    //   a1 != 0  -> set 0 (main model/movie streams)
+    //   a1 == 0  -> set 2 (room streams)
+    int unload_register_surfaces(int a1)
+    {
+        static auto* pWorkRegs = (uint32_t*)0x687F44;   // 12-byte entries {count, ptr, work}
+        static auto* pWorkRegsEnd = (uint32_t*)0x6880DC; // end of the 12-byte table
+        static auto* pStreamRegs = (uint32_t*)0x6808AC;  // 40-byte entries (texture/object streams)
+        static auto* pStreamRegsEnd = (uint32_t*)0x680DFC; // end of the 40-byte table
+
+        const int v1 = a1 != 0 ? 0 : 2;
+
+        for (auto* v2 = pWorkRegs + 3 * v1; v2 < pWorkRegsEnd; v2 += 3)
+        {
+            if (v2[-1] > 0)
+            {
+                if (v2[0])
+                {
+                    auto* v3 = (char*)v2[0];
+                    cstd_vector_dtor(v3, 0x124, *((uint32_t*)v3 - 1), (void*)0x00444430);
+                    operator_delete(v3 - 4);
+                }
+                v2[1] = 0;
+                v2[0] = 0;
+                v2[-1] = 0;
+            }
+        }
+
+        for (auto* v5 = pStreamRegs + 10 * v1; v5 < pStreamRegsEnd; v5 += 10)
+        {
+            if (v5[-1])
+            {
+                unload_texture(gGameTable.pMarni, v5[-1]);
+                v5[-1] = 0;
+            }
+            if (v5[0])
+            {
+                unload_texture(gGameTable.pMarni, v5[0]);
+                v5[0] = 0;
+            }
+            if (v5[1])
+            {
+                unload_texture(gGameTable.pMarni, v5[1]);
+                v5[1] = 0;
+            }
+            if (v5[2])
+            {
+                auto* v6 = (char*)v5[2];
+                cstd_vector_dtor(v6, 0x40, *((uint32_t*)v6 - 1), (void*)0x00443370);
+                operator_delete(v6 - 4);
+            }
+            if (v5[3])
+            {
+                interop::thiscall<void, void*>(0x004302C0, (void*)v5[3]); // stdiobuf dtor
+                operator_delete((void*)v5[3]);
+                v5[3] = 0;
+            }
+            v5[2] = 0;
+            v5[-4] = 0;
+            v5[-3] = 0;
+            v5[-2] = 0;
+            v5[4] = 0;
+            v5[-5] = -1;
+        }
+
+        memset((void*)0x680DE8, 0xFF, 0x180C);
+        return -1;
+    }
+
+    // 0x0043EC00
+    // Destroys the dynamic object array dword_671424[0..10).
+    static int destroy_dynamic_objects()
+    {
+        int result;
+        auto* v0 = (uint32_t*)0x671424;
+        do
+        {
+            result = *v0;
+            if (*v0)
+            {
+                result = destroy_object(gGameTable.pMarni, *v0);
+                *v0 = 0;
+            }
+            ++v0;
+        }
+        while ((uint32_t)v0 < 0x67144C);
+        return result;
+    }
+
+    // 0x0043DF40
+    // Unloads all object textures and destroys the room/object models.
+    int release_object_textures()
+    {
+        static auto* pObjTex = (uint32_t*)0x671620; // obj_tex_handle (32 entries of 85 dwords)
+
+        // Iterate from obj_tex_handle.Tex_handle2 (dword 4) to &stru_6740A0.field_10.
+        auto* p = pObjTex + 4;
+        do
+        {
+            if (p[-1])
+            {
+                unload_texture(gGameTable.pMarni, p[-1]);
+                p[-1] = 0;
+            }
+            if (p[0])
+            {
+                unload_texture(gGameTable.pMarni, p[0]);
+                p[0] = 0;
+            }
+            const int v1 = p[1];
+            p[74] = 0;
+            p[3] = (uint32_t)(p - 4);
+            if (v1)
+            {
+                destroy_object(gGameTable.pMarni, v1);
+                p[1] = 0;
+            }
+            if (p[2])
+            {
+                destroy_object(gGameTable.pMarni, p[2]);
+                p[2] = 0;
+            }
+            p[3] = (uint32_t)(p - 4);
+            p[4] = (uint32_t)(p - 4);
+            p[71] = 0;
+            p[72] = 0;
+            p[73] = 0;
+            p[74] = 0;
+            p[70] = 0;
+            memset(p + 75, 0, 0x18);
+            p += 85;
+        }
+        while ((uint32_t)p < 0x6740B0);
+
+        destroy_dynamic_objects();
+
+        // Unload the shared world texture handle.
+        int result = *(uint32_t*)0x674DF0;
+        if (*(uint32_t*)0x674DF0)
+        {
+            unload_texture(gGameTable.pMarni, *(uint32_t*)0x674DF0);
+            *(uint32_t*)0x674DF0 = 0;
+            // (the UnloadTexture result is discarded: the C++ unload_texture wrapper is void)
+        }
+        *(uint32_t*)0x674DF4 = 0;
+        return result;
+    }
+
     // 0x004419A0
     void kill()
     {
-        interop::call(0x004419A0);
+        static auto* pKillFlag = (uint32_t*)0x6805CC;
+
+        if (gGameTable.movie_r0 >= 2)
+        {
+            openre::movie_kill();
+            gGameTable.movie_r0 = 5;
+        }
+
+        if (!*pKillFlag)
+        {
+            *pKillFlag = 1;
+            unload_register_surfaces(1);
+            release_object_textures();
+
+            if (gGameTable.pMarni)
+            {
+                dtor(gGameTable.pMarni);
+                operator_delete(gGameTable.pMarni);
+                gGameTable.pMarni = nullptr;
+            }
+        }
     }
 
     // 0x00441270
@@ -8796,10 +9673,60 @@ namespace openre::marni
         system::config::save();
     }
 
+    // 0x0050C690
+    // Copies a Shift-JIS string (a2) into a1 honouring the maximum character
+    // count a3 (no limit when a3 == -1). Returns the last byte read.
+    static uint8_t string_copy_sjis(uint8_t* dst, const uint8_t* src, int maxLen)
+    {
+        const uint8_t* v3 = src;
+        uint8_t result = *src;
+        for (; result; ++v3)
+        {
+            if (maxLen != -1)
+            {
+                const int v7 = maxLen--;
+                if (v7 <= 0)
+                    break;
+            }
+            if ((result >= 0x81u && result <= 0x9Fu) || (result >= 0xE0u && result <= 0xFCu))
+            {
+                *dst = result;
+                result = v3[1];
+                ++dst;
+                ++v3;
+            }
+            *dst = result;
+            result = v3[1];
+            ++dst;
+        }
+        *dst = 0;
+        return result;
+    }
+
+    // 0x0050BC30
+    // Resets an OldStdString to the empty string.
+    static uint8_t string_reset_empty(OldStdString* self)
+    {
+        interop::thiscall<void, void*>(0x50BC10, self); // OldStdString dtor (0x0050BC10)
+        self->length = 1;
+        auto* v2 = (char*)operator_new(1);
+        self->data = v2;
+        return string_copy_sjis((uint8_t*)v2, (const uint8_t*)0x669F4C, -1);
+    }
+
+    // 0x00509C70
+    // Clears the config path strings.
+    static uint8_t config_reset_strings()
+    {
+        string_reset_empty(&gGameTable.ss_file_string);
+        string_reset_empty((OldStdString*)0x689F34);
+        return string_reset_empty((OldStdString*)0x689F44); // ss_save_path_string
+    }
+
     // 0x0050B900
     void config_shutdown()
     {
-        interop::call(0x00509C70);
+        config_reset_strings();
         interop::thiscall<void, MarniConfig*>(0x0050ACA0, &gGameTable.marni_config);
     }
 

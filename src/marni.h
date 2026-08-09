@@ -76,6 +76,8 @@ namespace openre::marni
     void result_unload_textures();
     void flush_surfaces();
     void kill();
+    int unload_register_surfaces(int a1);
+    int release_object_textures();
     void add_tile(void* primPtr, int z, int is_back);
     void set_gpu_flag();
 

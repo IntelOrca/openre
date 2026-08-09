@@ -2341,7 +2341,7 @@ namespace openre
     }
 
     // 0x00441780
-    static void movie_kill()
+    void movie_kill()
     {
         if (gGameTable.movie_playing)
         {

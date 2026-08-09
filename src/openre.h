@@ -220,6 +220,9 @@ namespace openre
     bool cutscene_active();
     void vsync();
 
+    // 0x00441780
+    void movie_kill();
+
     // Handles a keyboard event delivered by the SDL window module.
     // vk is a Win32 VK code, repeat is the key auto-repeat flag.
     void handle_key(int vk, bool repeat);

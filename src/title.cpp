@@ -135,13 +135,13 @@ namespace openre::title
     // 0x004450C0
     static void sub_4450C0(int a0)
     {
-        interop::call<void, int>(0x004450C0, a0);
+        marni::unload_register_surfaces(a0);
     }
 
     // 0x0043DF40
     static void sub_43DF40()
     {
-        interop::call(0x0043DF40);
+        marni::release_object_textures();
     }
 
     // 0x0050B910
