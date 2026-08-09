@@ -137,12 +137,12 @@ namespace openre::gfx_draw
          * the source UV region of the texture. The z depth is stored as a
          * float scale and also shifted right by 4 for OT z-ordering.
          *
-         * @param bg Pointer to a background descriptor; fields are x@+8 (i16),
+         * @param bg Pointer to a BgScaledDesc; fields are x@+8 (i16),
          *     y@+0A (i16), u@+0C (u8), v@+0D (u8), w@+10 (i16), h@+12 (i16).
          * @param z The draw depth; used as a float scale and OT z-order (z >> 4).
          * @return 1 on success, 0 if no background texture is loaded.
          */
-        virtual int addBgScaled(int bg, int z) = 0;
+        virtual int addBgScaled(const BgScaledDesc* bg, int z) = 0;
 
         /**
          * Draws the current room background at the camera offset.
@@ -174,12 +174,12 @@ namespace openre::gfx_draw
          * one). The z depth is stored as a float scale and shifted right by 4
          * for OT z-ordering.
          *
-         * @param prim Pointer to a POLY_FT4-shaped descriptor.
+         * @param prim Pointer to a PolyFt4 descriptor.
          * @param page The texture page index whose texture is sampled.
          * @param z The draw depth; used as a float scale and OT z-order (z >> 4).
          * @return 1 on success, 0 if the page is invalid/unloaded/suspended.
          */
-        virtual int addScaledSprite(int prim, int page, int z) = 0;
+        virtual int addScaledSprite(const PolyFt4* prim, int page, int z) = 0;
 
         /**
          * Draws a textured quad scaled to a non-standard size via the scaler OT.
@@ -190,12 +190,12 @@ namespace openre::gfx_draw
          * flat-shaded. The z depth is shifted right by 4 and must fit within
          * the 4095-entry scaler OT.
          *
-         * @param prim Pointer to a POLY_FT4-shaped descriptor.
+         * @param prim Pointer to a PolyFt4 descriptor.
          * @param page The texture page index whose texture is sampled.
          * @param z The draw depth; OT z-order is z >> 4 (rejected if > 4095).
          * @return 1 on success, 0 if the page is invalid/unloaded/suspended or z overflows.
          */
-        virtual int addScaledPoly(int prim, int page, int z) = 0;
+        virtual int addScaledPoly(const PolyFt4* prim, int page, int z) = 0;
 
         /**
          * Draws a gouraud-shaded textured quad (PSX POLY_GT4).
@@ -310,11 +310,11 @@ namespace openre::gfx_draw
         int addSprt(const Sprt* p, uint32_t page, int z, int add_back) override;
         void addPolyFt4(const PolyFt4* p, int page, int z, int add_back) override;
         int addMask(const Sprt* p, int page, int z) override;
-        int addBgScaled(int bg, int z) override;
+        int addBgScaled(const BgScaledDesc* bg, int z) override;
         void addBg() override;
         void addBg2(int16_t scroll_y) override;
-        int addScaledSprite(int prim, int page, int z) override;
-        int addScaledPoly(int prim, int page, int z) override;
+        int addScaledSprite(const PolyFt4* prim, int page, int z) override;
+        int addScaledPoly(const PolyFt4* prim, int page, int z) override;
         int addPolyGt4(const PolyGt4* p, int page, int z) override;
         int addPolyFt42(const PolyFt4* p, int page, int z) override;
         int addPolyF4(const Tile* p, int z, int is_back) override;

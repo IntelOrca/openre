@@ -133,6 +133,22 @@ namespace openre::gfx_draw
     };
     static_assert(sizeof(LineF2) == 0x10);
 
+    // Descriptor for addBgScaled(). 0x14 bytes; the game builds it on the
+    // stack (tag/colour/clut slots are uninitialized and never read).
+    struct BgScaledDesc
+    {
+        uint32_t tag;  // 0x00 (uninitialized, never read)
+        uint32_t pad;  // 0x04 (uninitialized, never read)
+        int16_t x;     // 0x08 on-screen origin x
+        int16_t y;     // 0x0A on-screen origin y
+        uint8_t u;     // 0x0C source texture u
+        uint8_t v;     // 0x0D source texture v
+        uint16_t clut; // 0x0E (uninitialized, never read)
+        int16_t w;     // 0x10 drawn width
+        int16_t h;     // 0x12 drawn height
+    };
+    static_assert(sizeof(BgScaledDesc) == 0x14);
+
     // The scratch primitive written into the shared MARNI_PRIM buffer. It is
     // laid out identically to PrimSprite (see re2.h) and is followed by a
     // per-type colour tail.
@@ -189,20 +205,20 @@ namespace openre::gfx_draw
     // callers to our implementations.
 
     void reset_geom();
-    int add_sprt(Sprt* p, uint32_t page, int z, int add_back);
+    int add_sprt(const Sprt* p, uint32_t page, int z, int add_back);
     int add_sprt_v(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back);
-    void add_poly_ft4(PolyFt4* p, int page, int z, int add_back);
-    int add_mask(Sprt* p, int page, int z);
-    int add_bg_scaled(int bg, int z);
+    void add_poly_ft4(const PolyFt4* p, int page, int z, int add_back);
+    int add_mask(const Sprt* p, int page, int z);
+    int add_bg_scaled(const BgScaledDesc* bg, int z);
     void add_bg();
     void add_bg_2(int16_t scroll_y);
-    int add_scaled_sprite(int prim, int page, int z);
-    int add_scaled_poly(int prim, int page, int z);
-    int add_poly_gt4(PolyGt4* p, int page, int z);
-    int add_poly_ft4_2(PolyFt4* p, int page, int z);
-    int add_poly_f4(Tile* p, int z, int is_back);
-    int add_tile(Tile* p, int z, int is_back);
-    int add_line_f2(LineF2* p, int z, int is_back);
+    int add_scaled_sprite(const PolyFt4* prim, int page, int z);
+    int add_scaled_poly(const PolyFt4* prim, int page, int z);
+    int add_poly_gt4(const PolyGt4* p, int page, int z);
+    int add_poly_ft4_2(const PolyFt4* p, int page, int z);
+    int add_poly_f4(const Tile* p, int z, int is_back);
+    int add_tile(const Tile* p, int z, int is_back);
+    int add_line_f2(const LineF2* p, int z, int is_back);
 
     // ── Texture page management ────────────────────────────────────────
     // The Renderer interface deals only in raw texture handles. Organising

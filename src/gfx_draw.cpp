@@ -16,7 +16,7 @@ namespace openre::gfx_draw
     }
 
     // 0x00440280
-    int add_sprt(Sprt* p, uint32_t page, int z, int add_back)
+    int add_sprt(const Sprt* p, uint32_t page, int z, int add_back)
     {
         return g_renderer->addSprt(p, page, z, add_back);
     }
@@ -28,19 +28,19 @@ namespace openre::gfx_draw
     }
 
     // 0x00440600
-    void add_poly_ft4(PolyFt4* p, int page, int z, int add_back)
+    void add_poly_ft4(const PolyFt4* p, int page, int z, int add_back)
     {
         g_renderer->addPolyFt4(p, page, z, add_back);
     }
 
     // 0x004407F0
-    int add_mask(Sprt* p, int page, int z)
+    int add_mask(const Sprt* p, int page, int z)
     {
         return g_renderer->addMask(p, page, z);
     }
 
     // 0x00440950
-    int add_bg_scaled(int bg, int z)
+    int add_bg_scaled(const BgScaledDesc* bg, int z)
     {
         return g_renderer->addBgScaled(bg, z);
     }
@@ -58,43 +58,43 @@ namespace openre::gfx_draw
     }
 
     // 0x00440A20
-    int add_scaled_sprite(int prim, int page, int z)
+    int add_scaled_sprite(const PolyFt4* prim, int page, int z)
     {
         return g_renderer->addScaledSprite(prim, page, z);
     }
 
     // 0x00440B70
-    int add_scaled_poly(int prim, int page, int z)
+    int add_scaled_poly(const PolyFt4* prim, int page, int z)
     {
         return g_renderer->addScaledPoly(prim, page, z);
     }
 
     // 0x00440DD0
-    int add_poly_gt4(PolyGt4* p, int page, int z)
+    int add_poly_gt4(const PolyGt4* p, int page, int z)
     {
         return g_renderer->addPolyGt4(p, page, z);
     }
 
     // 0x00440FF0
-    int add_poly_ft4_2(PolyFt4* p, int page, int z)
+    int add_poly_ft4_2(const PolyFt4* p, int page, int z)
     {
         return g_renderer->addPolyFt42(p, page, z);
     }
 
     // 0x00441170
-    int add_poly_f4(Tile* p, int z, int is_back)
+    int add_poly_f4(const Tile* p, int z, int is_back)
     {
         return g_renderer->addPolyF4(p, z, is_back);
     }
 
     // 0x00441270
-    int add_tile(Tile* p, int z, int is_back)
+    int add_tile(const Tile* p, int z, int is_back)
     {
         return g_renderer->addTile(p, z, is_back);
     }
 
     // 0x00441370
-    int add_line_f2(LineF2* p, int z, int is_back)
+    int add_line_f2(const LineF2* p, int z, int is_back)
     {
         return g_renderer->addLineF2(p, z, is_back);
     }
