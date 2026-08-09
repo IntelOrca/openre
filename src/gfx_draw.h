@@ -147,7 +147,6 @@ namespace openre::gfx_draw
     enum class DrawKind : uint8_t
     {
         Sprt,
-        SprtV,
         PolyFt4,
         Mask,
         BgScaled,

@@ -12,7 +12,7 @@ namespace openre::gfx_draw
     // 0x00440250
     void reset_geom()
     {
-        g_renderer->resetGeom();
+        g_renderer->reset();
     }
 
     // 0x00440280

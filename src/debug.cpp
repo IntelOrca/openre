@@ -159,7 +159,7 @@ namespace openre::debug
             s_log_scroll = maxScroll;
 
         const char* names[static_cast<int>(gfx_draw::DrawKind::Count)] = {
-            "Sprt", "SprtV", "FT4", "Mask", "BgScl", "SclSprt", "SclPoly", "GT4", "FT4_2", "F4", "Tile", "Line",
+            "Sprt", "FT4", "Mask", "BgScl", "SclSprt", "SclPoly", "GT4", "FT4_2", "F4", "Tile", "Line",
         };
 
         // Show the last ~20 entries that fit on screen.

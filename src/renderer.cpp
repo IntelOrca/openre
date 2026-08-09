@@ -140,7 +140,7 @@ namespace openre::gfx_draw
         class MarniRenderer final : public Renderer
         {
         public:
-            void resetGeom() override
+            void reset() override
             {
                 arena.reset();
                 setGeomOffset(0, 0);
@@ -199,38 +199,6 @@ namespace openre::gfx_draw
                     marni::add_primitive_back(gGameTable.pMarni, (Prim*)prim, z);
                 else
                     marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
-                return 1;
-            }
-
-            // 0x00440480
-            int addSprtV(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back) override
-            {
-                if (page >= 41 || gGameTable.texture_pages[page].handle == 0 || gGameTable.texture_pages[page].suspended == 1
-                    || w <= 0 || h <= 0 || w + u - 1 > 255 || h + v - 1 > 255 || u < 0 || v < 0)
-                {
-                    return 0;
-                }
-
-                if (clut >= gGameTable.texture_pages[page].clutCount)
-                    clut = 0;
-
-                auto* prim = (MarniPrim*)arena.alloc(sizeof(MarniPrim));
-                prim->u0 = (uint8_t)u;
-                prim->v0 = (uint8_t)v;
-                prim->x0 = (int16_t)x;
-                prim->x1 = (int16_t)(w + x - 1);
-                prim->type = 36;
-                prim->y0 = (int16_t)y;
-                prim->y1 = (int16_t)(h + y - 1);
-                prim->u1 = (uint8_t)(u + w - 1);
-                prim->v1 = (uint8_t)(v + h - 1);
-                prim->texture = gGameTable.texture_pages[page].handle;
-                prim->clut = clut;
-
-                if (is_back)
-                    marni::add_primitive_back(gGameTable.pMarni, (Prim*)prim, depth);
-                else
-                    marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, depth);
                 return 1;
             }
 
@@ -965,23 +933,16 @@ namespace openre::gfx_draw
         stats.log_count++;
     }
 
-    void LoggingRenderer::resetGeom()
+    void LoggingRenderer::reset()
     {
         stats = {};
-        inner->resetGeom();
+        inner->reset();
     }
 
     int LoggingRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)
     {
         int result = inner->addSprt(p, page, z, add_back);
         record(DrawKind::Sprt, z, (int)page, p->x0, p->y0, (int16_t)(p->x0 + p->w - 1), (int16_t)(p->y0 + p->h - 1));
-        return result;
-    }
-
-    int LoggingRenderer::addSprtV(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back)
-    {
-        int result = inner->addSprtV(x, y, w, h, u, v, clut, page, depth, is_back);
-        record(DrawKind::SprtV, depth, page, (int16_t)x, (int16_t)y, (int16_t)(w + x - 1), (int16_t)(h + y - 1));
         return result;
     }
 
