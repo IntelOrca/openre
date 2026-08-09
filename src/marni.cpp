@@ -6604,7 +6604,6 @@ namespace openre::marni
                         surface_set_current_color(surface, xx + 1, ypos, color, 0);
                         surface_set_current_color(surface, xx, ypos + 1, color, 0);
                         surface_set_current_color(surface, xx + 1, ypos + 1, color, 0);
-                        rAcc = 0;
                     }
                     else
                     {
@@ -6658,7 +6657,6 @@ namespace openre::marni
                     surface_set_current_color(surface, xx + 1, ypos, color, 0);
                     surface_set_current_color(surface, xx, ypos + 1, color, 0);
                     surface_set_current_color(surface, xx + 1, ypos + 1, color, 0);
-                    rAcc = 0;
                 }
                 else
                 {
@@ -7801,7 +7799,7 @@ namespace openre::marni
 
             surface_lock(&v15->surface, 0, 0);
             surface_lock(&self->surface2, 0, 0);
-            v22 = v39 | 0x50;
+            v22 = v39 | 0x5000;
             auto v23 = (double)(pPrim->y1 + 1) * v42;
             auto v24 = (double)(pPrim->x1 + 1) * textureHandle;
             auto v25 = (double)(pPrim->y0) * v42;
@@ -11263,7 +11261,8 @@ namespace openre::marni
             {
                 do
                 {
-                    *dstDwords++ = *(uint32_t*)src++;
+                    *dstDwords++ = *(uint32_t*)src;
+                    src += 2; // advance 4 bytes per dword, matching the OG int* source
                     ++copied;
                 } while (copied < (s_clipWidth >> 1));
             }
@@ -11402,7 +11401,7 @@ namespace openre::marni
         s_palette = (uint16_t*)(palBase + (1 << src->bpp) * src->var_22 * (src->var_25 >> 3));
 
         // "Optimized bits" path: mark the source format so the rasterizer can pick its palette layout.
-        if ((flags & 0x400000) != 0)
+        if ((flags & 0x4000) != 0)
         {
             if (src->bpp == 8 && src->var_28)
             {
@@ -11461,37 +11460,35 @@ namespace openre::marni
 
         // 8-bit paletted sources are converted into the destination's 565/555 layout
         // through the scaling LUTs, tinted by the blend colour.
-        if ((flags & 0x200000) != 0)
+        if ((flags & 0x2000) != 0)
         {
-            if ((flags & 0x400000) == 0)
+            if ((flags & 0x4000) != 0)
             {
-                out("not supported when bits is not optimized. TexSpr", "");
-                return 0;
-            }
-            uint16_t* scratch = s_paletteScratch;
-            int redMul = 32 * ((color >> 16) & 0xFF);
-            int blueMul = 32 * (color & 0xFF);
-            int greenMul = 32 * ((color >> 8) & 0xFF);
-            int palCount = 1 << src->bpp;
-            if ((flags & 0x300000) == 0x100000)
-            {
-                for (int k = 0; k < palCount; ++k)
+                uint16_t* scratch = s_paletteScratch;
+                int redMul = 32 * ((color >> 16) & 0xFF);
+                int blueMul = 32 * (color & 0xFF);
+                int greenMul = 32 * ((color >> 8) & 0xFF);
+                int palCount = 1 << src->bpp;
+                if ((flags & 0x300000) == 0x100000)
                 {
-                    uint16_t v = s_palette[k];
-                    scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 11)]
-                                            | s_lutG[greenMul | ((v >> 6) & 0x1F)]);
+                    for (int k = 0; k < palCount; ++k)
+                    {
+                        uint16_t v = s_palette[k];
+                        scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 11)]
+                                                | s_lutG[greenMul | ((v >> 6) & 0x1F)]);
+                    }
                 }
-            }
-            else if ((flags & 0x300000) == 0x200000)
-            {
-                for (int k = 0; k < palCount; ++k)
+                else if ((flags & 0x300000) == 0x200000)
                 {
-                    uint16_t v = s_palette[k];
-                    scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 10)]
-                                            | s_lutG[greenMul | ((v >> 5) & 0x1F)]);
+                    for (int k = 0; k < palCount; ++k)
+                    {
+                        uint16_t v = s_palette[k];
+                        scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 10)]
+                                                | s_lutG[greenMul | ((v >> 5) & 0x1F)]);
+                    }
                 }
+                s_palette = scratch;
             }
-            s_palette = scratch;
         }
 
         // Dispatch on the draw mode. Bits 14/15 (0x4000/0x8000) are ignored here.
