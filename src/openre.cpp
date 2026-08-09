@@ -37,7 +37,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <windows.h>
+
+#ifdef DEBUG
+#include <crtdbg.h>
+#include <rtcapi.h>
+#endif
 
 using namespace openre;
 using namespace openre::audio;
@@ -3018,8 +3024,53 @@ namespace openre
     }
 }
 
+#ifdef DEBUG
+/// Redirects RTC failures (e.g. "Run-Time Check Failure #0" stack corruption)
+/// to stderr and terminates instead of showing the default error dialog.
+static int __cdecl
+rtc_error_handler(int errorType, const wchar_t* file, int line, const wchar_t* moduleName, const wchar_t* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    wchar_t buffer[1024];
+    vswprintf_s(buffer, format, args);
+    va_end(args);
+
+    std::fwprintf(
+        stderr,
+        L"RTC failure (%d) in %ls (%ls:%d): %ls\n",
+        errorType,
+        moduleName ? moduleName : L"?",
+        file ? file : L"?",
+        line,
+        buffer);
+    std::fflush(stderr);
+
+    // Exit immediately; the stack may be corrupted so running destructors is unsafe.
+    _exit(1);
+}
+
+static void init_rtc_error_handlers()
+{
+    // The CRT instance is statically linked into this DLL (/MTd), so the RTC
+    // handler must be installed from within the DLL itself.
+    _RTC_SetErrorFuncW(rtc_error_handler);
+
+    // Belt-and-suspenders: also redirect generic CRT error/assert reports to
+    // stderr instead of showing a dialog.
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+}
+#endif
+
 void onAttach()
 {
+#ifdef DEBUG
+    init_rtc_error_handlers();
+#endif
+
     logging::initConsoleLogger(logging::LogVerbosity::info);
     logging::logInfo("OpenRE v{} Initializing...", OPENRE_VERSION);
 
