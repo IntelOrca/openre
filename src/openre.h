@@ -210,6 +210,7 @@ namespace openre
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
     void stage_init_item();
+    void load_init_table_3();
     int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
     uint32_t update_timer();

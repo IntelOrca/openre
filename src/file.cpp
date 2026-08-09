@@ -6,6 +6,7 @@
 #include "str.h"
 #include "stream.h"
 #include "system_filesystem.h"
+#include "tim.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -212,7 +213,9 @@ namespace openre::file
     // 0x00505B20
     void sub_505B20()
     {
-        interop::call(0x00505B20);
+        // The original entry point is hooked to load_init_table_3, so call it
+        // directly rather than going through the original binary.
+        load_init_table_3();
     }
 
     // 0x004DD360
@@ -507,7 +510,10 @@ namespace openre::file
     // 0x0043FF40
     int tim_buffer_to_surface(int* timPtr, int page, int mode)
     {
-        return interop::call<int, int*, int, int>(0x0043FF40, timPtr, page, mode);
+        // The original entry point is hooked to tim::tim_buffer_to_surface, so
+        // delegate to the reimplementation (the real function takes a Tim*).
+        return openre::tim::tim_buffer_to_surface(
+            reinterpret_cast<openre::tim::Tim*>(timPtr), static_cast<uint32_t>(page), static_cast<uint32_t>(mode));
     }
 
     // 0x0043C0E0
@@ -576,10 +582,84 @@ namespace openre::file
         return system::fs::createDirectory((std::string("save://") + str::sjis_to_utf8(path)).c_str()) ? 1 : 0;
     }
 
+    // 0x0050C1A0
+    // Shift-JIS-aware ASCII uppercasing used when validating save entries:
+    // converts 'a'..'z' to uppercase in place, skipping double-byte character
+    // lead bytes so their trailing bytes are never corrupted. Returns the
+    // number of characters converted.
+    static int string_upper_sjis(OldStdString* self)
+    {
+        char* p = self->data;
+        int count = 0;
+        char c = *p;
+        if (c)
+        {
+            do
+            {
+                if (((uint8_t)c < 0x81 || (uint8_t)c > 0x9F) && ((uint8_t)c < 0xE0 || (uint8_t)c > 0xFC))
+                {
+                    if (c >= 'a' && c <= 'z')
+                    {
+                        ++count;
+                        *p = (char)(c - 32);
+                    }
+                    ++p;
+                }
+                else
+                {
+                    p += 2;
+                }
+                c = *p;
+            }
+            while (*p);
+        }
+        return count;
+    }
+
     // 0x004326E0
+    // Validates a save file entry in the given folder. Builds the full save
+    // path as "<folder>\<entry>", normalises the filename case (ASCII only),
+    // then verifies the name mentions the game ("BIOHAZARD2" / "RESIDENT2")
+    // and that the file starts with the "SC" magic. Returns 1 for a valid
+    // save, 0 otherwise.
     static int ck_valid_save(const char* folder, void* entry)
     {
-        return interop::call<int, const char*, void*>(0x004326E0, folder, entry);
+        OldStdString path;
+        str::string_ctor_from_cstr(&path, folder);
+
+        int result = 0;
+
+        // Ensure the folder ends with a backslash before appending the entry
+        // name, then build the full path in place.
+        OldStdString lastChar;
+        str::string_right(&path, &lastChar, 1);
+        bool needsSeparator = str::string_ne_cstr(&lastChar, "\\");
+        str::string_dtor(&lastChar);
+        if (needsSeparator)
+            str::string_append(&path, "\\");
+        str::string_append(&path, static_cast<const char*>(entry));
+
+        string_upper_sjis(&path);
+
+        if (str::string_find_last(&path, ".BIOHAZARD2") < 0 && str::string_find_last(&path, "RESIDENT2") < 0)
+        {
+            str::string_dtor(&path);
+            return 0;
+        }
+
+        uint8_t buffer[0x800];
+        std::memset(buffer, 0, sizeof(buffer));
+        if (file_read_save(buffer, str::string_get_data(&path), 0x800) != 0)
+        {
+            str::string_dtor(&path);
+            return 0;
+        }
+
+        if (buffer[0] == 'S' && buffer[1] == 'C')
+            result = 1;
+
+        str::string_dtor(&path);
+        return result;
     }
 
     // 0x00431F40
@@ -613,9 +693,98 @@ namespace openre::file
     }
 
     // 0x004C7A30
+    // Inserts a new save card into the sorted card array. Builds the path
+    // "<Name>\<Title>", reads the save file's 0x598-byte data block at offset
+    // 512 plus its modification time, then inserts the new entry ahead of the
+    // first card with an older timestamp (cards are ordered newest first).
+    // Fills in the card fields from the save data and returns the high dword
+    // of the file time.
     static int Card_write(SaveFile* Head, const char* Name, const char* Title)
     {
-        return interop::call<int, SaveFile*, const char*, const char*>(0x4C7A30, Head, Name, Title);
+        char fileName[260];
+        strcpy(fileName, Name);
+        size_t nameLen = strlen(fileName);
+        fileName[nameLen] = '\\';
+        fileName[nameLen + 1] = '\0';
+        strcat(fileName, Title);
+
+        uint8_t buffer[0x598];
+        uint32_t timeHigh;
+        uint32_t timeLow;
+        save_open_fp(fileName, buffer, 0x598, 512, &timeHigh, &timeLow);
+
+        int cnt0 = gGameTable.cnt0;
+        int insertIndex = 0;
+        if (cnt0 > 0)
+        {
+            uint64_t newTime = ((uint64_t)timeHigh << 32) | timeLow;
+            for (; insertIndex < cnt0; insertIndex++)
+            {
+                const SaveFile* card = &Head[insertIndex];
+                uint32_t cardTimeHigh;
+                uint32_t cardTimeLow;
+                std::memcpy(&cardTimeHigh, &card->field_108, sizeof(cardTimeHigh));
+                std::memcpy(&cardTimeLow, &card->field_10C, sizeof(cardTimeLow));
+                if ((((uint64_t)cardTimeHigh << 32) | cardTimeLow) < newTime)
+                    break;
+            }
+        }
+
+        // Shift the cards below the insertion point up by one slot.
+        for (int i = cnt0 - 2; i >= insertIndex; i--)
+        {
+            Head[i + 1] = Head[i];
+        }
+
+        SaveFile* card = &Head[insertIndex];
+        strcpy(reinterpret_cast<char*>(card), Title);
+        strcpy(fileName, Title);
+        *strrchr(fileName, '.') = '\0';
+
+        uint8_t maxTitleLen;
+        if (gGameTable.is_480p)
+            maxTitleLen = gGameTable.pad_662E64[0];
+        else
+        {
+            maxTitleLen = 32;
+            gGameTable.pad_662E64[0] = 32;
+        }
+        size_t titleLen = strlen(fileName);
+        card->field_110 = (char)(titleLen <= maxTitleLen ? 0 : titleLen - maxTitleLen);
+
+        card->field_111 = (char)buffer[0x592];
+
+        uint8_t v23 = buffer[10];
+        uint32_t v26;
+        std::memcpy(&v26, &buffer[20], sizeof(v26));
+        if (card->field_111 == 0)
+        {
+            if (v26 & 0x40000000)
+                card->field_105 = (v23 & 1) ? 3 : 2;
+            else
+                card->field_105 = (v23 & 1) ? 1 : 0;
+            card->field_113 = (char)((v26 >> 26) & 1);
+        }
+        else
+        {
+            switch (v23)
+            {
+            case 0: card->field_105 = 6; break;
+            case 1: card->field_105 = 7; break;
+            case 11: card->field_105 = 9; break;
+            case 14: card->field_105 = 8; break;
+            default: break;
+            }
+            card->field_113 = 0;
+        }
+
+        card->field_106 = (char)buffer[32];
+        card->field_107 = (char)buffer[11];
+        std::memcpy(&card->field_108, &timeHigh, sizeof(timeHigh));
+        std::memcpy(&card->field_10C, &timeLow, sizeof(timeLow));
+        card->field_112 = (char)buffer[18];
+
+        return (int)timeHigh;
     }
 
     // 0x00431D80

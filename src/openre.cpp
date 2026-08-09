@@ -2273,7 +2273,7 @@ namespace openre
     }
 
     // 0x00505B20
-    static void load_init_table_3()
+    void load_init_table_3()
     {
         gGameTable.mem_top = (void*)0x008FF8A0;
         load_init_table((void*)0x008BD880, gGameTable.byte_989E7E);
