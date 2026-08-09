@@ -2,10 +2,29 @@
 
 #include "gfx_draw.h"
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace openre::gfx_draw
 {
+    // Raw decoded texture image. Callers decode TIM/ADT data into an Image and
+    // hand it to the renderer; the renderer is responsible for uploading it to
+    // the GPU. The pixel buffer is stored as the marni surface bitmap (pitch *
+    // height bytes) and the palette buffer as the raw palette entries.
+    class Image
+    {
+    public:
+        int width = 0; // surface width in pixels
+        int height = 0;
+        int depth = 0;         // pixel bit depth: 4, 8 or 16
+        int palBpp = 0;        // palette entry bit depth (16); 0 = not paletted
+        int palCnt = 0;        // number of palettes; 0 = not paletted
+        bool psxFormat = true; // PSX 555 layout (red low, no alpha); false = D3D 555 (blue low, alpha in bit 15)
+        std::vector<uint8_t> pixels;
+        std::vector<uint8_t> palette;
+    };
+
     // Abstract renderer interface. One method per hooked Add* function in
     // gfx_draw.h; the hooks are thin wrappers that delegate to the global
     // renderer. Each method mirrors the original binary function (address in
@@ -30,6 +49,14 @@ namespace openre::gfx_draw
         virtual int addPolyF4(const Tile* p, int z, int is_back) = 0;
         virtual int addTile(const Tile* p, int z, int is_back) = 0;
         virtual int addLineF2(const LineF2* p, int z, int is_back) = 0;
+
+        // Uploads `image` as a new texture and returns its handle (0 on
+        // failure).
+        virtual int loadTexture(const Image& image, uint32_t mode) = 0;
+        // Unloads a texture handle previously returned by loadTexture().
+        virtual void unloadTexture(int handle) = 0;
+        // Unloads all textures (title / logo sequence).
+        virtual void unloadAllTextures() = 0;
     };
 
     // Decorator that records every draw call to the per-frame DrawStats while
@@ -55,6 +82,10 @@ namespace openre::gfx_draw
         int addPolyF4(const Tile* p, int z, int is_back) override;
         int addTile(const Tile* p, int z, int is_back) override;
         int addLineF2(const LineF2* p, int z, int is_back) override;
+
+        int loadTexture(const Image& image, uint32_t mode) override;
+        void unloadTexture(int handle) override;
+        void unloadAllTextures() override;
 
         // Per-frame draw-call statistics accumulated by this logger.
         const DrawStats& drawStats() const;

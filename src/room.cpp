@@ -10,6 +10,7 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "renderer.h"
 #include "sce.h"
 #include "scheduler.h"
 
@@ -55,14 +56,14 @@ namespace openre::room
             // Unload texture 1 if present
             if (pTex[-1])
             {
-                marni::unload_texture(marni, pTex[-1]);
+                gfx_draw::g_renderer->unloadTexture(pTex[-1]);
                 pTex[-1] = 0;
             }
 
             // Unload texture 2 if present
             if (pTex[0])
             {
-                marni::unload_texture(marni, pTex[0]);
+                gfx_draw::g_renderer->unloadTexture(pTex[0]);
                 pTex[0] = 0;
             }
 
@@ -116,7 +117,7 @@ namespace openre::room
         int result = gGameTable.dword_674DF0;
         if (result)
         {
-            marni::unload_texture(marni, result);
+            gfx_draw::g_renderer->unloadTexture(result);
             gGameTable.dword_674DF0 = 0;
         }
 
@@ -379,7 +380,7 @@ namespace openre::room
                 snd_room_load();
                 if (!ctcb.var_13)
                 {
-                    marni::unload_texture_page(17);
+                    gfx_draw::unloadTexturePage(17);
                     sce_model_init();
                     snd_bgm_play_ck();
                     if (rdt_get_offset<void*>(RdtOffsetKind::VB))

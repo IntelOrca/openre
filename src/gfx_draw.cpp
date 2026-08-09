@@ -1,5 +1,6 @@
 #include "gfx_draw.h"
 #include "interop.hpp"
+#include "openre.h"
 #include "renderer.h"
 
 namespace openre::gfx_draw
@@ -108,10 +109,40 @@ namespace openre::gfx_draw
         return empty;
     }
 
+    // 0x0043FF40 (page-upload part of tim_buffer_to_surface)
+    int loadTexturePage(uint32_t page, const Image& image, uint32_t mode)
+    {
+        if (page >= std::size(gGameTable.texture_pages))
+            return 0;
+        unloadTexturePage(page);
+
+        int handle = g_renderer->loadTexture(image, mode);
+        if (handle == 0)
+            return 0;
+
+        auto& tp = gGameTable.texture_pages[page];
+        tp.handle = handle;
+        tp.clutCount = image.palCnt > 0 ? image.palCnt : 1;
+        update_timer();
+        return handle;
+    }
+
+    // 0x0043F550
+    void unloadTexturePage(uint32_t page)
+    {
+        if (page >= std::size(gGameTable.texture_pages))
+            return;
+        auto& tp = gGameTable.texture_pages[page];
+        if (tp.handle != 0)
+            g_renderer->unloadTexture(tp.handle);
+        tp.handle = 0;
+        tp.clutCount = 0;
+        tp.suspended = 0;
+        update_timer();
+    }
+
     void init_hooks()
     {
-        initRenderer();
-
         interop::writeJmp(0x00440250, &reset_geom);
         interop::writeJmp(0x00441170, &add_poly_f4);
         interop::writeJmp(0x00440950, &add_bg_scaled);

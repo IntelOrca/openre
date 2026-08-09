@@ -12,6 +12,7 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "renderer.h"
 #include "room.h"
 #include "save.h"
 #include "scd.h"
@@ -175,7 +176,7 @@ namespace openre::title
         {
         case 0:
         {
-            marni::result_unload_textures();
+            gfx_draw::g_renderer->unloadAllTextures();
             sub_4450C0(1);
             sub_43DF40();
             snd_sys_init2();
@@ -298,11 +299,11 @@ namespace openre::title
     // 0x00503A30
     static void title_main_game()
     {
-        marni::unload_texture_page(18);
-        marni::unload_texture_page(19);
-        marni::unload_texture_page(20);
-        marni::unload_texture_page(21);
-        marni::unload_texture_page(22);
+        gfx_draw::unloadTexturePage(18);
+        gfx_draw::unloadTexturePage(19);
+        gfx_draw::unloadTexturePage(20);
+        gfx_draw::unloadTexturePage(21);
+        gfx_draw::unloadTexturePage(22);
         task_chain(game_loop);
     }
 

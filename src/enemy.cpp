@@ -5,8 +5,10 @@
 #include "model.h"
 #include "openre.h"
 #include "rdt.h"
+#include "renderer.h"
 #include <array>
 #include <cstring>
+#include <vector>
 #include <windows.h>
 
 using namespace openre::file;
@@ -308,6 +310,35 @@ namespace openre::enemy
         interop::thiscall<int, MarniSurface2*>(0x0042FEB0, self);
     }
 
+    // Deep-copies a marni surface (including a sub-region aliased via
+    // set_address_0 / set_pal_address) into an Image.
+    static gfx_draw::Image imageFromSurface(MarniSurface2* surface)
+    {
+        gfx_draw::Image image;
+        image.width = surface->width;
+        image.height = surface->height;
+        image.depth = surface->bpp;
+        image.palBpp = surface->var_28 ? surface->var_25 : 0;
+        image.palCnt = surface->var_28 ? surface->pal_cnt : 0;
+        image.psxFormat = surface->desc.a_bitcnt == 0;
+
+        const int bytesPerRow = (surface->bpp == 4) ? (surface->width / 2) : (surface->width * (surface->bpp / 8));
+        image.pixels.resize((size_t)bytesPerRow * surface->height);
+        const auto* src = (const uint8_t*)surface->pBitmap;
+        for (int y = 0; y < surface->height; ++y)
+        {
+            std::memcpy(image.pixels.data() + (size_t)y * bytesPerRow, src + (size_t)y * surface->pitch, (size_t)bytesPerRow);
+        }
+
+        if (image.palBpp > 0)
+        {
+            const int entriesPerPal = surface->bpp == 4 ? 16 : 256;
+            const auto* pPalette = (const uint8_t*)surface->pPalette;
+            image.palette.assign(pPalette, pPalette + (size_t)entriesPerPal * surface->pal_cnt * (surface->var_25 / 8));
+        }
+        return image;
+    }
+
     // 0x00443F70
     static void pl_load_texture(int workNo, void* pTim, int tpage, int clut, int id)
     {
@@ -322,17 +353,17 @@ namespace openre::enemy
 
         if (gPlTextureHandle[10 * workNo])
         {
-            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle[10 * workNo]);
+            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle[10 * workNo]);
             gPlTextureHandle[10 * workNo] = 0;
         }
         if (gPlTextureHandle1[10 * workNo])
         {
-            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle1[10 * workNo]);
+            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle1[10 * workNo]);
             gPlTextureHandle1[10 * workNo] = 0;
         }
         if (gPlTextureHandle2[10 * workNo])
         {
-            marni::unload_texture(gGameTable.pMarni, (int)gPlTextureHandle2[10 * workNo]);
+            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle2[10 * workNo]);
             gPlTextureHandle2[10 * workNo] = 0;
         }
 
@@ -426,7 +457,8 @@ namespace openre::enemy
 
             work.width -= 256;
             work.bOpen = 1;
-            gPlTextureHandle1[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
+            gPlTextureHandle1[10 * workNo]
+                = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(&work), gPlTextureMode);
 
             if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
             {
@@ -446,14 +478,15 @@ namespace openre::enemy
 
                 work.bOpen = 1;
                 gPlTextureHandle2[10 * workNo]
-                    = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, &work, gPlTextureMode);
+                    = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(&work), gPlTextureMode);
             }
 
             p_pDDsurface->width = 256;
             marni::surface2_release(&work);
         }
 
-        gPlTextureHandle[10 * workNo] = (uint32_t)marni::create_texture_handle(gGameTable.pMarni, p_pDDsurface, gPlTextureMode);
+        gPlTextureHandle[10 * workNo]
+            = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(p_pDDsurface), gPlTextureMode);
         marni::surface2_release(&surface);
         timobject_dtor(&tim);
     }

@@ -2,6 +2,7 @@
 #include "interop.hpp"
 #include "marni.h"
 #include "openre.h"
+#include "renderer.h"
 #include "system_filesystem.h"
 #include <array>
 #include <cstdio>
@@ -193,41 +194,44 @@ namespace openre::tim
     {
         TimObject timObject;
         timobject_ctor(&timObject, nullptr);
-        timobject_in(&timObject, pTim);
+        int decoded = timobject_in(&timObject, pTim);
         if (page >= std::size(gGameTable.texture_pages))
         {
             timobject_dtor(&timObject);
             return 0;
         }
-
-        marni::unload_texture_page(page);
-        auto mode2 = mode == 0 ? 16 : 0;
-        auto& tp = gGameTable.texture_pages[page];
-        if ((pTim->header.fmt & 0x7) > 1)
+        if (!decoded)
         {
-            mode2 |= 2;
-            tp.handle = marni::create_texture_handle(gGameTable.pMarni, &timObject, mode2);
-            tp.clutCount = 1;
-        }
-        else
-        {
-            if (timObject.pal_cnt <= 1)
-                mode2 |= 2;
-            else
-                mode2 |= 0x22;
-            tp.handle = marni::create_texture_handle(gGameTable.pMarni, &timObject, mode2);
-            tp.clutCount = timObject.pal_cnt;
-        }
-        if (tp.handle == 0)
-        {
-            marni::unload_texture_page(page);
+            // The original still unloaded the page when the decode failed.
+            gfx_draw::unloadTexturePage(page);
             timobject_dtor(&timObject);
             return 0;
         }
 
-        update_timer();
+        auto mode2 = mode == 0 ? 16 : 0;
+        if ((pTim->header.fmt & 0x7) > 1)
+            mode2 |= 2;
+        else
+            mode2 |= timObject.pal_cnt <= 1 ? 2 : 0x22;
+
+        gfx_draw::Image image;
+        image.width = timObject.width;
+        image.height = timObject.height;
+        image.depth = timObject.bpp;
+        image.palBpp = timObject.var_28 ? timObject.var_25 : 0;
+        image.palCnt = timObject.var_28 ? timObject.pal_cnt : 0;
+        image.psxFormat = true;
+        const auto* pBitmap = (const uint8_t*)timObject.pBitmap;
+        image.pixels.assign(pBitmap, pBitmap + (size_t)timObject.pitch * timObject.height);
+        if (image.palBpp > 0)
+        {
+            const auto* pPalette = (const uint8_t*)timObject.pPalette;
+            image.palette.assign(
+                pPalette, pPalette + (size_t)(timObject.bpp == 4 ? 16 : 256) * timObject.pal_cnt * (timObject.var_25 / 8));
+        }
         timobject_dtor(&timObject);
-        return 1;
+
+        return gfx_draw::loadTexturePage(page, image, mode2) != 0 ? 1 : 0;
     }
 
     void tim_init_hooks()

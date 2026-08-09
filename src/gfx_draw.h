@@ -7,6 +7,10 @@
 
 namespace openre::gfx_draw
 {
+    // The game's texture-page helpers take an Image; the full definition lives
+    // in renderer.h.
+    class Image;
+
     // PSX-style primitive structures passed by the game code to the Add*
     // family. These mirror the original RE2 (PSX libgpu) prim structures used
     // by the binary. Layouts verified against IDA (SPRT = 0x14 bytes, TILE =
@@ -200,6 +204,18 @@ namespace openre::gfx_draw
     int add_poly_f4(Tile* p, int z, int is_back);
     int add_tile(Tile* p, int z, int is_back);
     int add_line_f2(LineF2* p, int z, int is_back);
+
+    // ── Texture page management ────────────────────────────────────────
+    // The Renderer interface deals only in raw texture handles. Organising
+    // those handles into the game's texture pages (gGameTable.texture_pages)
+    // is the game's responsibility; these helpers delegate to the renderer.
+
+    // Uploads `image` to texture `page`, replacing any existing texture on
+    // that page. Stores the resulting handle / clut count in
+    // gGameTable.texture_pages. Returns the texture handle, or 0 on failure.
+    int loadTexturePage(uint32_t page, const Image& image, uint32_t mode);
+    // Unloads the texture currently bound to `page`, if any.
+    void unloadTexturePage(uint32_t page);
 
     // Registers hooks for the Add* functions and ResetGeom.
     void init_hooks();

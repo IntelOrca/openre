@@ -4,6 +4,8 @@
 #include "re2.h"
 
 #include <cstdint>
+#include <cstring>
+#include <iterator>
 #include <memory>
 #include <vector>
 
@@ -86,6 +88,52 @@ namespace openre::gfx_draw
             size_t currentBlock = 0;
             size_t blockSize;
         };
+
+        // Materializes a marni work surface from an Image, matching the layout
+        // produced by timobject_in (PSX 555 descriptor, var_2A = 1). The caller
+        // must surface2_release() the surface when done.
+        static bool materializeSurface(MarniSurface2* surface, const Image& image)
+        {
+            marni::surface2_ctor(surface);
+            if (!marni::surface2_create_work(surface, image.width, image.height, image.depth, image.palBpp, image.palCnt))
+            {
+                marni::surface2_release(surface);
+                return false;
+            }
+
+            if (image.psxFormat)
+            {
+                // PSX 555 pixel format: red in the low bits, no alpha channel.
+                surface->desc.r_shift = 0;
+                surface->desc.r_mask = 31;
+                surface->desc.r_bitcnt = 5;
+                surface->desc.g_shift = 5;
+                surface->desc.g_mask = 31;
+                surface->desc.g_bitcnt = 5;
+                surface->desc.b_shift = 10;
+                surface->desc.b_mask = 31;
+                surface->desc.b_bitcnt = 5;
+                surface->desc.a_shift = 0;
+                surface->desc.a_mask = 0;
+                surface->desc.a_bitcnt = 0;
+            }
+            surface->var_2A = 1;
+            surface->bOpen = 1;
+
+            size_t bitmapSize = (size_t)surface->pitch * surface->height;
+            if (!image.pixels.empty() && image.pixels.size() <= bitmapSize)
+                std::memcpy(surface->pBitmap, image.pixels.data(), image.pixels.size());
+
+            size_t paletteSize = 0;
+            if (image.palBpp > 0 && image.palCnt > 0)
+            {
+                int entriesPerPal = surface->bpp == 4 ? 16 : 256;
+                paletteSize = (size_t)entriesPerPal * image.palCnt * (image.palBpp / 8);
+                if (image.palette.size() <= paletteSize)
+                    std::memcpy(surface->pPalette, image.palette.data(), image.palette.size());
+            }
+            return true;
+        }
 
         // Concrete renderer that builds MARNI primitives in its own growing
         // arena and submits them to marni.
@@ -854,6 +902,31 @@ namespace openre::gfx_draw
                 return 1;
             }
 
+            // Uploads `image` as a new texture, returning the handle (0 on
+            // failure).
+            int loadTexture(const Image& image, uint32_t mode) override
+            {
+                MarniSurface2 surface;
+                if (!materializeSurface(&surface, image))
+                    return 0;
+
+                int handle = marni::create_texture_handle(gGameTable.pMarni, &surface, mode);
+                marni::surface2_release(&surface);
+                return handle;
+            }
+
+            // 0x00404CE0
+            void unloadTexture(int handle) override
+            {
+                marni::unload_texture(gGameTable.pMarni, handle);
+            }
+
+            // 0x00441520
+            void unloadAllTextures() override
+            {
+                marni::result_unload_textures();
+            }
+
         private:
             static void setGeomOffset(int cx, int cy)
             {
@@ -1005,6 +1078,21 @@ namespace openre::gfx_draw
         int result = inner->addLineF2(p, z, is_back);
         record(DrawKind::LineF2, z, -1, p->x0, p->y0, p->x1, p->y1);
         return result;
+    }
+
+    int LoggingRenderer::loadTexture(const Image& image, uint32_t mode)
+    {
+        return inner->loadTexture(image, mode);
+    }
+
+    void LoggingRenderer::unloadTexture(int handle)
+    {
+        inner->unloadTexture(handle);
+    }
+
+    void LoggingRenderer::unloadAllTextures()
+    {
+        inner->unloadAllTextures();
     }
 
     const DrawStats& LoggingRenderer::drawStats() const

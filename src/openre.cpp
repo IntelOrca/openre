@@ -22,6 +22,7 @@
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
+#include "renderer.h"
 #include "save.h"
 #include "scd.h"
 #include "sce.h"
@@ -3058,6 +3059,10 @@ void onAttach()
     math_init_hooks();
     tim::tim_init_hooks();
     window::window_init_hooks();
+    // The renderer must exist even in classic mode, where the gfx_draw Add*
+    // hooks are not installed but tim/enemy texture hooks still run and now
+    // talk to the renderer.
+    gfx_draw::initRenderer();
     if (!gClassicRebirthEnabled)
     {
         input_init_hooks();

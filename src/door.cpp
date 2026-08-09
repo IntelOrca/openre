@@ -8,6 +8,7 @@
 #include "model.h"
 #include "openre.h"
 #include "re2.h"
+#include "renderer.h"
 #include "room.h"
 #include "scd.h"
 #include "sce.h"
@@ -366,7 +367,7 @@ namespace openre::door
             if (_doorTransitionMvs[gGameTable.door_trans_mv] == nullptr)
             {
                 gGameTable.byte_680598 = 0;
-                marni::unload_texture_page(18);
+                gfx_draw::unloadTexturePage(18);
                 movie_set(1);
                 task_exit();
             }
