@@ -253,7 +253,9 @@ namespace openre::marni
     static int __stdcall set_movie_resolution(Marni* self, const char* path, int mode)
     {
         if (!self->is_gpu_active)
+        {
             return 0;
+        }
 
         RECT rc;
         ZeroMemory(&rc, sizeof(RECT));
