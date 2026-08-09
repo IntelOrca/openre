@@ -207,7 +207,7 @@ namespace openre::tim
         {
             mode2 |= 2;
             tp.handle = marni::create_texture_handle(gGameTable.pMarni, &timObject, mode2);
-            tp.var_04 = 1;
+            tp.clutCount = 1;
         }
         else
         {
@@ -216,7 +216,7 @@ namespace openre::tim
             else
                 mode2 |= 0x22;
             tp.handle = marni::create_texture_handle(gGameTable.pMarni, &timObject, mode2);
-            tp.var_04 = timObject.pal_cnt;
+            tp.clutCount = timObject.pal_cnt;
         }
         if (tp.handle == 0)
         {

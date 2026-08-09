@@ -5822,7 +5822,7 @@ namespace openre::marni
         }
         else
         {
-            auto pTexture = search_texture_object_0_from_1_in_condition(self, texture, pPrim->var_0C);
+            auto pTexture = search_texture_object_0_from_1_in_condition(self, texture, pPrim->clut);
             if (pTexture == nullptr)
                 goto LABEL_26;
             v11 = pTexture->var_14;
@@ -8604,8 +8604,8 @@ namespace openre::marni
             marni::unload_texture(gGameTable.pMarni, tp.handle);
         }
         tp.handle = 0;
-        tp.var_04 = 0;
-        tp.var_08 = 0;
+        tp.clutCount = 0;
+        tp.suspended = 0;
         update_timer();
     }
 

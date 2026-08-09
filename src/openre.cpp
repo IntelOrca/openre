@@ -2830,7 +2830,7 @@ namespace openre
             // via marni::add_tile/swap_cbuff and leaves state behind.
             marni::clear_otags(gGameTable.pMarni);
             reset_geom();
-            gGameTable.byte_6805B4 = 0;
+            gGameTable.bgDrawn = 0;
             gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
 
             save_reset();
@@ -2862,7 +2862,7 @@ namespace openre
             return;
         }
 
-        if (!gGameTable.byte_6805B4 && !gGameTable.byte_680598)
+        if (!gGameTable.bgDrawn && !gGameTable.byte_680598)
             gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
 
         // 0x004BF760: gallery function

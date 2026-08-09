@@ -711,7 +711,7 @@ static_assert(sizeof(PrimLine2) == 0x18);
 struct PrimSprite : Prim
 {
     uint32_t texture;                   // 0x0008
-    uint32_t var_0C;                    // 0x000C
+    uint32_t clut;                      // 0x000C
     int16_t x0;                         // 0x0010
     int16_t y0;                         // 0x0012
     int16_t x1;                         // 0x0014
@@ -1150,8 +1150,8 @@ static_assert(sizeof(D3DDeviceInfo) == 0x16C);
 struct TexturePage
 {
     uint32_t handle;                    // 0x0000
-    uint32_t var_04;                    // 0x0004
-    uint32_t var_08;                    // 0x0008
+    uint32_t clutCount;                 // 0x0004
+    uint32_t suspended;                 // 0x0008
 };
 static_assert(sizeof(TexturePage) == 0x0C);
 
@@ -1299,7 +1299,7 @@ struct GameTable
     uint32_t dword_674DF0;              // 0x674DF0
     uint32_t dword_674DF4;              // 0x674DF4
     uint8_t pad_674DF8[104];            // 0x674DF8
-    uint32_t dword_674E60[2];           // 0x674E60
+    uint32_t bgScrollTextures[2];       // 0x674E60
     uint8_t pad_674E68[30912];          // 0x674E68
     uint32_t bg_tex0;                   // 0x67C728
     uint32_t bg_tex1;                   // 0x67C72C
@@ -1352,7 +1352,7 @@ struct GameTable
     uint8_t hard_mode;                  // 0x6805B1
     uint8_t byte_6805B2;                // 0x6805B2
     uint8_t censorship_off;             // 0x6805B3
-    uint8_t byte_6805B4;                // 0x6805B4
+    uint8_t bgDrawn;                    // 0x6805B4
     uint8_t window_active;              // 0x6805B5
     uint8_t pad_6805B6[2];              // 0x6805B6
     Marni* pMarni;                      // 0x6805B8

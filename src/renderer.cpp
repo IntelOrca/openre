@@ -11,23 +11,30 @@ namespace openre::gfx_draw
 {
     namespace
     {
-        // Type modifier tables (immutable data from the original binary).
-        // These are ORed into the primitive type to select the MARNI prim
-        // variant (see marni.cpp draw-op dispatch).
-        constexpr uint32_t s_typeMod524E24[8] = {
-            0x100000, 0x200000, 0x100000, 0x100000, 0x400000, 0x100000, 0x100000, 0x100000,
+        // Semi-transparency blend-mode modifiers, ORed into the primitive
+        // type. The primitive's tag (low 2 bits) indexes the table for its
+        // prim family; marni's draw-op dispatch reads the resulting bits to
+        // pick the PSX semi-transparency blend mode. Immutable data from the
+        // original binary.
+        constexpr uint32_t kBlendAverage = 0x100000;  // 0.5 x B + 0.5 x F  -> SRCALPHA/INVSRCALPHA
+        constexpr uint32_t kBlendAdd = 0x200000;      // B + F              -> SRCALPHA/ONE
+        constexpr uint32_t kBlendSubtract = 0x300000; // B - F              -> SRCALPHA/ONE
+        constexpr uint32_t kBlendQuarter = 0x400000;  // 0.25 x B + 0.25 x F-> SRCALPHA/INVSRCALPHA
+
+        constexpr uint32_t s_sprtTypeMods[8] = {
+            kBlendAverage, kBlendAdd, kBlendAverage, kBlendAverage, kBlendQuarter, kBlendAverage, kBlendAverage, kBlendAverage,
         };
-        constexpr uint32_t s_typeMod524E44[4] = {
-            0x100000,
-            0x200000,
-            0x100000,
-            0x300000,
+        constexpr uint32_t s_polyTypeMods[4] = {
+            kBlendAverage,
+            kBlendAdd,
+            kBlendAverage,
+            kBlendSubtract,
         };
-        constexpr uint32_t s_typeMod524E5C[4] = {
-            0x100000,
-            0x200000,
-            0x400000,
-            0x300000,
+        constexpr uint32_t s_tileTypeMods[4] = {
+            kBlendAverage,
+            kBlendAdd,
+            kBlendQuarter,
+            kBlendSubtract,
         };
 
         // Growing scratch arena for MARNI primitives. Records are carved from
@@ -98,11 +105,11 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
 
                 uint16_t clut = p->clut;
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* prim = (MarniPrim*)arena.alloc(0x20);
@@ -110,7 +117,7 @@ namespace openre::gfx_draw
                 {
                     prim->type = 36;
                     if ((p->code & 2) != 0)
-                        prim->type = (int32_t)(s_typeMod524E24[p->tag & 3] | 0x24);
+                        prim->type = (int32_t)(s_sprtTypeMods[p->tag & 3] | 0x24);
                     prim->x0 = p->x0;
                     prim->y0 = p->y0;
                     prim->x1 = p->x0 + p->w - 1;
@@ -120,14 +127,14 @@ namespace openre::gfx_draw
                     prim->u1 = (uint8_t)(p->u0 + (uint8_t)p->w - 1);
                     prim->v1 = (uint8_t)(p->v0 + (uint8_t)p->h - 1);
                     prim->texture = gGameTable.texture_pages[page].handle;
-                    prim->var_0C = clut;
+                    prim->clut = clut;
                 }
                 else
                 {
                     prim->type = 37;
                     prim[1].pNext = (Prim*)(uintptr_t)((p->r << 16) | (p->g << 8) | p->b);
                     if ((p->code & 2) != 0)
-                        prim->type = (int32_t)(s_typeMod524E24[p->tag & 3] | 0x25);
+                        prim->type = (int32_t)(s_sprtTypeMods[p->tag & 3] | 0x25);
                     prim->x0 = p->x0;
                     prim->y0 = p->y0;
                     prim->x1 = p->x0 + p->w - 1;
@@ -137,7 +144,7 @@ namespace openre::gfx_draw
                     prim->u1 = (uint8_t)(p->u0 + (uint8_t)p->w - 1);
                     prim->v1 = (uint8_t)(p->v0 + (uint8_t)p->h - 1);
                     prim->texture = gGameTable.texture_pages[page].handle;
-                    prim->var_0C = clut;
+                    prim->clut = clut;
                 }
 
                 if (add_back)
@@ -150,13 +157,13 @@ namespace openre::gfx_draw
             // 0x00440480
             int addSprtV(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back) override
             {
-                if (page >= 41 || gGameTable.texture_pages[page].handle == 0 || gGameTable.texture_pages[page].var_08 == 1
+                if (page >= 41 || gGameTable.texture_pages[page].handle == 0 || gGameTable.texture_pages[page].suspended == 1
                     || w <= 0 || h <= 0 || w + u - 1 > 255 || h + v - 1 > 255 || u < 0 || v < 0)
                 {
                     return 0;
                 }
 
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* prim = (MarniPrim*)arena.alloc(sizeof(MarniPrim));
@@ -170,7 +177,7 @@ namespace openre::gfx_draw
                 prim->u1 = (uint8_t)(u + w - 1);
                 prim->v1 = (uint8_t)(v + h - 1);
                 prim->texture = gGameTable.texture_pages[page].handle;
-                prim->var_0C = clut;
+                prim->clut = clut;
 
                 if (is_back)
                     marni::add_primitive_back(gGameTable.pMarni, (Prim*)prim, depth);
@@ -182,10 +189,10 @@ namespace openre::gfx_draw
             // 0x00440600
             void addPolyFt4(const PolyFt4* p, int page, int z, int add_back) override
             {
-                if (page < 41 && gGameTable.texture_pages[page].handle != 0 && gGameTable.texture_pages[page].var_08 != 1)
+                if (page < 41 && gGameTable.texture_pages[page].handle != 0 && gGameTable.texture_pages[page].suspended != 1)
                 {
                     uint16_t clut = (uint16_t)p->clut;
-                    if (clut >= gGameTable.texture_pages[page].var_04)
+                    if (clut >= gGameTable.texture_pages[page].clutCount)
                         clut = 0;
 
                     auto* prim = (MarniPrim*)arena.alloc(0x20);
@@ -194,7 +201,7 @@ namespace openre::gfx_draw
                         // White quad: no per-vertex colour, 0x24 (POLY_FT4) primitive.
                         prim->type = 36;
                         if ((p->code & 2) != 0)
-                            prim->type = (int32_t)(s_typeMod524E24[p->tag & 3] | 0x24);
+                            prim->type = (int32_t)(s_sprtTypeMods[p->tag & 3] | 0x24);
                         prim->x0 = p->x0;
                         prim->y0 = p->y0;
                         prim->x1 = p->x3;
@@ -204,7 +211,7 @@ namespace openre::gfx_draw
                         prim->u1 = p->u3;
                         prim->v1 = p->v3;
                         prim->texture = gGameTable.texture_pages[page].handle;
-                        prim->var_0C = clut;
+                        prim->clut = clut;
                     }
                     else
                     {
@@ -215,7 +222,7 @@ namespace openre::gfx_draw
                         prim[1].pNext = (Prim*)(uintptr_t)((uint8_t)p->b0 | (v6 << 8));
                         if ((p->code & 2) != 0)
                         {
-                            prim->type = (int32_t)(s_typeMod524E24[p->tag & 7] | 0x25);
+                            prim->type = (int32_t)(s_sprtTypeMods[p->tag & 7] | 0x25);
                             if ((p->tag & 7) == 4)
                             {
                                 int v7 = 2 * (uint8_t)p->r0 - 1;
@@ -233,7 +240,7 @@ namespace openre::gfx_draw
                         prim->u1 = p->u3;
                         prim->v1 = p->v3;
                         prim->texture = gGameTable.texture_pages[page].handle;
-                        prim->var_0C = clut;
+                        prim->clut = clut;
                     }
 
                     if (add_back)
@@ -253,11 +260,11 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
 
                 uint16_t clut = p->clut;
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* prim = (MarniPrim*)arena.alloc(0x24);
@@ -268,7 +275,7 @@ namespace openre::gfx_draw
                 if (p->code & 2)
                 {
                     prim->type = 0x1002D; // 65581
-                    prim->type = (int32_t)(s_typeMod524E24[p->tag & 3] | 0x1002D);
+                    prim->type = (int32_t)(s_sprtTypeMods[p->tag & 3] | 0x1002D);
                     // Colour packed as b | (g << 8) | (r << 16) into the tail dword.
                     *(uint32_t*)((uint8_t*)prim + 0x20) = (uint32_t)p->b | ((uint32_t)p->g << 8) | ((uint32_t)p->r << 16);
                 }
@@ -286,7 +293,7 @@ namespace openre::gfx_draw
                 *(uint8_t*)((uint8_t*)prim + 0x1F) = (uint8_t)(p->v0 + (uint8_t)p->h - 1);
 
                 prim->texture = gGameTable.texture_pages[page].handle;
-                prim->var_0C = clut;
+                prim->clut = clut;
 
                 // The z value is clamped to the projection plane before being stored.
                 if (z >= gGameTable.global_prj / 2)
@@ -395,23 +402,23 @@ namespace openre::gfx_draw
             void addBg() override
             {
                 addBgPrims((int16_t)gGameTable.global_cx, (int16_t)gGameTable.global_cy);
-                gGameTable.byte_6805B4 = 1;
+                gGameTable.bgDrawn = 1;
             }
 
             // 0x0043FCB0
             // AddBg2 - same as AddBg but the background is scrolled by
-            // `scroll_y`, and an extra pair of strips (from dword_674E60) is
+            // `scroll_y`, and an extra pair of strips (from bgScrollTextures) is
             // drawn below the visible frame to fill in during a vertical scroll
             // transition.
             void addBg2(int16_t scroll_y) override
             {
                 addBgPrims(0, scroll_y);
 
-                if (gGameTable.dword_674E60[0] != 0)
+                if (gGameTable.bgScrollTextures[0] != 0)
                 {
                     auto* prim = (MarniPrim*)arena.alloc(sizeof(PrimSprite));
                     prim->type = 36;
-                    prim->texture = gGameTable.dword_674E60[0];
+                    prim->texture = gGameTable.bgScrollTextures[0];
                     prim->x0 = 0;
                     prim->y0 = scroll_y - 0xF0;
                     prim->x1 = 255;
@@ -423,11 +430,11 @@ namespace openre::gfx_draw
                     marni::add_primitive_back(gGameTable.pMarni, (Prim*)prim, 15);
                 }
 
-                if (gGameTable.dword_674E60[1] != 0)
+                if (gGameTable.bgScrollTextures[1] != 0)
                 {
                     auto* prim = (MarniPrim*)arena.alloc(sizeof(PrimSprite));
                     prim->type = 36;
-                    prim->texture = gGameTable.dword_674E60[1];
+                    prim->texture = gGameTable.bgScrollTextures[1];
                     prim->x0 = 0x100;
                     prim->y0 = scroll_y - 0xF0;
                     prim->x1 = 0x13F;
@@ -440,7 +447,7 @@ namespace openre::gfx_draw
 
                     auto* prim2 = (MarniPrim*)arena.alloc(sizeof(PrimSprite));
                     prim2->type = 36;
-                    prim2->texture = gGameTable.dword_674E60[1];
+                    prim2->texture = gGameTable.bgScrollTextures[1];
                     prim2->x0 = 0x100;
                     prim2->y0 = scroll_y - 0x70;
                     prim2->x1 = 0x13F;
@@ -452,7 +459,7 @@ namespace openre::gfx_draw
                     marni::add_primitive_back(gGameTable.pMarni, (Prim*)prim2, 15);
                 }
 
-                gGameTable.byte_6805B4 = 1;
+                gGameTable.bgDrawn = 1;
             }
 
             // 0x00440A20
@@ -470,11 +477,11 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
 
                 uint16_t clut = (uint16_t)p->clut;
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* out = (MarniPrim*)arena.alloc(0x24);
@@ -496,7 +503,7 @@ namespace openre::gfx_draw
 
                 if ((p->code & 2) != 0)
                 {
-                    out->type |= s_typeMod524E24[((uint8_t)p->tpage >> 5) & 3];
+                    out->type |= s_sprtTypeMods[((uint8_t)p->tpage >> 5) & 3];
                 }
 
                 out->x1 = p->x0;
@@ -518,7 +525,7 @@ namespace openre::gfx_draw
 
                 // Store the z depth as a float scale over the x0/y0 fields.
                 *(float*)&out->x0 = (float)z;
-                out->var_0C = clut;
+                out->clut = clut;
 
                 marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)out, z >> 4);
                 return 1;
@@ -537,13 +544,13 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
                 if (z >> 4 > 4095)
                     return 0;
 
                 uint16_t clut = (uint16_t)p->clut;
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* out = (MarniPrim*)arena.alloc(0x30);
@@ -554,7 +561,7 @@ namespace openre::gfx_draw
                     // White (unshaded) quad: 0x1004C (POLY_FT4-scaler) primitive.
                     out->type = 0x1004C;
                     if ((p->code & 2) != 0)
-                        out->type = (int32_t)(s_typeMod524E44[((uint8_t)p->tpage >> 5) & 3] | 0x1004C);
+                        out->type = (int32_t)(s_polyTypeMods[((uint8_t)p->tpage >> 5) & 3] | 0x1004C);
 
                     out->x0 = p->x0;
                     out->y0 = p->y0;
@@ -571,10 +578,10 @@ namespace openre::gfx_draw
                     tail[9] = p->v1;                    // BYTE1(out[1].pTexture)
                     tail[10] = p->u2;                   // BYTE2(out[1].pTexture)
                     tail[11] = p->v2;                   // HIBYTE(out[1].pTexture)
-                    tail[12] = p->u3;                   // LOBYTE(out[1].field_C)
-                    tail[13] = p->v3;                   // BYTE1(out[1].field_C)
+                    tail[12] = p->u3;                   // LOBYTE(out[1].clut)
+                    tail[13] = p->v3;                   // BYTE1(out[1].clut)
                     out->texture = gGameTable.texture_pages[page].handle;
-                    out->var_0C = clut;
+                    out->clut = clut;
                 }
                 else
                 {
@@ -583,7 +590,7 @@ namespace openre::gfx_draw
                     out->type = 0x1004D;
                     *(uint32_t*)&tail[0x10] = (uint32_t)((p->r0 << 16) | (p->g0 << 8) | p->b0);
                     if ((p->code & 2) != 0)
-                        out->type = (int32_t)(s_typeMod524E44[((uint8_t)p->tpage >> 5) & 3] | 0x1004D);
+                        out->type = (int32_t)(s_polyTypeMods[((uint8_t)p->tpage >> 5) & 3] | 0x1004D);
 
                     out->x0 = p->x0;
                     out->y0 = p->y0;
@@ -600,10 +607,10 @@ namespace openre::gfx_draw
                     tail[9] = p->v1;                    // BYTE1(out[1].pTexture)
                     tail[10] = p->u2;                   // BYTE2(out[1].pTexture)
                     tail[11] = p->v2;                   // HIBYTE(out[1].pTexture)
-                    tail[12] = p->u3;                   // LOBYTE(out[1].field_C)
-                    tail[13] = p->v3;                   // BYTE1(out[1].field_C)
+                    tail[12] = p->u3;                   // LOBYTE(out[1].clut)
+                    tail[13] = p->v3;                   // BYTE1(out[1].clut)
                     out->texture = gGameTable.texture_pages[page].handle;
-                    out->var_0C = clut;
+                    out->clut = clut;
                 }
 
                 marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)out, z >> 4);
@@ -621,13 +628,13 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
                 if ((int)(z & 0xFFFFFFF0) > 65520)
                     return 0;
 
                 uint16_t clut = p->clut;
-                if (clut >= gGameTable.texture_pages[page].var_04)
+                if (clut >= gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 // MARNI stores half-intensity colours and scales them by two
@@ -651,13 +658,13 @@ namespace openre::gfx_draw
 
                 // Pack the four vertex colours into the colour tail as
                 // b | (g << 8) | (r << 16), one dword per vertex.
-                *(uint32_t*)&prim[1].var_0C = (uint32_t)b0 | ((uint32_t)g0 << 8) | ((uint32_t)r0 << 16);
+                *(uint32_t*)&prim[1].clut = (uint32_t)b0 | ((uint32_t)g0 << 8) | ((uint32_t)r0 << 16);
                 *(uint32_t*)&prim[1].x0 = (uint32_t)b1 | ((uint32_t)g1 << 8) | ((uint32_t)r1 << 16);
                 *(uint32_t*)&prim[1].x1 = (uint32_t)b2 | ((uint32_t)g2 << 8) | ((uint32_t)r2 << 16);
                 *(uint32_t*)&prim[1].u0 = (uint32_t)b3 | ((uint32_t)g3 << 8) | ((uint32_t)r3 << 16);
 
                 if ((p->code & 2) != 0)
-                    prim->type |= (int32_t)s_typeMod524E44[p->tag & 3];
+                    prim->type |= (int32_t)s_polyTypeMods[p->tag & 3];
 
                 // Vertex coordinates; the second and third vertices (x2/y2 and
                 // x3/y3) are packed into the otherwise-unused u/v bytes and the
@@ -676,7 +683,7 @@ namespace openre::gfx_draw
                 prim[1].texture = p->u2 | ((int32_t)p->v2 << 8) | ((int32_t)p->u3 << 16) | ((int32_t)p->v3 << 24);
 
                 prim->texture = gGameTable.texture_pages[page].handle;
-                prim->var_0C = clut;
+                prim->clut = clut;
 
                 marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
                 return 1;
@@ -685,7 +692,7 @@ namespace openre::gfx_draw
             // 0x00440FF0
             // AddPolyFT4_2 - adds a textured quad via the front OT only.
             // Unlike AddPolyFT4, this variant always emits primitive type 69
-            // (with the semi-transparency modifier from s_typeMod524E44 when
+            // (with the semi-transparency modifier from s_polyTypeMods when
             // the CODE bit 1 flag is set) and has no back-OT variant. The UV
             // coordinates are packed into the second prim's type and texture
             // fields.
@@ -695,11 +702,11 @@ namespace openre::gfx_draw
                     return 0;
                 if (gGameTable.texture_pages[page].handle == 0)
                     return 0;
-                if (gGameTable.texture_pages[page].var_08 == 1)
+                if (gGameTable.texture_pages[page].suspended == 1)
                     return 0;
 
                 uint16_t clut = (uint16_t)p->clut;
-                if (clut >= (uint32_t)gGameTable.texture_pages[page].var_04)
+                if (clut >= (uint32_t)gGameTable.texture_pages[page].clutCount)
                     clut = 0;
 
                 auto* prim = (MarniPrim*)arena.alloc(0x2C);
@@ -708,10 +715,10 @@ namespace openre::gfx_draw
                 const uint8_t r0 = p->r0 > 0x80 ? 0x80 : p->r0;
                 const uint8_t g0 = p->g0 > 0x80 ? 0x80 : p->g0;
                 const uint8_t b0 = p->b0 > 0x80 ? 0x80 : p->b0;
-                // Colour packed into the second prim's var_0C: b | (g << 8) | (r << 16).
-                prim[1].var_0C = ((uint32_t)r0 << 16) | ((uint32_t)g0 << 8) | b0;
+                // Colour packed into the second prim's clut: b | (g << 8) | (r << 16).
+                prim[1].clut = ((uint32_t)r0 << 16) | ((uint32_t)g0 << 8) | b0;
                 if ((p->code & 2) != 0)
-                    prim->type |= s_typeMod524E44[p->tag & 3];
+                    prim->type |= s_polyTypeMods[p->tag & 3];
 
                 // Geometry: x1/y1 pair and x2/y2 (packed over the u0/v0 and
                 // u1/v1 byte slots of the first prim) plus the x3/y3 pair
@@ -729,7 +736,7 @@ namespace openre::gfx_draw
                 prim[1].texture = (uint32_t)p->u2 | ((uint32_t)p->v2 << 8) | ((uint32_t)p->u3 << 16) | ((uint32_t)p->v3 << 24);
 
                 prim->texture = gGameTable.texture_pages[page].handle;
-                prim->var_0C = clut;
+                prim->clut = clut;
 
                 marni::add_primitive_front(gGameTable.pMarni, (Prim*)prim, z);
                 return 1;
@@ -747,14 +754,14 @@ namespace openre::gfx_draw
                 prim->texture = ((uint32_t)(uint16_t)p->y0 << 16) | (uint16_t)p->x0;
                 // x1/y1 come from the word following the tile (r|g and b|code of
                 // the next Tile at +0x14/+0x16), each decremented by one.
-                *(uint16_t*)&prim->var_0C = *(uint16_t*)&p[1].r - 1;
-                *((uint16_t*)&prim->var_0C + 1) = *(uint16_t*)&p[1].b - 1;
+                *(uint16_t*)&prim->clut = *(uint16_t*)&p[1].r - 1;
+                *((uint16_t*)&prim->clut + 1) = *(uint16_t*)&p[1].b - 1;
                 // Colour: b | (g << 8) | (r << 16).
                 *(uint32_t*)&prim->x0 = (uint8_t)p->b | ((uint8_t)p->g << 8) | ((uint8_t)p->r << 16);
 
                 if ((p->code & 2) != 0)
                 {
-                    prim->type = s_typeMod524E5C[p->tag & 3] | 0x21;
+                    prim->type = s_tileTypeMods[p->tag & 3] | 0x21;
                     if ((p->tag & 2) != 0)
                     {
                         int r = (uint8_t)p->r;
@@ -788,16 +795,17 @@ namespace openre::gfx_draw
                 *(uint16_t*)&prim->texture = (uint16_t)p->x0;
                 *((uint16_t*)&prim->texture + 1) = (uint16_t)p->y0;
 
-                // Pack the bottom-right corner (x0+w-1, y0+h-1) into field_C.
-                *(uint16_t*)&prim->var_0C = (uint16_t)(p->x0 + p->w - 1);
-                *((uint16_t*)&prim->var_0C + 1) = (uint16_t)(p->y0 + p->h - 1);
+                // Pack the bottom-right corner (x0+w-1, y0+h-1) into the second
+                // dword (the CLUT slot, repurposed as scratch space here).
+                *(uint16_t*)&prim->clut = (uint16_t)(p->x0 + p->w - 1);
+                *((uint16_t*)&prim->clut + 1) = (uint16_t)(p->y0 + p->h - 1);
 
                 // Colour packed as b | (g << 8) | (r << 16) over the x0/y0/x1/y1 fields.
                 *(uint32_t*)&prim->x0 = (uint32_t)p->b | ((uint32_t)p->g << 8) | ((uint32_t)p->r << 16);
 
                 if (p->code & 2)
                 {
-                    prim->type = (int32_t)(s_typeMod524E5C[p->tag & 3] | 0x21);
+                    prim->type = (int32_t)(s_tileTypeMods[p->tag & 3] | 0x21);
                     if (p->tag == 2)
                     {
                         int r = p->r;

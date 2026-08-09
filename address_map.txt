@@ -559,7 +559,7 @@ declare     color1                  u32
 struct      PrimSprite
 base        Prim
 declare     texture                 u32
-declare     var_0C                  u32
+declare     clut                    u32
 declare     x0                      s16
 declare     y0                      s16
 declare     x1                      s16
@@ -908,8 +908,8 @@ declare     hwAccelerated2          u32
 
 struct      TexturePage
 declare     handle                  u32
-declare     var_04                  u32
-declare     var_08                  u32
+declare     clutCount               u32
+declare     suspended               u32
 
 struct      GameTable
 declare     byte_524E07             u8                      0x00524E07
@@ -1009,7 +1009,7 @@ declare     dword_671424            u32[10]                 0x00671424
 declare     obj_tex_handle          u8[0x2A90]              0x00671620
 declare     dword_674DF0            u32                     0x00674DF0
 declare     dword_674DF4            u32                     0x00674DF4
-declare     dword_674E60            u32[2]                  0x00674E60
+declare     bgScrollTextures        u32[2]                  0x00674E60
 declare     bg_tex0                 u32                     0x0067C728
 declare     bg_tex1                 u32                     0x0067C72C
 declare     bg_prims                PrimSprite[6]           0x0067C730
@@ -1054,7 +1054,7 @@ declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     byte_6805B2             u8                      0x006805B2
 declare     censorship_off          u8                      0x006805B3
-declare     byte_6805B4             u8                      0x006805B4
+declare     bgDrawn                 u8                      0x006805B4
 declare     window_active           u8                      0x006805B5
 declare     pMarni                  Marni*                  0x006805B8
 declare     global_rgb              u32                     0x006805BC
