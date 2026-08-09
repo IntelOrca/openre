@@ -87,6 +87,7 @@
     <ClCompile Include="gfx_d3d2.cpp" />
     <ClCompile Include="gfx_shaders.cpp" />
     <ClCompile Include="gfx_draw.cpp" />
+    <ClCompile Include="renderer.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -146,6 +147,7 @@
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
+    <ClInclude Include="renderer.h" />
     <ClInclude Include="room.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
