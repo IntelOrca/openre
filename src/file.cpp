@@ -610,8 +610,7 @@ namespace openre::file
                     p += 2;
                 }
                 c = *p;
-            }
-            while (*p);
+            } while (*p);
         }
         return count;
     }

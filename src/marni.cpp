@@ -32,7 +32,7 @@ namespace openre::marni
         void* texture;
     };
 
-    static void d3d_error_routine(int errorCode);
+    static int d3d_error_routine(int errorCode);
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2);
     static int __stdcall create_device(Marni* self);
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ);
@@ -85,9 +85,9 @@ namespace openre::marni
         Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount);
     static void __stdcall texture_surface_release(Marni* self, int handle);
-    static void tex_spr(
-        MarniSurface2* surface, void* a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12,
-        int a13, int a14, int a15, int a16);
+    static int tex_spr(
+        MarniSurface2* dst, MarniSurface2* src, int dstLeft, int dstTop, int dstRight, int dstBottom, int srcU0, int srcV0,
+        int srcU1, int srcV1, int clipLeft, int clipTop, int clipRight, int clipBottom, int color, int flags);
     static void __stdcall trans_priority_list(Marni* self, MarniOt* pOt);
     static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim);
     static std::string __stdcall generate_res_string(const MarniRes* self);
@@ -185,161 +185,131 @@ namespace openre::marni
         const char* message;
         switch ((uint32_t)hr)
         {
-        case 0x80004005:
-            message = "Generic failure. DDErrorRoutine";
-            break;
-        case 0x80004001:
-            message = "Action not supported. DDErrorRoutine";
-            break;
+        case 0x80004005: message = "Generic failure. DDErrorRoutine"; break;
+        case 0x80004001: message = "Action not supported. DDErrorRoutine"; break;
         case 0x800401F0:
-            message = "An attempt was made to invoke an interface member of a DirectDraw object created by CoCreateInstance() before it was initialized. DDErrorRoutine";
+            message = "An attempt was made to invoke an interface member of a DirectDraw object created by CoCreateInstance() "
+                      "before it was initialized. DDErrorRoutine";
             break;
-        case 0x8007000E:
-            message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine";
-            break;
+        case 0x8007000E: message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine"; break;
         case 0x80070057:
             message = "One or more of the parameters passed to the callback function are incorrect. DDErrorRoutine";
             break;
         case 0x88760037:
             message = "An exception was encountered while performing the requested operation DDErrorRoutine";
             break;
-        case 0x887600AA:
-            message = "There is no 3D present. DDErrorRoutine";
-            break;
+        case 0x887600AA: message = "There is no 3D present. DDErrorRoutine"; break;
         case 0x8876014A:
-            message = "Operation could not be carried out because there is no texture mapping hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no texture mapping hardware present or available. "
+                      "DDErrorRoutine";
             break;
         case 0x88760242:
-            message = "returned when GetOverlayPosition is called on a overlay that UpdateOverlay has never been called on to establish a destionation. DDErrorRoutine";
+            message = "returned when GetOverlayPosition is called on a overlay that UpdateOverlay has never been called on to "
+                      "establish a destionation. DDErrorRoutine";
             break;
 
         // s36: 0x88760005..0x88760028
-        case 0x88760005:
-            message = "This object is already initialized DDErrorRoutine";
-            break;
-        case 0x8876000A:
-            message = "This surface can not be attached to the requested surface. DDErrorRoutine";
-            break;
-        case 0x88760014:
-            message = "This surface can not be detached from the requested surface. DDErrorRoutine";
-            break;
-        case 0x88760028:
-            message = "Support is currently not available. DDErrorRoutine";
-            break;
+        case 0x88760005: message = "This object is already initialized DDErrorRoutine"; break;
+        case 0x8876000A: message = "This surface can not be attached to the requested surface. DDErrorRoutine"; break;
+        case 0x88760014: message = "This surface can not be detached from the requested surface. DDErrorRoutine"; break;
+        case 0x88760028: message = "Support is currently not available. DDErrorRoutine"; break;
 
         // s71: 0x8876005A..0x887600A0
-        case 0x8876005A:
-            message = "Height of rectangle provided is not a multiple of reqd alignment DDErrorRoutine";
-            break;
+        case 0x8876005A: message = "Height of rectangle provided is not a multiple of reqd alignment DDErrorRoutine"; break;
         case 0x8876005F:
             message = "Unable to match primary surface creation request with existing primary surface. DDErrorRoutine";
             break;
-        case 0x88760064:
-            message = "One or more of the caps bits passed to the callback are incorrect. DDErrorRoutine";
-            break;
-        case 0x8876006E:
-            message = "DirectDraw does not support provided Cliplist. DDErrorRoutine";
-            break;
-        case 0x88760078:
-            message = "DirectDraw does not support the requested mode DDErrorRoutine";
-            break;
-        case 0x88760082:
-            message = "DirectDraw received a pointer that was an invalid DIRECTDRAW object. DDErrorRoutine";
-            break;
-        case 0x88760091:
-            message = "pixel format was invalid as specified DDErrorRoutine";
-            break;
-        case 0x88760096:
-            message = "Rectangle provided was invalid. DDErrorRoutine";
-            break;
+        case 0x88760064: message = "One or more of the caps bits passed to the callback are incorrect. DDErrorRoutine"; break;
+        case 0x8876006E: message = "DirectDraw does not support provided Cliplist. DDErrorRoutine"; break;
+        case 0x88760078: message = "DirectDraw does not support the requested mode DDErrorRoutine"; break;
+        case 0x88760082: message = "DirectDraw received a pointer that was an invalid DIRECTDRAW object. DDErrorRoutine"; break;
+        case 0x88760091: message = "pixel format was invalid as specified DDErrorRoutine"; break;
+        case 0x88760096: message = "Rectangle provided was invalid. DDErrorRoutine"; break;
         case 0x887600A0:
             message = "Operation could not be carried out because one or more surfaces are locked DDErrorRoutine";
             break;
 
         // s141: 0x887600B4..0x88760140
         case 0x887600B4:
-            message = "Operation could not be carried out because there is no alpha accleration hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no alpha accleration hardware present or available. "
+                      "DDErrorRoutine";
             break;
-        case 0x887600CD:
-            message = "no clip list available DDErrorRoutine";
-            break;
+        case 0x887600CD: message = "no clip list available DDErrorRoutine"; break;
         case 0x887600D2:
-            message = "Operation could not be carried out because there is no color conversion hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no color conversion hardware present or available. "
+                      "DDErrorRoutine";
             break;
         case 0x887600D4:
-            message = "Create function called without DirectDraw object method SetCooperativeLevel being called. DDErrorRoutine";
+            message
+                = "Create function called without DirectDraw object method SetCooperativeLevel being called. DDErrorRoutine";
             break;
-        case 0x887600D7:
-            message = "Surface doesn't currently have a color key DDErrorRoutine";
-            break;
+        case 0x887600D7: message = "Surface doesn't currently have a color key DDErrorRoutine"; break;
         case 0x887600DC:
-            message = "Operation could not be carried out because there is no hardware support of the dest color key. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no hardware support of the dest color key. "
+                      "DDErrorRoutine";
             break;
-        case 0x887600DE:
-            message = "No DirectDraw support possible with current display driver DDErrorRoutine";
-            break;
+        case 0x887600DE: message = "No DirectDraw support possible with current display driver DDErrorRoutine"; break;
         case 0x887600E1:
-            message = "Operation requires the application to have exclusive mode but the application does not have exclusive mode. DDErrorRoutine";
+            message = "Operation requires the application to have exclusive mode but the application does not have exclusive "
+                      "mode. DDErrorRoutine";
             break;
-        case 0x887600E6:
-            message = "Flipping visible surfaces is not supported. DDErrorRoutine";
-            break;
-        case 0x887600F0:
-            message = "There is no GDI present. DDErrorRoutine";
-            break;
+        case 0x887600E6: message = "Flipping visible surfaces is not supported. DDErrorRoutine"; break;
+        case 0x887600F0: message = "There is no GDI present. DDErrorRoutine"; break;
         case 0x887600FA:
             message = "Operation could not be carried out because there is no hardware present or available. DDErrorRoutine";
             break;
-        case 0x887600FF:
-            message = "Requested item was not found DDErrorRoutine";
-            break;
+        case 0x887600FF: message = "Requested item was not found DDErrorRoutine"; break;
         case 0x88760104:
-            message = "Operation could not be carried out because there is no overlay hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no overlay hardware present or available. "
+                      "DDErrorRoutine";
             break;
         case 0x88760118:
-            message = "Operation could not be carried out because there is no appropriate raster op hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no appropriate raster op hardware present or "
+                      "available. DDErrorRoutine";
             break;
         case 0x88760122:
-            message = "Operation could not be carried out because there is no rotation hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no rotation hardware present or available. "
+                      "DDErrorRoutine";
             break;
         case 0x88760136:
             message = "Operation could not be carried out because there is no hardware support for stretching DDErrorRoutine";
             break;
         case 0x8876013C:
-            message = "DirectDrawSurface is not in 4 bit color palette and the requested operation requires 4 bit color palette. DDErrorRoutine";
+            message = "DirectDrawSurface is not in 4 bit color palette and the requested operation requires 4 bit color "
+                      "palette. DDErrorRoutine";
             break;
         case 0x8876013D:
-            message = "DirectDrawSurface is not in 4 bit color index palette and the requested operation requires 4 bit color index palette. DDErrorRoutine";
+            message = "DirectDrawSurface is not in 4 bit color index palette and the requested operation requires 4 bit color "
+                      "index palette. DDErrorRoutine";
             break;
         case 0x88760140:
-            message = "DirectDraw Surface is not in 8 bit color mode and the requested operation requires 8 bit color. DDErrorRoutine";
+            message = "DirectDraw Surface is not in 8 bit color mode and the requested operation requires 8 bit color. "
+                      "DDErrorRoutine";
             break;
 
         // s243: 0x8876014F..0x88760241
         case 0x8876014F:
-            message = "Operation could not be carried out because there is no hardware support for vertical blank synchronized operations. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no hardware support for vertical blank synchronized "
+                      "operations. DDErrorRoutine";
             break;
         case 0x88760154:
-            message = "Operation could not be carried out because there is no hardware support for zbuffer blting. DDErrorRoutine";
+            message
+                = "Operation could not be carried out because there is no hardware support for zbuffer blting. DDErrorRoutine";
             break;
         case 0x8876015E:
-            message = "Overlay surfaces could not be z layered based on their BltOrder because the hardware does not support z layering of overlays. DDErrorRoutine";
+            message = "Overlay surfaces could not be z layered based on their BltOrder because the hardware does not support z "
+                      "layering of overlays. DDErrorRoutine";
             break;
         case 0x88760168:
             message = "The hardware needed for the requested operation has already been allocated. DDErrorRoutine";
             break;
-        case 0x8876017C:
-            message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine";
-            break;
-        case 0x8876017E:
-            message = "hardware does not support clipped overlays DDErrorRoutine";
-            break;
+        case 0x8876017C: message = "DirectDraw does not have enough memory to perform the operation. DDErrorRoutine"; break;
+        case 0x8876017E: message = "hardware does not support clipped overlays DDErrorRoutine"; break;
         case 0x88760183:
-            message = "Access to this palette is being refused because the palette is already locked by another thread. DDErrorRoutine";
+            message = "Access to this palette is being refused because the palette is already locked by another thread. "
+                      "DDErrorRoutine";
             break;
-        case 0x88760190:
-            message = "No src color key specified for this operation. DDErrorRoutine";
-            break;
+        case 0x88760190: message = "No src color key specified for this operation. DDErrorRoutine"; break;
         case 0x8876019A:
             message = "This surface is already attached to the surface it is being attached to. DDErrorRoutine";
             break;
@@ -347,44 +317,33 @@ namespace openre::marni
             message = "This surface is already a dependency of the surface it is being made a dependency of. DDErrorRoutine";
             break;
         case 0x887601AE:
-            message = "Access to this surface is being refused because the surface is already locked by another thread. DDErrorRoutine";
+            message = "Access to this surface is being refused because the surface is already locked by another thread. "
+                      "DDErrorRoutine";
             break;
         case 0x887601B3:
-            message = "Access to this surface is being refused because no driver exists which can supply a pointer to the surface. This is most likely to happen when attempting to lock the primary surface when no DCI provider is present. Will also happen on attempts to lock an optimized surface. DDErrorRoutine";
+            message = "Access to this surface is being refused because no driver exists which can supply a pointer to the "
+                      "surface. This is most likely to happen when attempting to lock the primary surface when no DCI provider "
+                      "is present. Will also happen on attempts to lock an optimized surface. DDErrorRoutine";
             break;
-        case 0x887601B8:
-            message = "Access to Surface refused because Surface is obscured. DDErrorRoutine";
-            break;
+        case 0x887601B8: message = "Access to Surface refused because Surface is obscured. DDErrorRoutine"; break;
         case 0x887601C2:
-            message = "Access to this surface is being refused because the surface is gone. The DIRECTDRAWSURFACE object representing this surface should have Restore called on it. DDErrorRoutine";
+            message = "Access to this surface is being refused because the surface is gone. The DIRECTDRAWSURFACE object "
+                      "representing this surface should have Restore called on it. DDErrorRoutine";
             break;
-        case 0x887601CC:
-            message = "The requested surface is not attached. DDErrorRoutine";
-            break;
-        case 0x887601D6:
-            message = "Height requested by DirectDraw is too large. DDErrorRoutine";
-            break;
+        case 0x887601CC: message = "The requested surface is not attached. DDErrorRoutine"; break;
+        case 0x887601D6: message = "Height requested by DirectDraw is too large. DDErrorRoutine"; break;
         case 0x887601E0:
             message = "Size requested by DirectDraw is too large --\t The individual height and width are OK. DDErrorRoutine";
             break;
-        case 0x887601EA:
-            message = "Width requested by DirectDraw is too large. DDErrorRoutine";
-            break;
-        case 0x887601FE:
-            message = "FOURCC format requested is unsupported by DirectDraw DDErrorRoutine";
-            break;
-        case 0x88760208:
-            message = "Bitmask in the pixel format requested is unsupported by DirectDraw DDErrorRoutine";
-            break;
-        case 0x88760219:
-            message = "vertical blank is in progress DDErrorRoutine";
-            break;
+        case 0x887601EA: message = "Width requested by DirectDraw is too large. DDErrorRoutine"; break;
+        case 0x887601FE: message = "FOURCC format requested is unsupported by DirectDraw DDErrorRoutine"; break;
+        case 0x88760208: message = "Bitmask in the pixel format requested is unsupported by DirectDraw DDErrorRoutine"; break;
+        case 0x88760219: message = "vertical blank is in progress DDErrorRoutine"; break;
         case 0x8876021C:
-            message = "Informs DirectDraw that the previous Blt which is transfering information to or from this Surface is incomplete. DDErrorRoutine";
+            message = "Informs DirectDraw that the previous Blt which is transfering information to or from this Surface is "
+                      "incomplete. DDErrorRoutine";
             break;
-        case 0x88760230:
-            message = "Rectangle provided was not horizontally aligned on reqd. boundary DDErrorRoutine";
-            break;
+        case 0x88760230: message = "Rectangle provided was not horizontally aligned on reqd. boundary DDErrorRoutine"; break;
         case 0x88760231:
             message = "The GUID passed to DirectDrawCreate is not a valid DirectDraw driver identifier. DDErrorRoutine";
             break;
@@ -392,87 +351,67 @@ namespace openre::marni
             message = "A DirectDraw object representing this driver has already been created for this process. DDErrorRoutine";
             break;
         case 0x88760233:
-            message = "A hardware only DirectDraw object creation was attempted but the driver did not support any hardware. DDErrorRoutine";
+            message = "A hardware only DirectDraw object creation was attempted but the driver did not support any hardware. "
+                      "DDErrorRoutine";
             break;
-        case 0x88760235:
-            message = "software emulation not available. DDErrorRoutine";
-            break;
-        case 0x88760236:
-            message = "region passed to Clipper::GetClipList is too small. DDErrorRoutine";
-            break;
+        case 0x88760235: message = "software emulation not available. DDErrorRoutine"; break;
+        case 0x88760236: message = "region passed to Clipper::GetClipList is too small. DDErrorRoutine"; break;
         case 0x88760237:
-            message = "an attempt was made to set a clip list for a clipper objec that is already monitoring an hwnd. DDErrorRoutine";
+            message = "an attempt was made to set a clip list for a clipper objec that is already monitoring an hwnd. "
+                      "DDErrorRoutine";
             break;
-        case 0x88760238:
-            message = "No clipper object attached to surface object DDErrorRoutine";
-            break;
+        case 0x88760238: message = "No clipper object attached to surface object DDErrorRoutine"; break;
         case 0x88760239:
-            message = "Clipper notification requires an HWND or no HWND has previously been set as the CooperativeLevel HWND. DDErrorRoutine";
+            message = "Clipper notification requires an HWND or no HWND has previously been set as the CooperativeLevel HWND. "
+                      "DDErrorRoutine";
             break;
         case 0x8876023A:
-            message = "HWND used by DirectDraw CooperativeLevel has been subclassed, this prevents DirectDraw from restoring state. DDErrorRoutine";
+            message = "HWND used by DirectDraw CooperativeLevel has been subclassed, this prevents DirectDraw from restoring "
+                      "state. DDErrorRoutine";
             break;
         case 0x8876023B:
-            message = "The CooperativeLevel HWND has already been set. It can not be reset while the process has surfaces or palettes created. DDErrorRoutine";
+            message = "The CooperativeLevel HWND has already been set. It can not be reset while the process has surfaces or "
+                      "palettes created. DDErrorRoutine";
             break;
-        case 0x8876023C:
-            message = "No palette object attached to this surface. DDErrorRoutine";
-            break;
-        case 0x8876023D:
-            message = "No hardware support for 16 or 256 color palettes. DDErrorRoutine";
-            break;
+        case 0x8876023C: message = "No palette object attached to this surface. DDErrorRoutine"; break;
+        case 0x8876023D: message = "No hardware support for 16 or 256 color palettes. DDErrorRoutine"; break;
         case 0x8876023E:
             message = "If a clipper object is attached to the source surface passed into a BltFast call. DDErrorRoutine";
             break;
-        case 0x8876023F:
-            message = "No blter. DDErrorRoutine";
-            break;
-        case 0x88760240:
-            message = "No DirectDraw ROP hardware. DDErrorRoutine";
-            break;
-        case 0x88760241:
-            message = "returned when GetOverlayPosition is called on a hidden overlay DDErrorRoutine";
-            break;
+        case 0x8876023F: message = "No blter. DDErrorRoutine"; break;
+        case 0x88760240: message = "No DirectDraw ROP hardware. DDErrorRoutine"; break;
+        case 0x88760241: message = "returned when GetOverlayPosition is called on a hidden overlay DDErrorRoutine"; break;
 
         // s197: 0x88760243..0x88760307
         case 0x88760243:
-            message = "returned when the position of the overlay on the destionation is no longer legal for that destionation. DDErrorRoutine";
+            message = "returned when the position of the overlay on the destionation is no longer legal for that destionation. "
+                      "DDErrorRoutine";
             break;
-        case 0x88760244:
-            message = "returned when an overlay member is called for a non-overlay surface DDErrorRoutine";
-            break;
+        case 0x88760244: message = "returned when an overlay member is called for a non-overlay surface DDErrorRoutine"; break;
         case 0x88760245:
             message = "An attempt was made to set the cooperative level when it was already set to exclusive. DDErrorRoutine";
             break;
-        case 0x88760246:
-            message = "An attempt has been made to flip a surface that is not flippable. DDErrorRoutine";
-            break;
+        case 0x88760246: message = "An attempt has been made to flip a surface that is not flippable. DDErrorRoutine"; break;
         case 0x88760247:
             message = "Can't duplicate primary & 3D surfaces, or surfaces that are implicitly created. DDErrorRoutine";
             break;
         case 0x88760248:
-            message = "Surface was not locked.  An attempt to unlock a surface that was not locked at all, or by this process, has been attempted. DDErrorRoutine";
+            message = "Surface was not locked.  An attempt to unlock a surface that was not locked at all, or by this process, "
+                      "has been attempted. DDErrorRoutine";
             break;
-        case 0x88760249:
-            message = "Windows can not create any more DCs DDErrorRoutine";
-            break;
-        case 0x8876024A:
-            message = "No DC was ever created for this surface. DDErrorRoutine";
-            break;
+        case 0x88760249: message = "Windows can not create any more DCs DDErrorRoutine"; break;
+        case 0x8876024A: message = "No DC was ever created for this surface. DDErrorRoutine"; break;
         case 0x8876024B:
             message = "This surface can not be restored because it was created in a different mode. DDErrorRoutine";
             break;
         case 0x8876024C:
             message = "This surface can not be restored because it is an implicitly created surface. DDErrorRoutine";
             break;
-        case 0x8876024D:
-            message = "The surface being used is not a palette-based surface DDErrorRoutine";
-            break;
-        case 0x8876024E:
-            message = "The display is currently in an unsupported mode DDErrorRoutine";
-            break;
+        case 0x8876024D: message = "The surface being used is not a palette-based surface DDErrorRoutine"; break;
+        case 0x8876024E: message = "The display is currently in an unsupported mode DDErrorRoutine"; break;
         case 0x8876024F:
-            message = "Operation could not be carried out because there is no mip-map texture mapping hardware present or available. DDErrorRoutine";
+            message = "Operation could not be carried out because there is no mip-map texture mapping hardware present or "
+                      "available. DDErrorRoutine";
             break;
         case 0x88760250:
             message = "The requested action could not be performed because the surface was of the wrong type. DDErrorRoutine";
@@ -484,195 +423,82 @@ namespace openre::marni
             message = "Surface is an optimized surface, but has not yet been allocated any memory DDErrorRoutine";
             break;
         case 0x8876026C:
-            message = "A DC has already been returned for this surface. Only one DC can be retrieved per surface. DDErrorRoutine";
+            message
+                = "A DC has already been returned for this surface. Only one DC can be retrieved per surface. DDErrorRoutine";
             break;
         case 0x88760276:
-            message = "An attempt was made to allocate non-local video memory from a device that does not support non-local video memory. DDErrorRoutine";
+            message = "An attempt was made to allocate non-local video memory from a device that does not support non-local "
+                      "video memory. DDErrorRoutine";
             break;
-        case 0x88760280:
-            message = "The attempt to page lock a surface failed. DDErrorRoutine";
-            break;
-        case 0x88760294:
-            message = "The attempt to page unlock a surface failed. DDErrorRoutine";
-            break;
+        case 0x88760280: message = "The attempt to page lock a surface failed. DDErrorRoutine"; break;
+        case 0x88760294: message = "The attempt to page unlock a surface failed. DDErrorRoutine"; break;
         case 0x887602A8:
             message = "An attempt was made to page unlock a surface with no outstanding page locks. DDErrorRoutine";
             break;
         case 0x887602B2:
             message = "There is more data available than the specified buffer size could hold DDErrorRoutine";
             break;
-        case 0x887602B7:
-            message = "The video port is not active DDErrorRoutine";
-            break;
+        case 0x887602B7: message = "The video port is not active DDErrorRoutine"; break;
         case 0x887602BB:
-            message = "Surfaces created by one direct draw device cannot be used directly by another direct draw device. DDErrorRoutine";
+            message = "Surfaces created by one direct draw device cannot be used directly by another direct draw device. "
+                      "DDErrorRoutine";
             break;
-        case 0x887602BC:
-            message = "D3DERR_BADMAJORVERSION";
-            break;
-        case 0x887602BD:
-            message = "D3DERR_BADMINORVERSION";
-            break;
-        case 0x887602C1:
-            message = "D3DERR_INVALID_DEVICE";
-            break;
-        case 0x887602C2:
-            message = "D3DERR_INITFAILED  ";
-            break;
-        case 0x887602C3:
-            message = "D3DERR_DEVICEAGGREGATED";
-            break;
-        case 0x887602C6:
-            message = "D3DERR_EXECUTE_CREATE_FAILED";
-            break;
-        case 0x887602C7:
-            message = "D3DERR_EXECUTE_DESTROY_FAILED";
-            break;
-        case 0x887602C8:
-            message = "D3DERR_EXECUTE_LOCK_FAILED";
-            break;
-        case 0x887602C9:
-            message = "D3DERR_EXECUTE_UNLOCK_FAILED";
-            break;
-        case 0x887602CA:
-            message = "D3DERR_EXECUTE_LOCKED";
-            break;
-        case 0x887602CB:
-            message = "D3DERR_EXECUTE_NOT_LOCKED";
-            break;
-        case 0x887602CC:
-            message = "D3DERR_EXECUTE_FAILED";
-            break;
-        case 0x887602CD:
-            message = "D3DERR_EXECUTE_CLIPPED_FAILED";
-            break;
-        case 0x887602D0:
-            message = "D3DERR_TEXTURE_NO_SUPPORT";
-            break;
-        case 0x887602D1:
-            message = "D3DERR_TEXTURE_CREATE_FAILED";
-            break;
-        case 0x887602D2:
-            message = "D3DERR_TEXTURE_DESTROY_FAILED";
-            break;
-        case 0x887602D3:
-            message = "D3DERR_TEXTURE_LOCK_FAILED";
-            break;
-        case 0x887602D4:
-            message = "D3DERR_TEXTURE_UNLOCK_FAILED";
-            break;
-        case 0x887602D5:
-            message = "D3DERR_TEXTURE_LOAD_FAILED";
-            break;
-        case 0x887602D6:
-            message = "D3DERR_TEXTURE_SWAP_FAILED";
-            break;
-        case 0x887602D7:
-            message = "D3DERR_TEXTURE_LOCKED";
-            break;
-        case 0x887602D8:
-            message = "D3DERR_TEXTURE_NOT_LOCKED";
-            break;
-        case 0x887602D9:
-            message = "D3DERR_TEXTURE_GETSURF_FAILED";
-            break;
-        case 0x887602DA:
-            message = "D3DERR_MATRIX_CREATE_FAILED";
-            break;
-        case 0x887602DB:
-            message = "D3DERR_MATRIX_DESTROY_FAILED";
-            break;
-        case 0x887602DC:
-            message = "D3DERR_MATRIX_SETDATA_FAILED";
-            break;
-        case 0x887602DD:
-            message = "D3DERR_MATRIX_GETDATA_FAILED";
-            break;
-        case 0x887602DE:
-            message = "D3DERR_SETVIEWPORTDATA_FAILED";
-            break;
-        case 0x887602DF:
-            message = "D3DERR_INVALIDCURRENTVIEWPORT";
-            break;
-        case 0x887602E0:
-            message = "D3DERR_INVALIDPRIMITIVETYPE";
-            break;
-        case 0x887602E1:
-            message = "D3DERR_INVALIDVERTEXTYPE";
-            break;
-        case 0x887602E2:
-            message = "D3DERR_TEXTURE_BADSIZE";
-            break;
-        case 0x887602E3:
-            message = "D3DERR_INVALIDRAMPTEXTURE";
-            break;
-        case 0x887602E4:
-            message = "D3DERR_MATERIAL_CREATE_FAILED";
-            break;
-        case 0x887602E5:
-            message = "D3DERR_MATERIAL_DESTROY_FAILED";
-            break;
-        case 0x887602E6:
-            message = "D3DERR_MATERIAL_SETDATA_FAILED";
-            break;
-        case 0x887602E7:
-            message = "D3DERR_MATERIAL_GETDATA_FAILED";
-            break;
-        case 0x887602E8:
-            message = "D3DERR_INVALIDPALETTE";
-            break;
-        case 0x887602E9:
-            message = "D3DERR_ZBUFF_NEEDS_SYSTEMMEMORY";
-            break;
-        case 0x887602EA:
-            message = "D3DERR_ZBUFF_NEEDS_VIDEOMEMORY";
-            break;
-        case 0x887602EB:
-            message = "D3DERR_SURFACENOTINVIDMEM";
-            break;
-        case 0x887602EE:
-            message = "D3DERR_LIGHT_SET_FAILED";
-            break;
-        case 0x887602EF:
-            message = "D3DERR_LIGHTHASVIEWPORT";
-            break;
-        case 0x887602F0:
-            message = "D3DERR_LIGHTNOTINTHISVIEWPORT";
-            break;
-        case 0x887602F8:
-            message = "D3DERR_SCENE_IN_SCENE";
-            break;
-        case 0x887602F9:
-            message = "D3DERR_SCENE_NOT_IN_SCENE";
-            break;
-        case 0x887602FA:
-            message = "D3DERR_SCENE_BEGIN_FAILED";
-            break;
-        case 0x887602FB:
-            message = "D3DERR_SCENE_END_FAILED";
-            break;
-        case 0x88760302:
-            message = "D3DERR_INBEGIN";
-            break;
-        case 0x88760303:
-            message = "D3DERR_NOTINBEGIN";
-            break;
-        case 0x88760304:
-            message = "D3DERR_NOVIEWPORTS";
-            break;
-        case 0x88760305:
-            message = "D3DERR_VIEWPORTDATANOTSET";
-            break;
-        case 0x88760306:
-            message = "D3DERR_VIEWPORTHASNODEVICE";
-            break;
-        case 0x88760307:
-            message = "D3DERR_NOCURRENTVIEWPORT";
-            break;
+        case 0x887602BC: message = "D3DERR_BADMAJORVERSION"; break;
+        case 0x887602BD: message = "D3DERR_BADMINORVERSION"; break;
+        case 0x887602C1: message = "D3DERR_INVALID_DEVICE"; break;
+        case 0x887602C2: message = "D3DERR_INITFAILED  "; break;
+        case 0x887602C3: message = "D3DERR_DEVICEAGGREGATED"; break;
+        case 0x887602C6: message = "D3DERR_EXECUTE_CREATE_FAILED"; break;
+        case 0x887602C7: message = "D3DERR_EXECUTE_DESTROY_FAILED"; break;
+        case 0x887602C8: message = "D3DERR_EXECUTE_LOCK_FAILED"; break;
+        case 0x887602C9: message = "D3DERR_EXECUTE_UNLOCK_FAILED"; break;
+        case 0x887602CA: message = "D3DERR_EXECUTE_LOCKED"; break;
+        case 0x887602CB: message = "D3DERR_EXECUTE_NOT_LOCKED"; break;
+        case 0x887602CC: message = "D3DERR_EXECUTE_FAILED"; break;
+        case 0x887602CD: message = "D3DERR_EXECUTE_CLIPPED_FAILED"; break;
+        case 0x887602D0: message = "D3DERR_TEXTURE_NO_SUPPORT"; break;
+        case 0x887602D1: message = "D3DERR_TEXTURE_CREATE_FAILED"; break;
+        case 0x887602D2: message = "D3DERR_TEXTURE_DESTROY_FAILED"; break;
+        case 0x887602D3: message = "D3DERR_TEXTURE_LOCK_FAILED"; break;
+        case 0x887602D4: message = "D3DERR_TEXTURE_UNLOCK_FAILED"; break;
+        case 0x887602D5: message = "D3DERR_TEXTURE_LOAD_FAILED"; break;
+        case 0x887602D6: message = "D3DERR_TEXTURE_SWAP_FAILED"; break;
+        case 0x887602D7: message = "D3DERR_TEXTURE_LOCKED"; break;
+        case 0x887602D8: message = "D3DERR_TEXTURE_NOT_LOCKED"; break;
+        case 0x887602D9: message = "D3DERR_TEXTURE_GETSURF_FAILED"; break;
+        case 0x887602DA: message = "D3DERR_MATRIX_CREATE_FAILED"; break;
+        case 0x887602DB: message = "D3DERR_MATRIX_DESTROY_FAILED"; break;
+        case 0x887602DC: message = "D3DERR_MATRIX_SETDATA_FAILED"; break;
+        case 0x887602DD: message = "D3DERR_MATRIX_GETDATA_FAILED"; break;
+        case 0x887602DE: message = "D3DERR_SETVIEWPORTDATA_FAILED"; break;
+        case 0x887602DF: message = "D3DERR_INVALIDCURRENTVIEWPORT"; break;
+        case 0x887602E0: message = "D3DERR_INVALIDPRIMITIVETYPE"; break;
+        case 0x887602E1: message = "D3DERR_INVALIDVERTEXTYPE"; break;
+        case 0x887602E2: message = "D3DERR_TEXTURE_BADSIZE"; break;
+        case 0x887602E3: message = "D3DERR_INVALIDRAMPTEXTURE"; break;
+        case 0x887602E4: message = "D3DERR_MATERIAL_CREATE_FAILED"; break;
+        case 0x887602E5: message = "D3DERR_MATERIAL_DESTROY_FAILED"; break;
+        case 0x887602E6: message = "D3DERR_MATERIAL_SETDATA_FAILED"; break;
+        case 0x887602E7: message = "D3DERR_MATERIAL_GETDATA_FAILED"; break;
+        case 0x887602E8: message = "D3DERR_INVALIDPALETTE"; break;
+        case 0x887602E9: message = "D3DERR_ZBUFF_NEEDS_SYSTEMMEMORY"; break;
+        case 0x887602EA: message = "D3DERR_ZBUFF_NEEDS_VIDEOMEMORY"; break;
+        case 0x887602EB: message = "D3DERR_SURFACENOTINVIDMEM"; break;
+        case 0x887602EE: message = "D3DERR_LIGHT_SET_FAILED"; break;
+        case 0x887602EF: message = "D3DERR_LIGHTHASVIEWPORT"; break;
+        case 0x887602F0: message = "D3DERR_LIGHTNOTINTHISVIEWPORT"; break;
+        case 0x887602F8: message = "D3DERR_SCENE_IN_SCENE"; break;
+        case 0x887602F9: message = "D3DERR_SCENE_NOT_IN_SCENE"; break;
+        case 0x887602FA: message = "D3DERR_SCENE_BEGIN_FAILED"; break;
+        case 0x887602FB: message = "D3DERR_SCENE_END_FAILED"; break;
+        case 0x88760302: message = "D3DERR_INBEGIN"; break;
+        case 0x88760303: message = "D3DERR_NOTINBEGIN"; break;
+        case 0x88760304: message = "D3DERR_NOVIEWPORTS"; break;
+        case 0x88760305: message = "D3DERR_VIEWPORTDATANOTSET"; break;
+        case 0x88760306: message = "D3DERR_VIEWPORTHASNODEVICE"; break;
+        case 0x88760307: message = "D3DERR_NOCURRENTVIEWPORT"; break;
 
-        default:
-            message = "there is no match error code at present. DDErrorRoutine";
-            break;
+        default: message = "there is no match error code at present. DDErrorRoutine"; break;
         }
 
         out(message, "");
@@ -3269,9 +3095,47 @@ namespace openre::marni
     }
 
     // 0x00406A10
-    static void d3d_error_routine(int errorCode)
+    static int d3d_error_routine(int errorCode)
     {
-        interop::call<void, int>(0x00406A10, errorCode);
+        switch (errorCode)
+        {
+        case -2005531972: out("D3DERR_BADMAJORVERSION", "D3DErrorRoutine"); break;
+        case -2005531971: out("D3DERR_BADMINORVERSION", "D3DErrorRoutine"); break;
+        case -2005531962: out("D3DERR_EXECUTE_CREATE_FAILED", "D3DErrorRoutine"); break;
+        case -2005531961: out("D3DERR_EXECUTE_DESTROY_FAILED", "D3DErrorRoutine"); break;
+        case -2005531960: out("D3DERR_EXECUTE_LOCK_FAILED", "D3DErrorRoutine"); break;
+        case -2005531959: out("D3DERR_EXECUTE_UNLOCK_FAILED", "D3DErrorRoutine"); break;
+        case -2005531958: out("D3DERR_EXECUTE_LOCKED", "D3DErrorRoutine"); break;
+        case -2005531957: out("D3DERR_EXECUTE_NOT_LOCKED", "D3DErrorRoutine"); break;
+        case -2005531956: out("D3DERR_EXECUTE_FAILED", "D3DErrorRoutine"); break;
+        case -2005531955: out("D3DERR_EXECUTE_CLIPPED_FAILED", "D3DErrorRoutine"); break;
+        case -2005531952: out("D3DERR_TEXTURE_NO_SUPPORT", "D3DErrorRoutine"); break;
+        case -2005531951: out("D3DERR_TEXTURE_CREATE_FAILED", "D3DErrorRoutine"); break;
+        case -2005531950: out("D3DERR_TEXTURE_DESTROY_FAILED", "D3DErrorRoutine"); break;
+        case -2005531949: out("D3DERR_TEXTURE_LOCK_FAILED", "D3DErrorRoutine"); break;
+        case -2005531948: out("D3DERR_TEXTURE_UNLOCK_FAILED", "D3DErrorRoutine"); break;
+        case -2005531947: out("D3DERR_TEXTURE_LOAD_FAILED", "D3DErrorRoutine"); break;
+        case -2005531946: out("D3DERR_TEXTURE_SWAP_FAILED", "D3DErrorRoutine"); break;
+        case -2005531945: out("D3DERR_TEXTURE_LOCKED", "D3DErrorRoutine"); break;
+        case -2005531944: out("D3DERR_TEXTURE_NOT_LOCKED", "D3DErrorRoutine"); break;
+        case -2005531943: out("D3DERR_TEXTURE_GETSURF_FAILED", "D3DErrorRoutine"); break;
+        case -2005531942: out("D3DERR_MATRIX_CREATE_FAILED", "D3DErrorRoutine"); break;
+        case -2005531941: out("D3DERR_MATRIX_DESTROY_FAILED", "D3DErrorRoutine"); break;
+        case -2005531940: out("D3DERR_MATRIX_SETDATA_FAILED", "D3DErrorRoutine"); break;
+        case -2005531939: out("D3DERR_MATRIX_GETDATA_FAILED", "D3DErrorRoutine"); break;
+        case -2005531938: out("D3DERR_SETVIEWPORTDATA_FAILED", "D3DErrorRoutine"); break;
+        case -2005531932: out("D3DERR_MATERIAL_CREATE_FAILED", "D3DErrorRoutine"); break;
+        case -2005531931: out("D3DERR_MATERIAL_DESTROY_FAILED", "D3DErrorRoutine"); break;
+        case -2005531930: out("D3DERR_MATERIAL_SETDATA_FAILED", "D3DErrorRoutine"); break;
+        case -2005531929: out("D3DERR_MATERIAL_GETDATA_FAILED", "D3DErrorRoutine"); break;
+        case -2005531922: out("D3DERR_LIGHT_SET_FAILED", "D3DErrorRoutine"); break;
+        case -2005531912: out("D3DERR_SCENE_IN_SCENE", "D3DErrorRoutine"); break;
+        case -2005531911: out("D3DERR_SCENE_NOT_IN_SCENE", "D3DErrorRoutine"); break;
+        case -2005531910: out("D3DERR_SCENE_BEGIN_FAILED", "D3DErrorRoutine"); break;
+        case -2005531909: out("D3DERR_SCENE_END_FAILED", "D3DErrorRoutine"); break;
+        default: return errorCode + 2005531972;
+        }
+        return 0;
     }
 
     // 0x00406D90
@@ -3320,8 +3184,8 @@ namespace openre::marni
             uint8_t formats[kMaxFormats * kFormatEntrySize];
 
             // D3DEnumTextureFormats (0x00406880).
-            int formatCount = d3d_enum_texture_formats(
-                (LPDIRECT3DDEVICE2)self->pDirectDevice2, (int)kMaxFormats, (LPDDSURFACEDESC)formats);
+            int formatCount
+                = d3d_enum_texture_formats((LPDIRECT3DDEVICE2)self->pDirectDevice2, (int)kMaxFormats, (LPDDSURFACEDESC)formats);
             if (formatCount != 0)
             {
                 int matched = 0;
@@ -3644,22 +3508,1146 @@ namespace openre::marni
         vec[2] = v0 * mat[8] + v1 * mat[9] + v2 * mat[10];
     }
 
-    // 0x00415E80
-    static int __stdcall refer_vertex(PolygonObject* self, int index, float* out)
+    // MARNI_POLY_OBJECT: the polygon object used by both PolygonObject
+    // (the Marni::polygons array) and the local 0x58-byte TMD loader buffers.
+    // Dword fields match MarniPolygonObject::ctor/CreateWork layout.
+    struct MarniPolyObject
     {
-        return interop::thiscall<int, PolygonObject*, int, float*>(0x00415E80, self, index, out);
+        void* vTbl;           // +0x00
+        uint8_t* vertices;    // +0x04
+        uint8_t* normals;     // +0x08
+        uint8_t* primitives;  // +0x0C
+        uint32_t magic;       // +0x10
+        uint32_t pad_14;      // +0x14
+        uint32_t vertexCount; // +0x18
+        uint32_t pad_1C;      // +0x1C
+        uint32_t normalCount; // +0x20
+        uint32_t pad_24;      // +0x24
+        uint32_t primCount;   // +0x28
+        uint32_t pad_2C;      // +0x2C
+        uint32_t type;        // +0x30
+        uint32_t flags;       // +0x34
+        uint8_t pad_38[0x20]; // +0x38
+    };
+    static_assert(sizeof(MarniPolyObject) == 0x58);
+
+    // 0x00416490
+    static MarniPolyObject* polygon_object_ctor(MarniPolyObject* self)
+    {
+        self->vTbl = (void*)0x5173F8;
+        memset((uint8_t*)self + 0x10, 0, 0x24);
+        self->primitives = nullptr;
+        self->normals = nullptr;
+        self->vertices = nullptr;
+        self->flags = 0;
+        return self;
+    }
+
+    // 0x004161F0
+    static int polygon_object_dtor_0(MarniPolyObject* self)
+    {
+        operator_delete(self->vertices);
+        self->primitives = nullptr;
+        self->normals = nullptr;
+        self->vertices = nullptr;
+        self->flags = 0;
+        memset((uint8_t*)self + 0x10, 0, 0x24);
+        return 1;
+    }
+
+    // 0x00416280
+    static int create_work(MarniPolyObject* self, int vertexCount, int normalCount, int primCount, int type)
+    {
+        polygon_object_dtor_0(self);
+
+        self->vertexCount = (uint32_t)vertexCount;
+        self->normalCount = (uint32_t)normalCount;
+        self->primCount = (uint32_t)primCount;
+        self->type = (uint32_t)type;
+
+        uint32_t maskType = (uint32_t)type & 0xFF801FFF;
+        uint8_t* buffer;
+
+        if (maskType > 0x10014C0)
+        {
+            if (maskType > 0x1800400)
+            {
+                if (maskType != 0x1800401)
+                {
+                    out("", "");
+                    return 0;
+                }
+                buffer = (uint8_t*)operator_new(12 * (primCount + vertexCount));
+                self->normalCount = (uint32_t)vertexCount;
+                self->vertices = buffer;
+                self->normals = nullptr;
+                self->primitives = buffer + 12 * vertexCount;
+            }
+            else if (maskType == 0x1800400)
+            {
+                buffer = (uint8_t*)operator_new(12 * vertexCount + 16 * primCount);
+                self->vertices = buffer;
+                self->normals = nullptr;
+                self->normalCount = (uint32_t)vertexCount;
+                self->primitives = buffer + 12 * vertexCount;
+            }
+            else
+            {
+                uint32_t v13 = maskType - 0x1800080;
+                if (v13 == 0)
+                {
+                    buffer = (uint8_t*)operator_new(6 * (normalCount + vertexCount + 4 * primCount));
+                    self->vertices = buffer;
+                    self->normals = buffer + 6 * vertexCount;
+                    self->primitives = buffer + 6 * (vertexCount + normalCount);
+                }
+                else if (v13 == 1)
+                {
+                    buffer = (uint8_t*)operator_new(6 * (vertexCount + normalCount + 3 * primCount));
+                    self->vertices = buffer;
+                    self->normals = buffer + 6 * vertexCount;
+                    self->primitives = buffer + 6 * (vertexCount + normalCount);
+                }
+                else
+                {
+                    out("", "");
+                    return 0;
+                }
+            }
+        }
+        else if (maskType == 0x10014C0)
+        {
+            buffer = (uint8_t*)operator_new(8 * (primCount + 4 * vertexCount));
+            self->normalCount = (uint32_t)vertexCount;
+            self->vertices = buffer;
+            self->normals = nullptr;
+            self->primitives = buffer + 32 * vertexCount;
+        }
+        else if (maskType > 0x1442)
+        {
+            if (maskType != 0x800400)
+            {
+                out("", "");
+                return 0;
+            }
+            buffer = (uint8_t*)operator_new(12 * vertexCount + 40 * primCount);
+            self->vertices = buffer;
+            self->normals = nullptr;
+            self->primitives = buffer + 12 * vertexCount;
+        }
+        else
+        {
+            if (maskType == 0x1442)
+            {
+                buffer = (uint8_t*)operator_new(14 * primCount + 12 * (vertexCount + normalCount));
+                self->vertices = buffer;
+                self->normals = buffer + 12 * vertexCount;
+                self->primitives = buffer + 12 * (vertexCount + normalCount);
+            }
+            else
+            {
+                uint32_t v7 = maskType - 0x402;
+                if (v7 == 0)
+                    buffer = (uint8_t*)operator_new(12 * (primCount + vertexCount));
+                else if (v7 == 2)
+                    buffer = (uint8_t*)operator_new(12 * (vertexCount + 2 * primCount));
+                else
+                {
+                    out("", "");
+                    return 0;
+                }
+                self->vertices = buffer;
+                self->normals = nullptr;
+                self->primitives = buffer + 12 * vertexCount;
+            }
+        }
+
+        self->magic = 1129270349;
+        self->flags = 1;
+        return 1;
+    }
+
+    // 0x00416220
+    static int create_work_0(
+        MarniPolyObject* self, int vertexCount, int normalCount, int primCount, int a5, int a6, int a7, int a8, int a9, int a10,
+        int a11, int a12)
+    {
+        return create_work(
+            self,
+            vertexCount,
+            normalCount,
+            primCount,
+            a5 | (2 * (a6 | (32 * (a8 | (8 * (a9 | (4 * (a11 | (4 * (a10 | (32 * (a12 | (32 * a7))))))))))))));
+    }
+
+    // 0x004153E0
+    static int polygon_object_operator_eq(MarniPolyObject* self, const MarniPolyObject* other)
+    {
+        polygon_object_dtor_0(self);
+        create_work(self, (int)other->vertexCount, (int)other->normalCount, (int)other->primCount, (int)other->type);
+
+        uint32_t type = self->type & 0xFF801FFF;
+        uint32_t size;
+        switch (type)
+        {
+        case 0x1800400:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            size = 16 * self->primCount;
+            break;
+        case 0x1800401:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            size = 12 * self->primCount;
+            break;
+        case 0x1800080:
+            memcpy(self->vertices, other->vertices, 6 * self->vertexCount);
+            memcpy(self->normals, other->normals, 6 * self->normalCount);
+            size = 24 * self->primCount;
+            break;
+        case 0x1800081:
+            memcpy(self->vertices, other->vertices, 6 * self->vertexCount);
+            memcpy(self->normals, other->normals, 6 * self->normalCount);
+            size = 18 * self->primCount;
+            break;
+        case 0x10014C0:
+            memcpy(self->vertices, other->vertices, 32 * self->vertexCount);
+            size = 8 * self->primCount;
+            break;
+        case 0x800400:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            self->normals = nullptr;
+            size = 40 * self->primCount;
+            break;
+        case 0x1442:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            memcpy(self->normals, other->normals, 12 * self->normalCount);
+            size = 14 * self->primCount;
+            break;
+        case 0x402:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            self->normals = nullptr;
+            size = 12 * self->primCount;
+            break;
+        case 0x404:
+            memcpy(self->vertices, other->vertices, 12 * self->vertexCount);
+            self->normals = nullptr;
+            size = 24 * self->primCount;
+            break;
+        default: out("", ""); return 0;
+        }
+
+        memcpy(self->primitives, other->primitives, size);
+        return 1;
+    }
+
+    // 0x00416050
+    static int modify_vertex(MarniPolyObject* self, int index, float x, float y, float z)
+    {
+        if ((self->flags & 1) == 0 || index >= (int)self->vertexCount)
+        {
+            out("", "");
+            return 0;
+        }
+
+        uint32_t type = self->type & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x800400:
+        case 0x402:
+        case 0x404:
+        case 0x1442:
+        case 0x1800400:
+        case 0x1800401:
+            *(float*)(self->vertices + 12 * index) = x;
+            *(float*)(self->vertices + 12 * index + 4) = y;
+            *(float*)(self->vertices + 12 * index + 8) = z;
+            return 1;
+        case 0x10014C0:
+            *(float*)(self->vertices + 32 * index) = x;
+            *(float*)(self->vertices + 32 * index + 4) = y;
+            *(float*)(self->vertices + 32 * index + 8) = z;
+            return 1;
+        case 0x1800080:
+        case 0x1800081:
+        {
+            int scale = 1 << ((self->type >> 13) & 0x1F);
+            *(int16_t*)(self->vertices + 6 * index) = (int16_t)(scale * x);
+            *(int16_t*)(self->vertices + 6 * index + 2) = (int16_t)(scale * y);
+            *(int16_t*)(self->vertices + 6 * index + 4) = (int16_t)(scale * z);
+            return 1;
+        }
+        default: out("", ""); return 0;
+        }
+    }
+
+    // 0x00415CC0
+    static int modify_normal(MarniPolyObject* self, int index, float x, float y, float z)
+    {
+        if ((self->flags & 1) != 0 && index < (int)self->normalCount)
+        {
+            uint32_t type = self->type & 0xFF801FFF;
+            switch (type)
+            {
+            case 0x402:
+            case 0x404:
+            case 0x800400:
+            case 0x1800400:
+            case 0x1800401: out("", ""); return 1;
+            case 0x1442:
+                *(float*)(self->normals + 12 * index) = x;
+                *(float*)(self->normals + 12 * index + 4) = y;
+                *(float*)(self->normals + 12 * index + 8) = z;
+                return 1;
+            case 0x10014C0:
+                *(float*)(self->vertices + 32 * index + 12) = x;
+                *(float*)(self->vertices + 32 * index + 16) = y;
+                *(float*)(self->vertices + 32 * index + 20) = z;
+                return 1;
+            case 0x1800080:
+            case 0x1800081:
+            {
+                int scale = 1 << ((self->type >> 18) & 0x1F);
+                *(int16_t*)(self->normals + 6 * index) = (int16_t)(scale * x);
+                *(int16_t*)(self->normals + 6 * index + 2) = (int16_t)(scale * y);
+                *(int16_t*)(self->normals + 6 * index + 4) = (int16_t)(scale * z);
+                return 1;
+            }
+            default: out("", ""); return 0;
+            }
+        }
+
+        out("", "");
+        return 0;
+    }
+
+    // 0x00416030
+    static int modify_vertex_0(MarniPolyObject* self, int index, float* vec)
+    {
+        return modify_vertex(self, index, vec[0], vec[1], vec[2]);
+    }
+
+    // 0x00415CA0
+    static int modify_normal_0(MarniPolyObject* self, int index, float* vec)
+    {
+        return modify_normal(self, index, vec[0], vec[1], vec[2]);
+    }
+
+    // 0x00415E80
+    static int __stdcall refer_vertex(PolygonObject* self, int index, float* dst)
+    {
+        auto* s = (MarniPolyObject*)self;
+        if ((s->flags & 1) == 0 || index >= (int)s->vertexCount)
+        {
+            out("", "");
+            return 0;
+        }
+
+        uint32_t type = s->type & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x800400:
+        case 0x402:
+        case 0x404:
+        case 0x1442:
+        case 0x1800400:
+        case 0x1800401:
+            dst[0] = *(float*)(s->vertices + 12 * index);
+            dst[1] = *(float*)(s->vertices + 12 * index + 4);
+            dst[2] = *(float*)(s->vertices + 12 * index + 8);
+            return 1;
+        case 0x10014C0:
+            dst[0] = *(float*)(s->vertices + 32 * index);
+            dst[1] = *(float*)(s->vertices + 32 * index + 4);
+            dst[2] = *(float*)(s->vertices + 32 * index + 8);
+            return 1;
+        case 0x1800080:
+        case 0x1800081:
+        {
+            double scale = (double)(1 << ((s->type >> 13) & 0x1F));
+            dst[0] = (float)((double)*(int16_t*)(s->vertices + 6 * index) / scale);
+            dst[1] = (float)((double)*(int16_t*)(s->vertices + 6 * index + 2) / scale);
+            dst[2] = (float)((double)*(int16_t*)(s->vertices + 6 * index + 4) / scale);
+            return 1;
+        }
+        default: out("", ""); return 0;
+        }
     }
 
     // 0x00415AE0
-    static int __stdcall refer_normal(PolygonObject* self, int index, float* out)
+    static int __stdcall refer_normal(PolygonObject* self, int index, float* dst)
     {
-        return interop::thiscall<int, PolygonObject*, int, float*>(0x00415AE0, self, index, out);
+        auto* s = (MarniPolyObject*)self;
+        if ((s->flags & 1) != 0 && index < (int)s->normalCount)
+        {
+            uint32_t type = s->type & 0xFF801FFF;
+            switch (type)
+            {
+            case 0x402:
+            case 0x404:
+            case 0x800400:
+            case 0x1800400:
+            case 0x1800401: out("", ""); return 1;
+            case 0x1442:
+                dst[0] = *(float*)(s->normals + 12 * index);
+                dst[1] = *(float*)(s->normals + 12 * index + 4);
+                dst[2] = *(float*)(s->normals + 12 * index + 8);
+                return 1;
+            case 0x10014C0:
+                dst[0] = *(float*)(s->vertices + 32 * index + 12);
+                dst[1] = *(float*)(s->vertices + 32 * index + 16);
+                dst[2] = *(float*)(s->vertices + 32 * index + 20);
+                return 1;
+            case 0x1800080:
+            case 0x1800081:
+            {
+                double scale = (double)(1 << ((s->type >> 18) & 0x1F));
+                dst[0] = (float)((double)*(int16_t*)(s->normals + 6 * index) / scale);
+                dst[1] = (float)((double)*(int16_t*)(s->normals + 6 * index + 2) / scale);
+                dst[2] = (float)((double)*(int16_t*)(s->normals + 6 * index + 4) / scale);
+                return 1;
+            }
+            default: out("", ""); return 0;
+            }
+        }
+
+        out("", "");
+        return 0;
     }
 
     // 0x004156E0
-    static int __stdcall modify_primitive(PolygonObject* self, int index, void* out)
+    static int __stdcall modify_primitive(PolygonObject* self, int index, void* dst)
     {
-        return interop::thiscall<int, PolygonObject*, int, void*>(0x004156E0, self, index, out);
+        auto* s = (MarniPolyObject*)self;
+        if ((s->flags & 1) == 0 || index >= (int)s->primCount)
+        {
+            out("", "");
+            return 0;
+        }
+
+        uint32_t type = s->type & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x402:
+        case 0x1800401:
+            ((uint32_t*)dst)[0] = *(uint32_t*)(s->primitives + 12 * index);
+            ((uint32_t*)dst)[1] = *(uint32_t*)(s->primitives + 12 * index + 4);
+            ((uint32_t*)dst)[2] = *(uint32_t*)(s->primitives + 12 * index + 8);
+            return 1;
+        case 0x404: memcpy(dst, s->primitives + 24 * index, 0x18); return 1;
+        case 0x1442:
+            ((uint32_t*)dst)[0] = *(uint32_t*)(s->primitives + 14 * index);
+            ((uint32_t*)dst)[1] = *(uint32_t*)(s->primitives + 14 * index + 4);
+            ((uint32_t*)dst)[2] = *(uint32_t*)(s->primitives + 14 * index + 8);
+            *(uint16_t*)((uint8_t*)dst + 12) = *(uint16_t*)(s->primitives + 14 * index + 12);
+            return 1;
+        case 0x10014C0:
+            ((uint32_t*)dst)[0] = *(uint32_t*)(s->primitives + 8 * index);
+            ((uint32_t*)dst)[1] = *(uint32_t*)(s->primitives + 8 * index + 4);
+            return 1;
+        case 0x800400: memcpy(dst, s->primitives + 40 * index, 0x28); return 1;
+        case 0x1800400:
+            ((uint32_t*)dst)[0] = *(uint32_t*)(s->primitives + 16 * index);
+            ((uint32_t*)dst)[1] = *(uint32_t*)(s->primitives + 16 * index + 4);
+            ((uint32_t*)dst)[2] = *(uint32_t*)(s->primitives + 16 * index + 8);
+            ((uint32_t*)dst)[3] = *(uint32_t*)(s->primitives + 16 * index + 12);
+            return 1;
+        case 0x1800080: memcpy(dst, s->primitives + 24 * index, 0x18); return 1;
+        case 0x1800081:
+            ((uint32_t*)dst)[0] = *(uint32_t*)(s->primitives + 18 * index);
+            ((uint32_t*)dst)[1] = *(uint32_t*)(s->primitives + 18 * index + 4);
+            ((uint32_t*)dst)[2] = *(uint32_t*)(s->primitives + 18 * index + 8);
+            ((uint32_t*)dst)[3] = *(uint32_t*)(s->primitives + 18 * index + 12);
+            *(uint16_t*)((uint8_t*)dst + 16) = *(uint16_t*)(s->primitives + 18 * index + 16);
+            return 1;
+        default: out("", ""); return 0;
+        }
+    }
+
+    // 0x004158E0
+    static int refer_primitive(MarniPolyObject* self, int index, void* dst)
+    {
+        if ((self->flags & 1) == 0 || index >= (int)self->primCount)
+        {
+            out("", "");
+            return 0;
+        }
+
+        uint32_t type = self->type & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x402:
+        case 0x1800401:
+            *(uint32_t*)(self->primitives + 12 * index) = ((uint32_t*)dst)[0];
+            *(uint32_t*)(self->primitives + 12 * index + 4) = ((uint32_t*)dst)[1];
+            *(uint32_t*)(self->primitives + 12 * index + 8) = ((uint32_t*)dst)[2];
+            return 1;
+        case 0x404:
+        case 0x1800080: memcpy(self->primitives + 24 * index, dst, 0x18); return 1;
+        case 0x1442:
+            *(uint32_t*)(self->primitives + 14 * index) = ((uint32_t*)dst)[0];
+            *(uint32_t*)(self->primitives + 14 * index + 4) = ((uint32_t*)dst)[1];
+            *(uint32_t*)(self->primitives + 14 * index + 8) = ((uint32_t*)dst)[2];
+            *(uint16_t*)(self->primitives + 14 * index + 12) = *(uint16_t*)((uint8_t*)dst + 12);
+            return 1;
+        case 0x10014C0:
+            *(uint32_t*)(self->primitives + 8 * index) = ((uint32_t*)dst)[0];
+            *(uint32_t*)(self->primitives + 8 * index + 4) = ((uint32_t*)dst)[1];
+            return 1;
+        case 0x800400: memcpy(self->primitives + 40 * index, dst, 0x28); return 1;
+        case 0x1800400:
+            *(uint32_t*)(self->primitives + 16 * index) = ((uint32_t*)dst)[0];
+            *(uint32_t*)(self->primitives + 16 * index + 4) = ((uint32_t*)dst)[1];
+            *(uint32_t*)(self->primitives + 16 * index + 8) = ((uint32_t*)dst)[2];
+            *(uint32_t*)(self->primitives + 16 * index + 12) = ((uint32_t*)dst)[3];
+            return 1;
+        case 0x1800081:
+            *(uint32_t*)(self->primitives + 18 * index) = ((uint32_t*)dst)[0];
+            *(uint32_t*)(self->primitives + 18 * index + 4) = ((uint32_t*)dst)[1];
+            *(uint32_t*)(self->primitives + 18 * index + 8) = ((uint32_t*)dst)[2];
+            *(uint32_t*)(self->primitives + 18 * index + 12) = ((uint32_t*)dst)[3];
+            *(uint16_t*)(self->primitives + 18 * index + 16) = *(uint16_t*)((uint8_t*)dst + 16);
+            return 1;
+        default: out("", ""); return 0;
+        }
+    }
+
+    // 0x00430F20
+    static int marni_poly_object_reset(MarniPolyObject* self)
+    {
+        *(uint32_t*)((uint8_t*)self + 80) = 0;
+        memset((uint8_t*)self + 56, 0, 0x18);
+        return polygon_object_dtor_0(self);
+    }
+
+    // 0x00430F40
+    static MarniPolyObject* marni_poly_object_ctor_base(MarniPolyObject* self, char* filename, int a3)
+    {
+        polygon_object_ctor(self);
+        self->vTbl = (void*)0x517430;
+        *(uint32_t*)((uint8_t*)self + 0x50) = 0;
+        memset((uint8_t*)self + 0x38, 0, 0x18);
+        if (filename)
+            interop::thiscall<int, void*, char*, int, int>(0x004309B0, self, filename, a3, -1);
+        return self;
+    }
+
+    // 0x00430260
+    static MarniPolyObject* tm2_object_ctor(MarniPolyObject* self, char* filename, int a3)
+    {
+        marni_poly_object_ctor_base(self, 0, 0);
+        self->vTbl = (void*)0x517424;
+        if (filename)
+            interop::thiscall<int, void*, char*, int, int>(0x004309B0, self, filename, a3, -1);
+        return self;
+    }
+
+    // 0x004302C0
+    static int tm2_object_dtor(MarniPolyObject* self)
+    {
+        self->vTbl = (void*)0x517424;
+        marni_poly_object_reset(self);
+        self->vTbl = (void*)0x517430;
+        marni_poly_object_reset(self);
+        polygon_object_dtor((PolygonObject*)self);
+        return 1;
+    }
+
+    // 0x0042FF00
+    static int tm2_object_adjust_texture_coordinates(MarniPolyObject* self, int a2, int a3)
+    {
+        if ((self->flags & 1) != 0)
+        {
+            uint32_t v6[3];
+            auto* v7 = (uint8_t*)v6 + 12;
+            for (uint32_t i = 0; i < self->primCount; ++i)
+            {
+                modify_primitive((PolygonObject*)self, (int)i, v6);
+                v7[1] += (uint8_t)a3;
+                v7[0] += (uint8_t)a2;
+                v7[3] += (uint8_t)a3;
+                v7[2] += (uint8_t)a2;
+                v7[5] += (uint8_t)a3;
+                v7[4] += (uint8_t)a2;
+                refer_primitive(self, (int)i, v6);
+            }
+            return 1;
+        }
+        else
+        {
+            out("", "");
+            return 0;
+        }
+    }
+
+    // 0x0042FFB0
+    static int tm2_object_in(MarniPolyObject* self, uint8_t* lpMem, int a3, int a4)
+    {
+        marni_poly_object_reset(self);
+
+        uint8_t* v5;
+        int v20;
+        int v22;
+        int v23;
+        int v6;
+        if (a3 < (int)(*((uint32_t*)lpMem + 2) / 2)
+            && (v5 = &lpMem[56 * a3 + 12],
+                v20 = *(uint32_t*)&lpMem[56 * a3 + 60],
+                v22 = *(uint32_t*)&lpMem[56 * a3 + 32],
+                *(uint32_t*)v5 == *(uint32_t*)&lpMem[56 * a3 + 40])
+            && *(uint32_t*)&lpMem[56 * a3 + 20] == *(uint32_t*)&lpMem[56 * a3 + 48]
+            && (v6 = *(uint32_t*)&lpMem[56 * a3 + 32] + 2 * v20,
+                v23 = v6,
+                create_work_0(
+                    self, *(uint32_t*)&lpMem[56 * a3 + 16], *(uint32_t*)&lpMem[56 * a3 + 24], v6, 1, 0, 3, 2, 0, 0, 0, 12)))
+        {
+            int v7 = 0;
+            if (a3 > 0)
+            {
+                uint8_t* v8 = lpMem + 32;
+                int lpMema = a3;
+                do
+                {
+                    int v9 = 3 * *(uint32_t*)v8;
+                    int v10 = v7 + 16 * *((uint32_t*)v8 + 7);
+                    v8 += 56;
+                    v7 = v10 + 4 * v9;
+                    --lpMema;
+                } while (lpMema);
+            }
+
+            uint8_t* v11 = &lpMem[v7 + *(uint32_t*)lpMem];
+            uint32_t* v12 = (uint32_t*)operator_new(28 * v6);
+            uint8_t* v13 = (uint8_t*)*((uint32_t*)v5 + 4);
+            uint8_t* lpMemb = (uint8_t*)v12;
+            if ((lpMem[4] & 1) == 0)
+                v13 = lpMem + 4 * ((uint32_t)((uintptr_t)v13 + 12) >> 2);
+
+            int v14 = v22;
+            if (v22 > 0)
+            {
+                do
+                {
+                    v12[0] = 872416777;
+                    v12[1] = *(uint32_t*)v11;
+                    v12[2] = *((uint32_t*)v11 + 1);
+                    v12[3] = *((uint32_t*)v11 + 2);
+                    v12[4] = *(uint32_t*)v13;
+                    v12[5] = *((uint32_t*)v13 + 1);
+                    v12[6] = *((uint32_t*)v13 + 2);
+                    v12 += 7;
+                    v11 += 12;
+                    v13 += 12;
+                    --v14;
+                } while (v14);
+            }
+
+            uint8_t* v15 = (uint8_t*)*((uint32_t*)v5 + 11);
+            if ((lpMem[4] & 1) == 0)
+                v15 = lpMem + 4 * ((uint32_t)((uintptr_t)v15 + 12) >> 2);
+
+            if (v20 > 0)
+            {
+                do
+                {
+                    v12[0] = 872416777;
+                    v12[1] = *(uint32_t*)v11;
+                    v12[2] = *((uint32_t*)v11 + 1);
+                    v12[3] = *((uint32_t*)v11 + 2);
+                    v12[4] = *(uint32_t*)v15;
+                    v12[5] = *((uint32_t*)v15 + 1);
+                    v12[6] = *((uint32_t*)v15 + 2);
+                    uint32_t* v16 = v12 + 7;
+                    v11 += 16;
+                    v15 += 16;
+                    v16[0] = 872416777;
+                    v12 = v16 + 7;
+                    v12[-6] = *((uint32_t*)v11 - 4) ^ (uint16_t)(*((uint32_t*)v11 - 4) ^ *((uint32_t*)v11 - 3));
+                    v12[-5] = *((uint32_t*)v11 - 3) ^ (uint16_t)(*((uint32_t*)v11 - 3) ^ *((uint32_t*)v11 - 1));
+                    v12[-4] = *((uint32_t*)v11 - 2);
+                    v12[-3] = *((uint32_t*)v15 - 3);
+                    v12[-2] = *((uint32_t*)v15 - 1);
+                    v12[-1] = *((uint32_t*)v15 - 2);
+                    --v20;
+                } while (v20);
+            }
+
+            uint8_t v24[28];
+            memcpy(v24, v5, sizeof(v24));
+            int v17 = *(uint32_t*)lpMem;
+            int v18 = *((uint32_t*)lpMem + 1);
+            *(uint32_t*)lpMem = 65;
+            *((uint32_t*)v5 + 5) = (uint32_t)v23;
+            if ((lpMem[4] & 1) != 0)
+                *((uint32_t*)v5 + 4) = (uint32_t)lpMemb;
+            else
+                *((uint32_t*)v5 + 4) = (uint32_t)(lpMemb - lpMem - 12);
+            if (!interop::thiscall<int, void*, int, void*, int>(0x00430A60, self, (int)lpMem, (char*)(2 * a3), a4))
+                out("", "");
+            *(uint32_t*)lpMem = v17;
+            *((uint32_t*)lpMem + 1) = v18;
+            memcpy(v5, v24, 0x1C);
+            operator_delete(lpMemb);
+            return 1;
+        }
+        else
+        {
+            out("", "");
+            return 0;
+        }
+    }
+
+    // 0x00404BB0
+    static uint32_t create_object_handle(Marni* self, void* a2, int a3)
+    {
+        if (!self->is_gpu_active)
+            return 0;
+
+        if (((*(uint8_t*)((char*)a2 + 52)) & 1) == 0 || self->polygons_count <= 1)
+        {
+            out("", "");
+            return 0;
+        }
+
+        int v5 = 1;
+        while (self->polygons[v5])
+        {
+            ++v5;
+            if (v5 >= (int)self->polygons_count)
+            {
+                out("", "");
+                return 0;
+            }
+        }
+
+        auto* v9 = (MarniPolyObject*)operator_new(0x38);
+        v9 = v9 ? polygon_object_ctor(v9) : nullptr;
+        self->polygons[v5] = (PolygonObject*)v9;
+        polygon_object_operator_eq(v9, (const MarniPolyObject*)a2);
+        v9->flags |= (uint32_t)a3;
+        return (uint32_t)v5;
+    }
+
+    // 0x00443F20
+    static void stream_elem_ctor(void* self)
+    {
+        ((uint32_t*)self)[15] = 0;
+        ((uint32_t*)self)[1] = 0;
+        *(uint32_t*)self = 0;
+        memset((uint8_t*)self + 0x0A, 0, 0x30);
+    }
+
+    // 0x00443370
+    static void stream_elem_dtor(void* self)
+    {
+        if (*(uint32_t*)self)
+        {
+            destroy_object(gGameTable.pMarni, *(uint32_t*)self);
+            *(uint32_t*)self = 0;
+        }
+        if (((uint32_t*)self)[1])
+        {
+            destroy_object(gGameTable.pMarni, ((uint32_t*)self)[1]);
+            ((uint32_t*)self)[1] = 0;
+        }
+        ((uint32_t*)self)[15] = 0;
+        ((uint32_t*)self)[1] = 0;
+        *(uint32_t*)self = 0;
+        memset((uint8_t*)self + 0x0A, 0, 0x30);
+    }
+
+    // 0x00443E80
+    static int stream_alloc(uint32_t* stream, int count)
+    {
+        uint8_t* v3 = (uint8_t*)stream[7];
+        if (v3)
+        {
+            cstd_vector_dtor(v3, 0x40, *((uint32_t*)v3 - 1), (void*)0x00443370);
+            operator_delete(v3 - 4);
+        }
+
+        void* v5 = operator_new((count << 6) + 4);
+        if (v5)
+        {
+            uint32_t* v6 = (uint32_t*)v5 + 1;
+            *(uint32_t*)v5 = (uint32_t)count;
+            cstd_vector_ctor(v6, 0x40, count, (void*)0x00443F20, (void*)0x00443370);
+            stream[7] = (uint32_t)v6;
+        }
+        else
+        {
+            stream[7] = 0;
+        }
+        stream[1] = (uint32_t)count;
+        return 0;
+    }
+
+    // 0x00503480
+    static int zapping_check(unsigned int a1, int a2)
+    {
+        int v3 = 0;
+        int v5 = a2;
+        if (a1 >= 2)
+            return 0;
+        if ((a2 & 1) != a1)
+            return 0;
+        if (a2 < 11)
+        {
+            v3 = 1;
+            if ((a2 & 1) != 0)
+            {
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_6))
+                {
+                    v5 = 9;
+                    goto label_9;
+                }
+            }
+            else
+            {
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_5))
+                    v5 = 8;
+                if (check_flag(FlagGroup::Zapping, FG_ZAPPING_15))
+                {
+                    v5 = 10;
+                    goto label_9;
+                }
+            }
+        }
+        if (v5 < 80 || v5 > 90)
+        {
+            if (!v3)
+                return 0;
+        }
+        else if ((v5 & 1) != 0)
+        {
+            if (check_flag(FlagGroup::Zapping, FG_ZAPPING_6))
+                v5 = 89;
+        }
+        else
+        {
+            if (check_flag(FlagGroup::Zapping, FG_ZAPPING_5))
+                v5 = 88;
+            if (check_flag(FlagGroup::Zapping, FG_ZAPPING_15))
+                v5 = 90;
+        }
+    label_9:
+        if (a1 == 0)
+            return (v5 == 10) || (v5 == 90);
+        return (v5 == 9) || (v5 == 89);
+    }
+
+    // 0x00445B30
+    static int tmd_object_kind(const uint8_t* pTmd, int index)
+    {
+        const uint8_t* entry = pTmd + 12 + 56 * index;
+        const uint32_t baseData = ((pTmd[4] & 1) == 0) ? (uint32_t)((uintptr_t)pTmd + 12) : 0;
+
+        uint32_t v4 = 0;
+        const int triCount = *(uint32_t*)(entry + 20);
+        if (triCount)
+        {
+            const uint8_t* v6 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 24) + 6);
+            for (int i = 0; i < triCount; i++)
+            {
+                v4 |= 1u << (*v6 & 3);
+                v6 += 12;
+            }
+        }
+
+        const int quadCount = *(uint32_t*)(entry + 48);
+        if (quadCount)
+        {
+            const uint8_t* v11 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 52) + 6);
+            for (int i = 0; i < quadCount; i++)
+            {
+                v4 |= 1u << (*v11 & 3);
+                v11 += 16;
+            }
+        }
+
+        switch (v4)
+        {
+        case 4:
+        case 8:
+        case 12: return 2;
+        case 6: return 1;
+        default: return 0;
+        }
+    }
+
+    // 0x0052517C
+    static const uint8_t sTmdObjectListData[92] = {
+        0x08, 0x03, 0x05, 0x06, 0xFF, 0x10, 0x00, 0x00, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A, 0xFF, 0x20, 0x00, 0xFF,
+        0x21, 0x07, 0xFF, 0x23, 0x00, 0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x10, 0x11, 0x12, 0xFF, 0x25, 0x00, 0x00, 0x03, 0x05, 0x07, 0x0D, 0x14, 0xFF, 0x2B, 0x06, 0x07, 0x08, 0x09, 0x0C,
+        0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0xFF, 0x2E, 0x00, 0x00, 0x00,
+        0x00, 0x01, 0x02, 0xFF, 0x2F, 0x00, 0x00, 0x00, 0x02, 0xFF, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    // 0x005251D8
+    static const int sTmdObjectListOffsets[48] = {
+        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  8,  18, -1, 20, -1, 24, -1, -1,
+        -1, -1, -1, 44, -1, -1, 52, 76, -1, -1, 52, 84, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    };
+
+    // 0x00445AE0
+    static int tmd_object_list_check(int listId, int objectId)
+    {
+        if (listId == 74)
+            return 1;
+        if (listId >= 16 && listId - 16 < 48)
+        {
+            const int offset = sTmdObjectListOffsets[listId - 16];
+            if (offset >= 0)
+            {
+                const int8_t* v3 = (const int8_t*)(sTmdObjectListData + offset);
+                int v4 = *v3;
+                if (v4 == -1)
+                    return 1;
+                if (v4 >= 0)
+                {
+                    while (v4 != objectId)
+                    {
+                        v4 = *++v3;
+                        if (v4 < 0)
+                            return 0;
+                    }
+                    return 1;
+                }
+            }
+        }
+        return 0;
+    }
+
+    // 0x004468E0
+    static int tmd_write_uv_table(const uint8_t* pTmd, int a2, int a3, uint8_t* a4)
+    {
+        const uint8_t* entry = pTmd + 12 + 56 * a2;
+        const uint32_t baseData = ((pTmd[4] & 1) == 0) ? (uint32_t)((uintptr_t)pTmd + 12) : 0;
+
+        memset(a4, 0xFF, 0x804);
+        *(uint32_t*)a4 = (uint32_t)a2;
+
+        uint16_t* triUv = (uint16_t*)(a4 + 4);
+        uint16_t* quadUv = (uint16_t*)(a4 + 0x404);
+        int v13 = 0;
+        uint8_t* result = nullptr;
+        for (int v6 = 0; v6 < 4; v6++)
+        {
+            uint8_t* v7 = (uint8_t*)(baseData + *(uint32_t*)(entry + 24));
+            uint32_t v8 = 0;
+            if (*(uint32_t*)(entry + 20) != 0)
+            {
+                for (; v8 < *(uint32_t*)(entry + 20); ++v8)
+                {
+                    if (v6 == ((*(uint32_t*)v7 >> 22) & 3) && (((1 << (*(uint8_t*)(v7 + 6) & 3))) & a3))
+                    {
+                        if (v8 < 0x200)
+                            triUv[v8] = (uint16_t)v13;
+                        ++v13;
+                    }
+                    v7 += 12;
+                }
+            }
+
+            result = (uint8_t*)(baseData + *(uint32_t*)(entry + 52));
+            uint32_t v11 = 0;
+            if (*(uint32_t*)(entry + 48) != 0)
+            {
+                for (; v11 < *(uint32_t*)(entry + 48); ++v11)
+                {
+                    if (v6 == ((*(uint32_t*)result >> 22) & 3) && (((1 << (result[6] & 3))) & a3))
+                    {
+                        if (v11 < 0x200)
+                            quadUv[v11] = (uint16_t)v13;
+                        v13 += 2;
+                    }
+                    result += 16;
+                }
+            }
+        }
+        return (int)(intptr_t)result;
+    }
+
+    struct PrimRecord
+    {
+        uint16_t v0; // +0x00
+        uint16_t v1; // +0x02
+        uint16_t v2; // +0x04
+        uint16_t n0; // +0x06
+        uint16_t n1; // +0x08
+        uint16_t n2; // +0x0A
+        uint8_t u0;  // +0x0C
+        uint8_t u1;  // +0x0D
+        uint8_t u2;  // +0x0E
+        uint8_t u3;  // +0x0F
+        uint8_t u4;  // +0x10
+        uint8_t u5;  // +0x11
+    };
+    static_assert(sizeof(PrimRecord) == 0x12);
+
+    // 0x00445BF0
+    static uint32_t tmd_create_poly_object(const uint8_t* pTmd, int entryIndex, int a3, uint16_t* a4, int a5)
+    {
+        MarniPolyObject obj;
+        tm2_object_ctor(&obj, nullptr, 0);
+
+        if (a3 != 1 && a3 != 2 && a3 != 4 && a3 != 8 && a3 != 3 && a3 != 6 && a3 != 12)
+        {
+            tm2_object_dtor(&obj);
+            return 0;
+        }
+
+        const uint8_t* entry = pTmd + 12 + 56 * entryIndex;
+        const uint32_t baseData = ((pTmd[4] & 1) == 0) ? (uint32_t)((uintptr_t)pTmd + 12) : 0;
+
+        int v5 = 0;
+        const int triCount = *(uint32_t*)(entry + 20);
+        if (triCount)
+        {
+            const uint8_t* v11 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 24) + 6);
+            for (int i = 0; i < triCount; i++)
+            {
+                if ((1 << (*v11 & 3)) & a3)
+                    ++v5;
+                v11 += 12;
+            }
+        }
+        const int quadCount = *(uint32_t*)(entry + 48);
+        if (quadCount)
+        {
+            const uint8_t* v13 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 52) + 6);
+            for (int i = 0; i < quadCount; i++)
+            {
+                if ((1 << (*v13 & 3)) & a3)
+                    v5 += 2;
+                v13 += 16;
+            }
+        }
+
+        if (v5 == 0)
+        {
+            tm2_object_dtor(&obj);
+            return 0;
+        }
+
+        const int vertexCount = *(uint32_t*)(entry + 4);
+        const int normalCount = *(uint32_t*)(entry + 12);
+        create_work(&obj, vertexCount, normalCount, v5, 0x1B00081);
+
+        const int16_t* v16 = *(const int16_t**)(entry + 0);
+        for (int i = 0; i < vertexCount; i++)
+        {
+            modify_vertex(&obj, i, (float)v16[0], (float)-v16[1], (float)v16[2]);
+            v16 += 4;
+        }
+        const int16_t* v18 = *(const int16_t**)(entry + 8);
+        for (int j = 0; j < normalCount; j++)
+        {
+            modify_normal(
+                &obj,
+                j,
+                (float)((double)v18[0] * 0.000244140625),
+                (float)((double)-v18[1] * 0.000244140625),
+                (float)((double)v18[2] * 0.000244140625));
+            v18 += 4;
+        }
+
+        int v20 = 0;
+        int v67[4] = { 0, 0, 0, 0 };
+        for (int v51 = 0; v51 < 4; v51++)
+        {
+            v67[v51] = 0;
+            const int triCount2 = *(uint32_t*)(entry + 20);
+            const int16_t* v22 = (const int16_t*)(baseData + *(uint32_t*)(entry + 16));
+            const uint8_t* v23 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 24));
+            for (int v64 = 0; v64 < triCount2; ++v64)
+            {
+                const uint8_t v25 = v23[6] & 3;
+                if (v51 == ((*(const uint32_t*)v23 >> 22) & 3) && ((1 << v25) & a3))
+                {
+                    PrimRecord rec;
+                    rec.v0 = v22[1];
+                    rec.v1 = v22[3];
+                    rec.v2 = v22[5];
+                    rec.n0 = v22[0];
+                    rec.n1 = v22[2];
+                    rec.n2 = v22[4];
+                    const int v26 = v25 << 7;
+                    rec.u0 = (uint8_t)(v26 + v23[0]);
+                    rec.u1 = (uint8_t)((*(const uint32_t*)v23 >> 8) & 0xFF);
+                    rec.u2 = (uint8_t)(v26 + v23[4]);
+                    rec.u3 = (uint8_t)((*((const uint32_t*)v23 + 1) >> 8) & 0xFF);
+                    rec.u4 = (uint8_t)(v26 + v23[8]);
+                    rec.u5 = (uint8_t)((*((const uint32_t*)v23 + 2) >> 8) & 0xFF);
+                    refer_primitive(&obj, v20++, &rec);
+                    ++v67[v51];
+                }
+                v22 += 6;
+                v23 += 12;
+            }
+
+            const int quadCount2 = *(uint32_t*)(entry + 48);
+            const int16_t* v28 = (const int16_t*)(baseData + *(uint32_t*)(entry + 44));
+            const uint8_t* v29 = (const uint8_t*)(baseData + *(uint32_t*)(entry + 52));
+            for (int v64 = 0; v64 < quadCount2; ++v64)
+            {
+                if (v51 == ((*(const uint32_t*)v29 >> 22) & 3) && ((1 << (v29[6] & 3)) & a3))
+                {
+                    const int v32 = (v29[6] & 1) << 7;
+                    PrimRecord rec;
+                    rec.v0 = v28[1];
+                    rec.v1 = v28[3];
+                    rec.v2 = v28[5];
+                    rec.n0 = v28[0];
+                    rec.n1 = v28[2];
+                    rec.n2 = v28[4];
+                    rec.u0 = (uint8_t)(v32 + v29[0]);
+                    rec.u1 = (uint8_t)((*(const uint32_t*)v29 >> 8) & 0xFF);
+                    rec.u2 = (uint8_t)(v32 + v29[4]);
+                    rec.u3 = (uint8_t)((*((const uint32_t*)v29 + 1) >> 8) & 0xFF);
+                    rec.u4 = (uint8_t)(v32 + v29[8]);
+                    rec.u5 = (uint8_t)((*((const uint32_t*)v29 + 2) >> 8) & 0xFF);
+                    refer_primitive(&obj, v20, &rec);
+
+                    rec.v0 = v28[3];
+                    rec.v1 = v28[7];
+                    rec.v2 = v28[5];
+                    rec.n0 = v28[2];
+                    rec.n1 = v28[6];
+                    rec.n2 = v28[4];
+                    rec.u0 = (uint8_t)(v32 + v29[4]);
+                    rec.u1 = (uint8_t)((*((const uint32_t*)v29 + 1) >> 8) & 0xFF);
+                    rec.u2 = (uint8_t)(v32 + v29[12]);
+                    rec.u3 = (uint8_t)((*((const uint32_t*)v29 + 3) >> 8) & 0xFF);
+                    rec.u4 = (uint8_t)(v32 + v29[8]);
+                    rec.u5 = (uint8_t)((*((const uint32_t*)v29 + 2) >> 8) & 0xFF);
+                    refer_primitive(&obj, v20 + 1, &rec);
+                    v20 += 2;
+                    v67[v51] += 2;
+                }
+                v28 += 8;
+                v29 += 16;
+            }
+        }
+
+        uint32_t v35 = 0;
+        uint16_t* v36 = a4;
+        for (uint32_t v34 = 0; v34 < 4; v34++)
+        {
+            const int v37 = v67[v34];
+            if (v37)
+            {
+                v36[0] = (uint16_t)v34;
+                v36[2] = (uint16_t)v37;
+                ++v35;
+                v36 += 3;
+            }
+        }
+        a4[3 * v35 - 1] = 0;
+
+        if (a5)
+            tm2_object_adjust_texture_coordinates(&obj, a5, 0);
+        const uint32_t objectHandle = create_object_handle(gGameTable.pMarni, &obj, 0);
+        tm2_object_dtor(&obj);
+        return objectHandle;
     }
 
     // 0x0040E9D0
@@ -5329,13 +6317,373 @@ namespace openre::marni
         return 1;
     }
 
+    static inline int draw_line_clamp(int value)
+    {
+        return value > 255 ? 255 : value;
+    }
+
+    // Pack 8-bit R/G/B channels into a 0x00RRGGBB color (matches the original
+    // byte packing: low byte = blue, byte 1 = green, byte 2 = red).
+    static inline uint32_t draw_line_pack_rgb(int r, int g, int b)
+    {
+        return ((uint32_t)(uint8_t)r << 16) | ((uint32_t)(uint8_t)g << 8) | (uint32_t)(uint8_t)b;
+    }
+
     // 0x004C2C30 WHY DO WE JUMP HERE IN THIS FILE?!?!?
     static void draw_line(
         MarniSurface* surface, int x0, int y0, int x1, int y1, int a5, int a6, int width, int height, int color0, int color1,
         int flg)
     {
-        interop::call<void, MarniSurface*, int, int, int, int, int, int, int, int, int, int, int>(
-            0x004C2C30, surface, x0, y0, x1, y1, a5, a6, width, height, color0, color1, flg);
+        if (!surface->bOpen)
+        {
+            out("the Bits was invalid. triangle_texture", "");
+            return;
+        }
+
+        // Channel bases from the start color (0x00RRGGBB) and per-channel deltas
+        // towards the end color.
+        const int rBase = (color0 >> 16) & 0xFF;
+        const int gBase = (color0 >> 8) & 0xFF;
+        const int bBase = color0 & 0xFF;
+        const int rDiff = ((color1 >> 16) & 0xFF) - rBase;
+        const int gDiff = ((color1 >> 8) & 0xFF) - gBase;
+        const int bDiff = (uint8_t)color1 - (uint8_t)bBase;
+
+        // Axis-aligned step directions and per-axis lengths.
+        const int dx = x1 >= x0 ? x1 - x0 : x0 - x1;
+        const int dy = y1 >= y0 ? y1 - y0 : y0 - y1;
+        const int stepX = dx != 0 ? 2 * (x1 > x0) - 1 : 0;
+        const int stepY = dy != 0 ? 2 * (y1 > y0) - 1 : 0;
+
+        // Running line position (the original swaps the values into y1/x1).
+        int lineX = x0;
+        int lineY = y0;
+
+        if ((flg & 2) != 0)
+        {
+            // ---- Additive path: accumulate the gradient color into the surface.
+            if (dx == 0 && dy == 0)
+            {
+                // Single point: paint the doubled 2x2 block or a lone pixel.
+                if ((flg & 1) != 0)
+                {
+                    const int px = 2 * x0;
+                    const int py = 2 * y0;
+                    uint32_t pixel;
+
+                    surface_get_current_color(surface, px, py, &pixel);
+                    int r = draw_line_clamp(rBase + ((pixel >> 16) & 0xFF));
+                    int g = draw_line_clamp(gBase + ((pixel >> 8) & 0xFF));
+                    int b = draw_line_clamp(bBase + (uint8_t)pixel);
+                    surface_set_current_color(surface, px, py, draw_line_pack_rgb(r, g, b), 0);
+
+                    surface_get_current_color(surface, px + 1, py, &pixel);
+                    r = draw_line_clamp(rBase + ((pixel >> 16) & 0xFF));
+                    g = draw_line_clamp(gBase + ((pixel >> 8) & 0xFF));
+                    b = draw_line_clamp(bBase + (uint8_t)pixel);
+                    surface_set_current_color(surface, px + 1, py, draw_line_pack_rgb(r, g, b), 0);
+
+                    surface_get_current_color(surface, px, py + 1, &pixel);
+                    r = draw_line_clamp(rBase + ((pixel >> 16) & 0xFF));
+                    g = draw_line_clamp(gBase + ((pixel >> 8) & 0xFF));
+                    b = draw_line_clamp(bBase + (uint8_t)pixel);
+                    surface_set_current_color(surface, px, py + 1, draw_line_pack_rgb(r, g, b), 0);
+
+                    surface_get_current_color(surface, px + 1, py + 1, &pixel);
+                    r = draw_line_clamp(rBase + ((pixel >> 16) & 0xFF));
+                    g = draw_line_clamp(gBase + ((pixel >> 8) & 0xFF));
+                    b = draw_line_clamp(bBase + (uint8_t)pixel);
+                    surface_set_current_color(surface, px + 1, py + 1, draw_line_pack_rgb(r, g, b), 0);
+                }
+                else
+                {
+                    uint32_t pixel;
+                    surface_get_current_color(surface, x0, y0, &pixel);
+                    int r = draw_line_clamp(rBase + ((pixel >> 16) & 0xFF));
+                    int g = draw_line_clamp(gBase + ((pixel >> 8) & 0xFF));
+                    int b = draw_line_clamp(bBase + (uint8_t)pixel);
+                    surface_set_current_color(surface, x0, y0, draw_line_pack_rgb(r, g, b), 0);
+                }
+                return;
+            }
+
+            if (dx >= dy)
+            {
+                // ---- X-major.
+                int err = -2 * dy;
+                if (dx > 0)
+                {
+                    const int doubled = flg & 1;
+                    const int step = 2 * dy;
+                    int rAcc = 0;
+                    int gAcc = 0;
+                    int bAcc = 0;
+                    int xx = 2 * x0;
+                    int yy = 2 * y0;
+                    int count = dx;
+
+                    do
+                    {
+                        uint32_t pixel;
+                        if (doubled)
+                        {
+                            // 2x2 block, each pixel accumulating on the previous.
+                            surface_get_current_color(surface, xx, yy, &pixel);
+                            int r = draw_line_clamp(rAcc / dx + rBase + ((pixel >> 16) & 0xFF));
+                            int g = draw_line_clamp(gAcc / dx + gBase + ((pixel >> 8) & 0xFF));
+                            int b = draw_line_clamp(bAcc / dx + bBase + (uint8_t)pixel);
+                            surface_set_current_color(surface, xx, yy, draw_line_pack_rgb(r, g, b), 0);
+
+                            surface_get_current_color(surface, xx + 1, yy, &pixel);
+                            r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                            g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                            b = draw_line_clamp(b + (uint8_t)pixel);
+                            surface_set_current_color(surface, xx + 1, yy, draw_line_pack_rgb(r, g, b), 0);
+
+                            surface_get_current_color(surface, xx, yy + 1, &pixel);
+                            r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                            g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                            b = draw_line_clamp(b + (uint8_t)pixel);
+                            surface_set_current_color(surface, xx, yy + 1, draw_line_pack_rgb(r, g, b), 0);
+
+                            surface_get_current_color(surface, xx + 1, yy + 1, &pixel);
+                            r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                            g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                            b = draw_line_clamp(b + (uint8_t)pixel);
+                            surface_set_current_color(surface, xx + 1, yy + 1, draw_line_pack_rgb(r, g, b), 0);
+                        }
+                        else
+                        {
+                            surface_get_current_color(surface, lineX, lineY, &pixel);
+                            int r = draw_line_clamp(rAcc / dx + rBase + ((pixel >> 16) & 0xFF));
+                            int g = draw_line_clamp(gAcc / dx + gBase + ((pixel >> 8) & 0xFF));
+                            int b = draw_line_clamp(bAcc / dx + bBase + (uint8_t)pixel);
+                            surface_set_current_color(surface, lineX, lineY, draw_line_pack_rgb(r, g, b), 0);
+                        }
+
+                        const bool neg = (step + err) < 0;
+                        lineX += stepX;
+                        xx += 2 * stepX;
+                        err += step;
+                        if (!neg)
+                        {
+                            lineY += stepY;
+                            yy += 2 * stepY;
+                            err -= 2 * dx;
+                        }
+                        gAcc += gDiff;
+                        rAcc += rDiff;
+                        bAcc += bDiff;
+                        --count;
+                    } while (count != 0);
+                }
+                return;
+            }
+
+            // ---- Y-major.
+            int err = -2 * dx;
+            if (dy > 0)
+            {
+                const int savedDoubled = flg & 1;
+                int doubled = savedDoubled;
+                const int step = 2 * dx;
+                int rAcc = 0;
+                int gAcc = 0;
+                int bAcc = 0;
+                int xx = 2 * x0;
+                int yy = 2 * y0;
+                int count = dy;
+
+                while (true)
+                {
+                    uint32_t pixel;
+                    if (doubled)
+                    {
+                        surface_get_current_color(surface, xx, yy, &pixel);
+                        int r = draw_line_clamp(rAcc / dy + rBase + ((pixel >> 16) & 0xFF));
+                        int g = draw_line_clamp(gAcc / dy + gBase + ((pixel >> 8) & 0xFF));
+                        int b = draw_line_clamp(bAcc / dy + bBase + (uint8_t)pixel);
+                        surface_set_current_color(surface, xx, yy, draw_line_pack_rgb(r, g, b), 0);
+
+                        surface_get_current_color(surface, xx + 1, yy, &pixel);
+                        r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                        g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                        b = draw_line_clamp(b + (uint8_t)pixel);
+                        surface_set_current_color(surface, xx + 1, yy, draw_line_pack_rgb(r, g, b), 0);
+
+                        surface_get_current_color(surface, xx, yy + 1, &pixel);
+                        r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                        g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                        b = draw_line_clamp(b + (uint8_t)pixel);
+                        surface_set_current_color(surface, xx, yy + 1, draw_line_pack_rgb(r, g, b), 0);
+
+                        surface_get_current_color(surface, xx + 1, yy + 1, &pixel);
+                        r = draw_line_clamp(r + ((pixel >> 16) & 0xFF));
+                        g = draw_line_clamp(g + ((pixel >> 8) & 0xFF));
+                        b = draw_line_clamp(b + (uint8_t)pixel);
+                        surface_set_current_color(surface, xx + 1, yy + 1, draw_line_pack_rgb(r, g, b), 0);
+                    }
+                    else
+                    {
+                        surface_get_current_color(surface, lineX, lineY, &pixel);
+                        int r = draw_line_clamp(rAcc / dy + rBase + ((pixel >> 16) & 0xFF));
+                        int g = draw_line_clamp(gAcc / dy + gBase + ((pixel >> 8) & 0xFF));
+                        int b = draw_line_clamp(bAcc / dy + bBase + (uint8_t)pixel);
+                        surface_set_current_color(surface, lineX, lineY, draw_line_pack_rgb(r, g, b), 0);
+                    }
+
+                    yy += 2 * stepY;
+                    const bool neg = (step + err) < 0;
+                    lineY += stepY;
+                    err += step;
+                    if (!neg)
+                    {
+                        xx += 2 * stepX;
+                        lineX += stepX;
+                        err -= 2 * dy;
+                    }
+                    gAcc += gDiff;
+                    rAcc += rDiff;
+                    bAcc += bDiff;
+                    --count;
+                    if (count == 0)
+                        break;
+                    doubled = savedDoubled;
+                }
+            }
+            return;
+        }
+
+        // ---- Non-additive path: solid gradient color written directly.
+        if (dx == 0 && dy == 0)
+        {
+            // Single point: strip the alpha nibble of the start color.
+            const uint32_t color = color0 & 0xFFFFFF;
+            if ((flg & 1) != 0)
+            {
+                const int px = 2 * x0;
+                const int py = 2 * y0;
+                surface_set_current_color(surface, px, py, color, 0);
+                surface_set_current_color(surface, px + 1, py, color, 0);
+                surface_set_current_color(surface, px, py + 1, color, 0);
+                surface_set_current_color(surface, px + 1, py + 1, color, 0);
+            }
+            else
+            {
+                surface_set_current_color(surface, x0, y0, color, 0);
+            }
+            return;
+        }
+
+        if (dx < dy)
+        {
+            // ---- Y-major (non-additive).
+            int err = -2 * dx;
+            if (dy > 0)
+            {
+                const int doubled = flg & 1;
+                const int step = 2 * dx;
+                int rAcc = 0;
+                int gAcc = 0;
+                int bAcc = 0;
+                int xx = 2 * x0;
+                int ypos = 2 * y0;
+                int count = dy;
+
+                while (true)
+                {
+                    // Blue is truncated to a byte, green is summed in 16 bits
+                    // before shifting, red is shifted and masked to 0xFF0000.
+                    const uint32_t color = (uint32_t)(uint8_t)(bBase + bAcc / dy)
+                        | (uint32_t)(uint16_t)(((uint16_t)gBase + (uint16_t)(gAcc / dy)) << 8)
+                        | ((uint32_t)((rBase + rAcc / dy) << 16) & 0xFF0000);
+
+                    if (doubled)
+                    {
+                        surface_set_current_color(surface, xx, ypos, color, 0);
+                        surface_set_current_color(surface, xx + 1, ypos, color, 0);
+                        surface_set_current_color(surface, xx, ypos + 1, color, 0);
+                        surface_set_current_color(surface, xx + 1, ypos + 1, color, 0);
+                        rAcc = 0;
+                    }
+                    else
+                    {
+                        surface_set_current_color(surface, lineX, lineY, color, 0);
+                    }
+
+                    const bool neg = (step + err) < 0;
+                    const int saved = step + err;
+                    lineY += stepY;
+                    ypos += 2 * stepY;
+                    err += step;
+                    if (!neg)
+                    {
+                        lineX += stepX;
+                        xx += 2 * stepX;
+                        err = saved - 2 * dy;
+                    }
+                    rAcc += rDiff;
+                    gAcc += gDiff;
+                    bAcc += bDiff;
+                    --count;
+                    if (count == 0)
+                        break;
+                }
+            }
+            return;
+        }
+
+        // ---- X-major (non-additive).
+        int err = -2 * dy;
+        if (dx > 0)
+        {
+            const int doubled = flg & 1;
+            const int step = 2 * dy;
+            int rAcc = 0;
+            int gAcc = 0;
+            int bAcc = 0;
+            int xx = 2 * x0;
+            int ypos = 2 * y0;
+            int count = dx;
+
+            while (true)
+            {
+                const uint32_t color = (uint32_t)(uint8_t)(bBase + bAcc / dx)
+                    | (uint32_t)(uint16_t)(((uint16_t)gBase + (uint16_t)(gAcc / dx)) << 8)
+                    | ((uint32_t)((rBase + rAcc / dx) << 16) & 0xFF0000);
+
+                if (doubled)
+                {
+                    surface_set_current_color(surface, xx, ypos, color, 0);
+                    surface_set_current_color(surface, xx + 1, ypos, color, 0);
+                    surface_set_current_color(surface, xx, ypos + 1, color, 0);
+                    surface_set_current_color(surface, xx + 1, ypos + 1, color, 0);
+                    rAcc = 0;
+                }
+                else
+                {
+                    surface_set_current_color(surface, lineX, lineY, color, 0);
+                }
+
+                const bool neg = (step + err) < 0;
+                const int saved = step + err;
+                lineX += stepX;
+                xx += 2 * stepX;
+                err += step;
+                if (!neg)
+                {
+                    lineY += stepY;
+                    ypos += 2 * stepY;
+                    err = saved - 2 * dx;
+                }
+                rAcc += rDiff;
+                gAcc += gDiff;
+                bAcc += bDiff;
+                --count;
+                if (count == 0)
+                    break;
+            }
+        }
     }
 
     // GPU-backend path for MARNI line primitives (type 17/18: status-screen
@@ -9122,13 +10470,1088 @@ namespace openre::marni
         }
     }
 
-    // 0x0042F1D0
-    static void tex_spr(
-        MarniSurface2* surface, void* a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12,
-        int a13, int a14, int a15, int a16)
+    // tex_spr rasterizer state (shared globals written by TexSpr, consumed by the texspr_* routines)
+    static int& s_uRange = *(int*)0x662A08; // srcU1 - srcU0
+    static int& s_vRange = *(int*)0x662A0C; // srcV1 - srcV0
+    static uint8_t*& s_dstBase = *(uint8_t**)0x662A10;
+    static uint8_t*& s_srcBase = *(uint8_t**)0x662A14;
+    static MarniSurface2*& s_dstSurface = *(MarniSurface2**)0x662A18;
+    static int& s_color = *(int*)0x662A1C; // 0xAARRGGBB blend color
+    static int& s_dstWidth = *(int*)0x662E20;
+    static int& s_dstHeight = *(int*)0x662E24;
+    static uint16_t*& s_palette = *(uint16_t**)0x662E28;
+    static MarniSurface2*& s_srcSurface = *(MarniSurface2**)0x662E2C;
+    static int& s_rowCount = *(int*)0x662E30; // clipped height; adjusted by the rasterizers
+    static int& s_clipWidth = *(int*)0x662E34;
+    static int& s_srcU0 = *(int*)0x662E38;
+    static int& s_srcV0 = *(int*)0x662E3C;
+    static int& s_pitchShift = *(int*)0x662E40;
+    static int& s_clipLeft = *(int*)0x662E44;
+    static int& s_y = *(int*)0x662E48; // current destination y
+    static int& s_clipLeftOff = *(int*)0x662E4C;
+    static int& s_clipTopOff = *(int*)0x662E50;
+
+    static int& s_lutInit = *(int*)0x660A00;
+    static auto* s_xTable = (int*)0x660A08;         // destination x -> source x lookup
+    static auto* s_gammaTable = (uint8_t*)0x650A00; // 256x256 gamma ramp
+    static auto* s_lutR = (uint16_t*)0x64CA00;      // 565/555 red scaling LUT (256x32 words)
+    static auto* s_lutG = (uint16_t*)0x644A00;      // green
+    static auto* s_lutB = (uint16_t*)0x648A00;      // blue
+    static auto* s_paletteScratch = (uint16_t*)0x662A20;
+
+    // 0x00413630
+    static uint8_t* surface_calc_pal_address(MarniSurface2* self, int x, int y)
     {
-        return interop::call<void, MarniSurface2*, void*, int, int, int, int, int, int, int, int, int, int, int, int, int, int>(
-            0x0042F1D0, surface, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16);
+        if (!self->var_28)
+            return 0;
+        if (!self->bOpen || !self->bLocked)
+        {
+            out("this Bits is invalid but you are trying to use the service.", "MarniBits::CalcPalAddress");
+            return 0;
+        }
+        int palCount = 1 << self->bpp;
+        if (x >= palCount || y >= self->pal_cnt || x < 0 || y < 0)
+        {
+            out("the coordinate you specified is wrong...x=%d y=%d MarniBits::CalcPalAddress", "");
+            return 0;
+        }
+        if (self->var_25 == 16)
+            return (uint8_t*)self->pPalette + 2 * (x + y * palCount);
+        if (self->var_25 != 32)
+        {
+            out("this BitPixel isn't supported...%d MarniBits::CalcPalAddress", "");
+            return 0;
+        }
+        return (uint8_t*)self->pPalette + 4 * (x + y * palCount);
+    }
+
+    // Source row byte offset for a given interpolated row.
+    static int texspr_src_row(int row)
+    {
+        if (s_pitchShift)
+            return (s_srcV0 + row) << s_pitchShift;
+        return s_srcSurface->pitch * (s_srcV0 + row);
+    }
+
+    // Destination y for a given row index.
+    static int texspr_src_y(int row)
+    {
+        return s_srcV0 + s_vRange * (row + s_clipTopOff) / s_dstHeight;
+    }
+
+    // 0x0042D4D0
+    static int texspr_copy()
+    {
+        for (int row = 0; row < s_rowCount; ++row)
+        {
+            int srcY = texspr_src_y(row);
+            int xOff = s_clipLeftOff;
+            int dstX = s_clipLeft;
+            int endX = s_clipWidth + xOff;
+            while (xOff < endX)
+            {
+                uint32_t pixel;
+                surface_get_current_color(s_srcSurface, s_xTable[xOff], srcY, &pixel);
+                surface_set_current_color(s_dstSurface, dstX, s_y, pixel, 0);
+                ++xOff;
+                ++dstX;
+            }
+            ++s_y;
+        }
+        return s_rowCount;
+    }
+
+    // 0x0042DA80
+    static int texspr_copy_alpha()
+    {
+        for (int row = 0; row < s_rowCount; ++row)
+        {
+            int srcY = texspr_src_y(row);
+            int xOff = s_clipLeftOff;
+            int dstX = s_clipLeft;
+            int endX = s_clipWidth + xOff;
+            while (xOff < endX)
+            {
+                uint32_t pixel;
+                surface_get_current_color(s_srcSurface, s_xTable[xOff], srcY, &pixel);
+                if (pixel)
+                    surface_set_current_color(s_dstSurface, dstX, s_y, pixel, 0);
+                ++xOff;
+                ++dstX;
+            }
+            ++s_y;
+        }
+        return s_rowCount;
+    }
+
+    // 0x0042D910
+    static int texspr_copy_modulate_alpha()
+    {
+        for (int row = 0; row < s_rowCount; ++row)
+        {
+            int srcY = texspr_src_y(row);
+            int xOff = s_clipLeftOff;
+            int dstX = s_clipLeft;
+            int endX = s_clipWidth + xOff;
+            while (xOff < endX)
+            {
+                uint32_t pixel;
+                surface_get_current_color(s_srcSurface, s_xTable[xOff], srcY, &pixel);
+                if (pixel)
+                {
+                    int r = ((pixel >> 16) & 0xFF) * ((s_color >> 16) & 0xFF) >> 7;
+                    int g = ((s_color >> 8) & 0xFF) * ((pixel >> 8) & 0xFF) >> 7;
+                    int b = (pixel & 0xFF) * (s_color & 0xFF) >> 7;
+                    if (r > 255)
+                        r = 255;
+                    if (g > 255)
+                        g = 255;
+                    if (b > 255)
+                        b = 255;
+                    uint32_t outColor = (uint32_t)b | ((uint32_t)(g | (r << 8)) << 8);
+                    surface_set_current_color(s_dstSurface, dstX, s_y, outColor, 0);
+                }
+                ++xOff;
+                ++dstX;
+            }
+            ++s_y;
+        }
+        return s_rowCount;
+    }
+
+    // 0x0042D590
+    static int texspr_copy_modulate_avg()
+    {
+        for (int row = 0; row < s_rowCount; ++row)
+        {
+            int srcY = texspr_src_y(row);
+            int xOff = s_clipLeftOff;
+            int dstX = s_clipLeft;
+            int endX = s_clipWidth + xOff;
+            while (xOff < endX)
+            {
+                uint32_t pixel;
+                uint32_t dstColor;
+                surface_get_current_color(s_srcSurface, s_xTable[xOff], srcY, &pixel);
+                surface_get_current_color(s_dstSurface, dstX, s_y, &dstColor);
+                if (pixel)
+                {
+                    int r = ((pixel >> 16) & 0xFF) * ((s_color >> 16) & 0xFF) >> 7;
+                    int g = ((s_color >> 8) & 0xFF) * ((pixel >> 8) & 0xFF) >> 7;
+                    int b = (pixel & 0xFF) * (s_color & 0xFF) >> 7;
+                    if (r > 255)
+                        r = 255;
+                    if (g > 255)
+                        g = 255;
+                    if (b > 255)
+                        b = 255;
+                    uint32_t outColor = (uint32_t)(uint8_t)(b / 2 + ((dstColor >> 1) & 0x7F))
+                        | ((uint32_t)(uint16_t)(g / 2 + ((dstColor >> 9) & 0x7F)) << 8)
+                        | (((r / 2 + ((dstColor >> 17) & 0x7F)) << 16) & 0xFF0000);
+                    surface_set_current_color(s_dstSurface, dstX, s_y, outColor, 0);
+                }
+                ++xOff;
+                ++dstX;
+            }
+            ++s_y;
+        }
+        return s_rowCount;
+    }
+
+    // 0x0042D760
+    static int texspr_copy_additive()
+    {
+        for (int row = 0; row < s_rowCount; ++row)
+        {
+            int srcY = texspr_src_y(row);
+            int xOff = s_clipLeftOff;
+            int dstX = s_clipLeft;
+            int endX = s_clipWidth + xOff;
+            while (xOff < endX)
+            {
+                uint32_t pixel;
+                uint32_t dstColor;
+                surface_get_current_color(s_srcSurface, s_xTable[xOff], srcY, &pixel);
+                surface_get_current_color(s_dstSurface, dstX, s_y, &dstColor);
+                if (pixel)
+                {
+                    int r = ((dstColor >> 16) & 0xFF) + (((pixel >> 16) & 0xFF) * ((s_color >> 16) & 0xFF) >> 7);
+                    int g = ((dstColor >> 8) & 0xFF) + (((s_color >> 8) & 0xFF) * ((pixel >> 8) & 0xFF) >> 7);
+                    int b = (dstColor & 0xFF) + ((pixel & 0xFF) * (s_color & 0xFF) >> 7);
+                    if (r > 255)
+                        r = 255;
+                    if (g > 255)
+                        g = 255;
+                    if (b > 255)
+                        b = 255;
+                    uint32_t outColor = (uint32_t)b | ((uint32_t)(g | (r << 8)) << 8);
+                    surface_set_current_color(s_dstSurface, dstX, s_y, outColor, 0);
+                }
+                ++xOff;
+                ++dstX;
+            }
+            ++s_y;
+        }
+        return s_rowCount;
+    }
+
+    // 0x0042DB40
+    static int texspr_pal_copy()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                        *dst = palette[idx];
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042EE30
+    static int texspr_pal_copy_565()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    *dst++ = palette[*(uint8_t*)(srcPtr + xOff)];
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042DC80
+    static int texspr_pal_halfadd_565_1px()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                        *dst = (uint16_t)(((*dst >> 1) & 0x7BEF) + ((palette[idx] >> 1) & 0x7BEF));
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E090
+    static int texspr_pal_halfadd_555_1px()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                        *dst = (uint16_t)(((*dst >> 1) & 0x3DEF) + ((palette[idx] >> 1) & 0x3DEF));
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E9B0
+    static int texspr_pal_add_565()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int pal = palette[idx];
+                        int dstv = *dst;
+                        int r = (pal & 0xF800) + (dstv & 0xF800);
+                        if (r > 0xF800)
+                            r = 0xF800;
+                        int g = (pal & 0x7E0) + (dstv & 0x7E0);
+                        if (g > 0x7E0)
+                            g = 0x7E0;
+                        int b = (pal & 0x1F) + (dstv & 0x1F);
+                        if (b > 0x1F)
+                            b = 0x1F;
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042EB60
+    static int texspr_pal_add_555()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int pal = palette[idx];
+                        int dstv = *dst;
+                        int r = (pal & 0x7C00) + (dstv & 0x7C00);
+                        if (r > 0x7C00)
+                            r = 0x7C00;
+                        int g = (pal & 0x3E0) + (dstv & 0x3E0);
+                        if (g > 0x3E0)
+                            g = 0x3E0;
+                        int b = (pal & 0x1F) + (dstv & 0x1F);
+                        if (b > 0x1F)
+                            b = 0x1F;
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E1D0
+    static int texspr_pal_halfadd_565()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int dstv = *dst;
+                        int q = palette[idx] >> 2;
+                        int r = (q & 0x3800) + (dstv & 0xF800);
+                        if (r > 0xF800)
+                            r = 0xF800;
+                        int g = (dstv & 0x7E0) + (q & 0x1E0);
+                        if (g > 0x7E0)
+                            g = 0x7E0;
+                        int b = (dstv & 0x1F) + (q & 7);
+                        if (b > 0x1F)
+                            b = 0x1F;
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E380
+    static int texspr_pal_halfadd_555()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int dstv = *dst;
+                        int q = palette[idx] >> 2;
+                        int r = (q & 0x1C00) + (dstv & 0x7C00);
+                        if (r > 0x7C00)
+                            r = 0x7C00;
+                        int g = (dstv & 0x3E0) + (q & 0xE0);
+                        if (g > 0x3E0)
+                            g = 0x3E0;
+                        int b = (dstv & 0x1F) + (q & 7);
+                        if (b > 0x1F)
+                            b = 0x1F;
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E530
+    static int texspr_pal_alphablend_565()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int alpha = (s_color >> 24) & 0xFF;
+        int inv = 255 - alpha;
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int pal = palette[idx];
+                        int dstv = *dst;
+                        uint16_t r = (uint16_t)(((alpha * (pal & 0xF800) / 0xFF) & 0xF800)
+                                                + ((inv * (dstv & 0xF800) / 0xFF) & 0xF800));
+                        uint16_t g
+                            = (uint16_t)(((alpha * (pal & 0x7E0) / 0xFF) & 0x7E0) + ((inv * (dstv & 0x7E0) / 0xFF) & 0x7E0));
+                        uint16_t b = (uint16_t)(((alpha * (pal & 0x1F) / 0xFF) & 0x1F) + ((inv * (dstv & 0x1F) / 0xFF) & 0x1F));
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042E770
+    static int texspr_pal_alphablend_555_1px()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int alpha = (s_color >> 24) & 0xFF;
+        int inv = 255 - alpha;
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    int idx = *(uint8_t*)(srcPtr + xOff);
+                    if (idx)
+                    {
+                        int pal = palette[idx];
+                        int dstv = *dst;
+                        uint16_t r = (uint16_t)(((alpha * (pal & 0x7C00) / 0xFF) & 0x7C00)
+                                                + ((inv * (dstv & 0x7C00) / 0xFF) & 0x7C00));
+                        uint16_t g
+                            = (uint16_t)(((alpha * (pal & 0x3E0) / 0xFF) & 0x3E0) + ((inv * (dstv & 0x3E0) / 0xFF) & 0x3E0));
+                        uint16_t b = (uint16_t)(((alpha * (pal & 0x1F) / 0xFF) & 0x1F) + ((inv * (dstv & 0x1F) / 0xFF) & 0x1F));
+                        *dst = (uint16_t)(r | g | b);
+                    }
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042DDC0
+    static int texspr_pal_copy_2px_parity()
+    {
+        int row = s_clipTopOff;
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            int* p = xTable;
+            int endX = s_clipWidth + s_clipLeft;
+            uint16_t* dstRow = dst;
+            uint16_t* nextRow = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            // Skip the first pixel on odd destination rows (keeps 2-pixel alignment).
+            if ((((uint8_t)s_clipLeft ^ (uint8_t)row) & 1) != 0)
+            {
+                ++dstRow;
+                ++p;
+                --endX;
+            }
+            if (s_clipLeft < endX)
+            {
+                int n = ((uint32_t)(endX - s_clipLeft - 1) >> 1) + 1;
+                do
+                {
+                    int idx = *(uint8_t*)(srcPtr + *p);
+                    if (idx)
+                        *dstRow = palette[idx];
+                    p += 2;
+                    dstRow += 2;
+                    --n;
+                } while (n);
+            }
+            interp += step;
+            ++row;
+            s_clipTopOff = row;
+            if (row >= s_rowCount)
+                break;
+            dst = nextRow;
+        }
+        return interp;
+    }
+
+    // 0x0042DF10
+    static int texspr_pal_copy_2px_yparity()
+    {
+        int row = s_clipTopOff;
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* palette = s_palette;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            int* p = xTable;
+            int endX = s_clipWidth + s_clipLeft;
+            uint16_t* dstRow = dst;
+            uint16_t* nextRow = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            if ((((uint8_t)row + (uint8_t)s_y) & 1) == 0)
+            {
+                if ((s_clipLeft & 1) != 0)
+                {
+                    ++dstRow;
+                    ++p;
+                    --endX;
+                }
+                if (s_clipLeft < endX)
+                {
+                    int n = ((uint32_t)(endX - s_clipLeft - 1) >> 1) + 1;
+                    do
+                    {
+                        int idx = *(uint8_t*)(srcPtr + *p);
+                        if (idx)
+                            *dstRow = palette[idx];
+                        p += 2;
+                        dstRow += 2;
+                        --n;
+                    } while (n);
+                }
+            }
+            s_clipTopOff = ++row;
+            if (row >= s_rowCount)
+                break;
+            dst = nextRow;
+        }
+        return interp;
+    }
+
+    // 0x0042ED10
+    static int texspr_direct_copy_16()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    *dst++ = *(uint16_t*)(srcPtr + 2 * xOff);
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042EF70
+    static int texspr_direct_copy_16_nz()
+    {
+        int* xTable = &s_xTable[s_clipLeftOff];
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int interp = ((s_vRange << 16) / s_dstHeight) * s_clipTopOff;
+        int step = (s_vRange << 16) / s_dstHeight;
+        s_rowCount += s_clipTopOff;
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint8_t* srcPtr = s_srcBase + texspr_src_row(interp >> 16);
+            if (s_clipLeft < s_clipWidth + s_clipLeft)
+            {
+                int count = s_clipWidth;
+                int* p = xTable;
+                do
+                {
+                    int xOff = *p++;
+                    uint16_t val = *(uint16_t*)(srcPtr + 2 * xOff);
+                    if (val)
+                        *dst = val;
+                    ++dst;
+                } while (--count);
+            }
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            interp += step;
+            ++s_clipTopOff;
+        }
+        return interp;
+    }
+
+    // 0x0042F090
+    static int* texspr_direct_copy_16_1to1()
+    {
+        int width = s_clipWidth;
+        uint16_t* dst = (uint16_t*)(s_dstBase + s_y * s_dstSurface->pitch + 2 * s_clipLeft);
+        int row = s_clipTopOff;
+        int srcPitchWords = (uint32_t)s_srcSurface->pitch >> 1;
+        s_rowCount += s_clipTopOff;
+        int rowSkipWords = srcPitchWords - s_clipWidth;
+        uint16_t* src;
+        if (s_pitchShift)
+            src = (uint16_t*)(s_srcBase + ((s_clipTopOff + s_srcV0) << s_pitchShift) + 2 * (s_clipLeftOff + s_srcU0));
+        else
+            src = (uint16_t*)(s_srcBase + s_srcSurface->pitch * (s_clipTopOff + s_srcV0) + 2 * (s_clipLeftOff + s_srcU0));
+        while (s_clipTopOff < s_rowCount)
+        {
+            uint32_t* dstDwords = (uint32_t*)dst;
+            dst = (uint16_t*)((uint8_t*)dst + s_dstSurface->pitch);
+            int copied = 0;
+            if (width >= 2)
+            {
+                do
+                {
+                    *dstDwords++ = *(uint32_t*)src++;
+                    ++copied;
+                } while (copied < (s_clipWidth >> 1));
+            }
+            if ((width & 1) != 0)
+            {
+                *(uint16_t*)dstDwords = *src;
+                src = (uint16_t*)((uint8_t*)src + 2);
+            }
+            src = (uint16_t*)((uint8_t*)src + 2 * rowSkipWords);
+            s_clipTopOff = ++row;
+        }
+        return (int*)src;
+    }
+
+    // 0x0042F1A0
+    static int texspr_pal_alpha_threshold()
+    {
+        int alpha = (s_color >> 24) & 0xFF;
+        if (alpha <= 0x33)
+            return alpha;
+        if (alpha < 0x66)
+            return texspr_pal_copy_2px_yparity();
+        if (alpha < 0xCC)
+            return texspr_pal_copy_2px_parity();
+        return texspr_pal_copy();
+    }
+
+    // 0x0042F1D0
+    static int tex_spr(
+        MarniSurface2* dst, MarniSurface2* src, int dstLeft, int dstTop, int dstRight, int dstBottom, int srcU0, int srcV0,
+        int srcU1, int srcV1, int clipLeft, int clipTop, int clipRight, int clipBottom, int color, int flags)
+    {
+        if (!dst->bOpen || !src->bOpen)
+        {
+            out("the Bits was invalid. TexSpr", "");
+            return 0;
+        }
+
+        // Lazily build the gamma ramp and the 555/565 colour-scaling lookup tables.
+        if (!s_lutInit)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                int value = 0;
+                uint8_t* rowDest = &s_gammaTable[i * 256];
+                for (int j = 0; j < 256; ++j)
+                {
+                    int out = value / 128;
+                    if (out > 255)
+                        out = 255;
+                    rowDest[j] = (uint8_t)out;
+                    value += i;
+                }
+            }
+            for (int i = 0; i < 256; ++i)
+            {
+                for (int k = 0; k < 32; ++k)
+                {
+                    int c = (k * i) / 128;
+                    if (flags & 0x8000) // 555 tables
+                    {
+                        s_lutR[i * 32 + k] = (uint16_t)((c < 32) ? (c << 10) : 0x7C00);
+                        s_lutG[i * 32 + k] = (uint16_t)((c < 32) ? (32 * c) : 0x3E0);
+                        s_lutB[i * 32 + k] = (uint16_t)((c < 32) ? c : 31);
+                    }
+                    else // 565 tables
+                    {
+                        s_lutR[i * 32 + k] = (uint16_t)((c < 32) ? (c << 11) : 0xF800);
+                        s_lutG[i * 32 + k] = (uint16_t)((c < 32) ? (32 * ((2 * k * i) / 128)) : 0x7E0);
+                        s_lutB[i * 32 + k] = (uint16_t)((c < 32) ? c : 31);
+                    }
+                }
+            }
+            s_lutInit = 1;
+        }
+
+        if (dst->bpp != 16 && dst->bpp != 32)
+        {
+            out("this pixel size doesn't support till now. TexSpr", "");
+            return 0;
+        }
+
+        // Reject rectangles that fall completely outside the clip window.
+        if (dstLeft > clipRight || dstRight < clipLeft || dstTop > clipBottom || dstBottom < clipTop)
+            return 1;
+
+        s_srcSurface = src;
+        s_color = color;
+        int row = dstBottom - dstTop;
+        s_dstSurface = dst;
+        s_srcU0 = srcU0;
+        s_uRange = srcU1 - srcU0;
+        int col = dstRight - dstLeft;
+        s_srcV0 = srcV0;
+        s_dstWidth = dstRight - dstLeft;
+        s_dstHeight = dstBottom - dstTop;
+        s_vRange = srcV1 - srcV0;
+
+        if (dstRight - dstLeft <= 0 || row <= 0)
+            return 1;
+
+        if (dstRight > clipRight)
+            col = clipRight - dstLeft;
+        s_clipWidth = col;
+        if (dstBottom > clipBottom)
+            row = clipBottom - dstTop;
+        s_rowCount = row;
+
+        if (dstLeft >= clipLeft)
+        {
+            s_clipLeft = dstLeft;
+            s_clipLeftOff = 0;
+        }
+        else
+        {
+            s_clipLeft = clipLeft;
+            s_clipLeftOff = clipLeft - dstLeft;
+            s_clipWidth -= clipLeft - dstLeft;
+        }
+
+        if (dstTop >= clipTop)
+        {
+            s_y = dstTop;
+            s_clipTopOff = 0;
+        }
+        else
+        {
+            s_y = clipTop;
+            s_clipTopOff = clipTop - dstTop;
+            s_rowCount = row - (clipTop - dstTop);
+        }
+
+        s_dstBase = (uint8_t*)surface_calc_address((MarniSurface*)dst, 0, 0);
+        s_srcBase = (uint8_t*)surface_calc_address((MarniSurface*)src, 0, 0);
+        uint8_t* palBase = surface_calc_pal_address(src, 0, 0);
+        s_palette = (uint16_t*)(palBase + (1 << src->bpp) * src->var_22 * (src->var_25 >> 3));
+
+        // "Optimized bits" path: mark the source format so the rasterizer can pick its palette layout.
+        if ((flags & 0x400000) != 0)
+        {
+            if (src->bpp == 8 && src->var_28)
+            {
+                if (flags & 0x800000)
+                    flags |= 0x200000; // 8-bit paletted 555
+                else
+                    flags |= 0x100000; // 8-bit paletted 565
+            }
+            else if (src->bpp == 16)
+            {
+                if (flags & 0x800000)
+                    flags |= 0x400000; // 16-bit 555
+                else
+                    flags |= 0x300000; // 16-bit 565
+                if (s_dstWidth == s_uRange && s_dstHeight == s_vRange)
+                    flags |= 0x10000; // 1:1 copy
+            }
+        }
+
+        // Source pitch -> shift amount.
+        int pitch = src->pitch;
+        if (pitch <= 128)
+        {
+            switch (pitch)
+            {
+            case 128: s_pitchShift = 7; break;
+            case 64: s_pitchShift = 6; break;
+            case 32: s_pitchShift = 5; break;
+            case 16: s_pitchShift = 4; break;
+            default: s_pitchShift = 0; break;
+            }
+        }
+        else if (pitch == 256)
+        {
+            s_pitchShift = 8;
+        }
+        else if (pitch == 512)
+        {
+            s_pitchShift = 9;
+        }
+        else
+        {
+            s_pitchShift = 0;
+        }
+
+        // Precompute the destination x -> source x lookup table.
+        if ((flags & 0x10000) == 0)
+        {
+            int acc = 0;
+            for (int i = 0; i < s_dstWidth; ++i)
+            {
+                s_xTable[i] = srcU0 + acc / s_dstWidth;
+                acc += s_uRange;
+            }
+        }
+
+        // 8-bit paletted sources are converted into the destination's 565/555 layout
+        // through the scaling LUTs, tinted by the blend colour.
+        if ((flags & 0x200000) != 0)
+        {
+            if ((flags & 0x400000) == 0)
+            {
+                out("not supported when bits is not optimized. TexSpr", "");
+                return 0;
+            }
+            uint16_t* scratch = s_paletteScratch;
+            int redMul = 32 * ((color >> 16) & 0xFF);
+            int blueMul = 32 * (color & 0xFF);
+            int greenMul = 32 * ((color >> 8) & 0xFF);
+            int palCount = 1 << src->bpp;
+            if ((flags & 0x300000) == 0x100000)
+            {
+                for (int k = 0; k < palCount; ++k)
+                {
+                    uint16_t v = s_palette[k];
+                    scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 11)]
+                                            | s_lutG[greenMul | ((v >> 6) & 0x1F)]);
+                }
+            }
+            else if ((flags & 0x300000) == 0x200000)
+            {
+                for (int k = 0; k < palCount; ++k)
+                {
+                    uint16_t v = s_palette[k];
+                    scratch[k] = (uint16_t)(s_lutB[blueMul | (v & 0x1F)] | s_lutR[redMul | (v >> 10)]
+                                            | s_lutG[greenMul | ((v >> 5) & 0x1F)]);
+                }
+            }
+            s_palette = scratch;
+        }
+
+        // Dispatch on the draw mode. Bits 14/15 (0x4000/0x8000) are ignored here.
+        switch (flags & 0xFFFF3FFF)
+        {
+        case 0x1000: texspr_copy(); return 1;
+        case 0x1001: texspr_copy_alpha(); return 1;
+        case 0x2001: texspr_copy_modulate_alpha(); return 1;
+        case 0x2011: texspr_copy_modulate_avg(); return 1;
+        case 0x2021: texspr_copy_additive(); return 1;
+        case 0x101000: texspr_pal_copy_565(); return 1;
+        case 0x101001: texspr_pal_copy(); return 1;
+        case 0x101011: texspr_pal_halfadd_565_1px(); return 1;
+        case 0x101021: texspr_pal_add_565(); return 1;
+        case 0x101031: texspr_pal_halfadd_565(); return 1;
+        case 0x101041: texspr_pal_alphablend_565(); return 1;
+        case 0x101111: texspr_pal_copy_2px_parity(); return 1;
+        case 0x101121: texspr_pal_copy_2px_parity(); return 1;
+        case 0x101131: texspr_pal_copy_2px_yparity(); return 1;
+        case 0x101141: texspr_pal_alpha_threshold(); return 1;
+        case 0x102001: texspr_pal_copy(); return 1;
+        case 0x102011: texspr_pal_halfadd_565_1px(); return 1;
+        case 0x102021: texspr_pal_add_565(); return 1;
+        case 0x102031: texspr_pal_halfadd_565(); return 1;
+        case 0x102041: texspr_pal_alphablend_565(); return 1;
+        case 0x102111: texspr_pal_copy_2px_parity(); return 1;
+        case 0x102121: texspr_pal_copy_2px_parity(); return 1;
+        case 0x102131: texspr_pal_copy_2px_yparity(); return 1;
+        case 0x102141: texspr_pal_alpha_threshold(); return 1;
+        case 0x111000: texspr_pal_copy_565(); return 1;
+        case 0x201000: texspr_pal_copy_565(); return 1;
+        case 0x201001: texspr_pal_copy(); return 1;
+        case 0x201011: texspr_pal_halfadd_555_1px(); return 1;
+        case 0x201021: texspr_pal_add_555(); return 1;
+        case 0x201031: texspr_pal_halfadd_555(); return 1;
+        case 0x201041: texspr_pal_alphablend_555_1px(); return 1;
+        case 0x201111: texspr_pal_copy_2px_parity(); return 1;
+        case 0x201121: texspr_pal_copy_2px_parity(); return 1;
+        case 0x201131: texspr_pal_copy_2px_yparity(); return 1;
+        case 0x201141: texspr_pal_alpha_threshold(); return 1;
+        case 0x202001: texspr_pal_copy(); return 1;
+        case 0x202011: texspr_pal_halfadd_555_1px(); return 1;
+        case 0x202021: texspr_pal_add_555(); return 1;
+        case 0x202031: texspr_pal_halfadd_555(); return 1;
+        case 0x202041: texspr_pal_alphablend_555_1px(); return 1;
+        case 0x202111: texspr_pal_copy_2px_parity(); return 1;
+        case 0x202121: texspr_pal_copy_2px_parity(); return 1;
+        case 0x202131: texspr_pal_copy_2px_yparity(); return 1;
+        case 0x202141: texspr_pal_alpha_threshold(); return 1;
+        case 0x211000: texspr_pal_copy_565(); return 1;
+        case 0x301000: texspr_direct_copy_16(); return 1;
+        case 0x301001: texspr_direct_copy_16_nz(); return 1;
+        case 0x311000: texspr_direct_copy_16_1to1(); return 1;
+        case 0x311001: texspr_direct_copy_16_nz(); return 1;
+        case 0x401000: texspr_direct_copy_16(); return 1;
+        case 0x401001: texspr_direct_copy_16_nz(); return 1;
+        case 0x411000: texspr_direct_copy_16_1to1(); return 1;
+        case 0x411001: texspr_direct_copy_16_nz(); return 1;
+        default: out("unexpected situation...%x TexSpr", ""); return 1;
+        }
     }
 
     // 0x0044462E0 (matrix fill helper for the door scaler prims)
@@ -9224,12 +11647,12 @@ namespace openre::marni
     // 0x00432BB0
     void unload_door_texture()
     {
-        static auto* pDoorWork = (uint32_t*)0x669B28;     // door work pointer array
-        static auto* pDoorWorkEnd = (uint32_t*)0x669B58;  // door work object handles [12]
+        static auto* pDoorWork = (uint32_t*)0x669B28;        // door work pointer array
+        static auto* pDoorWorkEnd = (uint32_t*)0x669B58;     // door work object handles [12]
         static auto* pDoorScalerBlock = (uint32_t*)0x669B88; // door scaler block pointer
-        static auto* pDoorMdlh = (uint32_t*)0x669B8C;     // Door_mdlh[12]
+        static auto* pDoorMdlh = (uint32_t*)0x669B8C;        // Door_mdlh[12]
         static auto* pDoorVar94 = (uint32_t*)0x669BBC;
-        static auto* pDoorVarC4 = (uint32_t*)0x669BEC;    // door texture handle
+        static auto* pDoorVarC4 = (uint32_t*)0x669BEC; // door texture handle
 
         if (*pDoorVarC4)
         {
@@ -9294,10 +11717,119 @@ namespace openre::marni
         add_primitive_scaler(gGameTable.pMarni, (Prim*)scaler, a3 + (v7 >> 7));
     }
 
+    // 0x004335A0
+    static int calc_prj(const float* a1, uint16_t* a2, uint16_t* a3, uint16_t* a4)
+    {
+        struct DoorMatrix
+        {
+            int16_t m[3][3]; // 0x0000
+            int16_t pad;     // 0x0012
+            int32_t t[3];    // 0x0014
+        };
+        static auto* s_rcMatrix = (DoorMatrix*)0x99CE80;
+
+        constexpr double k = 0.000244140625;
+        const double v10 = s_rcMatrix->m[2][0] * k * a1[0] - s_rcMatrix->m[2][1] * k * a1[1] + s_rcMatrix->m[2][2] * k * a1[2];
+        const double v8 = s_rcMatrix->t[0] + s_rcMatrix->m[0][0] * k * a1[0] - s_rcMatrix->m[0][1] * k * a1[1]
+            + s_rcMatrix->m[0][2] * k * a1[2];
+        double v4 = s_rcMatrix->t[2] + v10;
+        if (v4 == 0.0)
+            v4 = 1.0;
+        const double v5 = gGameTable.global_prj;
+        const double v9 = s_rcMatrix->t[1] + s_rcMatrix->m[1][0] * k * a1[0] - s_rcMatrix->m[1][1] * k * a1[1]
+            + s_rcMatrix->m[1][2] * k * a1[2];
+        const double v11 = 1.0 / v4 * v5 * v9 + 120.0;
+        *a2 = (uint16_t)(int64_t)(1.0 / v4 * v5 * v8 + 160.0);
+        *a3 = (uint16_t)(int64_t)v11;
+        const int64_t v6 = (int64_t)v11;
+        *a4 = (uint16_t)v6;
+        return (int)((int32_t)v6 >> 2);
+    }
+
     // 0x00432CD0
     void door_disp1(int doorId)
     {
-        interop::call<void, int>(0x00432CD0, doorId);
+        static auto* s_pDoorScalerBlock = (uint32_t*)0x669B88;
+        static auto* s_pDoorPrim = (uint32_t*)0x669B28;
+        static auto* s_pDoorPrimCount = (uint32_t*)0x669BBC;
+
+        if (doorId >= 12)
+            return;
+
+        auto* v29 = (char*)*s_pDoorScalerBlock + 224 * doorId;
+        uint32_t v13 = 0;
+        arrange_object_contents(gGameTable.pMarni, *((uint32_t*)v29 + 19), (int*)&v13);
+
+        uint32_t v34[9] = {};
+        if ((*(uint8_t*)(v13 + 52) & 1) != 0)
+            memcpy(v34, (const void*)(v13 + 16), sizeof(v34));
+        const uint32_t v1 = v34[6];
+
+        if (s_pDoorPrim[doorId] == 0)
+        {
+            const uint32_t v2 = 48 * v34[6];
+            auto* v3 = (uint32_t*)operator_new(48 * v34[6]);
+            s_pDoorPrim[doorId] = (uint32_t)v3;
+            s_pDoorPrimCount[doorId] = v1;
+            memset(v3, 0, v2);
+        }
+
+        auto* v4 = (uint8_t*)s_pDoorPrim[doorId];
+        int v5 = 0;
+        uint32_t v14 = 0;
+        if (v1 != 0)
+        {
+            while (v5 < (int)s_pDoorPrimCount[doorId])
+            {
+                PrimRecord rec;
+                modify_primitive((PolygonObject*)v13, v5, &rec);
+                float v31[3];
+                float v32[3];
+                float v33[3];
+                float v35[3];
+                float v36[3];
+                float v37[3];
+                refer_vertex((PolygonObject*)v13, rec.v0, v31);
+                refer_vertex((PolygonObject*)v13, rec.v1, v32);
+                refer_vertex((PolygonObject*)v13, rec.v2, v33);
+                refer_normal((PolygonObject*)v13, rec.n0, v35);
+                refer_normal((PolygonObject*)v13, rec.n1, v36);
+                refer_normal((PolygonObject*)v13, rec.n2, v37);
+
+                int16_t v27;
+                int16_t v28;
+                int16_t v30;
+                const int v6 = calc_prj(v32, (uint16_t*)v4 + 10, (uint16_t*)v4 + 11, (uint16_t*)&v30);
+                const int v7 = calc_prj(v31, (uint16_t*)v4 + 8, (uint16_t*)v4 + 9, (uint16_t*)&v27) + v6;
+                const int v8 = calc_prj(v33, (uint16_t*)v4 + 12, (uint16_t*)v4 + 13, (uint16_t*)&v28) + v7;
+
+                const int16_t v9 = *(int16_t*)(v4 + 24);
+                *(int16_t*)(v4 + 32) = 30000;
+                const int16_t v10 = *(int16_t*)(v4 + 26);
+                *(int16_t*)(v4 + 28) = v9;
+                *(int16_t*)(v4 + 30) = v10;
+                *(uint32_t*)(v4 + 4) = 65613;
+                const uint32_t v12 = *((uint32_t*)v29 + 2);
+                *(uint32_t*)(v4 + 12) = 0;
+                *(uint32_t*)(v4 + 8) = v12;
+                *(uint8_t*)(v4 + 34) = rec.u0;
+                *(uint8_t*)(v4 + 35) = rec.u1;
+                *(uint8_t*)(v4 + 36) = rec.u2;
+                *(uint8_t*)(v4 + 37) = rec.u3;
+                *(uint8_t*)(v4 + 38) = rec.u4;
+                *(uint8_t*)(v4 + 39) = rec.u5;
+                *(uint8_t*)(v4 + 40) = rec.u0;
+                *(uint8_t*)(v4 + 41) = rec.u1;
+                *(uint32_t*)(v4 + 44) = 8421504;
+
+                if (v8 / 3 > 400)
+                    add_primitive_scaler(gGameTable.pMarni, (Prim*)v4, v8 / 3);
+                v4 += 48;
+                if (++v14 >= v34[6])
+                    break;
+                v5 = (int)v14;
+            }
+        }
     }
 
     // 0x0043F550
@@ -9447,9 +11979,9 @@ namespace openre::marni
     //   a1 == 0  -> set 2 (room streams)
     int unload_register_surfaces(int a1)
     {
-        static auto* pWorkRegs = (uint32_t*)0x687F44;   // 12-byte entries {count, ptr, work}
-        static auto* pWorkRegsEnd = (uint32_t*)0x6880DC; // end of the 12-byte table
-        static auto* pStreamRegs = (uint32_t*)0x6808AC;  // 40-byte entries (texture/object streams)
+        static auto* pWorkRegs = (uint32_t*)0x687F44;      // 12-byte entries {count, ptr, work}
+        static auto* pWorkRegsEnd = (uint32_t*)0x6880DC;   // end of the 12-byte table
+        static auto* pStreamRegs = (uint32_t*)0x6808AC;    // 40-byte entries (texture/object streams)
         static auto* pStreamRegsEnd = (uint32_t*)0x680DFC; // end of the 40-byte table
 
         const int v1 = a1 != 0 ? 0 : 2;
@@ -9526,8 +12058,7 @@ namespace openre::marni
                 *v0 = 0;
             }
             ++v0;
-        }
-        while ((uint32_t)v0 < 0x67144C);
+        } while ((uint32_t)v0 < 0x67144C);
         return result;
     }
 
@@ -9573,8 +12104,7 @@ namespace openre::marni
             p[70] = 0;
             memset(p + 75, 0, 0x18);
             p += 85;
-        }
-        while ((uint32_t)p < 0x6740B0);
+        } while ((uint32_t)p < 0x6740B0);
 
         destroy_dynamic_objects();
 
@@ -9633,7 +12163,276 @@ namespace openre::marni
     // 0x00443620
     void mapping_tmd(int workNo, Md1* pTmd, int id)
     {
-        interop::call<void, int, Md1*, int>(0x00443620, workNo, pTmd, id);
+        static auto* s_pStreamBase = (uint32_t*)0x680898;     // 40-byte stream entries
+        static auto* s_pUvTableDoor = (uint8_t*)0x680DE8;     // byte_680DE8
+        static auto* s_pUvTableElevator = (uint8_t*)0x6815EC; // byte_6815EC
+        static auto* s_pUvTableOther = (uint8_t*)0x681DF0;    // byte_681DF0
+
+        uint32_t* stream = s_pStreamBase + 10 * workNo;
+
+        const int v33 = *((uint32_t*)pTmd + 2) / 2;
+        const int count = v33 + (workNo == 0 ? 20 : 0);
+        stream_alloc(stream, count);
+
+        int v24 = 0;
+        if (v33 > 0)
+        {
+            for (;;)
+            {
+                uint8_t* base = (uint8_t*)stream[7];
+                const int v6 = v24 << 6;
+                int* v7 = (int*)(base + v6);
+
+                if (*v7)
+                {
+                    destroy_object(gGameTable.pMarni, *v7);
+                    *v7 = 0;
+                }
+                if (v7[1])
+                {
+                    destroy_object(gGameTable.pMarni, v7[1]);
+                    v7[1] = 0;
+                }
+                v7[15] = 0;
+                v7[1] = 0;
+                *v7 = 0;
+                memset((char*)v7 + 10, 0, 0x30);
+
+                MarniPolyObject obj;
+                tm2_object_ctor(&obj, nullptr, 0);
+                const int v8 = v24;
+                tm2_object_in(&obj, (uint8_t*)pTmd, v24, -1);
+
+                *(uint16_t*)(base + v6 + 8) = (uint16_t)tmd_object_kind((const uint8_t*)pTmd, v24);
+                const uint32_t v38 = *(uint32_t*)((char*)&obj + 0x50);
+                *(uint32_t*)(base + v6 + 60) = v38;
+
+                const uint8_t* srcRec = (const uint8_t*)&obj + 0x38;
+                if (v38 <= 1)
+                {
+                    uint8_t* v13 = base + v6 + 10;
+                    *(uint32_t*)v13 = *(uint32_t*)srcRec;
+                    *(uint16_t*)(v13 + 4) = *(uint16_t*)(srcRec + 4);
+                    *(uint16_t*)(base + v6 + 10) = (uint16_t)((*(uint16_t*)srcRec >> 6) - 480);
+                    *(uint16_t*)(base + v6 + 14) = 0;
+                }
+                else
+                {
+                    for (int v22 = 0; v22 < (int)v38; v22++)
+                    {
+                        uint8_t* v12 = base + v6 + 10 + 6 * v22;
+                        const uint8_t* v11 = srcRec + 6 * v22;
+                        *(uint32_t*)v12 = *(uint32_t*)v11;
+                        *(uint16_t*)(v12 + 4) = *(uint16_t*)(v11 + 4);
+                        *(uint16_t*)(base + v6 + 10 + 6 * v22) = (uint16_t)((*(uint16_t*)v11 >> 6) - 480);
+                        *(uint16_t*)(base + v6 + 14 + 6 * v22) = *(uint16_t*)(v11 + 4);
+                    }
+                }
+
+                if (tmd_object_list_check(id, v8))
+                {
+                    auto* v15 = (MarniPolyObject*)operator_new(0x54);
+                    v15 = v15 ? tm2_object_ctor(v15, nullptr, 0) : nullptr;
+                    if (stream[8])
+                    {
+                        tm2_object_dtor((MarniPolyObject*)stream[8]);
+                        operator_delete((void*)stream[8]);
+                    }
+                    const bool copyHeader = (obj.flags & 1) != 0;
+                    stream[8] = (uint32_t)v15;
+                    uint32_t objData[9] = {};
+                    if (copyHeader)
+                        memcpy(objData, (char*)&obj + 0x10, sizeof(objData));
+
+                    create_work(v15, 3 * (int)objData[6], 3 * (int)objData[6], (int)objData[6], (int)(intptr_t)objData[8]);
+                    if ((int)objData[6] > 0)
+                    {
+                        int v23 = 2;
+                        for (int v18 = 0; v18 < (int)objData[6]; v18++)
+                        {
+                            PrimRecord rec;
+                            modify_primitive((PolygonObject*)&obj, v18, &rec);
+                            float v25[3];
+                            refer_vertex((PolygonObject*)&obj, rec.v0, v25);
+                            modify_vertex_0(v15, v23 - 2, v25);
+                            refer_vertex((PolygonObject*)&obj, rec.v1, v25);
+                            modify_vertex_0(v15, v23 - 1, v25);
+                            refer_vertex((PolygonObject*)&obj, rec.v2, v25);
+                            modify_vertex_0(v15, v23, v25);
+
+                            rec.v0 = (uint16_t)(3 * v18);
+                            rec.v1 = (uint16_t)(3 * v18 + 1);
+                            rec.v2 = (uint16_t)(3 * v18 + 2);
+
+                            refer_normal((PolygonObject*)&obj, rec.n0, v25);
+                            modify_normal_0(v15, v23 - 2, v25);
+                            refer_normal((PolygonObject*)&obj, rec.n1, v25);
+                            modify_normal_0(v15, v23 - 1, v25);
+                            refer_normal((PolygonObject*)&obj, rec.n2, v25);
+                            modify_normal_0(v15, v23, v25);
+
+                            rec.n0 = (uint16_t)(3 * v18);
+                            rec.n1 = (uint16_t)(3 * v18 + 1);
+                            rec.n2 = (uint16_t)(3 * v18 + 2);
+
+                            refer_primitive(v15, v18, &rec);
+                            v23 += 3;
+                        }
+                    }
+                }
+
+                enum
+                {
+                    DISPATCH_NONE,
+                    DISPATCH_30,
+                    DISPATCH_33,
+                    DISPATCH_39,
+                };
+                int dispatch = DISPATCH_NONE;
+
+                if (!v8 && (zapping_check(1u, id) || zapping_check(0u, id)))
+                {
+                    dispatch = DISPATCH_30;
+                }
+                else if (id != 48)
+                {
+                    if (id == 49)
+                    {
+                        if (v8 == 4)
+                            dispatch = DISPATCH_33;
+                        else if (v8)
+                            dispatch = DISPATCH_39;
+                        else
+                            dispatch = DISPATCH_30;
+                    }
+                    else
+                    {
+                        switch (id)
+                        {
+                        case 51:
+                            if (v8 == 11)
+                            {
+                                *(uint32_t*)(base + 704)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 11, 3, (uint16_t*)(base + 714), 0);
+                                *(uint32_t*)(base + 708)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 11, 4, (uint16_t*)(base + 738), 0);
+                                tmd_write_uv_table((const uint8_t*)pTmd, 11, 4, s_pUvTableDoor);
+                            }
+                            else
+                                dispatch = DISPATCH_39;
+                            break;
+                        case 52:
+                            switch (v8)
+                            {
+                            case 16:
+                                *(uint32_t*)(base + 1024) = create_object_handle(gGameTable.pMarni, &obj, 0);
+                                *(uint32_t*)(base + 1028)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 16, 6, (uint16_t*)(base + 1034), -128);
+                                tmd_write_uv_table((const uint8_t*)pTmd, 16, 6, s_pUvTableDoor);
+                                break;
+                            case 5:
+                                *(uint32_t*)(base + 320)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 5, 4, (uint16_t*)(base + 330), 0);
+                                *(uint32_t*)(base + 324) = 0;
+                                tmd_write_uv_table((const uint8_t*)pTmd, 5, 4, s_pUvTableElevator);
+                                break;
+                            case 10:
+                                *(uint32_t*)(base + 640)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 10, 3, (uint16_t*)(base + 650), 0);
+                                *(uint32_t*)(base + 644)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 10, 4, (uint16_t*)(base + 674), 0);
+                                tmd_write_uv_table((const uint8_t*)pTmd, 10, 4, s_pUvTableOther);
+                                break;
+                            default: dispatch = DISPATCH_39; break;
+                            }
+                            break;
+                        case 54:
+                            if (v8 == 2)
+                            {
+                                *(uint32_t*)(base + 128)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 2, 3, (uint16_t*)(base + 138), 0);
+                                *(uint32_t*)(base + 132)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 2, 8, (uint16_t*)(base + 162), 0);
+                                tmd_write_uv_table((const uint8_t*)pTmd, 2, 8, s_pUvTableDoor);
+                            }
+                            else
+                                dispatch = DISPATCH_39;
+                            break;
+                        default:
+                            if (id == 40 && v8 == 1)
+                            {
+                                *(uint32_t*)(base + 64) = create_object_handle(gGameTable.pMarni, &obj, 0);
+                                *(uint32_t*)(base + 68)
+                                    = tmd_create_poly_object((const uint8_t*)pTmd, 1, 6, (uint16_t*)(base + 74), -128);
+                                tmd_write_uv_table((const uint8_t*)pTmd, 1, 6, s_pUvTableDoor);
+                            }
+                            else
+                                dispatch = DISPATCH_39;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    if (v8 == 4)
+                        dispatch = DISPATCH_33;
+                    else if (v8 != 3)
+                        dispatch = DISPATCH_39;
+                    else
+                    {
+                        *(uint32_t*)(base + 192)
+                            = tmd_create_poly_object((const uint8_t*)pTmd, 3, 3, (uint16_t*)(base + 202), 0);
+                        *(uint32_t*)(base + 196)
+                            = tmd_create_poly_object((const uint8_t*)pTmd, 3, 4, (uint16_t*)(base + 226), 0);
+                        tmd_write_uv_table((const uint8_t*)pTmd, 3, 3, s_pUvTableElevator);
+                    }
+                }
+
+                switch (dispatch)
+                {
+                case DISPATCH_30:
+                    *(uint32_t*)(base + 0) = tmd_create_poly_object((const uint8_t*)pTmd, 0, 3, (uint16_t*)(base + 10), 0);
+                    *(uint32_t*)(base + 4) = tmd_create_poly_object((const uint8_t*)pTmd, 0, 4, (uint16_t*)(base + 34), 0);
+                    break;
+                case DISPATCH_33:
+                    *(uint32_t*)(base + 256) = tmd_create_poly_object((const uint8_t*)pTmd, 4, 3, (uint16_t*)(base + 266), 0);
+                    *(uint32_t*)(base + 260) = tmd_create_poly_object((const uint8_t*)pTmd, 4, 4, (uint16_t*)(base + 290), 0);
+                    tmd_write_uv_table((const uint8_t*)pTmd, 4, 4, s_pUvTableDoor);
+                    break;
+                case DISPATCH_39:
+                    *(uint32_t*)(base + v6 + 0) = create_object_handle(gGameTable.pMarni, &obj, 0);
+                    tm2_object_adjust_texture_coordinates(&obj, -128, 0);
+                    *(uint32_t*)(base + v6 + 4) = create_object_handle(gGameTable.pMarni, &obj, 0);
+                    break;
+                }
+
+                if ((int)v38 > 0)
+                {
+                    for (int v19 = 0; v19 < (int)v38; v19++)
+                    {
+                        if (*(uint16_t*)(base + v6 + 8) == 1 || (id == 54 && v24 != 2))
+                        {
+                            --*(uint16_t*)(base + v6 + 10 + 6 * v19);
+                            --*(uint16_t*)(base + v6 + 34 + 6 * v19);
+                        }
+                        *(uint16_t*)(base + v6 + 10 + 6 * v19) &= 1;
+                        *(uint16_t*)(base + v6 + 34 + 6 * v19) &= 1;
+                    }
+                }
+                tm2_object_dtor(&obj);
+
+                v24 = v8 + 1;
+                if (v24 >= v33)
+                {
+                    stream[0] = (uint32_t)id;
+                    stream[9] = 0x680898 + 40 * workNo;
+                    return;
+                }
+            }
+        }
+
+        stream[0] = (uint32_t)id;
+        stream[9] = 0x680898 + 40 * workNo;
     }
 
     static void out_internal(const char* message, const char* location)
@@ -9885,5 +12684,8 @@ namespace openre::marni
         interop::hookThisCall(0x004123D0, &surface_pal_blt);
         interop::hookThisCall(0x00412580, &surface2_blt);
         interop::hookThisCall(0x00416D40, &flush_surfaces_marni);
+        interop::writeJmp(0x00432CD0, &door_disp1);
+        interop::writeJmp(0x00443620, &mapping_tmd);
+        interop::writeJmp(0x00406A10, &d3d_error_routine);
     }
 }
