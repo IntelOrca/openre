@@ -7440,7 +7440,7 @@ namespace openre::marni
         {
             type |= 2;
         }
-        if (gfx::active_backend() == 1 && (self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
         {
             // GPU backend: emit the line as a GPU primitive instead of
             // software-rasterizing it into surface0 (see draw_line_gpu).
@@ -7482,7 +7482,7 @@ namespace openre::marni
         {
             type |= 2;
         }
-        if (gfx::active_backend() == 1 && (self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
         {
             // GPU backend: emit the line as a GPU primitive instead of
             // software-rasterizing it into surface0 (see draw_line_gpu).

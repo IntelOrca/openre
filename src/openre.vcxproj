@@ -82,7 +82,6 @@
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="gfxadt.cpp" />
-    <ClCompile Include="gfx_backend_d3d.cpp" />
     <ClCompile Include="gfx_backend_gpu.cpp" />
     <ClCompile Include="gfx_d3d2.cpp" />
     <ClCompile Include="gfx_shaders.cpp" />

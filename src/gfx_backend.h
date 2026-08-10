@@ -9,13 +9,13 @@
 
 namespace openre::gfx
 {
-    // Abstract graphics backend. The COM front-end (gfx_d3d2.cpp) broadcasts
-    // every render-path call to every registered backend.
+    // The single graphics backend (SDL_GPU). The COM front-end (gfx_d3d2.cpp)
+    // intercepts every render-path call and forwards it to this backend.
     //
     // Every method mirrors a legacy COM method of the same name. Methods that
     // return HRESULT in the original interface return HRESULT here too: the
-    // D3D reference backend performs the original call and hands its result
-    // back to the front-end, which returns it to the game.
+    // backend's result is handed back to the front-end, which returns it to
+    // the game.
     class GfxBackend
     {
     public:
@@ -40,9 +40,9 @@ namespace openre::gfx
         virtual HRESULT get_dc(IUnknown* surface, HDC* hdc) = 0;
         virtual HRESULT release_dc(IUnknown* surface, HDC hdc) = 0;
         // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
-        // surface; the D3D reference performs the real QI and wraps the
-        // returned texture (so its GetHandle/Load reach the backends), the GPU
-        // backend has no interface to hand out.
+        // surface; the front-end (gfx_d3d2.cpp) performs the real QI and wraps
+        // the returned texture (so its GetHandle/Load reach the backend). The
+        // backend itself has no interface to hand out.
         virtual HRESULT query_texture_interface(IUnknown* surface, LPVOID* outTexture) = 0;
 
         // ---- device / scene ----
@@ -90,176 +90,124 @@ namespace openre::gfx
         virtual void present() = 0;
     };
 
-    GfxBackend* backend_d3d();
     GfxBackend* backend_gpu();
 
     // ---------------------------------------------------------------------
-    // Broadcast helpers for the decompiled render path
+    // Forwarding helpers for the decompiled render path
     // ---------------------------------------------------------------------
     // Decompiled code used to reach the backends through the wrapped COM
-    // device vtable (gfx_d3d2.cpp). These helpers forward a call to every
-    // registered backend directly, so decompiled code no longer needs the
-    // COM front-end for the hot render path.
+    // device vtable (gfx_d3d2.cpp). These helpers forward a call to the
+    // backend directly, so decompiled code no longer needs the COM front-end
+    // for the hot render path.
 
     inline HRESULT device_set_current_viewport(IUnknown* device, IUnknown* viewport)
     {
-        const auto hr = backend_d3d()->set_current_viewport(device, viewport);
-        backend_gpu()->set_current_viewport(device, viewport);
-        return hr;
+        return backend_gpu()->set_current_viewport(device, viewport);
     }
 
     inline HRESULT device_set_render_state(IUnknown* device, D3DRENDERSTATETYPE state, DWORD value)
     {
-        const auto hr = backend_d3d()->set_render_state(device, state, value);
-        backend_gpu()->set_render_state(device, state, value);
-        return hr;
+        return backend_gpu()->set_render_state(device, state, value);
     }
 
     inline HRESULT device_draw_primitive(
         IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
         DWORD flags)
     {
-        const auto hr = backend_d3d()->draw_primitive(device, primType, vertexType, vertices, vertexCount, flags);
-        backend_gpu()->draw_primitive(device, primType, vertexType, vertices, vertexCount, flags);
-        return hr;
+        return backend_gpu()->draw_primitive(device, primType, vertexType, vertices, vertexCount, flags);
     }
 
     inline HRESULT device_begin_scene(IUnknown* device)
     {
-        const auto hr = backend_d3d()->begin_scene(device);
-        backend_gpu()->begin_scene(device);
-        return hr;
+        return backend_gpu()->begin_scene(device);
     }
 
     inline HRESULT device_end_scene(IUnknown* device)
     {
-        const auto hr = backend_d3d()->end_scene(device);
-        backend_gpu()->end_scene(device);
-        return hr;
+        return backend_gpu()->end_scene(device);
     }
 
     inline HRESULT device_get_stats(IUnknown* device, D3DSTATS* stats)
     {
-        const auto hr = backend_d3d()->get_stats(device, stats);
-        backend_gpu()->get_stats(device, stats);
-        return hr;
+        return backend_gpu()->get_stats(device, stats);
     }
 
     inline HRESULT viewport_set_viewport2(IUnknown* viewport, const D3DVIEWPORT2* vp)
     {
-        const auto hr = backend_d3d()->set_viewport(viewport, vp);
-        backend_gpu()->set_viewport(viewport, vp);
-        return hr;
+        return backend_gpu()->set_viewport(viewport, vp);
     }
 
     inline HRESULT viewport_clear(IUnknown* viewport, DWORD count, const D3DRECT* rects, DWORD flags)
     {
-        const auto hr = backend_d3d()->clear(viewport, count, rects, flags);
-        backend_gpu()->clear(viewport, count, rects, flags);
-        return hr;
+        return backend_gpu()->clear(viewport, count, rects, flags);
     }
 
     inline HRESULT viewport_set_background(IUnknown* viewport, D3DMATERIALHANDLE materialHandle)
     {
-        const auto hr = backend_d3d()->set_background(viewport, materialHandle);
-        backend_gpu()->set_background(viewport, materialHandle);
-        return hr;
+        return backend_gpu()->set_background(viewport, materialHandle);
     }
 
     inline HRESULT surface_is_lost(IUnknown* surface)
     {
-        const auto hr = backend_d3d()->is_lost(surface);
-        backend_gpu()->is_lost(surface);
-        return hr;
+        return backend_gpu()->is_lost(surface);
     }
 
     inline HRESULT surface_restore(IUnknown* surface)
     {
-        const auto hr = backend_d3d()->restore(surface);
-        backend_gpu()->restore(surface);
-        return hr;
+        return backend_gpu()->restore(surface);
     }
 
     inline HRESULT surface_blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
     {
-        const auto hr = backend_d3d()->blt(dst, dstRect, src, srcRect, flags, fx);
-        backend_gpu()->blt(dst, dstRect, src, srcRect, flags, fx);
-        return hr;
+        return backend_gpu()->blt(dst, dstRect, src, srcRect, flags, fx);
     }
 
     inline HRESULT surface_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc)
     {
-        const auto hr = backend_d3d()->get_surface_desc(surface, desc);
-        backend_gpu()->get_surface_desc(surface, desc);
-        return hr;
+        return backend_gpu()->get_surface_desc(surface, desc);
     }
 
     inline HRESULT surface_add_attached_surface(IUnknown* surface, IUnknown* attached)
     {
-        const auto hr = backend_d3d()->add_attached_surface(surface, attached);
-        backend_gpu()->add_attached_surface(surface, attached);
-        return hr;
+        return backend_gpu()->add_attached_surface(surface, attached);
     }
 
     inline HRESULT surface_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key)
     {
-        const auto hr = backend_d3d()->set_color_key(surface, flags, key);
-        backend_gpu()->set_color_key(surface, flags, key);
-        return hr;
+        return backend_gpu()->set_color_key(surface, flags, key);
     }
 
     inline HRESULT surface_set_palette(IUnknown* surface, IUnknown* palette)
     {
-        const auto hr = backend_d3d()->set_palette(surface, palette);
-        backend_gpu()->set_palette(surface, palette);
-        return hr;
+        return backend_gpu()->set_palette(surface, palette);
     }
 
     inline HRESULT surface_set_clipper(IUnknown* surface, IUnknown* clipper)
     {
-        const auto hr = backend_d3d()->set_clipper(surface, clipper);
-        backend_gpu()->set_clipper(surface, clipper);
-        return hr;
+        return backend_gpu()->set_clipper(surface, clipper);
     }
 
     inline HRESULT surface_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
     {
-        const auto hr = backend_d3d()->lock(surface, rect, desc, flags, event);
-        backend_gpu()->lock(surface, rect, desc, flags, event);
-        return hr;
+        return backend_gpu()->lock(surface, rect, desc, flags, event);
     }
 
     inline HRESULT surface_unlock(IUnknown* surface, void* lpRect)
     {
-        const auto hr = backend_d3d()->unlock(surface, lpRect);
-        backend_gpu()->unlock(surface, lpRect);
-        return hr;
+        return backend_gpu()->unlock(surface, lpRect);
     }
 
     inline HRESULT surface_query_texture_interface(IUnknown* surface, LPVOID* outTexture)
     {
-        const auto hr = backend_d3d()->query_texture_interface(surface, outTexture);
-        backend_gpu()->query_texture_interface(surface, outTexture);
-        return hr;
+        return backend_gpu()->query_texture_interface(surface, outTexture);
     }
 
-    // 0 = D3D reference, 1 = GPU. Hotkey wired in M2.
-    void set_active_backend(int index);
+    // The GPU backend is the one and only backend; the active backend is
+    // always GPU.
     int active_backend();
-
-    // True while the D3D reference backend must keep forwarding calls to the
-    // real DirectDraw/D3D2 objects. The persistent [video] disable_d3d_reference
-    // config flag turns it off while the GPU backend is active, so the D3D
-    // reference does no per-frame draw work (the front-end hooks still answer
-    // every COM call; only the reference's forwarding is skipped).
-    bool reference_enabled();
 
     // True when the GPU backend initialised successfully and can present.
     bool gpu_enabled();
-
-    // True when a live F6 backend toggle is available (mode "both" and the GPU
-    // backend is present). In "d3d"/"gpu" single-backend modes F6 is ignored.
-    bool backend_toggle_enabled();
 
     // Called from marni.cpp.
     void init();

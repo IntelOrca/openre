@@ -7,7 +7,6 @@
 #include "entity.h"
 #include "error.h"
 #include "file.h"
-#include "gfx_backend.h"
 #include "gfx_draw.h"
 #include "hud.h"
 #include "input.h"
@@ -2499,18 +2498,7 @@ namespace openre
             gGameTable.vk_press |= 0x40; // exit to menu
             break;
         case VK_F10:
-            // Toggle the active render backend: 0 = D3D reference (DirectDraw
-            // primary surface Blt), 1 = GPU (SDL_GPU swapchain present). Only
-            // available in gfx_mode "both"; see docs/gfx-migration.md.
-            if (gfx::backend_toggle_enabled())
-            {
-                gfx::set_active_backend(gfx::active_backend() ? 0 : 1);
-                logging::logInfo("[gfx] active backend toggled to {}", gfx::active_backend());
-            }
-            else
-            {
-                logging::logInfo("[gfx] F6 ignored: backend toggle only available in 'both' mode");
-            }
+            // The D3D reference backend was removed (Phase 3); F10 is a no-op.
             SetFocus(hWnd);
             break;
         default:

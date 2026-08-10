@@ -467,9 +467,6 @@ namespace openre::gfx
         // target into the swapchain. Draws are deferred to present() so vertex
         // uploads (copy passes) never have to be interleaved with the render
         // pass, and so the frame's Clear lands on the first pass exactly once.
-        // Present only runs while the GPU backend is the active backend, so the
-        // DirectDraw primary surface keeps showing when the D3D reference
-        // backend (0) is selected.
         class GfxBackendGPU final : public GfxBackend
         {
         private:
@@ -598,16 +595,6 @@ namespace openre::gfx
 
             void present() override
             {
-                // While the D3D reference backend is active the DirectDraw
-                // primary surface (the game's Blt in flip_blt) owns the window;
-                // do not acquire/present the swapchain in that case, and drop
-                // any queued GPU work so a mid-frame toggle never renders stale
-                // draws later.
-                if (active_backend() != 1)
-                {
-                    resetFrameState();
-                    return;
-                }
                 if (mDevice == nullptr || mWindow == nullptr)
                 {
                     logging::logDebug("[gfx:gpu] present skipped (device/window not ready)");
@@ -996,21 +983,10 @@ namespace openre::gfx
                     return S_OK;
                 }
 
-                // The D3D reference backend already filled desc with the real
-                // surface info; adopt it so zero-size primaries get their real
-                // dimensions here too.
+                // Adopt whatever the desc already carries (the game may pass a
+                // previously filled desc) so zero-size primaries pick up real
+                // dimensions here.
                 adoptDesc(*entry, desc);
-
-                // Only the active backend may hand the game its CPU pointer:
-                // while the D3D reference is active the game must keep writing
-                // into the real DirectDraw surface, so leave the desc the D3D
-                // backend just filled untouched.
-                if (active_backend() != 1)
-                {
-                    logging::logDebug(
-                        "[gfx:gpu] Lock surface={} (inactive: D3D owns the pointer)", static_cast<void*>(surface));
-                    return S_OK;
-                }
 
                 if (!ensureTexture(*entry))
                 {
@@ -1238,13 +1214,10 @@ namespace openre::gfx
             {
                 if (hdc == nullptr)
                     return E_POINTER;
-                // When the D3D reference is active the front-end already set
-                // *hdc from the real DirectDraw surface; only replace it when
-                // this backend owns the presenter.
                 if (mDevice == nullptr)
                     return S_OK;
                 auto* entry = findSurface(surface);
-                if (entry == nullptr || active_backend() != 1)
+                if (entry == nullptr)
                     return S_OK;
 
                 // Seed the DIB with the current surface content so transparent
@@ -1288,8 +1261,6 @@ namespace openre::gfx
                     logging::logDebug("[gfx:gpu] ReleaseDC surface={} (no matching GetDC)", static_cast<void*>(surface));
                     return S_OK;
                 }
-                if (active_backend() != 1)
-                    return S_OK;
 
                 if (entry->gdiBits != nullptr)
                     copyGdiToShadow(*entry);
@@ -1327,16 +1298,6 @@ namespace openre::gfx
                     return S_OK;
                 }
 
-                if (active_backend() != 1)
-                {
-                    logging::logDebug(
-                        "[gfx:gpu] Blt dst={} src={} flags={} (inactive)",
-                        static_cast<void*>(dst),
-                        static_cast<void*>(src),
-                        flags);
-                    return S_OK;
-                }
-
                 if (src != nullptr)
                 {
                     auto* srcEntry = findSurface(src);
@@ -1369,10 +1330,10 @@ namespace openre::gfx
                     return E_FAIL;
                 }
 
-                // The D3D reference backend already filled desc with the real
-                // DirectDraw values. Adopt them so the zero-size primary
-                // (created with DDSD_CAPS only) learns its real size here, and
-                // surfaces created without a pixel format learn their bpp.
+                // Adopt whatever the desc already carries (e.g. a desc the game
+                // filled itself) so the zero-size primary (created with
+                // DDSD_CAPS only) learns its real size here, and surfaces
+                // created without a pixel format learn their bpp.
                 if (adoptDesc(*entry, desc))
                 {
                     logging::logInfo(
@@ -1389,12 +1350,9 @@ namespace openre::gfx
                 if (!ensureTexture(*entry))
                     return S_OK;
 
-                if (active_backend() == 1)
-                {
-                    desc->dwWidth = entry->width;
-                    desc->dwHeight = entry->height;
-                    desc->lPitch = static_cast<LONG>(entry->pitch);
-                }
+                desc->dwWidth = entry->width;
+                desc->dwHeight = entry->height;
+                desc->lPitch = static_cast<LONG>(entry->pitch);
                 return S_OK;
             }
 
@@ -1454,9 +1412,9 @@ namespace openre::gfx
                 const auto start = std::min(static_cast<Uint32>(base), 256u);
                 const auto n = std::min(static_cast<Uint32>(count), 256u - start);
                 // The game always writes peFlags = 0 (MarniSurfaceX::vUnlock /
-                // vPalUnlock), which the D3D reference renders as an opaque
-                // palette (transparency is handled by colour keying, deferred
-                // to a later milestone), so expand every entry to opaque RGBA.
+                // vPalUnlock), which renders as an opaque palette (transparency
+                // is handled by colour keying, deferred to a later milestone),
+                // so expand every entry to opaque RGBA.
                 for (Uint32 i = 0; i < n; i++)
                 {
                     data.rgba[start + i] = 0xFF000000u | (static_cast<uint32_t>(entries[i].peRed) << 16)
@@ -1500,8 +1458,8 @@ namespace openre::gfx
 
             HRESULT query_texture_interface(IUnknown* /*surface*/, LPVOID* /*outTexture*/) override
             {
-                // The GPU backend has no IDirect3DTexture2 object to hand
-                // out; the D3D reference performs the real QI, and texture
+                // The GPU backend has no IDirect3DTexture2 object to hand out;
+                // the front-end (gfx_d3d2.cpp) performs the real QI, and texture
                 // creation reaches this backend through the GetHandle/Load
                 // broadcasts.
                 return E_NOINTERFACE;
@@ -1812,8 +1770,6 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 DWORD flags) override
             {
-                if (active_backend() != 1)
-                    return S_OK;
                 if (vertices == nullptr || vertexCount == 0)
                     return S_OK;
                 if (vertexType != D3DVT_TLVERTEX)
@@ -1848,8 +1804,6 @@ namespace openre::gfx
                 IUnknown* device, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, const void* vertices, DWORD vertexCount,
                 const void* indices, DWORD indexCount, DWORD flags) override
             {
-                if (active_backend() != 1)
-                    return S_OK;
                 if (vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0)
                     return S_OK;
                 if (vertexType != D3DVT_TLVERTEX)
@@ -1907,13 +1861,12 @@ namespace openre::gfx
 
             HRESULT get_stats(IUnknown* /*device*/, D3DSTATS* stats) override
             {
-                // The D3D reference backend fills stats from the real device
-                // first; when the GPU backend is active, replace them with the
-                // counts of what the GPU actually drew so the game's per-frame
-                // deltas keep working. The values are cumulative (like the
-                // D3D2 device's counters); Marni::do_render subtracts the
-                // previous GetStats to obtain the per-frame deltas.
-                if (stats != nullptr && active_backend() == 1)
+                // Fill the counters with what the GPU actually drew so the
+                // game's per-frame deltas keep working. The values are
+                // cumulative (like the D3D2 device's counters);
+                // Marni::do_render subtracts the previous GetStats to obtain
+                // the per-frame deltas.
+                if (stats != nullptr)
                 {
                     stats->dwTrianglesDrawn = static_cast<DWORD>(mDeviceState.totalTriangles);
                     stats->dwVerticesProcessed = static_cast<DWORD>(mDeviceState.totalVertices);
@@ -2019,11 +1972,11 @@ namespace openre::gfx
                 }
             }
 
-            // Records the real width/height/bit depth into the entry from a
-            // DDSURFACEDESC the D3D reference backend just filled (GetSurfaceDesc
-            // or Lock). Returns true when anything changed. The row pitch is
-            // recomputed as width * bytesPerPixel, matching what the game expects
-            // from a DirectDraw surface.
+            // Records the width/height/bit depth into the entry from a
+            // DDSURFACEDESC (GetSurfaceDesc or Lock). Returns true when
+            // anything changed. The row pitch is recomputed as width *
+            // bytesPerPixel, matching what the game expects from a DirectDraw
+            // surface.
             bool adoptDesc(SurfaceEntry& entry, const DDSURFACEDESC* desc)
             {
                 bool changed = false;

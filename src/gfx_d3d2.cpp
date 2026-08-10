@@ -1,11 +1,8 @@
 #include "gfx_d3d2.h"
 #include "gfx_backend.h"
 #include "logger.h"
-#include "system_config.h"
 
-#include <cstdlib>
 #include <cstring>
-#include <string>
 #include <unordered_map>
 
 namespace openre::gfx
@@ -125,7 +122,6 @@ namespace openre::gfx
             *vpp = orig;
             if (SUCCEEDED(hr) && palette != nullptr && *palette != nullptr)
             {
-                backend_d3d()->create_palette(*palette, flags);
                 backend_gpu()->create_palette(*palette, flags);
                 wrap_palette(*palette);
             }
@@ -150,7 +146,6 @@ namespace openre::gfx
             *vpp = orig;
             if (SUCCEEDED(hr) && surface != nullptr && *surface != nullptr)
             {
-                backend_d3d()->create_surface(*surface, desc);
                 backend_gpu()->create_surface(*surface, desc);
                 wrap_surface(*surface);
             }
@@ -195,7 +190,6 @@ namespace openre::gfx
             *vpp = orig;
             if (SUCCEEDED(hr) && surface != nullptr && *surface != nullptr)
             {
-                backend_d3d()->create_surface(*surface, desc);
                 backend_gpu()->create_surface(*surface, desc);
                 wrap_surface(*surface);
             }
@@ -239,7 +233,6 @@ namespace openre::gfx
                 // mode change does not leak GPU resources or keep a stale render
                 // target. The object is gone, so leave its vtable as ddraw's
                 // original and never touch it again.
-                backend_d3d()->destroy_surface(self);
                 backend_gpu()->destroy_surface(self);
                 registry::erase(self);
 
@@ -272,9 +265,7 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_surface_add_attached(IDirectDrawSurface* self, LPDIRECTDRAWSURFACE attached)
         {
-            const auto hr = backend_d3d()->add_attached_surface(self, attached);
-            backend_gpu()->add_attached_surface(self, attached);
-            return hr;
+            return backend_gpu()->add_attached_surface(self, attached);
         }
 
         // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
@@ -325,59 +316,43 @@ namespace openre::gfx
         static HRESULT STDMETHODCALLTYPE hook_surface_blt(
             IDirectDrawSurface* self, LPRECT dstRect, LPDIRECTDRAWSURFACE src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
         {
-            const auto hr = backend_d3d()->blt(self, dstRect, src, srcRect, flags, fx);
-            backend_gpu()->blt(self, dstRect, src, srcRect, flags, fx);
-            return hr;
+            return backend_gpu()->blt(self, dstRect, src, srcRect, flags, fx);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_get_surface_desc(IDirectDrawSurface* self, LPDDSURFACEDESC desc)
         {
-            const auto hr = backend_d3d()->get_surface_desc(self, desc);
-            backend_gpu()->get_surface_desc(self, desc);
-            return hr;
+            return backend_gpu()->get_surface_desc(self, desc);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_is_lost(IDirectDrawSurface* self)
         {
-            const auto hr = backend_d3d()->is_lost(self);
-            backend_gpu()->is_lost(self);
-            return hr;
+            return backend_gpu()->is_lost(self);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_surface_lock(IDirectDrawSurface* self, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
         {
-            const auto hr = backend_d3d()->lock(self, rect, desc, flags, event);
-            backend_gpu()->lock(self, rect, desc, flags, event);
-            return hr;
+            return backend_gpu()->lock(self, rect, desc, flags, event);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_restore(IDirectDrawSurface* self)
         {
-            const auto hr = backend_d3d()->restore(self);
-            backend_gpu()->restore(self);
-            return hr;
+            return backend_gpu()->restore(self);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_clipper(IDirectDrawSurface* self, LPDIRECTDRAWCLIPPER clipper)
         {
-            const auto hr = backend_d3d()->set_clipper(self, clipper);
-            backend_gpu()->set_clipper(self, clipper);
-            return hr;
+            return backend_gpu()->set_clipper(self, clipper);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_color_key(IDirectDrawSurface* self, DWORD flags, LPDDCOLORKEY key)
         {
-            const auto hr = backend_d3d()->set_color_key(self, flags, key);
-            backend_gpu()->set_color_key(self, flags, key);
-            return hr;
+            return backend_gpu()->set_color_key(self, flags, key);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_palette(IDirectDrawSurface* self, LPDIRECTDRAWPALETTE palette)
         {
-            const auto hr = backend_d3d()->set_palette(self, palette);
-            backend_gpu()->set_palette(self, palette);
-            return hr;
+            return backend_gpu()->set_palette(self, palette);
         }
 
         // ------------------------------------------------------------------
@@ -406,32 +381,25 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_surface_unlock(IDirectDrawSurface* self, void* lpRect)
         {
-            const auto hr = backend_d3d()->unlock(self, lpRect);
-            backend_gpu()->unlock(self, lpRect);
-            return hr;
+            return backend_gpu()->unlock(self, lpRect);
         }
 
         // The game draws the save screen's text via GDI over an HDC obtained
-        // from the surface (GetDC/ReleaseDC). In GPU mode that text would land
-        // in the real ddraw surface memory, which is never presented, so the
-        // GPU backend supplies its own DIB-backed HDC over the surface shadow
-        // instead (see gfx_backend_gpu.cpp get_dc/release_dc).
+        // from the surface (GetDC/ReleaseDC). The GPU backend supplies its own
+        // DIB-backed HDC over the surface shadow (see gfx_backend_gpu.cpp
+        // get_dc/release_dc).
         static HRESULT STDMETHODCALLTYPE hook_surface_get_dc(IDirectDrawSurface* self, HDC* hdc)
         {
-            // Defensive: if both backends skip (e.g. the GPU backend is active
-            // but has no device yet), never hand the game back a garbage handle.
+            // Defensive: if the GPU backend skips (e.g. no device yet), never
+            // hand the game back a garbage handle.
             if (hdc != nullptr)
                 *hdc = nullptr;
-            const auto hr = backend_d3d()->get_dc(self, hdc);
-            backend_gpu()->get_dc(self, hdc);
-            return hr;
+            return backend_gpu()->get_dc(self, hdc);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_release_dc(IDirectDrawSurface* self, HDC hdc)
         {
-            const auto hr = backend_d3d()->release_dc(self, hdc);
-            backend_gpu()->release_dc(self, hdc);
-            return hr;
+            return backend_gpu()->release_dc(self, hdc);
         }
 
         // ------------------------------------------------------------------
@@ -502,12 +470,10 @@ namespace openre::gfx
                 // its draw/state calls would stop reaching the GPU backend
                 // (permanent black screen). Erase it before re-wrapping.
                 registry::erase(*device);
-                backend_d3d()->create_device(*device);
                 backend_gpu()->create_device(*device);
                 // The game creates the device against the render target surface
                 // (surface0) and never calls SetRenderTarget afterwards, so
                 // broadcast the CreateDevice surface as the render target.
-                backend_d3d()->set_render_target(*device, surface, 0);
                 backend_gpu()->set_render_target(*device, surface, 0);
                 wrap_device2(*device);
             }
@@ -520,82 +486,61 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_device_get_stats(IDirect3DDevice2* self, LPD3DSTATS stats)
         {
-            const auto hr = backend_d3d()->get_stats(self, stats);
-            backend_gpu()->get_stats(self, stats);
-            return hr;
+            return backend_gpu()->get_stats(self, stats);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_device_begin_scene(IDirect3DDevice2* self)
         {
-            const auto hr = backend_d3d()->begin_scene(self);
-            backend_gpu()->begin_scene(self);
-            return hr;
+            return backend_gpu()->begin_scene(self);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_device_end_scene(IDirect3DDevice2* self)
         {
-            const auto hr = backend_d3d()->end_scene(self);
-            backend_gpu()->end_scene(self);
-            return hr;
+            return backend_gpu()->end_scene(self);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_device_set_current_viewport(IDirect3DDevice2* self, LPDIRECT3DVIEWPORT2 viewport)
         {
-            const auto hr = backend_d3d()->set_current_viewport(self, viewport);
-            backend_gpu()->set_current_viewport(self, viewport);
-            return hr;
+            return backend_gpu()->set_current_viewport(self, viewport);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_device_set_render_target(IDirect3DDevice2* self, LPDIRECTDRAWSURFACE surface, DWORD flags)
         {
-            const auto hr = backend_d3d()->set_render_target(self, surface, flags);
-            backend_gpu()->set_render_target(self, surface, flags);
-            return hr;
+            return backend_gpu()->set_render_target(self, surface, flags);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_device_set_render_state(IDirect3DDevice2* self, D3DRENDERSTATETYPE state, DWORD value)
         {
-            const auto hr = backend_d3d()->set_render_state(self, state, value);
-            backend_gpu()->set_render_state(self, state, value);
-            return hr;
+            return backend_gpu()->set_render_state(self, state, value);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_device_set_transform(IDirect3DDevice2* self, D3DTRANSFORMSTATETYPE state, LPD3DMATRIX matrix)
         {
-            const auto hr = backend_d3d()->set_transform(self, state, matrix);
-            backend_gpu()->set_transform(self, state, matrix);
-            return hr;
+            return backend_gpu()->set_transform(self, state, matrix);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_device_multiply_transform(IDirect3DDevice2* self, D3DTRANSFORMSTATETYPE state, LPD3DMATRIX matrix)
         {
-            const auto hr = backend_d3d()->multiply_transform(self, state, matrix);
-            backend_gpu()->multiply_transform(self, state, matrix);
-            return hr;
+            return backend_gpu()->multiply_transform(self, state, matrix);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_device_draw_primitive(
             IDirect3DDevice2* self, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, LPVOID vertices, DWORD vertexCount,
             DWORD flags)
         {
-            const auto hr = backend_d3d()->draw_primitive(self, primType, vertexType, vertices, vertexCount, flags);
-            backend_gpu()->draw_primitive(self, primType, vertexType, vertices, vertexCount, flags);
-            return hr;
+            return backend_gpu()->draw_primitive(self, primType, vertexType, vertices, vertexCount, flags);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_device_draw_indexed_primitive(
             IDirect3DDevice2* self, D3DPRIMITIVETYPE primType, D3DVERTEXTYPE vertexType, LPVOID vertices, DWORD vertexCount,
             LPWORD indices, DWORD indexCount, DWORD flags)
         {
-            const auto hr = backend_d3d()->draw_indexed_primitive(
+            return backend_gpu()->draw_indexed_primitive(
                 self, primType, vertexType, vertices, vertexCount, indices, indexCount, flags);
-            backend_gpu()->draw_indexed_primitive(
-                self, primType, vertexType, vertices, vertexCount, indices, indexCount, flags);
-            return hr;
         }
 
         // ------------------------------------------------------------------
@@ -604,24 +549,18 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_viewport_set_background(IDirect3DViewport2* self, D3DMATERIALHANDLE handle)
         {
-            const auto hr = backend_d3d()->set_background(self, handle);
-            backend_gpu()->set_background(self, handle);
-            return hr;
+            return backend_gpu()->set_background(self, handle);
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_viewport_clear(IDirect3DViewport2* self, DWORD count, LPD3DRECT rects, DWORD flags)
         {
-            const auto hr = backend_d3d()->clear(self, count, rects, flags);
-            backend_gpu()->clear(self, count, rects, flags);
-            return hr;
+            return backend_gpu()->clear(self, count, rects, flags);
         }
 
         static HRESULT STDMETHODCALLTYPE hook_viewport_set_viewport2(IDirect3DViewport2* self, LPD3DVIEWPORT2 vp)
         {
-            const auto hr = backend_d3d()->set_viewport(self, vp);
-            backend_gpu()->set_viewport(self, vp);
-            return hr;
+            return backend_gpu()->set_viewport(self, vp);
         }
 
         // ------------------------------------------------------------------
@@ -637,7 +576,6 @@ namespace openre::gfx
                 return E_UNEXPECTED;
             using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirect3DMaterial2*, LPD3DMATERIAL);
             const auto hr = reinterpret_cast<Fn>(e->origVtbl[slots::MAT_SetMaterial])(self, material);
-            backend_d3d()->set_material(material);
             backend_gpu()->set_material(material);
             return hr;
         }
@@ -867,48 +805,16 @@ namespace openre::gfx
 
     namespace
     {
-        int g_activeBackend = 0;
-        // Set from the persistent [video] disable_d3d_reference config flag; the
-        // D3D reference backend then skips its per-frame forwarding while the
-        // GPU backend is the active one.
-        bool g_referenceDisabled = false;
-
-        // Which backends are created and may present. Set from [video] gfx_mode
-        // (or the OPENRE_GFX_MODE env var) in init(); see docs/gfx-migration.md.
-        enum class GfxMode
-        {
-            Both, // current behaviour: D3D reference + GPU, live F6 toggle
-            D3D,  // only the D3D reference; the GPU backend is not created
-            GPU,  // only the GPU backend; the D3D reference stops per-frame forwarding
-        };
-        GfxMode g_mode = GfxMode::Both;
         // True when backend_gpu()->init() succeeded, i.e. the GPU backend exists
         // and may present.
         bool g_gpuInitialized = false;
-
-        GfxMode parseMode(const std::string& value)
-        {
-            if (value == "d3d")
-                return GfxMode::D3D;
-            if (value == "gpu")
-                return GfxMode::GPU;
-            return GfxMode::Both;
-        }
     }
 
-    void set_active_backend(int index)
-    {
-        g_activeBackend = index;
-    }
-
+    // The GPU backend is the one and only backend; the active backend is
+    // always GPU.
     int active_backend()
     {
-        return g_activeBackend;
-    }
-
-    bool reference_enabled()
-    {
-        return !(g_referenceDisabled && active_backend() == 1);
+        return 1;
     }
 
     bool gpu_enabled()
@@ -916,92 +822,17 @@ namespace openre::gfx
         return g_gpuInitialized;
     }
 
-    bool backend_toggle_enabled()
-    {
-        return g_mode == GfxMode::Both && g_gpuInitialized;
-    }
-
     void init()
     {
-        // Resolve the backend mode first: it decides which backends are created.
-        // Precedence: OPENRE_GFX_MODE env var > [video] gfx_mode > legacy
-        // [video] render_backend + disable_d3d_reference > "both".
-        GfxMode mode = GfxMode::Both;
-        if (const char* envMode = std::getenv("OPENRE_GFX_MODE"); envMode != nullptr && envMode[0] != '\0')
-        {
-            mode = parseMode(envMode);
-        }
-        else if (const auto cfgMode = system::config::get<std::string>("video", "gfx_mode", ""); !cfgMode.empty())
-        {
-            mode = parseMode(cfgMode);
-        }
+        g_gpuInitialized = backend_gpu()->init();
+        if (g_gpuInitialized)
+            logging::logInfo("[gfx] GPU backend initialised (active backend: gpu)");
         else
-        {
-            const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
-            const bool refDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
-            if (renderBackend == "gpu" && refDisabled)
-                mode = GfxMode::GPU;
-        }
-        g_mode = mode;
-
-        // The COM front-end needs the D3D reference's real DirectDraw surface
-        // state (the game's original surface code is still in place), so the
-        // D3D backend is always initialised. The GPU backend is only created in
-        // the modes that use it; "d3d" mode skips the SDL_GPU device entirely.
-        backend_d3d()->init();
-        g_gpuInitialized = g_mode != GfxMode::D3D && backend_gpu()->init();
-
-        switch (g_mode)
-        {
-        case GfxMode::GPU:
-            if (g_gpuInitialized)
-            {
-                // Only the GPU presents; the D3D reference's per-frame
-                // forwarding is disabled (its surface-layer forwards are kept).
-                set_active_backend(1);
-                g_referenceDisabled = true;
-            }
-            else
-            {
-                // GPU init failed (e.g. no SDL window / no driver): fall back to
-                // the D3D reference so the game still renders.
-                logging::logError("[gfx] gpu mode requested but the GPU backend failed to initialise; falling back to d3d");
-                g_mode = GfxMode::Both;
-                set_active_backend(0);
-                g_referenceDisabled = false;
-            }
-            break;
-        case GfxMode::D3D:
-            set_active_backend(0);
-            g_referenceDisabled = false;
-            break;
-        case GfxMode::Both:
-        default:
-        {
-            const auto renderBackend = system::config::get<std::string>("video", "render_backend", "d3d");
-            if (renderBackend == "gpu")
-                set_active_backend(1);
-            g_referenceDisabled = system::config::get<int32_t>("video", "disable_d3d_reference", 0) != 0;
-            if (const char* env = std::getenv("OPENRE_GFX_BACKEND"))
-            {
-                if (env[0] == '1')
-                    set_active_backend(1);
-            }
-            break;
-        }
-        }
-
-        const char* modeName = g_mode == GfxMode::D3D ? "d3d" : g_mode == GfxMode::GPU ? "gpu" : "both";
-        logging::logInfo(
-            "[gfx] backends initialised (mode={}, active={}, d3d reference {})",
-            modeName,
-            active_backend(),
-            reference_enabled() ? "enabled" : "disabled");
+            logging::logError("[gfx] GPU backend failed to initialise - the game will not render");
     }
 
     void shutdown()
     {
-        backend_d3d()->shutdown();
         if (g_gpuInitialized)
             backend_gpu()->shutdown();
         registry::clear();
@@ -1009,7 +840,6 @@ namespace openre::gfx
 
     void notify_present()
     {
-        backend_d3d()->present();
         backend_gpu()->present();
     }
 }
