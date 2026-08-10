@@ -13092,6 +13092,11 @@ namespace openre::marni
     {
         system::config::load();
         interop::thiscall<void, MarniConfig*>(0x0050ACB0, self);
+        // DisplayMode is derived from [video] render_resolution and DriverMode
+        // is no longer persisted. Drop any legacy values now so save() stops
+        // emitting them (the in-memory values were already read by ReadAll).
+        system::config::remove_key(self->path.data, "DisplayMode");
+        system::config::remove_key(self->path.data, "DriverMode");
     }
 
     // 0x0050B020

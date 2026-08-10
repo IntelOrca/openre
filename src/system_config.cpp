@@ -303,6 +303,26 @@ namespace openre::system::config
         return removed;
     }
 
+    bool remove_key(const std::string& group, const std::string& name)
+    {
+        if (!s_loaded)
+            load();
+
+        std::string fullKey = group + "." + name;
+        auto it = s_config.find(fullKey);
+        if (it == s_config.end())
+            return false;
+
+        s_config.erase(it);
+        s_keyOrder.erase(
+            std::remove_if(
+                s_keyOrder.begin(),
+                s_keyOrder.end(),
+                [&](const SectionKey& sk) { return sk.section == group && sk.key == name; }),
+            s_keyOrder.end());
+        return true;
+    }
+
     template<> std::string get<std::string>(const std::string& group, const std::string& name, std::string default_value)
     {
         if (!s_loaded)

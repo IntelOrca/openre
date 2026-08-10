@@ -7,6 +7,7 @@
 #include "system_config.h"
 #include "system_input.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -39,6 +40,20 @@ namespace openre::marni
         MarniConfig_GetString(MarniConfig* self, OldStdString* out, const char* name, const char* defaultValue)
         {
             memset(out, 0, sizeof(OldStdString));
+
+            // The display mode is no longer a persisted OG key: it is derived
+            // from the modern [video] render_resolution (the source of truth)
+            // so the two can never diverge. The string uses the same
+            // "WxH Dbpp full:F" format as marni::generate_res_string, which is
+            // what the mode list is matched against at boot.
+            if (std::strcmp(name, "DisplayMode") == 0)
+            {
+                const auto res = system::config::get_render_resolution();
+                char buffer[64];
+                std::snprintf(buffer, sizeof(buffer), "%dx%d 32bpp full:0", res.width, res.height);
+                str::string_assign_cstr(out, buffer);
+                return out;
+            }
 
             const char* group = get_registry_path(self);
             auto value = system::config::get<std::string>(group, name, defaultValue ? defaultValue : "");
@@ -77,6 +92,13 @@ namespace openre::marni
         // Writes a string value to the config.
         static bool __stdcall MarniConfig_WriteString(MarniConfig* self, const char* name, const char* data)
         {
+            // DisplayMode is derived from [video] render_resolution and
+            // DriverMode is no longer persisted, so writes to both are
+            // ignored. The in-memory marni_config values are unaffected; only
+            // their INI representation is dropped.
+            if (std::strcmp(name, "DisplayMode") == 0 || std::strcmp(name, "DriverMode") == 0)
+                return true;
+
             const char* group = get_registry_path(self);
             system::config::set(group, name, data ? data : "");
             return true;

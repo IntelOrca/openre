@@ -13,6 +13,10 @@ namespace openre::system::config
     // reset a stale/obsolete config section.
     bool remove_group(const std::string& group);
 
+    // Removes a single key belonging to `group`, so the next save drops it.
+    // Returns true when the key was present.
+    bool remove_key(const std::string& group, const std::string& name);
+
     template<typename T> T get(const std::string& group, const std::string& name, T default_value);
 
     // Explicit specializations
