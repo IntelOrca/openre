@@ -1,5 +1,6 @@
 #include "system_window.h"
 #include "logger.h"
+#include "system_config.h"
 
 #include <cstdlib>
 #include <windows.h>
@@ -121,7 +122,11 @@ namespace openre::system::window
             title = envTitle;
         }
 
-        gWindow = SDL_CreateWindow(title, 640, 480, 0);
+        // The window is created resizable at the configured [video] window_size
+        // and is decoupled from the internal render resolution: F8 only changes
+        // the render target, never the window.
+        const auto windowSize = system::config::get_window_size();
+        gWindow = SDL_CreateWindow(title, windowSize.width, windowSize.height, SDL_WINDOW_RESIZABLE);
         if (!gWindow)
         {
             logging::logError("[SDL3] SDL_CreateWindow failed: {}", SDL_GetError());
@@ -158,13 +163,6 @@ namespace openre::system::window
         if (!gWindow)
             return false;
         return SDL_SetWindowFullscreen(gWindow, fullscreen);
-    }
-
-    bool set_window_size(int width, int height)
-    {
-        if (!gWindow)
-            return false;
-        return SDL_SetWindowSize(gWindow, width, height);
     }
 
     void* get_hinstance()

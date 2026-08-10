@@ -35,8 +35,6 @@ namespace openre::system::window
 
     // Toggles borderless desktop fullscreen on the game window.
     bool set_fullscreen(bool fullscreen);
-    // Sets the window client area size (windowed mode).
-    bool set_window_size(int width, int height);
 
     // Underlying Win32 window handle (never SDL_Window*).
     void* get_hwnd();

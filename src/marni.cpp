@@ -790,7 +790,23 @@ namespace openre::marni
     // 0x00402500
     bool __stdcall change_resolution(Marni* self)
     {
-        return change_display_mode(self, self->modes + 1 >= (uint32_t)self->res_count ? 0 : self->modes + 1);
+        // F8 cycles only the windowed render resolutions; the window is
+        // decoupled from them, so a "mode" is just an internal render
+        // resolution here. The fullscreen mode is exclusive to the ALT+ENTER
+        // toggle: F8 neither enters it nor alters the fullscreen state (it is
+        // a no-op while fullscreen).
+        if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+            return false;
+        auto mode = self->modes + 1;
+        for (auto i = 0; i < self->res_count; i++)
+        {
+            if (mode >= (uint32_t)self->res_count)
+                mode = 0;
+            if (self->resolutions[mode].fullscreen == 0)
+                return change_display_mode(self, (int)mode);
+            mode++;
+        }
+        return false;
     }
 
     // ALT+ENTER: toggles between the current windowed mode and the fullscreen
@@ -1438,6 +1454,31 @@ namespace openre::marni
         else
         {
             SetRect((LPRECT)&self->window_rect, 0, 0, self->xsize, self->ysize);
+        }
+    }
+
+    // Computes the letterboxed presentation rect (in screen coordinates) for a
+    // windowed render: `width`x`height` scaled to fit the window client area
+    // and centered. The window no longer tracks the render resolution (it is
+    // resizable and sized from config), so the blit target must be derived
+    // from the actual client area instead of the render size.
+    static void compute_windowed_window_rect(HWND hWnd, int width, int height, LPRECT outRect)
+    {
+        RECT client;
+        if (GetClientRect(hWnd, &client) && client.right > 0 && client.bottom > 0)
+        {
+            double scale = std::min((double)client.right / width, (double)client.bottom / height);
+            auto rectW = (int)(width * scale);
+            auto rectH = (int)(height * scale);
+            POINT p0 = { (client.right - rectW) / 2, (client.bottom - rectH) / 2 };
+            POINT p1 = { p0.x + rectW, p0.y + rectH };
+            ClientToScreen(hWnd, &p0);
+            ClientToScreen(hWnd, &p1);
+            SetRect(outRect, p0.x, p0.y, p1.x, p1.y);
+        }
+        else
+        {
+            SetRect(outRect, 0, 0, width, height);
         }
     }
 
@@ -2916,14 +2957,10 @@ namespace openre::marni
             compute_fullscreen_window_rect(marni);
             return;
         }
-        auto window = (HWND)marni->hWnd;
-        POINT point0 = {};
-        ClientToScreen(window, &point0);
-        POINT point1 = {};
-        point1.x = marni->resolutions[marni->modes].width;
-        point1.y = marni->resolutions[marni->modes].height;
-        ClientToScreen(window, &point1);
-        SetRect((LPRECT)&marni->window_rect, point0.x, point0.y, point1.x, point1.y);
+        // Windowed: recompute the letterboxed presentation rect for the new
+        // window position (the rect is in screen coordinates, so it shifts with
+        // the client origin).
+        compute_windowed_window_rect((HWND)marni->hWnd, marni->xsize, marni->ysize, (LPRECT)&marni->window_rect);
     }
 
     // 0x004064D0
@@ -8856,21 +8893,15 @@ namespace openre::marni
     // 0x0040EE60
     static int invalidate_window(HWND hWnd, int width, int height, int /*fullscreen*/, LPRECT lpResRect)
     {
-        // SDL3 owns the Win32 window and ignores raw SetWindowPos size changes
-        // (the window is created non-resizable), so resize through SDL instead.
-        system::window::set_window_size(width, height);
+        // The window is resizable and decoupled from the render resolution, so
+        // a display-mode change never resizes it here. Only the letterboxed
+        // presentation rect is recomputed from the actual client area.
         // The original binary dropped the window to HWND_BOTTOM here to keep it
         // behind the desktop, but on a modern OS that just hides the game behind
         // other windows on every F8 press, so we skip the Z-order change.
 
         if (lpResRect)
-        {
-            POINT p0 = { 0, 0 };
-            POINT p1 = { width, height };
-            ClientToScreen(hWnd, &p0);
-            ClientToScreen(hWnd, &p1);
-            SetRect(lpResRect, p0.x, p0.y, p1.x, p1.y);
-        }
+            compute_windowed_window_rect(hWnd, width, height, lpResRect);
 
         InvalidateRect(hWnd, nullptr, TRUE);
         return 1;
