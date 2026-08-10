@@ -4085,6 +4085,27 @@ namespace openre::marni
         return tmd_file_dtor((TmdFile*)self);
     }
 
+    // Per-primitive record layout for refer_primitive/modify_primitive. The
+    // 18-byte record must be contiguous in memory (the original keeps the
+    // equivalent locals in one stack block and refer_primitive copies the whole
+    // record).
+    struct PrimRecord
+    {
+        uint16_t v0; // +0x00
+        uint16_t v1; // +0x02
+        uint16_t v2; // +0x04
+        uint16_t n0; // +0x06
+        uint16_t n1; // +0x08
+        uint16_t n2; // +0x0A
+        uint8_t u0;  // +0x0C
+        uint8_t u1;  // +0x0D
+        uint8_t u2;  // +0x0E
+        uint8_t u3;  // +0x0F
+        uint8_t u4;  // +0x10
+        uint8_t u5;  // +0x11
+    };
+    static_assert(sizeof(PrimRecord) == 0x12);
+
     // 0x00430750
     static uint32_t tmd_counts_objects(TmdFile* self, uint32_t* data)
     {
@@ -4409,12 +4430,13 @@ namespace openre::marni
         uint32_t variationBuf[64];
         memset(variationBuf, 0, sizeof(variationBuf));
 
-        // Per-primitive record passed to refer_primitive. Must be declared directly
-        // before variationBuf so the original's stack over-read in refer_primitive
-        // (up to 24/40 bytes for some primitive types) reads the variation table.
-        uint32_t v48;
-        int16_t v49, v50, v51, v52;
-        int8_t v53, v54, v55, v56, v57, v58;
+        // Per-primitive record passed to refer_primitive. The 18-byte record must
+        // be a single contiguous object (the original keeps v48..v58 in one stack
+        // block); passing separate locals lets the compiler scatter them and
+        // refer_primitive copies garbage. Declared directly before variationBuf so
+        // the original's stack over-read in refer_primitive (up to 24/40 bytes for
+        // some primitive types) reads the variation table.
+        PrimRecord v48;
 
         uint32_t v44, v42, v45;
 
@@ -4561,17 +4583,18 @@ namespace openre::marni
                             uint8_t* v26 = lpMem;
                             do
                             {
-                                v48 = (uint16_t)v26[0x12] | ((uint16_t)v26[0x16] << 16);
-                                v49 = *(int16_t*)(v26 + 0x1A);
-                                v50 = *(int16_t*)(v26 + 0x10);
-                                v51 = *(int16_t*)(v26 + 0x14);
-                                v52 = *(int16_t*)(v26 + 0x18);
-                                v53 = (int8_t)((uint8_t)v31 + v26[4]);
-                                v54 = (int8_t)v26[5];
-                                v55 = (int8_t)((uint8_t)v31 + v26[8]);
-                                v56 = (int8_t)v26[9];
-                                v57 = (int8_t)((uint8_t)v31 + v26[0xC]);
-                                v58 = (int8_t)v26[0xD];
+                                v48.v0 = *(uint16_t*)(v26 + 0x12);
+                                v48.v1 = *(uint16_t*)(v26 + 0x16);
+                                v48.v2 = *(uint16_t*)(v26 + 0x1A);
+                                v48.n0 = *(uint16_t*)(v26 + 0x10);
+                                v48.n1 = *(uint16_t*)(v26 + 0x14);
+                                v48.n2 = *(uint16_t*)(v26 + 0x18);
+                                v48.u0 = (uint8_t)((uint8_t)v31 + v26[4]);
+                                v48.u1 = (uint8_t)v26[5];
+                                v48.u2 = (uint8_t)((uint8_t)v31 + v26[8]);
+                                v48.u3 = (uint8_t)v26[9];
+                                v48.u4 = (uint8_t)((uint8_t)v31 + v26[0xC]);
+                                v48.u5 = (uint8_t)v26[0xD];
                                 refer_primitive(self, v40, &v48);
                                 ++v30;
                                 ++v40;
@@ -5054,23 +5077,6 @@ namespace openre::marni
         }
         return (int)(intptr_t)result;
     }
-
-    struct PrimRecord
-    {
-        uint16_t v0; // +0x00
-        uint16_t v1; // +0x02
-        uint16_t v2; // +0x04
-        uint16_t n0; // +0x06
-        uint16_t n1; // +0x08
-        uint16_t n2; // +0x0A
-        uint8_t u0;  // +0x0C
-        uint8_t u1;  // +0x0D
-        uint8_t u2;  // +0x0E
-        uint8_t u3;  // +0x0F
-        uint8_t u4;  // +0x10
-        uint8_t u5;  // +0x11
-    };
-    static_assert(sizeof(PrimRecord) == 0x12);
 
     // 0x00445BF0
     static uint32_t tmd_create_poly_object(const uint8_t* pTmd, int entryIndex, int a3, uint16_t* a4, int a5)
@@ -12300,7 +12306,10 @@ namespace openre::marni
             v7 = 2;
         }
 
-        gfx_draw::add_scaler(scaler, a3 + (v7 >> 7));
+        // The door scaler block is a persistent 224-byte record per door (0x669B88 + 224 * doorId);
+        // TransObject reads the object handle at +0x4C, so the full block must reach the OT.
+        // gfx_draw::add_scaler would truncate it to sizeof(PrimScaler), corrupting the object index.
+        add_primitive_scaler(gGameTable.pMarni, (Prim*)scaler, a3 + (v7 >> 7));
     }
 
     // 0x004335A0
