@@ -1,5 +1,5 @@
 #include "debug.h"
-#include "gfx_draw.h"
+#include "marni_draw.h"
 #include "openre.h"
 #include "re2.h"
 #include "system_window.h"
@@ -149,7 +149,7 @@ namespace openre::debug
         }
 
         // Draw-call log (most recent first, scrollable with PgUp/PgDn)
-        const auto& stats = gfx_draw::draw_stats();
+        const auto& stats = marni::draw_stats();
         print(margin, y, color, "Draw calls: %d", stats.log_count);
         y += lineHeight;
 
@@ -158,7 +158,7 @@ namespace openre::debug
         if (s_log_scroll > maxScroll)
             s_log_scroll = maxScroll;
 
-        const char* names[static_cast<int>(gfx_draw::DrawKind::Count)] = {
+        const char* names[static_cast<int>(marni::DrawKind::Count)] = {
             "Sprt", "FT4", "Mask", "BgScl", "SclSprt", "SclPoly", "GT4", "FT4_2", "F4", "Tile", "Line",
         };
 
@@ -167,7 +167,7 @@ namespace openre::debug
         const int rows = (std::min)(visible, 20);
         for (int i = stats.log_count - 1 - s_log_scroll, row = 0; i >= 0 && row < rows; i--, row++)
         {
-            const auto& rec = stats.log[i % gfx_draw::DRAW_CALL_LOG_SIZE];
+            const auto& rec = stats.log[i % marni::DRAW_CALL_LOG_SIZE];
             const char* name = names[static_cast<int>(rec.kind)];
             if (rec.page == 0xFFFF)
                 print(margin, y, color, "%s z=%d (%d,%d)-(%d,%d)", name, rec.z, rec.x0, rec.y0, rec.x1, rec.y1);

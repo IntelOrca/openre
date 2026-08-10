@@ -6,11 +6,11 @@
 #include "file.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "openre.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
-#include "renderer.h"
 #include "sce.h"
 #include "scheduler.h"
 
@@ -303,7 +303,7 @@ namespace openre::room
                 snd_room_load();
                 if (!ctcb.var_13)
                 {
-                    gfx_draw::unloadTexturePage(17);
+                    marni::unloadTexturePage(17);
                     sce_model_init();
                     snd_bgm_play_ck();
                     if (rdt_get_offset<void*>(RdtOffsetKind::VB))

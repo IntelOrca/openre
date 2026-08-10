@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace openre::gfx_draw
+namespace openre::marni
 {
     class Image;
 }
@@ -19,5 +19,5 @@ namespace openre::tim
     // buffer is the raw 16-bit-aligned TIM pixel data (pitch * height bytes)
     // and the palette buffer the raw CLUT entries, matching the layout that
     // timobject_in used to produce via MarniSurface2.
-    bool decodeTim(const uint8_t* data, gfx_draw::Image& image);
+    bool decodeTim(const uint8_t* data, marni::Image& image);
 }

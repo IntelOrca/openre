@@ -1,14 +1,14 @@
 #include "marni.h"
-#include "gfx_backend.h"
-#include "gfx_draw.h"
 #include "interop.hpp"
 #include "logger.h"
+#include "marni_draw.h"
 #include "marni_movie.h"
 #include "openre.h"
 #include "re2.h"
 #include "str.h"
 #include "system_config.h"
 #include "system_filesystem.h"
+#include "system_gpu_backend.h"
 #include "system_window.h"
 
 #include <algorithm>
@@ -12282,7 +12282,7 @@ namespace openre::marni
 
         if (*pDoorVarC4)
         {
-            gfx_draw::unloadTexture(*pDoorVarC4);
+            marni::unloadTexture(*pDoorVarC4);
             *pDoorVarC4 = 0;
         }
 
@@ -12342,7 +12342,7 @@ namespace openre::marni
 
         // The door scaler block is a persistent 224-byte record per door (0x669B88 + 224 * doorId);
         // TransObject reads the object handle at +0x4C, so the full block must reach the OT.
-        // gfx_draw::add_scaler would truncate it to sizeof(PrimScaler), corrupting the object index.
+        // marni::add_scaler would truncate it to sizeof(PrimScaler), corrupting the object index.
         add_primitive_scaler(gGameTable.pMarni, (Prim*)scaler, a3 + (v7 >> 7));
     }
 
@@ -12452,7 +12452,7 @@ namespace openre::marni
                 *(uint32_t*)(v4 + 44) = 8421504;
 
                 if (v8 / 3 > 400)
-                    gfx_draw::add_scaler((const PrimScaler*)v4, v8 / 3);
+                    marni::add_scaler((const PrimScaler*)v4, v8 / 3);
                 v4 += 48;
                 if (++v14 >= v34[6])
                     break;
@@ -12467,7 +12467,7 @@ namespace openre::marni
         auto& tp = gGameTable.texture_pages[page];
         if (tp.handle != 0)
         {
-            gfx_draw::unloadTexture(tp.handle);
+            marni::unloadTexture(tp.handle);
         }
         tp.handle = 0;
         tp.clutCount = 0;
@@ -12635,17 +12635,17 @@ namespace openre::marni
         {
             if (v5[-1])
             {
-                gfx_draw::unloadTexture(v5[-1]);
+                marni::unloadTexture(v5[-1]);
                 v5[-1] = 0;
             }
             if (v5[0])
             {
-                gfx_draw::unloadTexture(v5[0]);
+                marni::unloadTexture(v5[0]);
                 v5[0] = 0;
             }
             if (v5[1])
             {
-                gfx_draw::unloadTexture(v5[1]);
+                marni::unloadTexture(v5[1]);
                 v5[1] = 0;
             }
             if (v5[2])
@@ -12703,12 +12703,12 @@ namespace openre::marni
         {
             if (p[-1])
             {
-                gfx_draw::unloadTexture(p[-1]);
+                marni::unloadTexture(p[-1]);
                 p[-1] = 0;
             }
             if (p[0])
             {
-                gfx_draw::unloadTexture(p[0]);
+                marni::unloadTexture(p[0]);
                 p[0] = 0;
             }
             const int v1 = p[1];
@@ -12741,7 +12741,7 @@ namespace openre::marni
         int result = *(uint32_t*)0x674DF0;
         if (*(uint32_t*)0x674DF0)
         {
-            gfx_draw::unloadTexture(*(uint32_t*)0x674DF0);
+            marni::unloadTexture(*(uint32_t*)0x674DF0);
             *(uint32_t*)0x674DF0 = 0;
             // (the UnloadTexture result is discarded: the C++ unload_texture wrapper is void)
         }
@@ -12778,7 +12778,7 @@ namespace openre::marni
     // 0x00441270
     void add_tile(void* primPtr, int z, int is_back)
     {
-        gfx_draw::add_tile((gfx_draw::Tile*)primPtr, z, is_back);
+        marni::add_tile((marni::Tile*)primPtr, z, is_back);
     }
 
     // 0x00442E40
@@ -13170,26 +13170,26 @@ namespace openre::marni
         {
         case 0:
         {
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, false);
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, false);
+            marni::set_gpu_flag(GpuFlags::GPU_17, false);
+            marni::set_gpu_flag(GpuFlags::GPU_18, false);
             break;
         }
         case 1:
         {
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, true);
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, false);
+            marni::set_gpu_flag(GpuFlags::GPU_17, true);
+            marni::set_gpu_flag(GpuFlags::GPU_18, false);
             break;
         }
         case 2:
         {
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, false);
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, true);
+            marni::set_gpu_flag(GpuFlags::GPU_17, false);
+            marni::set_gpu_flag(GpuFlags::GPU_18, true);
             break;
         }
         case 3:
         {
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, true);
-            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, true);
+            marni::set_gpu_flag(GpuFlags::GPU_17, true);
+            marni::set_gpu_flag(GpuFlags::GPU_18, true);
             break;
         }
         }
@@ -13267,16 +13267,16 @@ namespace openre::marni
         interop::hookThisCall(0x004021C0, &add_primitive_front);
         interop::hookThisCall(0x00402210, &add_primitive_scaler);
         interop::hookThisCall(0x00402240, &add_primitive_back);
-        interop::hookThisCall(0x00402290, &clear_otags);
+        interop::hookThisCall(0x00402290, (void(__stdcall*)(Marni*)) & clear_otags);
         interop::hookThisCall(0x004022E0, &request_video_memory);
         interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x004033F0, &reload_texture);
         interop::hookThisCall(0x00402940, &restore_surfaces);
-        interop::hookThisCall(0x00402A80, &flip);
-        interop::hookThisCall(0x00402BC0, &draw);
+        interop::hookThisCall(0x00402A80, (void(__stdcall*)(Marni*)) & flip);
+        interop::hookThisCall(0x00402BC0, (void(__stdcall*)(Marni*)) & draw);
         interop::hookThisCall(0x00405DD0, &get_z_buffer_caps);
         interop::hookThisCall(0x00404CE0, &unload_texture);
-        interop::hookThisCall(0x00404D20, &clear);
+        interop::hookThisCall(0x00404D20, (int(__stdcall*)(Marni*)) & clear);
         interop::hookThisCall(0x00404FA0, &clear_buffers);
         interop::hookThisCall(0x004050C0, &dtor);
         interop::hookThisCall(0x00405320, &init);
@@ -13307,7 +13307,7 @@ namespace openre::marni
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
         interop::writeJmp(0x004DBFD0, &out_internal);
-        interop::writeJmp(0x00442CB0, &set_gpu_flag);
+        interop::writeJmp(0x00442CB0, (void (*)())&set_gpu_flag);
         interop::hookThisCall(0x00412BD0, &surface2_vfill);
         interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);

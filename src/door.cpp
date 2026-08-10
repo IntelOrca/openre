@@ -4,11 +4,11 @@
 #include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "math.h"
 #include "model.h"
 #include "openre.h"
 #include "re2.h"
-#include "renderer.h"
 #include "room.h"
 #include "scd.h"
 #include "sce.h"
@@ -367,7 +367,7 @@ namespace openre::door
             if (_doorTransitionMvs[gGameTable.door_trans_mv] == nullptr)
             {
                 gGameTable.byte_680598 = 0;
-                gfx_draw::unloadTexturePage(18);
+                marni::unloadTexturePage(18);
                 movie_set(1);
                 task_exit();
             }

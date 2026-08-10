@@ -1,12 +1,12 @@
 #pragma once
 
-#include "gfx_draw.h"
+#include "marni_draw.h"
 
 #include <cstdint>
 #include <memory>
 #include <vector>
 
-namespace openre::gfx_draw
+namespace openre::marni
 {
     // Raw decoded texture image. Callers decode TIM/ADT data into an Image and
     // hand it to the renderer; the renderer is responsible for uploading it to
@@ -26,7 +26,7 @@ namespace openre::gfx_draw
     };
 
     // Abstract renderer interface. One method per hooked Add* function in
-    // gfx_draw.h; the hooks are thin wrappers that delegate to the global
+    // marni_draw.h; the hooks are thin wrappers that delegate to the global
     // renderer. Each method mirrors the original binary function (address in
     // the implementation).
     class Renderer
@@ -494,10 +494,10 @@ namespace openre::gfx_draw
         DrawStats stats;
     };
 
-    // The global renderer used by the gfx_draw hooks.
+    // The global renderer used by the marni_draw hooks.
     extern std::unique_ptr<Renderer> g_renderer;
 
     // Constructs the global renderer (a LoggingRenderer wrapping the real
-    // renderer). Called from gfx_draw::init_hooks().
+    // renderer). Called from marni::init_draw_hooks().
     void initRenderer();
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gfx_backend.h"
+#include "system_gpu_backend.h"
 
 namespace openre::gfx
 {
@@ -81,7 +81,7 @@ namespace openre::gfx
     constexpr int kMaterialVtblSlots = 64;
     constexpr int kTextureVtblSlots = 64;
 
-    // Wrap entry points (implemented in gfx_d3d2.cpp; only gfx_d3d2.cpp
+    // Wrap entry points (implemented in marni_ddraw.cpp; only marni_ddraw.cpp
     // wraps objects).
     void wrap_ddraw2(IDirectDraw2* dd2);
     void wrap_surface(IDirectDrawSurface* surface);

@@ -1,13 +1,13 @@
-#include "gfx_draw.h"
+#include "marni_draw.h"
 #include "interop.hpp"
+#include "marni_renderer.h"
 #include "openre.h"
-#include "renderer.h"
 
-namespace openre::gfx_draw
+namespace openre::marni
 {
     // The hooked Add* family (originally all __cdecl in the 0x00440xxx range)
     // is now a set of thin wrappers over the global renderer, which owns all
-    // primitive memory. init_hooks() routes all callers to these wrappers.
+    // primitive memory. init_draw_hooks() routes all callers to these wrappers.
 
     // 0x00440250
     void reset_geom()
@@ -188,7 +188,7 @@ namespace openre::gfx_draw
         g_renderer->unloadTexture(handle);
     }
 
-    void init_hooks()
+    void init_draw_hooks()
     {
         interop::writeJmp(0x00440250, &reset_geom);
         interop::writeJmp(0x00441170, &add_poly_f4);

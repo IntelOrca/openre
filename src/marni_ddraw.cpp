@@ -1,7 +1,7 @@
-#include "gfx_d3d2.h"
-#include "gfx_backend.h"
+#include "marni_ddraw.h"
 #include "logger.h"
 #include "system_gpu.h"
+#include "system_gpu_backend.h"
 
 #include <cstring>
 #include <unordered_map>
@@ -387,7 +387,7 @@ namespace openre::gfx
 
         // The game draws the save screen's text via GDI over an HDC obtained
         // from the surface (GetDC/ReleaseDC). The GPU backend supplies its own
-        // DIB-backed HDC over the surface shadow (see gfx_backend_gpu.cpp
+        // DIB-backed HDC over the surface shadow (see system_gpu.cpp
         // get_dc/release_dc).
         static HRESULT STDMETHODCALLTYPE hook_surface_get_dc(IDirectDrawSurface* self, HDC* hdc)
         {

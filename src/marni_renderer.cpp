@@ -1,4 +1,4 @@
-#include "renderer.h"
+#include "marni_renderer.h"
 #include "marni.h"
 #include "openre.h"
 #include "re2.h"
@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-namespace openre::gfx_draw
+namespace openre::marni
 {
     namespace
     {

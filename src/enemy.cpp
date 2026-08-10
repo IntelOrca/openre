@@ -2,10 +2,10 @@
 #include "file.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "model.h"
 #include "openre.h"
 #include "rdt.h"
-#include "renderer.h"
 #include "tim.h"
 #include <array>
 #include <cstring>
@@ -257,9 +257,9 @@ namespace openre::enemy
     // the palette) into a compact Image. Mirrors the surface slicing the
     // original did via set_address_0 / set_pal_address on a shared marni
     // surface, followed by imageFromSurface.
-    static gfx_draw::Image sliceImage(const gfx_draw::Image& src, int x0, int width, int palStart, int palCnt)
+    static marni::Image sliceImage(const marni::Image& src, int x0, int width, int palStart, int palCnt)
     {
-        gfx_draw::Image out;
+        marni::Image out;
         out.width = width;
         out.height = src.height;
         out.depth = src.depth;
@@ -298,9 +298,9 @@ namespace openre::enemy
     // round trip is lossless, so each output pixel is just the (remapped)
     // palette entry; the transparent 0x8000 colour is substituted with 0x8001
     // first so it survives as a red 1x1 dot instead of collapsing to black.
-    static gfx_draw::Image expandPalettedTo16bpp(const gfx_draw::Image& src)
+    static marni::Image expandPalettedTo16bpp(const marni::Image& src)
     {
-        gfx_draw::Image out;
+        marni::Image out;
         out.width = src.width;
         out.height = src.height;
         out.depth = 16;
@@ -362,17 +362,17 @@ namespace openre::enemy
     {
         if (gPlTextureHandle[10 * workNo])
         {
-            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle[10 * workNo]);
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle[10 * workNo]);
             gPlTextureHandle[10 * workNo] = 0;
         }
         if (gPlTextureHandle1[10 * workNo])
         {
-            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle1[10 * workNo]);
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle1[10 * workNo]);
             gPlTextureHandle1[10 * workNo] = 0;
         }
         if (gPlTextureHandle2[10 * workNo])
         {
-            gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle2[10 * workNo]);
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle2[10 * workNo]);
             gPlTextureHandle2[10 * workNo] = 0;
         }
 
@@ -380,7 +380,7 @@ namespace openre::enemy
         gPlClutHandle[10 * workNo] = clut;
         gPlTextureMode = (-(gGameTable.graphics_ptr_data != 2) & 0x20) + 17;
 
-        gfx_draw::Image image;
+        marni::Image image;
         if (!tim::decodeTim((const uint8_t*)pTim, image))
             return;
 
@@ -394,21 +394,21 @@ namespace openre::enemy
             // correct palette entries (offset by 1 for id 54, 2 otherwise).
             const int palStart = id == 54 ? 1 : 2;
             const int palCnt = id == 54 ? image.palCnt - 1 : image.palCnt - 2;
-            gPlTextureHandle1[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(
+            gPlTextureHandle1[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(
                 sliceImage(image, 256, image.width - 256, palStart, palCnt), gPlTextureMode);
 
             if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
             {
                 gPlTextureHandle2[10 * workNo]
-                    = (uint32_t)gfx_draw::g_renderer->loadTexture(sliceImage(image, 128, 256, 1, 2), gPlTextureMode);
+                    = (uint32_t)marni::g_renderer->loadTexture(sliceImage(image, 128, 256, 1, 2), gPlTextureMode);
             }
 
-            gfx_draw::Image left = sliceImage(image, 0, 256, 0, image.palCnt);
-            gPlTextureHandle[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(std::move(left), gPlTextureMode);
+            marni::Image left = sliceImage(image, 0, 256, 0, image.palCnt);
+            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(left), gPlTextureMode);
         }
         else
         {
-            gPlTextureHandle[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(std::move(image), gPlTextureMode);
+            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(image), gPlTextureMode);
         }
     }
 

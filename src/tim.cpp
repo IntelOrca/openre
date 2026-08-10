@@ -1,8 +1,8 @@
 #include "tim.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "openre.h"
-#include "renderer.h"
 #include "system_filesystem.h"
 #include <array>
 #include <cstdio>
@@ -174,14 +174,14 @@ namespace openre::tim
     // 0x0043FF40
     int tim_buffer_to_surface(Tim* pTim, uint32_t page, uint32_t mode)
     {
-        gfx_draw::Image image;
+        marni::Image image;
         bool decoded = decodeTim((const uint8_t*)pTim, image);
         if (page >= std::size(gGameTable.texture_pages))
             return 0;
         if (!decoded)
         {
             // The original still unloaded the page when the decode failed.
-            gfx_draw::unloadTexturePage(page);
+            marni::unloadTexturePage(page);
             return 0;
         }
 
@@ -191,14 +191,14 @@ namespace openre::tim
         else
             mode2 |= image.palCnt <= 1 ? 2 : 0x22;
 
-        return gfx_draw::loadTexturePage(page, image, mode2) != 0 ? 1 : 0;
+        return marni::loadTexturePage(page, image, mode2) != 0 ? 1 : 0;
     }
 
-    bool decodeTim(const uint8_t* data, gfx_draw::Image& image)
+    bool decodeTim(const uint8_t* data, marni::Image& image)
     {
         const uint32_t* pTimData = (const uint32_t*)data;
 
-        image = gfx_draw::Image();
+        image = marni::Image();
 
         if (pTimData[0] != 16)
         {

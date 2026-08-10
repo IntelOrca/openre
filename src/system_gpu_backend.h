@@ -9,7 +9,7 @@
 
 namespace openre::gfx
 {
-    // The single graphics backend (SDL_GPU). The COM front-end (gfx_d3d2.cpp)
+    // The single graphics backend (SDL_GPU). The COM front-end (marni_ddraw.cpp)
     // intercepts every render-path call and forwards it to this backend.
     //
     // Every method mirrors a legacy COM method of the same name. Methods that
@@ -58,7 +58,7 @@ namespace openre::gfx
         virtual HRESULT get_dc(IUnknown* surface, HDC* hdc) = 0;
         virtual HRESULT release_dc(IUnknown* surface, HDC hdc) = 0;
         // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
-        // surface; the front-end (gfx_d3d2.cpp) performs the real QI and wraps
+        // surface; the front-end (marni_ddraw.cpp) performs the real QI and wraps
         // the returned texture (so its GetHandle/Load reach the backend). The
         // backend itself has no interface to hand out.
         virtual HRESULT query_texture_interface(IUnknown* surface, LPVOID* outTexture) = 0;
@@ -114,7 +114,7 @@ namespace openre::gfx
     // Forwarding helpers for the decompiled render path
     // ---------------------------------------------------------------------
     // Decompiled code used to reach the backends through the wrapped COM
-    // device vtable (gfx_d3d2.cpp). These helpers forward a call to the
+    // device vtable (marni_ddraw.cpp). These helpers forward a call to the
     // backend directly, so decompiled code no longer needs the COM front-end
     // for the hot render path.
 

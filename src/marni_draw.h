@@ -5,10 +5,10 @@
 #include <cstdint>
 #include <cstring>
 
-namespace openre::gfx_draw
+namespace openre::marni
 {
     // The game's texture-page helpers take an Image; the full definition lives
-    // in renderer.h.
+    // in marni_renderer.h.
     class Image;
 
     // PSX-style primitive structures passed by the game code to the Add*
@@ -202,7 +202,7 @@ namespace openre::gfx_draw
     const DrawStats& draw_stats();
 
     // Decompiled Add* family (originally all __cdecl in the 0x00440xxx range).
-    // These replace the original binary functions; init_hooks() routes all
+    // These replace the original binary functions; init_draw_hooks() routes all
     // callers to our implementations.
 
     void reset_geom();
@@ -244,5 +244,5 @@ namespace openre::gfx_draw
     void unloadTexture(int handle);
 
     // Registers hooks for the Add* functions and ResetGeom.
-    void init_hooks();
+    void init_draw_hooks();
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -82,17 +82,15 @@
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="gfxadt.cpp" />
-    <ClCompile Include="gfx_backend_gpu.cpp" />
-    <ClCompile Include="gfx_d3d2.cpp" />
-    <ClCompile Include="gfx_shaders.cpp" />
-    <ClCompile Include="gfx_draw.cpp" />
-    <ClCompile Include="renderer.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="logger.cpp" />
+    <ClCompile Include="marni_ddraw.cpp" />
+    <ClCompile Include="marni_draw.cpp" />
+    <ClCompile Include="marni_renderer.cpp" />
     <ClCompile Include="marni_config.cpp" />
     <ClCompile Include="marni.cpp" />
     <ClCompile Include="marni_movie.cpp" />
@@ -122,6 +120,7 @@
   <ItemGroup>
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
+    <ClInclude Include="cmdline.h" />
     <ClInclude Include="data.hpp" />
     <ClInclude Include="debug.h" />
     <ClInclude Include="door.h" />
@@ -130,14 +129,16 @@
     <ClInclude Include="error.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="gfx.h" />
-    <ClInclude Include="gfx_backend.h" />
-    <ClInclude Include="gfx_d3d2.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
     <ClInclude Include="logger.h" />
+    <ClInclude Include="marni_config.h" />
+    <ClInclude Include="marni_ddraw.h" />
+    <ClInclude Include="marni_draw.h" />
+    <ClInclude Include="marni_renderer.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="marni_movie.h" />
     <ClInclude Include="math.h" />
@@ -147,7 +148,6 @@
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />
-    <ClInclude Include="renderer.h" />
     <ClInclude Include="room.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
@@ -157,8 +157,11 @@
     <ClInclude Include="save.h" />
     <ClInclude Include="system_audio.h" />
     <ClInclude Include="system_config.h" />
+    <ClInclude Include="system_filesystem.h" />
+    <ClInclude Include="system_gpu_backend.h" />
     <ClInclude Include="system_gpu.h" />
     <ClInclude Include="system_input.h" />
+    <ClInclude Include="system_window.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
     <ClInclude Include="window.h" />
