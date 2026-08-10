@@ -773,6 +773,26 @@ namespace openre::gfx
         return E_UNEXPECTED;
     }
 
+    HRESULT surface_forward_query_texture_interface(IUnknown* surface, LPVOID* outTexture)
+    {
+        // The game obtains IDirect3DTexture2 objects by QI-ing a DirectDraw
+        // surface (surfacex_create_texture_object); forward to the real QI and
+        // wrap the returned texture so its GetHandle/Load reach the backends.
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, REFIID, void**);
+            const auto hr = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_QueryInterface])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), IID_IDirect3DTexture2, outTexture);
+            if (SUCCEEDED(hr) && outTexture != nullptr && *outTexture != nullptr)
+            {
+                wrap_texture_from_surface(
+                    reinterpret_cast<IDirect3DTexture2*>(*outTexture), reinterpret_cast<IDirectDrawSurface*>(surface));
+            }
+            return hr;
+        }
+        return E_UNEXPECTED;
+    }
+
     // ----------------------------------------------------------------------
     // Wrap entry points: allocate a new vtable, copy the original, override
     // the slots we intercept, then swap the object's vtable pointer in place.

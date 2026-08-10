@@ -133,6 +133,7 @@ namespace openre::gfx
     HRESULT surface_forward_unlock(IUnknown* surface, void* lpRect);
     HRESULT surface_forward_is_lost(IUnknown* surface);
     HRESULT surface_forward_restore(IUnknown* surface);
+    HRESULT surface_forward_query_texture_interface(IUnknown* surface, LPVOID* outTexture);
 
     // ---------------------------------------------------------------------
     // Forwarding helpers for the decompiled render path
@@ -259,7 +260,9 @@ namespace openre::gfx
 
     inline HRESULT surface_query_texture_interface(IUnknown* surface, LPVOID* outTexture)
     {
-        return backend_gpu()->query_texture_interface(surface, outTexture);
+        const auto hr = surface_forward_query_texture_interface(surface, outTexture);
+        backend_gpu()->query_texture_interface(surface, outTexture);
+        return hr;
     }
 
     // The GPU backend is the one and only backend; the active backend is
