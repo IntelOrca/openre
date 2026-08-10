@@ -6,6 +6,7 @@
 #include "openre.h"
 #include "rdt.h"
 #include "renderer.h"
+#include "tim.h"
 #include <array>
 #include <cstring>
 #include <vector>
@@ -252,105 +253,113 @@ namespace openre::enemy
         return interop::call<void, int>(0x00442F50, id);
     }
 
-    struct PlTimSurface : public MarniSurface
+    // Deep-copies a rectangular region out of `src` (including a sub-range of
+    // the palette) into a compact Image. Mirrors the surface slicing the
+    // original did via set_address_0 / set_pal_address on a shared marni
+    // surface, followed by imageFromSurface.
+    static gfx_draw::Image sliceImage(const gfx_draw::Image& src, int x0, int width, int palStart, int palCnt)
     {
-        uint32_t var_3C; // 0x003C
-    };
-    static_assert(sizeof(PlTimSurface) == 0x40);
+        gfx_draw::Image out;
+        out.width = width;
+        out.height = src.height;
+        out.depth = src.depth;
+        out.palBpp = src.palBpp;
+        out.palCnt = src.palBpp > 0 ? palCnt : 0;
+        out.psxFormat = src.psxFormat;
 
-    // 0x00413630
-    static uint16_t* calc_pal_address(MarniSurface2* self, int a2, int a3)
-    {
-        return (uint16_t*)interop::thiscall<int, MarniSurface2*, int, int>(0x00413630, self, a2, a3);
-    }
+        const int srcRowBytes = src.depth == 4 ? src.width / 2 : src.width * (src.depth / 8);
+        const int outRowBytes = src.depth == 4 ? width / 2 : width * (src.depth / 8);
+        const int srcOffset = src.depth == 4 ? x0 / 2 : x0 * (src.depth / 8);
 
-    // 0x00412F70
-    static void set_pal_address(MarniSurface2* self, void* addr)
-    {
-        interop::thiscall<int, MarniSurface2*, void*>(0x00412F70, self, addr);
-    }
-
-    // 0x00412F30
-    static void set_address_0(MarniSurface2* self, void* addr)
-    {
-        interop::thiscall<int, MarniSurface2*, void*>(0x00412F30, self, addr);
-    }
-
-    // 0x004130D0
-    static int surface_operator_eq(MarniSurface2* self, MarniSurface2* pSrc)
-    {
-        return interop::thiscall<int, MarniSurface2*, MarniSurface2*>(0x004130D0, self, pSrc);
-    }
-
-    static int surface_lock(MarniSurface2* self, int a2, int a3)
-    {
-        return interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)self->vtbl->lock_fn, self, a2, a3);
-    }
-
-    static void surface_unlock(MarniSurface2* self)
-    {
-        interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl->unlock_fn, self);
-    }
-
-    // 0x0042FE50
-    static void timobject_ctor(MarniSurface2* self, const char* path)
-    {
-        interop::thiscall<int, MarniSurface2*, const char*>(0x0042FE50, self, path);
-    }
-
-    // 0x0042FB70
-    static int timobject_in(MarniSurface2* self, void* pTim)
-    {
-        return interop::thiscall<int, MarniSurface2*, void*>(0x0042FB70, self, pTim);
-    }
-
-    // 0x0042FEB0
-    static void timobject_dtor(MarniSurface2* self)
-    {
-        interop::thiscall<int, MarniSurface2*>(0x0042FEB0, self);
-    }
-
-    // Deep-copies a marni surface (including a sub-region aliased via
-    // set_address_0 / set_pal_address) into an Image.
-    static gfx_draw::Image imageFromSurface(MarniSurface2* surface)
-    {
-        gfx_draw::Image image;
-        image.width = surface->width;
-        image.height = surface->height;
-        image.depth = surface->bpp;
-        image.palBpp = surface->var_28 ? surface->var_25 : 0;
-        image.palCnt = surface->var_28 ? surface->pal_cnt : 0;
-        image.psxFormat = surface->desc.a_bitcnt == 0;
-
-        const int bytesPerRow = (surface->bpp == 4) ? (surface->width / 2) : (surface->width * (surface->bpp / 8));
-        image.pixels.resize((size_t)bytesPerRow * surface->height);
-        const auto* src = (const uint8_t*)surface->pBitmap;
-        for (int y = 0; y < surface->height; ++y)
+        out.pixels.resize((size_t)outRowBytes * src.height);
+        const auto* srcPixels = src.pixels.data();
+        for (int y = 0; y < src.height; ++y)
         {
-            std::memcpy(image.pixels.data() + (size_t)y * bytesPerRow, src + (size_t)y * surface->pitch, (size_t)bytesPerRow);
+            std::memcpy(
+                out.pixels.data() + (size_t)y * outRowBytes,
+                srcPixels + (size_t)y * srcRowBytes + srcOffset,
+                (size_t)outRowBytes);
         }
 
-        if (image.palBpp > 0)
+        if (out.palBpp > 0)
         {
-            const int entriesPerPal = surface->bpp == 4 ? 16 : 256;
-            const auto* pPalette = (const uint8_t*)surface->pPalette;
-            image.palette.assign(pPalette, pPalette + (size_t)entriesPerPal * surface->pal_cnt * (surface->var_25 / 8));
+            const int entriesPerPal = src.depth == 4 ? 16 : 256;
+            const size_t palBytesPerPal = (size_t)entriesPerPal * (src.palBpp / 8);
+            const auto* srcPal = src.palette.data();
+            out.palette.assign(
+                srcPal + (size_t)palStart * palBytesPerPal, srcPal + (size_t)(palStart + palCnt) * palBytesPerPal);
         }
-        return image;
+        return out;
+    }
+
+    // 16-bit expands a paletted Image through palette 0, matching the software
+    // 8-bit (graphics_ptr_data == 2) path of the original which blitted the
+    // indexed TIM into a 16bpp work surface. The blit's 555 expand/re-pack
+    // round trip is lossless, so each output pixel is just the (remapped)
+    // palette entry; the transparent 0x8000 colour is substituted with 0x8001
+    // first so it survives as a red 1x1 dot instead of collapsing to black.
+    static gfx_draw::Image expandPalettedTo16bpp(const gfx_draw::Image& src)
+    {
+        gfx_draw::Image out;
+        out.width = src.width;
+        out.height = src.height;
+        out.depth = 16;
+        out.palBpp = 0;
+        out.palCnt = 0;
+        out.psxFormat = true;
+        out.pixels.resize((size_t)2 * src.width * src.height);
+
+        if (src.depth == 16)
+        {
+            // Non-paletted 16bpp is already in the final format; a paletted
+            // 16bpp texture never reaches the soft8 path in practice.
+            out.pixels = src.pixels;
+            return out;
+        }
+
+        const int palCount = 1 << src.depth; // entries per palette (16 for 4bpp, 256 for 8bpp)
+        std::vector<uint16_t> remapped;
+        remapped.resize(src.palette.size() / 2);
+        std::memcpy(remapped.data(), src.palette.data(), src.palette.size());
+        for (int palette = 0; palette < src.palCnt; ++palette)
+        {
+            for (int i = 1; i < palCount; ++i)
+            {
+                if (remapped[(size_t)palette * palCount + i] == 0x8000)
+                    remapped[(size_t)palette * palCount + i] = 0x8001;
+            }
+        }
+
+        auto* dst = (uint16_t*)out.pixels.data();
+        if (src.depth == 4)
+        {
+            // var_2A = 1: even columns hold the low nibble.
+            for (int y = 0; y < src.height; ++y)
+            {
+                for (int x = 0; x < src.width; x += 2)
+                {
+                    uint8_t byte = src.pixels[(size_t)y * (src.width / 2) + x / 2];
+                    dst[(size_t)y * src.width + x] = remapped[byte & 0xF];
+                    dst[(size_t)y * src.width + x + 1] = remapped[byte >> 4];
+                }
+            }
+        }
+        else
+        {
+            for (int y = 0; y < src.height; ++y)
+            {
+                for (int x = 0; x < src.width; ++x)
+                {
+                    dst[(size_t)y * src.width + x] = remapped[src.pixels[(size_t)y * src.width + x]];
+                }
+            }
+        }
+        return out;
     }
 
     // 0x00443F70
     static void pl_load_texture(int workNo, void* pTim, int tpage, int clut, int id)
     {
-        PlTimSurface tim;
-        MarniSurface2 work;
-        MarniSurface2 surface;
-        MarniSurface2* p_pDDsurface;
-        RECT rect;
-
-        timobject_ctor(&tim, nullptr);
-        marni::surface2_ctor(&surface);
-
         if (gPlTextureHandle[10 * workNo])
         {
             gfx_draw::g_renderer->unloadTexture((int)gPlTextureHandle[10 * workNo]);
@@ -371,124 +380,36 @@ namespace openre::enemy
         gPlClutHandle[10 * workNo] = clut;
         gPlTextureMode = (-(gGameTable.graphics_ptr_data != 2) & 0x20) + 17;
 
-        timobject_in(&tim, pTim);
+        gfx_draw::Image image;
+        if (!tim::decodeTim((const uint8_t*)pTim, image))
+            return;
 
         if (gGameTable.graphics_ptr_data == 2)
+            image = expandPalettedTo16bpp(image);
+
+        if (image.width > 256)
         {
-            int width = tim.width;
-            int height = tim.height;
-            int palCnt = tim.pal_cnt;
-
-            marni::surface2_create_work(&surface, width, height, 16, 0, -1);
-
-            rect.left = 0;
-            rect.top = 0;
-            rect.right = 127;
-            rect.bottom = height - 1;
-
-            surface_lock(&tim, 0, 0);
-
-            if (palCnt > 0)
-            {
-                for (int palette = 0; palette < palCnt; palette++)
-                {
-                    for (int i = 1; i < 256; i++)
-                    {
-                        uint16_t* p = calc_pal_address(&tim, i, palette);
-                        if (*p == 0x8000)
-                            *p = 0x8001;
-                    }
-                }
-            }
-
-            surface_unlock(&tim);
-
-            if (id == 54)
-            {
-                if (rect.right >= width)
-                    rect.right = width - 1;
-                marni::surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
-                rect.left += 128;
-                rect.right += 128;
-            }
-
-            do
-            {
-                if (rect.right >= width)
-                    rect.right = width - 1;
-                marni::surface2_blt(&surface, &rect, &rect, &tim, 0, 0);
-                rect.left += 128;
-                rect.right += 128;
-            } while (width > rect.left);
-
-            p_pDDsurface = &surface;
-        }
-        else
-        {
-            p_pDDsurface = &tim;
-        }
-
-        if (p_pDDsurface->width > 256)
-        {
-            marni::surface2_ctor(&work);
-            surface_operator_eq(&work, p_pDDsurface);
-            work.bOpen = 0;
-
-            surface_lock(p_pDDsurface, 0, 0);
-
-            char* v13 = marni::surface_calc_address((MarniSurface*)p_pDDsurface, 256, 0);
-
-            uint16_t* v14;
-            if (id == 54)
-            {
-                v14 = calc_pal_address(p_pDDsurface, 0, 1);
-                work.pal_cnt--;
-            }
-            else
-            {
-                v14 = calc_pal_address(p_pDDsurface, 0, 2);
-                work.pal_cnt -= 2;
-            }
-            set_pal_address(&work, v14);
-
-            surface_unlock(p_pDDsurface);
-
-            set_address_0(&work, v13);
-
-            work.width -= 256;
-            work.bOpen = 1;
-            gPlTextureHandle1[10 * workNo]
-                = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(&work), gPlTextureMode);
+            // Textures wider than 256px are split into 256px-wide textures; the
+            // right hand part moves its CLUT base so its UVs keep addressing the
+            // correct palette entries (offset by 1 for id 54, 2 otherwise).
+            const int palStart = id == 54 ? 1 : 2;
+            const int palCnt = id == 54 ? image.palCnt - 1 : image.palCnt - 2;
+            gPlTextureHandle1[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(
+                sliceImage(image, 256, image.width - 256, palStart, palCnt), gPlTextureMode);
 
             if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
             {
-                surface_operator_eq(&work, p_pDDsurface);
-                work.bOpen = 0;
-
-                surface_lock(p_pDDsurface, 0, 0);
-
-                char* v16 = marni::surface_calc_address((MarniSurface*)p_pDDsurface, 128, 0);
-                work.width = 256;
-                set_address_0(&work, v16);
-                work.pal_cnt = 2;
-                uint16_t* v17 = calc_pal_address(p_pDDsurface, 0, 1);
-                set_pal_address(&work, v17);
-
-                surface_unlock(p_pDDsurface);
-
-                work.bOpen = 1;
                 gPlTextureHandle2[10 * workNo]
-                    = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(&work), gPlTextureMode);
+                    = (uint32_t)gfx_draw::g_renderer->loadTexture(sliceImage(image, 128, 256, 1, 2), gPlTextureMode);
             }
 
-            p_pDDsurface->width = 256;
-            marni::surface2_release(&work);
+            gfx_draw::Image left = sliceImage(image, 0, 256, 0, image.palCnt);
+            gPlTextureHandle[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(std::move(left), gPlTextureMode);
         }
-
-        gPlTextureHandle[10 * workNo]
-            = (uint32_t)gfx_draw::g_renderer->loadTexture(imageFromSurface(p_pDDsurface), gPlTextureMode);
-        marni::surface2_release(&surface);
-        timobject_dtor(&tim);
+        else
+        {
+            gPlTextureHandle[10 * workNo] = (uint32_t)gfx_draw::g_renderer->loadTexture(std::move(image), gPlTextureMode);
+        }
     }
 
     static int get_customised_emd_id(int id)
