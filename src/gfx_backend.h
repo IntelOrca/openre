@@ -32,6 +32,16 @@ namespace openre::gfx
         virtual void set_guest_framebuffer(void* texture, int width, int height) = 0;
         virtual void shutdown() = 0;
 
+        // ---- movie overlay (Phase 7) ----
+        // The movie player captures decoded DirectShow frames (top-down RGB24,
+        // `pitch` bytes per row) and the backend composites the latest one into
+        // the guest framebuffer during present(), after the scene pass and the
+        // GDI text overlay - so cutscenes render into the framebuffer with no
+        // separate video window. The backend copies the pixels immediately.
+        // Passing nullptr (or width/height 0) clears the movie overlay. No-op
+        // by default (non-GPU backends have nothing to composite).
+        virtual void set_movie_frame(const void* /*pixels*/, int /*width*/, int /*height*/, int /*pitch*/) {}
+
         // ---- surface layer ----
         virtual void create_surface(IUnknown* surface, const DDSURFACEDESC* desc) = 0;
         virtual void destroy_surface(IUnknown* surface) = 0;

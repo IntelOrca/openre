@@ -553,6 +553,33 @@ namespace openre::gfx
                 logging::logInfo("[gfx:gpu] guest framebuffer set ({}x{})", width, height);
             }
 
+            // The movie player (marni_movie.cpp) hands over each captured
+            // cutscene frame (top-down RGB24); present() uploads and composites
+            // it. Called on the main thread only (same as present()). The
+            // pixels are copied immediately. nullptr/zero clears the overlay.
+            void set_movie_frame(const void* pixels, int width, int height, int pitch) override
+            {
+                if (pixels == nullptr || width <= 0 || height <= 0 || pitch <= 0)
+                {
+                    mMovieFrame.clear();
+                    mMovieW = 0;
+                    mMovieH = 0;
+                    mMoviePitch = 0;
+                    mMovieFrameValid = false;
+                    mMovieFrameNew = false;
+                    return;
+                }
+                const auto bytes = static_cast<size_t>(pitch) * static_cast<size_t>(height);
+                if (mMovieFrame.size() != bytes)
+                    mMovieFrame.resize(bytes);
+                std::memcpy(mMovieFrame.data(), pixels, bytes);
+                mMovieW = static_cast<Uint32>(width);
+                mMovieH = static_cast<Uint32>(height);
+                mMoviePitch = static_cast<Uint32>(pitch);
+                mMovieFrameValid = true;
+                mMovieFrameNew = true;
+            }
+
             void shutdown() override
             {
                 if (mDevice != nullptr)
@@ -568,6 +595,7 @@ namespace openre::gfx
                         mFrameFence = nullptr;
                     }
                     releaseSceneResources();
+                    releaseMovieFrameResources();
                     for (auto& pair : mSurfaces)
                         releaseSurface(pair.second);
                     mSurfaces.clear();
@@ -721,6 +749,8 @@ namespace openre::gfx
                     // blit.
                     if (rtEntry != nullptr && rtEntry->textOverlayPending)
                         appendOverlayQuad(rtW, rtH);
+                    if (mMovieFrameValid && mMovieW != 0 && mMovieH != 0)
+                        appendMovieQuad(rtW, rtH);
                     appendBlitQuad(winW, winH, rtW, rtH);
 
                     // Grow the vertex pool if this frame needs more room. The
@@ -838,6 +868,27 @@ namespace openre::gfx
                         if (uploadTextOverlay(*rtEntry, commandBuffer))
                             compositeTextOverlay(*rtEntry, sceneTexture, commandBuffer);
                         rtEntry->textOverlayPending = false;
+                    }
+
+                    // Movie composite (Phase 7): cutscenes render into the
+                    // guest framebuffer (captured DirectShow frames handed over
+                    // by the movie player; no child video window). Drawn after
+                    // the scene pass and the GDI text overlay so the movie sits
+                    // on top, like the original's always-on-top video window.
+                    // Each new frame is uploaded into the movie texture in the
+                    // same command buffer that composites it; while no new
+                    // frame has arrived (e.g. the very first frames) the last
+                    // one stays on screen, and before the first capture the
+                    // movie quad is not drawn at all (the scene shows).
+                    if (mMovieFrameValid && mMovieW != 0 && mMovieH != 0)
+                    {
+                        if (mMovieFrameNew)
+                        {
+                            uploadMovieFrame(commandBuffer);
+                            mMovieFrameNew = false;
+                        }
+                        if (mMovieTexture != nullptr)
+                            blitOverlayTexture(mMovieTexture, mMovieQuadOffset, sceneTexture, rtW, rtH, commandBuffer);
                     }
 
                     // Present pass: letterbox the (text-composited) render
@@ -2381,16 +2432,17 @@ namespace openre::gfx
                 return true;
             }
 
-            // Composites the GDI text overlay texture (room + text, fully
-            // opaque) into the guest framebuffer right after the scene pass: a
-            // full-framebuffer blit through the overlay pipeline (plain
-            // textured blit into R8G8B8A8_UNORM, no depth target), so the
-            // swapchain present pass below only needs its single letterboxed
-            // blit. Works for both the guest framebuffer and the surface-layer
-            // fallback (both are R8G8B8A8_UNORM).
-            void compositeTextOverlay(SurfaceEntry& entry, SDL_GPUTexture* targetTexture, SDL_GPUCommandBuffer* commandBuffer)
+            // Runs a full-viewport textured blit of `texture` into
+            // `targetTexture` through the overlay pipeline (plain opaque
+            // textured blit into R8G8B8A8_UNORM, no depth): the shared
+            // composite pass used by the GDI text overlay and the movie
+            // overlay. The blit quad was appended to the frame vertex pool
+            // earlier in present() (mOverlayQuadOffset / mMovieQuadOffset).
+            void blitOverlayTexture(
+                SDL_GPUTexture* texture, Uint32 quadOffset, SDL_GPUTexture* targetTexture, Uint32 vpW, Uint32 vpH,
+                SDL_GPUCommandBuffer* commandBuffer)
             {
-                if (mDevice == nullptr || commandBuffer == nullptr || targetTexture == nullptr || entry.textTexture == nullptr)
+                if (mDevice == nullptr || commandBuffer == nullptr || texture == nullptr || targetTexture == nullptr)
                     return;
                 ensureOverlayPipeline();
                 if (mOverlayPipeline == nullptr)
@@ -2402,18 +2454,125 @@ namespace openre::gfx
                 target.load_op = SDL_GPU_LOADOP_LOAD;
                 target.store_op = SDL_GPU_STOREOP_STORE;
                 auto* pass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
-                SDL_GPUViewport vp
-                    = { 0.0f, 0.0f, static_cast<float>(entry.width), static_cast<float>(entry.height), 0.0f, 1.0f };
+                SDL_GPUViewport vp = { 0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH), 0.0f, 1.0f };
                 SDL_SetGPUViewport(pass, &vp);
-                const float vpSize[4] = { 0.0f, 0.0f, static_cast<float>(entry.width), static_cast<float>(entry.height) };
+                const float vpSize[4] = { 0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH) };
                 SDL_PushGPUVertexUniformData(commandBuffer, 0, vpSize, sizeof(vpSize));
                 SDL_BindGPUGraphicsPipeline(pass, mOverlayPipeline);
-                SDL_GPUTextureSamplerBinding binding = { entry.textTexture, mSamplerLinear };
+                SDL_GPUTextureSamplerBinding binding = { texture, mSamplerLinear };
                 SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
-                SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, mOverlayQuadOffset };
+                SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, quadOffset };
                 SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
                 SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
                 SDL_EndGPURenderPass(pass);
+            }
+
+            // Composites the GDI text overlay texture (room + text, fully
+            // opaque) into the guest framebuffer right after the scene pass: a
+            // full-framebuffer blit through the overlay pipeline (plain
+            // textured blit into R8G8B8A8_UNORM, no depth target), so the
+            // swapchain present pass below only needs its single letterboxed
+            // blit. Works for both the guest framebuffer and the surface-layer
+            // fallback (both are R8G8B8A8_UNORM).
+            void compositeTextOverlay(SurfaceEntry& entry, SDL_GPUTexture* targetTexture, SDL_GPUCommandBuffer* commandBuffer)
+            {
+                if (entry.textTexture == nullptr || targetTexture == nullptr)
+                    return;
+                blitOverlayTexture(
+                    entry.textTexture, mOverlayQuadOffset, targetTexture, entry.width, entry.height, commandBuffer);
+            }
+
+            // Uploads the latest captured movie frame (top-down RGB24) into
+            // mMovieTexture using the given (already open) command buffer, so
+            // the upload lands in the same submitted frame as the composite
+            // that draws it. The texture/transfer buffer are recreated when
+            // the frame size changes (a different movie / re-opened file).
+            void uploadMovieFrame(SDL_GPUCommandBuffer* commandBuffer)
+            {
+                if (mDevice == nullptr || commandBuffer == nullptr || mMovieFrame.empty())
+                    return;
+                if (mMovieTexture == nullptr || mMovieTexW != mMovieW || mMovieTexH != mMovieH)
+                {
+                    if (mMovieTexture != nullptr)
+                        SDL_ReleaseGPUTexture(mDevice, mMovieTexture);
+                    if (mMovieUpload != nullptr)
+                        SDL_ReleaseGPUTransferBuffer(mDevice, mMovieUpload);
+
+                    SDL_GPUTextureCreateInfo info = {};
+                    info.type = SDL_GPU_TEXTURETYPE_2D;
+                    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+                    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+                    info.width = mMovieW;
+                    info.height = mMovieH;
+                    info.layer_count_or_depth = 1;
+                    info.num_levels = 1;
+                    info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+                    mMovieTexture = SDL_CreateGPUTexture(mDevice, &info);
+
+                    SDL_GPUTransferBufferCreateInfo transferInfo = {};
+                    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                    transferInfo.size = static_cast<Uint32>(mMovieW) * mMovieH * 4;
+                    mMovieUpload = SDL_CreateGPUTransferBuffer(mDevice, &transferInfo);
+
+                    if (mMovieTexture == nullptr || mMovieUpload == nullptr)
+                    {
+                        logging::logError("[gfx:gpu] movie texture/upload creation failed: {}", SDL_GetError());
+                        if (mMovieTexture != nullptr)
+                        {
+                            SDL_ReleaseGPUTexture(mDevice, mMovieTexture);
+                            mMovieTexture = nullptr;
+                        }
+                        if (mMovieUpload != nullptr)
+                        {
+                            SDL_ReleaseGPUTransferBuffer(mDevice, mMovieUpload);
+                            mMovieUpload = nullptr;
+                        }
+                        mMovieTexW = 0;
+                        mMovieTexH = 0;
+                        return;
+                    }
+                    mMovieTexW = mMovieW;
+                    mMovieTexH = mMovieH;
+                    logging::logInfo("[gfx:gpu] movie texture created ({}x{})", mMovieW, mMovieH);
+                }
+
+                // Expand the RGB24 rows into the texture's RGBA8 layout (the
+                // same row-wise conversion the GDI text overlay upload uses).
+                void* mapped = SDL_MapGPUTransferBuffer(mDevice, mMovieUpload, false);
+                if (mapped == nullptr)
+                {
+                    logging::logError("[gfx:gpu] movie frame upload map failed: {}", SDL_GetError());
+                    return;
+                }
+                auto* dst = static_cast<uint8_t*>(mapped);
+                for (Uint32 row = 0; row < mMovieH; row++)
+                {
+                    const auto* src = mMovieFrame.data() + static_cast<size_t>(row) * mMoviePitch;
+                    auto* dstRow = dst + static_cast<size_t>(row) * mMovieW * 4;
+                    for (Uint32 x = 0; x < mMovieW; x++)
+                    {
+                        dstRow[x * 4 + 0] = src[x * 3 + 2];
+                        dstRow[x * 4 + 1] = src[x * 3 + 1];
+                        dstRow[x * 4 + 2] = src[x * 3 + 0];
+                        dstRow[x * 4 + 3] = 0xFF;
+                    }
+                }
+                SDL_UnmapGPUTransferBuffer(mDevice, mMovieUpload);
+
+                auto* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                SDL_GPUTextureTransferInfo source = {};
+                source.transfer_buffer = mMovieUpload;
+                source.pixels_per_row = mMovieW;
+                source.rows_per_layer = mMovieH;
+                SDL_GPUTextureRegion destination = {};
+                destination.texture = mMovieTexture;
+                destination.w = mMovieW;
+                destination.h = mMovieH;
+                destination.d = 1;
+                SDL_UploadToGPUTexture(copyPass, &source, &destination, false);
+                SDL_EndGPUCopyPass(copyPass);
+                mStatUploads++;
+                mStatUploadBytes += static_cast<Uint64>(mMovieW) * mMovieH * 4;
             }
 
             // Fills the given region of the CPU shadow with a DirectDraw fill
@@ -2779,6 +2938,24 @@ namespace openre::gfx
             Uint32 mBlitQuadOffset = 0;
             SDL_GPUGraphicsPipeline* mOverlayPipeline = nullptr;
             Uint32 mOverlayQuadOffset = 0;
+
+            // Movie overlay (Phase 7): the movie player captures decoded
+            // DirectShow frames (top-down RGB24) and hands them over via
+            // set_movie_frame; present() uploads each new frame into
+            // mMovieTexture and composites it into the guest framebuffer right
+            // after the scene pass and the GDI text overlay, so cutscenes
+            // render into the framebuffer instead of a child video window.
+            std::vector<uint8_t> mMovieFrame;
+            Uint32 mMovieW = 0;
+            Uint32 mMovieH = 0;
+            Uint32 mMoviePitch = 0;
+            bool mMovieFrameValid = false; // a movie frame is set (composite even without a fresh frame)
+            bool mMovieFrameNew = false;   // a new frame arrived since the last present
+            SDL_GPUTexture* mMovieTexture = nullptr;
+            SDL_GPUTransferBuffer* mMovieUpload = nullptr;
+            Uint32 mMovieTexW = 0;
+            Uint32 mMovieTexH = 0;
+            Uint32 mMovieQuadOffset = 0;
 
             // Debug aid (OPENRE_GPU_DUMP=<N>): every N-th frame, read back the
             // scene render target after the scene pass and write it as a BMP so
@@ -3152,6 +3329,27 @@ namespace openre::gfx
                 resetFrameState();
             }
 
+            // Releases the movie overlay texture/transfer buffer (owned by the
+            // backend, unlike the captured frames, which live on the movie
+            // player side). Called at shutdown after an idle wait.
+            void releaseMovieFrameResources()
+            {
+                if (mDevice == nullptr)
+                    return;
+                if (mMovieTexture != nullptr)
+                {
+                    SDL_ReleaseGPUTexture(mDevice, mMovieTexture);
+                    mMovieTexture = nullptr;
+                }
+                if (mMovieUpload != nullptr)
+                {
+                    SDL_ReleaseGPUTransferBuffer(mDevice, mMovieUpload);
+                    mMovieUpload = nullptr;
+                }
+                mMovieTexW = 0;
+                mMovieTexH = 0;
+            }
+
             SDL_GPUShader* createShader(
                 const uint8_t* code, Uint32 codeSize, SDL_GPUShaderFormat format, SDL_GPUShaderStage stage, Uint32 numSamplers,
                 Uint32 numUniformBuffers)
@@ -3416,6 +3614,17 @@ namespace openre::gfx
                 mOverlayQuadOffset = appendQuad(0.0f, 0.0f, static_cast<float>(rtW), static_cast<float>(rtH));
             }
 
+            // Appends the full-framebuffer quad the movie composite uses (the
+            // cutscene covers the framebuffer and is letterboxed by the
+            // swapchain blit, matching the original's full-window movie rect);
+            // records the byte offset so the movie pass can bind exactly it.
+            void appendMovieQuad(Uint32 rtW, Uint32 rtH)
+            {
+                if (rtW == 0 || rtH == 0)
+                    return;
+                mMovieQuadOffset = appendQuad(0.0f, 0.0f, static_cast<float>(rtW), static_cast<float>(rtH));
+            }
+
             void submitAndReset(SDL_GPUCommandBuffer* commandBuffer)
             {
                 // Acquire a fence instead of blocking on a full device idle
@@ -3452,6 +3661,7 @@ namespace openre::gfx
                 mFrameVertices.clear();
                 mBlitQuadOffset = 0;
                 mOverlayQuadOffset = 0;
+                mMovieQuadOffset = 0;
                 mDeviceState.pendingClearTarget = false;
                 mDeviceState.pendingClearDepth = false;
             }

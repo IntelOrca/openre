@@ -114,6 +114,20 @@ namespace openre::system::gpu
         gfx::backend_gpu()->present();
     }
 
+    void set_movie_frame(const void* pixels, int width, int height, int pitch)
+    {
+        if (!init())
+            return;
+        gfx::backend_gpu()->set_movie_frame(pixels, width, height, pitch);
+    }
+
+    void clear_movie_frame()
+    {
+        if (g_device == nullptr)
+            return;
+        gfx::backend_gpu()->set_movie_frame(nullptr, 0, 0, 0);
+    }
+
     void shutdown()
     {
         // The backend holds the surface layer and per-frame replay resources;

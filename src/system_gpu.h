@@ -30,6 +30,20 @@ namespace openre::system::gpu
     // the swapchain). Creates the device on first use.
     void present();
 
+    // Movie frame bridge (Phase 7): the movie player (marni_movie.cpp) captures
+    // decoded DirectShow frames and hands them over here; the GPU backend
+    // composites the latest frame into the guest framebuffer during present()
+    // (after the scene pass and the GDI text overlay), so cutscenes render into
+    // the framebuffer with no separate video window. `pixels` is a top-down
+    // RGB24 bitmap with `pitch` bytes per row; the backend copies the pixels
+    // immediately, so the caller may reuse its buffer. Passing nullptr (or
+    // width/height 0) clears the movie overlay. Safe to call before the GPU
+    // exists (the frame is then dropped).
+    void set_movie_frame(const void* pixels, int width, int height, int pitch);
+
+    // Clears the movie overlay (no movie frame is composited any more).
+    void clear_movie_frame();
+
     // Releases the guest framebuffer, unclaims the window and destroys the
     // device. Idempotent.
     void shutdown();
