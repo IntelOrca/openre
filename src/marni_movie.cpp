@@ -636,7 +636,9 @@ namespace openre::marni
                 g_capturedNew = false;
             }
             if (!frame.empty() && w > 0 && h > 0)
+            {
                 system::gpu::set_movie_frame(frame.data(), w, h, w * 3);
+            }
 
             // Hand the buffer back to the capture side so it is not
             // reallocated every frame (only when no newer frame was captured

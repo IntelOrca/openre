@@ -2792,6 +2792,12 @@ namespace openre
             movie();
             marni::clear();
             marni::g_renderer->movieUpdate();
+            // The movie is composited into the guest framebuffer during
+            // present() (no child video window anymore), so presenting must
+            // keep running while the movie plays. The original loop called
+            // Draw + Flip after MovieUpdate; flip() skips the scene blit and
+            // presents the movie overlay.
+            marni::flip();
             return true;
         }
         if (gGameTable.reset_r0)

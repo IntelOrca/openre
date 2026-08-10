@@ -939,7 +939,14 @@ namespace openre::marni
         if (self->var_8C7EE0)
             return;
         if (self->pMovie->flag & 2)
+        {
+            // The movie is composited into the guest framebuffer during
+            // present() (no child video window anymore), so presenting must
+            // keep running while the movie plays. Skip the scene blit - the
+            // movie quad covers the whole framebuffer.
+            gfx::notify_present();
             return;
+        }
         if (!(self->gpu_flag & GpuFlags::GPU_9))
             return;
         if ((self->gpu_flag & GpuFlags::GPU_13) && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) && self->var_8C8318 < 4)
