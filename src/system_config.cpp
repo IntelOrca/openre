@@ -2,6 +2,7 @@
 #include "logger.h"
 #include "system_filesystem.h"
 #include <algorithm>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -78,6 +79,57 @@ namespace openre::system::config
             }
             return count;
         }
+
+        const Resolution kDefaultWindowSize{ 800, 600 };
+        const Resolution kDefaultRenderResolution{ 640, 480 };
+
+        // Parse a "WxH" value (e.g. "800x600") into a Resolution. Returns
+        // false when the value is malformed (non-numeric, missing separator,
+        // zero/negative, out of int32 range, ...).
+        bool parse_resolution(const std::string& value, Resolution& out)
+        {
+            auto xPos = value.find('x');
+            if (xPos == std::string::npos)
+                xPos = value.find('X');
+            if (xPos == std::string::npos)
+                return false;
+
+            auto widthStr = trim(value.substr(0, xPos));
+            auto heightStr = trim(value.substr(xPos + 1));
+            if (widthStr.empty() || heightStr.empty())
+                return false;
+
+            char* end = nullptr;
+            errno = 0;
+            auto width = std::strtol(widthStr.c_str(), &end, 10);
+            if (errno == ERANGE || end == widthStr.c_str() || *end != '\0' || width <= 0 || width > INT32_MAX)
+                return false;
+            errno = 0;
+            end = nullptr;
+            auto height = std::strtol(heightStr.c_str(), &end, 10);
+            if (errno == ERANGE || end == heightStr.c_str() || *end != '\0' || height <= 0 || height > INT32_MAX)
+                return false;
+
+            out.width = static_cast<int32_t>(width);
+            out.height = static_cast<int32_t>(height);
+            return true;
+        }
+
+        // Ensure the [video] section carries both resolution keys, defaulting
+        // when absent or malformed, so any save() round-trips them.
+        void ensure_video_defaults()
+        {
+            auto ensure = [](const char* key, const Resolution& defaultValue) {
+                Resolution parsed;
+                auto it = s_config.find(std::string("video.") + key);
+                if (it == s_config.end() || !parse_resolution(it->second, parsed))
+                {
+                    addKey("video", key, std::to_string(defaultValue.width) + "x" + std::to_string(defaultValue.height));
+                }
+            };
+            ensure("window_size", kDefaultWindowSize);
+            ensure("render_resolution", kDefaultRenderResolution);
+        }
     }
 
     void load()
@@ -85,6 +137,11 @@ namespace openre::system::config
         s_config.clear();
         s_keyOrder.clear();
         s_loaded = true;
+
+        // Seed the [video] resolution keys up front so a save() still
+        // round-trips them when no config file exists yet (or nothing has
+        // read the keys).
+        ensure_video_defaults();
 
         auto info = system::fs::info("user://openre.ini");
         if (info.kind == system::fs::FileKind::none)
@@ -132,6 +189,10 @@ namespace openre::system::config
                 }
             }
         }
+
+        // Re-seed after parsing so malformed values in the file fall back to
+        // (and are persisted as) the defaults.
+        ensure_video_defaults();
 
         logging::logInfo("Config loaded from {}", info.physicalPath);
     }
@@ -368,5 +429,43 @@ namespace openre::system::config
         auto hex = hexEncode(data, size);
         addKey(group, name, hex);
         return true;
+    }
+
+    Resolution get_resolution(std::string_view group, std::string_view name, const Resolution& default_value)
+    {
+        if (!s_loaded)
+            load();
+
+        auto fullKey = std::string(group) + "." + std::string(name);
+        auto it = s_config.find(fullKey);
+        if (it != s_config.end())
+        {
+            Resolution parsed;
+            if (parse_resolution(it->second, parsed))
+                return parsed;
+        }
+
+        // Absent or malformed: fall back to the default and store it so a
+        // subsequent save() round-trips a valid value.
+        set_resolution(group, name, default_value);
+        return default_value;
+    }
+
+    void set_resolution(std::string_view group, std::string_view name, const Resolution& value)
+    {
+        if (!s_loaded)
+            load();
+
+        addKey(std::string(group), std::string(name), std::to_string(value.width) + "x" + std::to_string(value.height));
+    }
+
+    Resolution get_window_size()
+    {
+        return get_resolution("video", "window_size", kDefaultWindowSize);
+    }
+
+    Resolution get_render_resolution()
+    {
+        return get_resolution("video", "render_resolution", kDefaultRenderResolution);
     }
 }
