@@ -8,10 +8,13 @@
 #include "re2.h"
 #include "str.h"
 #include "system_config.h"
+#include "system_filesystem.h"
 #include "system_window.h"
 
 #include <algorithm>
 #include <cstring>
+#include <string>
+#include <vector>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -4018,6 +4021,589 @@ namespace openre::marni
         return polygon_object_dtor_0(self);
     }
 
+    // TMDFile: header/state for a TMD data source. Layout matches
+    // MarniPolygonObject::Open's stack TMDFile (constructed via tmd_file_ctor).
+    struct TmdFile
+    {
+        uint32_t flag;  // +0x00 byte, 1 = valid
+        char* filename; // +0x04
+        uint8_t* data;  // +0x08
+    };
+    static_assert(sizeof(TmdFile) == 0x0C);
+
+    // 0x00430880
+    static int tmd_file_dtor(TmdFile* self)
+    {
+        operator_delete(self->filename);
+        self->filename = nullptr;
+        operator_delete(self->data);
+        self->data = nullptr;
+        self->flag = 1;
+        return 1;
+    }
+
+    // 0x004308B0
+    // Loads a TMD file into the object. Returns 1 whether or not the file could
+    // be opened (mirroring the original). The data buffer is allocated with the
+    // original 32-bit-aligned + 4 pad sizing (4 * (size / 4) + 4).
+    static int tmd_file_create(TmdFile* self, const char* filename)
+    {
+        tmd_file_dtor(self);
+
+        auto data = system::fs::readAllBytes((std::string("data://") + filename).c_str());
+        if (data.empty())
+        {
+            out("failed to open the file. TMDFile::Create", "");
+            return 1;
+        }
+
+        self->data = (uint8_t*)operator_new((size_t)(4 * ((int)data.size() / 4) + 4));
+        std::memcpy(self->data, data.data(), data.size());
+
+        operator_delete(self->filename);
+        self->filename = (char*)operator_new(std::strlen(filename) + 1);
+        std::memcpy(self->filename, filename, std::strlen(filename) + 1);
+
+        self->flag = 1;
+        return 1;
+    }
+
+    // 0x00430970
+    static TmdFile* tmd_file_ctor(TmdFile* self, const char* filename)
+    {
+        self->flag = 1;
+        self->filename = nullptr;
+        self->data = nullptr;
+        if (filename)
+            tmd_file_create(self, filename);
+        return self;
+    }
+
+    // 0x004309A0
+    static int sub_4309A0(void* self)
+    {
+        return tmd_file_dtor((TmdFile*)self);
+    }
+
+    // 0x00430750
+    static uint32_t tmd_counts_objects(TmdFile* self, uint32_t* data)
+    {
+        if (!data)
+        {
+            if (!self->flag)
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::CountsObjects", "");
+                return 0;
+            }
+            data = (uint32_t*)self->data;
+        }
+        if (*data != 65)
+        {
+            out("invalid header for TMD. TMDFile::CountsObjects", "");
+            return 0;
+        }
+        return data[2];
+    }
+
+    // 0x00430590
+    static int tmd_counts_variation(TmdFile* self, int a2, int a3, int a4, int a5)
+    {
+        uint8_t* data;
+        uint8_t* prim;
+        uint8_t* outPtr;
+        int variationCount;
+        int index;
+        uint32_t* record;
+        int counter;
+        uint8_t* object;
+
+        data = (uint8_t*)a5;
+        if (!a5)
+        {
+            if (!(uint8_t)self->flag)
+            {
+                out("you can't specify NULL pointer in this condition of the class.", "TMDFile::CountsVariation");
+                return 0;
+            }
+            data = self->data;
+        }
+        if (*(uint32_t*)data != 65)
+        {
+            out("invalid header for TMD.", "TMDFile::CountsVariation");
+            return 0;
+        }
+        if ((int32_t)*(uint32_t*)(data + 8) <= a2)
+        {
+            out("the object you specified is invalid. max...%d ap...%d", "TMDFile::CountsVariation");
+            return 0;
+        }
+        object = data + 28 * a2 + 12;
+        if ((*(uint8_t*)(data + 4) & 1) != 0)
+            prim = *(uint8_t**)(data + 28 * a2 + 28);
+        else
+            prim = data + 4 * ((uint32_t)(*(uint32_t*)(data + 28 * a2 + 28) + 12) >> 2);
+        variationCount = 0;
+        counter = 0;
+        memset((void*)a3, 0, 4 * ((uint32_t)(12 * a4) >> 2));
+        if (*(int32_t*)(object + 20) <= 0)
+            return variationCount;
+        outPtr = (uint8_t*)a3 + 4;
+        while (1)
+        {
+            index = 0;
+            if (variationCount > 0)
+            {
+                record = (uint32_t*)((uint8_t*)a3 + 4);
+                while (index < variationCount)
+                {
+                    if (record[1] == *(uint32_t*)prim)
+                    {
+                        if ((*(uint32_t*)prim & 0x4000000) == 0)
+                            break;
+                        if ((*(uint32_t*)(prim + 8) & 0x1800000) != 0x800000)
+                        {
+                            out("we now don't suppose to support the data except 8bit and 4bit palettized",
+                                "TMDFile::CountsVariation");
+                            return 0;
+                        }
+                        if (*record == ((*(uint32_t*)(prim + 4) & 0xFFFF0000) | (*(uint8_t*)(prim + 10) & 0x1F)))
+                            break;
+                    }
+                    ++index;
+                    record += 3;
+                }
+                if (index < variationCount)
+                    ++*(uint16_t*)((uint8_t*)a3 + 12 * index);
+            }
+            if (index == variationCount)
+            {
+                *(uint16_t*)(outPtr - 4) = 1;
+                *(uint32_t*)(outPtr + 4) = *(uint32_t*)prim;
+                ++variationCount;
+                *(uint32_t*)outPtr = ((*(uint32_t*)(prim + 4) & 0xFFFF0000) | (*(uint8_t*)(prim + 10) & 0x1F));
+                outPtr += 12;
+                *(uint16_t*)(outPtr - 14) = (uint16_t)(4 * *(uint8_t*)(prim + 1) + 4);
+            }
+            if (variationCount > a4)
+            {
+                out("not enough work to continue a process.", "MarniSystem TMDFile::CountsVariation");
+                return 0;
+            }
+            ++counter;
+            prim += 4 * *(uint8_t*)(prim + 1) + 4;
+            if (counter >= *(int32_t*)(object + 20))
+                return variationCount;
+        }
+    }
+
+    // 0x004307E0
+    static uint32_t tmd_counts_vertex(TmdFile* self, int objectIndex, uint32_t* data)
+    {
+        uint32_t* p = data;
+        if (!p)
+        {
+            if (!self->flag)
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::CountsVertex", "");
+                return 0;
+            }
+            p = (uint32_t*)self->data;
+        }
+        if (*p != 65)
+        {
+            out("invalid header for TMD. TMDFile::CountsVertex", "");
+            return 0;
+        }
+        return p[7 * objectIndex + 4];
+    }
+
+    // 0x00430830
+    static int tmd_counts_vertex_0(TmdFile* self, int a2, uint32_t* a3)
+    {
+        uint32_t* v3 = a3;
+        if (!a3)
+        {
+            if (!(self->flag & 0xFF))
+            {
+                out("you can't specify NULL pointer in this condition of the class.", "TMDFile::CountsVertex");
+                return 0;
+            }
+            v3 = (uint32_t*)self->data;
+        }
+        if (*v3 != 65)
+        {
+            out("invalid header for TMD.", "TMDFile::CountsVertex");
+            return 0;
+        }
+        return (int)v3[7 * a2 + 6];
+    }
+
+    // 0x00430790
+    static uint32_t tmd_counts_primitive(TmdFile* self, int index, uint32_t* data)
+    {
+        uint32_t* v3 = data;
+        if (!data)
+        {
+            if (!self->flag)
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::CountsPrimitive", "");
+                return 0;
+            }
+            v3 = (uint32_t*)self->data;
+        }
+        if (*v3 != 65)
+        {
+            out("invalid header for TMD. TMDFile::CountsPrimitive", "");
+            return 0;
+        }
+        return v3[7 * index + 8];
+    }
+
+    // 0x004303C0
+    static int tmd_read_tmd(TmdFile* self, int a2, int a3, uint32_t* a4, uint32_t* a5, uint32_t* a6, int a7)
+    {
+        uint32_t v7;
+        uint32_t v9;
+
+        v7 = (uint32_t)a7;
+        if (!a7)
+        {
+            if (!(self->flag & 0xFF))
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::GetVertex", "");
+                return 0;
+            }
+            v7 = (uint32_t)self->data;
+        }
+        if (*(uint32_t*)v7 != 0x41)
+        {
+            out("invalid header for TMD. TMDFile::GetVertex", "");
+            return 0;
+        }
+        if (*(int32_t*)(v7 + 8) <= a2)
+        {
+            out("the object you specified is invalid. max...%d ap...%d TMDFile::GetVertex", "");
+            return 0;
+        }
+        if ((*(uint8_t*)(v7 + 4) & 1) != 0)
+            v9 = *(uint32_t*)(v7 + 28 * a2 + 12);
+        else
+            v9 = *(uint32_t*)(v7 + 28 * a2 + 12) + v7 + 12;
+        *a4 = *(int16_t*)(v9 + 8 * a3);
+        *a5 = *(int16_t*)(v9 + 8 * a3 + 2);
+        *a6 = *(int16_t*)(v9 + 8 * a3 + 4);
+        return 1;
+    }
+
+    // 0x00430310
+    static uint32_t tmd_get_vertex(TmdFile* self, int a1, int a2, uint32_t* a3, uint32_t* a4, uint32_t* a5, int a6)
+    {
+        uint8_t* v7;
+
+        v7 = (uint8_t*)a6;
+        if (!a6)
+        {
+            if (!*(uint8_t*)self)
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::GetVertex", "");
+                return 0;
+            }
+            v7 = self->data;
+        }
+
+        if (*(uint32_t*)v7 != 65)
+        {
+            out("invalid header for TMD. TMDFile::GetVertex", "");
+            return 0;
+        }
+        if (*(int32_t*)(v7 + 8) <= a1)
+        {
+            out("the object you specified is invalid. max...%d ap...%d TMDFile::GetVertex", "");
+            return 0;
+        }
+
+        uint8_t* v9;
+        if ((v7[4] & 1) != 0)
+            v9 = (uint8_t*)(uintptr_t)*(uint32_t*)(v7 + 28 * a1 + 20);
+        else
+            v9 = (uint8_t*)((uintptr_t)*(uint32_t*)(v7 + 28 * a1 + 20) + (uintptr_t)v7 + 12);
+
+        *a3 = (uint32_t)*(int16_t*)(v9 + 8 * a2);
+        *a4 = (uint32_t)*(int16_t*)(v9 + 8 * a2 + 2);
+        *a5 = (uint32_t)*(int16_t*)(v9 + 8 * a2 + 4);
+        return 1;
+    }
+
+    // 0x00430470
+    static uint32_t tmd_rerieves_primitives(TmdFile* self, uint32_t a1, uint32_t* data, uint32_t a3, uint32_t a4)
+    {
+        uint8_t* v5 = (uint8_t*)a4;
+        if (!a4)
+        {
+            if (!(self->flag & 0xFF))
+            {
+                out("you can't specify NULL pointer in this condition of the class. TMDFile::RerievesPrimitives", "");
+                return 0;
+            }
+            v5 = self->data;
+        }
+
+        if (*(uint32_t*)v5 != 0x41)
+        {
+            out("invalid header for TMD. TMDFile::RerievesPrimitives", "");
+            return 0;
+        }
+
+        if (*(uint32_t*)(v5 + 8) <= a1)
+        {
+            out("the object you specified is invalid. max...%d ap...%d TMDFile::RerievesPrimitives", "");
+            return 0;
+        }
+
+        uint8_t* v7 = v5 + 28 * a1 + 12;
+        uint32_t* v8;
+        if ((*(uint8_t*)(v5 + 4) & 1) != 0)
+            v8 = *(uint32_t**)(v5 + 28 * a1 + 28);
+        else
+            v8 = (uint32_t*)(v5 + 4 * ((uint32_t)(*(uint32_t*)(v5 + 28 * a1 + 28) + 12) >> 2));
+
+        uint8_t* v12 = v7;
+        for (uint32_t i = 0; i < *(uint32_t*)(v7 + 20); ++i)
+        {
+            if (*v8 == *(uint32_t*)(a3 + 8)
+                && ((*v8 & 0x4000000) == 0 || (v8[1] & 0xFFFF0000 | *((uint8_t*)v8 + 10) & 0x1F) == *(uint32_t*)(a3 + 4)))
+            {
+                memcpy(data, v8, *(int16_t*)(a3 + 2));
+                v7 = v12;
+                uint32_t v10 = 4 * ((uint32_t)*(int16_t*)(a3 + 2) >> 2);
+                data = (uint32_t*)((uint8_t*)data + v10);
+                v8 = (uint32_t*)((uint8_t*)v8 + v10);
+            }
+            else
+            {
+                v8 += *((uint8_t*)v8 + 1) + 1;
+            }
+        }
+        return 1;
+    }
+
+    // 0x00430A60
+    // MarniPolygonObject::Open - main TMD parser. Parses the raw TMD buffer at arg0
+    // (object index a2) into the polygon object's vertex/normal/primitive buffers.
+    // Returns 0 on early validation failure, 1 otherwise (even on the later
+    // "not supported format" / "could not create work" / retrieve failures, which
+    // mirror the original).
+    // Must be __stdcall: the original is a thiscall with a `retn 0Ch` epilogue, and
+    // both the hookThisCall trampoline at 0x00430A60 and interop::thiscall rely on
+    // the callee cleaning up its stack arguments.
+    static int __stdcall marni_poly_object_open(MarniPolyObject* self, uint8_t* arg0, int a2, uint32_t a3)
+    {
+        marni_poly_object_reset(self);
+
+        TmdFile tmd;
+        tmd_file_ctor(&tmd, nullptr);
+
+        // TMDFile::CountsVariation output table (12 bytes per variant record).
+        // CountsVariation zeroes the whole 240-byte table, so reads past the first
+        // record (the min/max loop steps over every record's second dword) see zeroes.
+        uint32_t variationBuf[64];
+        memset(variationBuf, 0, sizeof(variationBuf));
+
+        // Per-primitive record passed to refer_primitive. Must be declared directly
+        // before variationBuf so the original's stack over-read in refer_primitive
+        // (up to 24/40 bytes for some primitive types) reads the variation table.
+        uint32_t v48;
+        int16_t v49, v50, v51, v52;
+        int8_t v53, v54, v55, v56, v57, v58;
+
+        uint32_t v44, v42, v45;
+
+        if (a2 >= (int)tmd_counts_objects(&tmd, (uint32_t*)arg0))
+        {
+            out("object number you specified is invalid...%d", "TMDObject::Create");
+            sub_4309A0(&tmd);
+            return 0;
+        }
+
+        int v6 = tmd_counts_variation(&tmd, a2, (int)&variationBuf[0], 20, (int)arg0);
+        if (!v6)
+        {
+            out("failed at analysis process.", "TMDObject::Create");
+            sub_4309A0(&tmd);
+            return 0;
+        }
+        if (v6 > 4)
+        {
+            out("not enough work. found %d object.", "TMDObject::In");
+            sub_4309A0(&tmd);
+            return 0;
+        }
+
+        int v7 = v6;
+        int v43 = v6;
+        int v8 = (uint16_t)variationBuf[1];
+        int v9 = (uint16_t)variationBuf[1];
+        if (v6 > 0)
+        {
+            int* v10 = (int*)&variationBuf[1];
+            int v11 = v6;
+            do
+            {
+                int v12 = (uint16_t)*v10;
+                if (v9 > v12)
+                    v9 = (uint16_t)*v10;
+                if (v8 > v12)
+                    v8 = (uint16_t)*v10;
+                v10 += 3;
+                --v11;
+            } while (v11);
+        }
+        if (v8 - v9 >= 2)
+        {
+            out("this object is consisting of more than or equal 2 objects.", "TMDObject::In");
+            sub_4309A0(&tmd);
+            return 0;
+        }
+
+        uint32_t v47 = (a3 == 0xFFFFFFFF) ? (uint32_t)(v9 & 0xFFFFFFFE) : a3;
+
+        if (v7 > 0)
+        {
+            int16_t* v14 = (int16_t*)&variationBuf[0];
+            int16_t* v15 = (int16_t*)((uint8_t*)self + 0x38);
+            int v16 = v7;
+            do
+            {
+                int16_t v17 = *v14;
+                v14 += 6;
+                v15[2] = v17;
+                *v15 = *(v14 - 3);
+                v15[1] = *(v14 - 4);
+                v15 += 3;
+                --v16;
+            } while (v16);
+        }
+
+        *(uint32_t*)((uint8_t*)self + 0x50) = (uint32_t)v7;
+
+        if (v7 > 0)
+        {
+            int v18 = 0;
+            int* v19 = (int*)&variationBuf[2];
+            bool mismatch = false;
+            do
+            {
+                if (variationBuf[2] != (uint32_t)*v19)
+                {
+                    mismatch = true;
+                    break;
+                }
+                ++v18;
+                v19 += 3;
+            } while (v18 < v7);
+            if (mismatch)
+            {
+                out("not supported for the object including header having more than 1.", "TMDObject::In");
+                sub_4309A0(&tmd);
+                return 0;
+            }
+        }
+
+        uint32_t v20 = tmd_counts_vertex(&tmd, a2, (uint32_t*)arg0);
+        int v21 = tmd_counts_vertex_0(&tmd, a2, (uint32_t*)arg0);
+        uint32_t v22 = tmd_counts_primitive(&tmd, a2, (uint32_t*)arg0);
+
+        int v23 = 0;
+        if (v43 > 0)
+        {
+            int v24 = v43;
+            int16_t* v25 = (int16_t*)&variationBuf[0] + 1;
+            do
+            {
+                if (v23 < *v25)
+                    v23 = *v25;
+                v25 += 6;
+                --v24;
+            } while (v24);
+        }
+
+        uint8_t* lpMem = (uint8_t*)operator_new(4 * ((uint32_t)(v22 * (uint32_t)v23) >> 2) + 4);
+
+        int v40 = 0;
+        if ((variationBuf[2] & 0x3DFFFFFF) == 0x34000609)
+        {
+            if (create_work_0(self, (int)v20, v21, (int)v22, 1, 0, 3, 2, 0, 0, 0, 12))
+            {
+                for (int i = 0; i < (int)v20; ++i)
+                {
+                    tmd_read_tmd(&tmd, a2, i, &v44, &v42, &v45, (int)arg0);
+                    modify_vertex(self, i, (float)(int32_t)v44, (float)(-(int32_t)v42), (float)(int32_t)v45);
+                }
+                for (int j = 0; j < v21; ++j)
+                {
+                    tmd_get_vertex(&tmd, a2, j, &v44, &v42, &v45, (int)arg0);
+                    const float scale = 0.000244140625f; // flt_51742C (1/4096)
+                    modify_normal(
+                        self, j, (float)(int32_t)v44 * scale, (float)(-(int32_t)v42) * scale, (float)(int32_t)v45 * scale);
+                }
+
+                int v38 = 0;
+                if (v43 > 0)
+                {
+                    int16_t* v29 = (int16_t*)&variationBuf[0];
+                    bool done = false;
+                    while (tmd_rerieves_primitives(&tmd, (uint32_t)a2, (uint32_t*)lpMem, (uint32_t)v29, (uint32_t)arg0))
+                    {
+                        int v30 = 0;
+                        if (*v29 > 0)
+                        {
+                            int8_t v31 = (int8_t)(((uint8_t)((uint16_t)*(uint32_t*)((uint8_t*)v29 + 4) - (uint8_t)v47)) << 7);
+                            uint8_t* v26 = lpMem;
+                            do
+                            {
+                                v48 = (uint16_t)v26[0x12] | ((uint16_t)v26[0x16] << 16);
+                                v49 = *(int16_t*)(v26 + 0x1A);
+                                v50 = *(int16_t*)(v26 + 0x10);
+                                v51 = *(int16_t*)(v26 + 0x14);
+                                v52 = *(int16_t*)(v26 + 0x18);
+                                v53 = (int8_t)((uint8_t)v31 + v26[4]);
+                                v54 = (int8_t)v26[5];
+                                v55 = (int8_t)((uint8_t)v31 + v26[8]);
+                                v56 = (int8_t)v26[9];
+                                v57 = (int8_t)((uint8_t)v31 + v26[0xC]);
+                                v58 = (int8_t)v26[0xD];
+                                refer_primitive(self, v40, &v48);
+                                ++v30;
+                                ++v40;
+                                v26 += 4 * ((uint32_t)v29[1] >> 2);
+                            } while (v30 < *v29);
+                        }
+                        v29 += 6;
+                        if (++v38 >= v43)
+                        {
+                            done = true;
+                            break;
+                        }
+                    }
+                    if (!done)
+                        out("failed to retrieve primitives specified.", "TMDObject::In");
+                }
+            }
+            else
+            {
+                out("could not create work.", "TMDObject::In");
+            }
+        }
+        else
+        {
+            out("sorry for not supported format...%x", "TMDObject::In");
+        }
+
+        operator_delete(lpMem);
+        sub_4309A0(&tmd);
+        return 1;
+    }
+
     // 0x00430F40
     static MarniPolyObject* marni_poly_object_ctor_base(MarniPolyObject* self, char* filename, int a3)
     {
@@ -4183,7 +4769,7 @@ namespace openre::marni
                 *((uint32_t*)v5 + 4) = (uint32_t)lpMemb;
             else
                 *((uint32_t*)v5 + 4) = (uint32_t)(lpMemb - lpMem - 12);
-            if (!interop::thiscall<int, void*, int, void*, int>(0x00430A60, self, (int)lpMem, (char*)(2 * a3), a4))
+            if (!marni_poly_object_open(self, lpMem, 2 * a3, (uint32_t)a4))
                 out("", "");
             *(uint32_t*)lpMem = v17;
             *((uint32_t*)lpMem + 1) = v18;
@@ -12685,6 +13271,7 @@ namespace openre::marni
         interop::hookThisCall(0x004123D0, &surface_pal_blt);
         interop::hookThisCall(0x00412580, &surface2_blt);
         interop::hookThisCall(0x00416D40, &flush_surfaces_marni);
+        interop::hookThisCall(0x00430A60, &marni_poly_object_open);
         interop::writeJmp(0x00432CD0, &door_disp1);
         interop::writeJmp(0x00443620, &mapping_tmd);
         interop::writeJmp(0x00406A10, &d3d_error_routine);
