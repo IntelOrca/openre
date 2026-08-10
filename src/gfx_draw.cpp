@@ -182,6 +182,12 @@ namespace openre::gfx_draw
         update_timer();
     }
 
+    // Unloads a texture handle previously returned by loadTexture().
+    void unloadTexture(int handle)
+    {
+        g_renderer->unloadTexture(handle);
+    }
+
     void init_hooks()
     {
         interop::writeJmp(0x00440250, &reset_geom);

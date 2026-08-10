@@ -11656,7 +11656,7 @@ namespace openre::marni
 
         if (*pDoorVarC4)
         {
-            unload_texture(gGameTable.pMarni, *pDoorVarC4);
+            gfx_draw::unloadTexture(*pDoorVarC4);
             *pDoorVarC4 = 0;
         }
 
@@ -11838,7 +11838,7 @@ namespace openre::marni
         auto& tp = gGameTable.texture_pages[page];
         if (tp.handle != 0)
         {
-            marni::unload_texture(gGameTable.pMarni, tp.handle);
+            gfx_draw::unloadTexture(tp.handle);
         }
         tp.handle = 0;
         tp.clutCount = 0;
@@ -12006,17 +12006,17 @@ namespace openre::marni
         {
             if (v5[-1])
             {
-                unload_texture(gGameTable.pMarni, v5[-1]);
+                gfx_draw::unloadTexture(v5[-1]);
                 v5[-1] = 0;
             }
             if (v5[0])
             {
-                unload_texture(gGameTable.pMarni, v5[0]);
+                gfx_draw::unloadTexture(v5[0]);
                 v5[0] = 0;
             }
             if (v5[1])
             {
-                unload_texture(gGameTable.pMarni, v5[1]);
+                gfx_draw::unloadTexture(v5[1]);
                 v5[1] = 0;
             }
             if (v5[2])
@@ -12074,12 +12074,12 @@ namespace openre::marni
         {
             if (p[-1])
             {
-                unload_texture(gGameTable.pMarni, p[-1]);
+                gfx_draw::unloadTexture(p[-1]);
                 p[-1] = 0;
             }
             if (p[0])
             {
-                unload_texture(gGameTable.pMarni, p[0]);
+                gfx_draw::unloadTexture(p[0]);
                 p[0] = 0;
             }
             const int v1 = p[1];
@@ -12112,7 +12112,7 @@ namespace openre::marni
         int result = *(uint32_t*)0x674DF0;
         if (*(uint32_t*)0x674DF0)
         {
-            unload_texture(gGameTable.pMarni, *(uint32_t*)0x674DF0);
+            gfx_draw::unloadTexture(*(uint32_t*)0x674DF0);
             *(uint32_t*)0x674DF0 = 0;
             // (the UnloadTexture result is discarded: the C++ unload_texture wrapper is void)
         }

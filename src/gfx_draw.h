@@ -240,6 +240,8 @@ namespace openre::gfx_draw
     int loadTexturePage(uint32_t page, const Image& image, uint32_t mode);
     // Unloads the texture currently bound to `page`, if any.
     void unloadTexturePage(uint32_t page);
+    // Unloads a texture handle previously returned by loadTexture().
+    void unloadTexture(int handle);
 
     // Registers hooks for the Add* functions and ResetGeom.
     void init_hooks();
