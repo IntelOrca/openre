@@ -47,6 +47,21 @@ namespace openre::gfx
             const auto it = map.find(surface);
             return it == map.end() ? surface : baseSurface(it->second);
         }
+
+        // ddraw.dll replaces a wrapped surface's vtable with its own
+        // IDirectDrawSurface7 template once primary-surface creation settles
+        // (observed on the primary surface). Our saved origVtbl then points at
+        // a stale intermediate template whose slot implementations do not obey
+        // the standard IDirectDrawSurface7 calling conventions (e.g.
+        // GetSurfaceDesc/SetClipper become 3/4-arg helpers), which trips the
+        // Debug /RTC CheckEsp assert. Dispatch through the surface's current
+        // vtable when it is no longer the one we installed - the same functions
+        // the original game's own vtable dispatch reaches.
+        void** surface_vtable_for_dispatch(void* surface, const registry::Entry* e)
+        {
+            auto** live = *reinterpret_cast<void***>(surface);
+            return live == e->newVtbl ? e->origVtbl : live;
+        }
     }
 
     namespace registry
@@ -266,7 +281,9 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_surface_add_attached(IDirectDrawSurface* self, LPDIRECTDRAWSURFACE attached)
         {
-            return backend_gpu()->add_attached_surface(self, attached);
+            const auto hr = surface_forward_add_attached_surface(self, attached);
+            backend_gpu()->add_attached_surface(self, attached);
+            return hr;
         }
 
         // The game obtains IDirect3DTexture2 objects by QueryInterface-ing a
@@ -322,38 +339,52 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_surface_get_surface_desc(IDirectDrawSurface* self, LPDDSURFACEDESC desc)
         {
-            return backend_gpu()->get_surface_desc(self, desc);
+            const auto hr = surface_forward_get_surface_desc(self, desc);
+            backend_gpu()->get_surface_desc(self, desc);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_is_lost(IDirectDrawSurface* self)
         {
-            return backend_gpu()->is_lost(self);
+            const auto hr = surface_forward_is_lost(self);
+            backend_gpu()->is_lost(self);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE
         hook_surface_lock(IDirectDrawSurface* self, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
         {
-            return backend_gpu()->lock(self, rect, desc, flags, event);
+            const auto hr = surface_forward_lock(self, rect, desc, flags, event);
+            backend_gpu()->lock(self, rect, desc, flags, event);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_restore(IDirectDrawSurface* self)
         {
-            return backend_gpu()->restore(self);
+            const auto hr = surface_forward_restore(self);
+            backend_gpu()->restore(self);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_clipper(IDirectDrawSurface* self, LPDIRECTDRAWCLIPPER clipper)
         {
-            return backend_gpu()->set_clipper(self, clipper);
+            const auto hr = surface_forward_set_clipper(self, clipper);
+            backend_gpu()->set_clipper(self, clipper);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_color_key(IDirectDrawSurface* self, DWORD flags, LPDDCOLORKEY key)
         {
-            return backend_gpu()->set_color_key(self, flags, key);
+            const auto hr = surface_forward_set_color_key(self, flags, key);
+            backend_gpu()->set_color_key(self, flags, key);
+            return hr;
         }
 
         static HRESULT STDMETHODCALLTYPE hook_surface_set_palette(IDirectDrawSurface* self, LPDIRECTDRAWPALETTE palette)
         {
-            return backend_gpu()->set_palette(self, palette);
+            const auto hr = surface_forward_set_palette(self, palette);
+            backend_gpu()->set_palette(self, palette);
+            return hr;
         }
 
         // ------------------------------------------------------------------
@@ -382,7 +413,9 @@ namespace openre::gfx
 
         static HRESULT STDMETHODCALLTYPE hook_surface_unlock(IDirectDrawSurface* self, void* lpRect)
         {
-            return backend_gpu()->unlock(self, lpRect);
+            const auto hr = surface_forward_unlock(self, lpRect);
+            backend_gpu()->unlock(self, lpRect);
+            return hr;
         }
 
         // The game draws the save screen's text via GDI over an HDC obtained
@@ -627,6 +660,117 @@ namespace openre::gfx
             }
             return hr;
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Real DirectDraw forwards
+    // ----------------------------------------------------------------------
+    // The game's original code (create_device, create_zbuffer, surface work,
+    // restore_surfaces) depends on the REAL DirectDraw surface state, so these
+    // surface-layer operations are forwarded to the real ddraw surface methods
+    // through the saved original vtable (or the current vtable when ddraw
+    // replaced the one we installed). The GPU backend adopts the real surface
+    // size/format from the desc these calls fill and replays the blits on its
+    // own textures. Per-frame ops (Blt, GetDC, ReleaseDC) are NOT forwarded -
+    // the GPU backend is the active presenter and supplies the HDC.
+
+    HRESULT surface_forward_add_attached_surface(IUnknown* surface, IUnknown* attached)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDIRECTDRAWSURFACE);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_AddAttachedSurface])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWSURFACE>(attached));
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDDSURFACEDESC);
+            auto fn = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_GetSurfaceDesc]);
+            return fn(reinterpret_cast<IDirectDrawSurface*>(surface), desc);
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_set_clipper(IUnknown* surface, IUnknown* clipper)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDIRECTDRAWCLIPPER);
+            auto fn = reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_SetClipper]);
+            return fn(reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWCLIPPER>(clipper));
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_set_palette(IUnknown* surface, IUnknown* palette)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPDIRECTDRAWPALETTE);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_SetPalette])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), reinterpret_cast<LPDIRECTDRAWPALETTE>(palette));
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, DWORD, LPDDCOLORKEY);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_SetColorKey])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), flags, const_cast<LPDDCOLORKEY>(key));
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, LPRECT, LPDDSURFACEDESC, DWORD, HANDLE);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Lock])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), rect, desc, flags, event);
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_unlock(IUnknown* surface, void* lpRect)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*, void*);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Unlock])(
+                reinterpret_cast<IDirectDrawSurface*>(surface), lpRect);
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_is_lost(IUnknown* surface)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_IsLost])(
+                reinterpret_cast<IDirectDrawSurface*>(surface));
+        }
+        return E_UNEXPECTED;
+    }
+
+    HRESULT surface_forward_restore(IUnknown* surface)
+    {
+        if (const auto* e = registry::find(surface); e != nullptr)
+        {
+            using Fn = HRESULT(STDMETHODCALLTYPE*)(IDirectDrawSurface*);
+            return reinterpret_cast<Fn>(surface_vtable_for_dispatch(surface, e)[slots::SURF_Restore])(
+                reinterpret_cast<IDirectDrawSurface*>(surface));
+        }
+        return E_UNEXPECTED;
     }
 
     // ----------------------------------------------------------------------

@@ -26,6 +26,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "system_gpu.h"
 #include "system_window.h"
 #include "tim.h"
 #include "title.h"
@@ -2656,7 +2657,10 @@ namespace openre
 
         case ERROR_FAILED_TO_INITIALIZE_DIRECTX:
         {
-            MessageBoxA(0, "Failed to initialize DIRECTX(R).", windowTitle, MB_ICONEXCLAMATION);
+            logging::logError(
+                "Failed to initialize the graphics backend (is_gpu_active={}, display mode count={})",
+                gGameTable.pMarni ? gGameTable.pMarni->is_gpu_active : 0,
+                gGameTable.pMarni ? marni::request_display_mode_count(gGameTable.pMarni) : 0);
             break;
         }
         case ERROR_INSERT_DISC:
@@ -2925,6 +2929,11 @@ namespace openre
             marni::g_renderer->init();
             if (!gGameTable.pMarni->is_gpu_active || !marni::g_renderer->requestDisplayModeCount())
             {
+                logging::logError(
+                    "Renderer init failed: is_gpu_active={} display_mode_count={} gpu_initialized={}",
+                    gGameTable.pMarni->is_gpu_active,
+                    marni::g_renderer->requestDisplayModeCount(),
+                    system::gpu::is_initialized());
                 win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);
                 system::window::destroy();
                 return 0;

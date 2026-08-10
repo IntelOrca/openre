@@ -8,6 +8,7 @@
 #include "str.h"
 #include "system_config.h"
 #include "system_filesystem.h"
+#include "system_gpu.h"
 #include "system_gpu_backend.h"
 #include "system_window.h"
 
@@ -2047,6 +2048,11 @@ namespace openre::marni
         self->field_8C8410 = 0;
         exception = 9;
         std::memset(self, 0, 0x1800);
+        // Create the SDL_GPU device eagerly. marni::init is the only place we
+        // know a window exists before init_all() creates the ddraw surfaces;
+        // the surfaces must be registered against the backend device for
+        // GetSurfaceDesc to succeed (which gates is_gpu_active).
+        system::gpu::init();
         for (auto i = 0; i < 256; i++)
         {
             self->textures[i].var_00 = 0;
@@ -3211,6 +3217,12 @@ namespace openre::marni
                       *pDeviceGuid, (LPDIRECTDRAWSURFACE)self->surface0.pDDsurface, (LPDIRECT3DDEVICE2*)&self->pDirectDevice2);
         if (gGameTable.error)
         {
+            char hrBuf[16];
+            snprintf(hrBuf, sizeof(hrBuf), "0x%08lX", (unsigned long)gGameTable.error);
+            logging::logError(
+                "[marni] create_device: D3D2 CreateDevice failed (hr={}, hwAccelerated={})",
+                hrBuf,
+                gGameTable.d3d_devices[self->device_cnt].hwAccelerated);
             error(gGameTable.error);
             out("failed to generate the D3DDevice2 for Draw Primitive.", "MarniSystem Direct3D::MD3DCreateDevice");
             return 0;

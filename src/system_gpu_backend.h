@@ -22,9 +22,9 @@ namespace openre::gfx
         virtual ~GfxBackend() = default;
 
         // The SDL_GPU device and window are owned by system_gpu (system_gpu.cpp);
-        // it hands them to the backend once created (lazily, on the first
-        // begin()/present(), never from marni::init). The backend itself never
-        // creates or destroys the device.
+        // it hands them to the backend once created (eagerly, from marni::init,
+        // so the ddraw surfaces created by init_all register against the device).
+        // The backend itself never creates or destroys the device.
         virtual void attach_device(void* device, void* window) = 0;
         // The guest framebuffer (the offscreen render target the scene pass
         // renders into) is owned by system_gpu; it hands it over here whenever
@@ -111,6 +111,30 @@ namespace openre::gfx
     GfxBackend* backend_gpu();
 
     // ---------------------------------------------------------------------
+    // Real DirectDraw forwards
+    // ---------------------------------------------------------------------
+    // The game's original code (create_device 0x00406D90, create_zbuffer
+    // 0x00407020, surface work 0x0040F580/0x00412BD0/0x00414750,
+    // restore_surfaces) depends on the REAL DirectDraw surface state: the
+    // original D3D2 CreateDevice validates the render target surface and its
+    // attached z-buffer, so AddAttachedSurface must reach the real ddraw
+    // surface. These forwards dispatch the surface-layer operation to the real
+    // ddraw surface method (via the wrap registry, using the live vtable when
+    // ddraw replaced the one we installed). Per-frame ops (Blt, GetDC,
+    // ReleaseDC) are intentionally NOT forwarded: the GPU backend replays them
+    // on its own textures and supplies its own DIB-backed HDC, matching the
+    // base behaviour while the GPU backend is active.
+    HRESULT surface_forward_add_attached_surface(IUnknown* surface, IUnknown* attached);
+    HRESULT surface_forward_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc);
+    HRESULT surface_forward_set_clipper(IUnknown* surface, IUnknown* clipper);
+    HRESULT surface_forward_set_palette(IUnknown* surface, IUnknown* palette);
+    HRESULT surface_forward_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key);
+    HRESULT surface_forward_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event);
+    HRESULT surface_forward_unlock(IUnknown* surface, void* lpRect);
+    HRESULT surface_forward_is_lost(IUnknown* surface);
+    HRESULT surface_forward_restore(IUnknown* surface);
+
+    // ---------------------------------------------------------------------
     // Forwarding helpers for the decompiled render path
     // ---------------------------------------------------------------------
     // Decompiled code used to reach the backends through the wrapped COM
@@ -167,12 +191,16 @@ namespace openre::gfx
 
     inline HRESULT surface_is_lost(IUnknown* surface)
     {
-        return backend_gpu()->is_lost(surface);
+        const auto hr = surface_forward_is_lost(surface);
+        backend_gpu()->is_lost(surface);
+        return hr;
     }
 
     inline HRESULT surface_restore(IUnknown* surface)
     {
-        return backend_gpu()->restore(surface);
+        const auto hr = surface_forward_restore(surface);
+        backend_gpu()->restore(surface);
+        return hr;
     }
 
     inline HRESULT surface_blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
@@ -182,37 +210,51 @@ namespace openre::gfx
 
     inline HRESULT surface_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc)
     {
-        return backend_gpu()->get_surface_desc(surface, desc);
+        const auto hr = surface_forward_get_surface_desc(surface, desc);
+        backend_gpu()->get_surface_desc(surface, desc);
+        return hr;
     }
 
     inline HRESULT surface_add_attached_surface(IUnknown* surface, IUnknown* attached)
     {
-        return backend_gpu()->add_attached_surface(surface, attached);
+        const auto hr = surface_forward_add_attached_surface(surface, attached);
+        backend_gpu()->add_attached_surface(surface, attached);
+        return hr;
     }
 
     inline HRESULT surface_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key)
     {
-        return backend_gpu()->set_color_key(surface, flags, key);
+        const auto hr = surface_forward_set_color_key(surface, flags, key);
+        backend_gpu()->set_color_key(surface, flags, key);
+        return hr;
     }
 
     inline HRESULT surface_set_palette(IUnknown* surface, IUnknown* palette)
     {
-        return backend_gpu()->set_palette(surface, palette);
+        const auto hr = surface_forward_set_palette(surface, palette);
+        backend_gpu()->set_palette(surface, palette);
+        return hr;
     }
 
     inline HRESULT surface_set_clipper(IUnknown* surface, IUnknown* clipper)
     {
-        return backend_gpu()->set_clipper(surface, clipper);
+        const auto hr = surface_forward_set_clipper(surface, clipper);
+        backend_gpu()->set_clipper(surface, clipper);
+        return hr;
     }
 
     inline HRESULT surface_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
     {
-        return backend_gpu()->lock(surface, rect, desc, flags, event);
+        const auto hr = surface_forward_lock(surface, rect, desc, flags, event);
+        backend_gpu()->lock(surface, rect, desc, flags, event);
+        return hr;
     }
 
     inline HRESULT surface_unlock(IUnknown* surface, void* lpRect)
     {
-        return backend_gpu()->unlock(surface, lpRect);
+        const auto hr = surface_forward_unlock(surface, lpRect);
+        backend_gpu()->unlock(surface, lpRect);
+        return hr;
     }
 
     inline HRESULT surface_query_texture_interface(IUnknown* surface, LPVOID* outTexture)

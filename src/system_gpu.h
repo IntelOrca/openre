@@ -8,9 +8,10 @@ namespace openre::system::gpu
     // the guest framebuffer (the offscreen render target the scene is rendered
     // into before being letterboxed into the swapchain).
     //
-    // Device creation is lazy: init() is called from create_guest_framebuffer
-    // and present(), never from marni::init. The window is claimed exactly once
-    // (at first init()).
+    // The window is claimed exactly once (at first init()). init() is called
+    // eagerly from marni::init (so the ddraw surfaces created by init_all can
+    // register against the backend device) and is idempotent, so
+    // create_guest_framebuffer/present() may also trigger it safely.
 
     // Creates the SDL_GPU device and claims the game window on first use.
     // Idempotent; safe to call repeatedly. Returns false on failure.
