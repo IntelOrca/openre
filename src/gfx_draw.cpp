@@ -15,6 +15,41 @@ namespace openre::gfx_draw
         g_renderer->reset();
     }
 
+    void begin()
+    {
+        g_renderer->begin();
+    }
+
+    void clear_otags()
+    {
+        g_renderer->clearOtags();
+    }
+
+    void clear()
+    {
+        g_renderer->clear();
+    }
+
+    void draw()
+    {
+        g_renderer->draw();
+    }
+
+    void flip()
+    {
+        g_renderer->flip();
+    }
+
+    void end()
+    {
+        g_renderer->end();
+    }
+
+    void set_gpu_flag(uint32_t flag, bool value)
+    {
+        g_renderer->setGpuFlag(flag, value);
+    }
+
     // 0x00440280
     int add_sprt(const Sprt* p, uint32_t page, int z, int add_back)
     {

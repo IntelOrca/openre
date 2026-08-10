@@ -43,6 +43,52 @@ namespace openre::gfx_draw
         virtual void reset() = 0;
 
         /**
+         * Begins a new frame of drawing. Clears the ordering tables and resets
+         * the geometry/arena state (equivalent to the original
+         * `clear_otags + reset_geom` prologue of the frame loop). The back
+         * buffer is NOT cleared here: the game calls clear() separately, after
+         * any GPU_3 flag changes, because that flag controls what clear() does.
+         */
+        virtual void begin() = 0;
+
+        /**
+         * Clears only the ordering tables, leaving geometry/arena state intact.
+         *
+         * Used by the mid-frame second draw pass in render_frame, which resets
+         * the ordering tables without touching geometry or the back buffer.
+         */
+        virtual void clearOtags() = 0;
+
+        /**
+         * Clears the back buffer (and Z buffer, controlled by the GPU_3 flag).
+         */
+        virtual void clear() = 0;
+
+        /**
+         * Renders the current ordering-table contents to the back buffer.
+         */
+        virtual void draw() = 0;
+
+        /**
+         * Presents the back buffer to the screen.
+         */
+        virtual void flip() = 0;
+
+        /**
+         * Convenience for paths that draw and present together: draw() + flip().
+         */
+        virtual void end() = 0;
+
+        /**
+         * Sets or clears a single flag bit in the renderer's GPU state
+         * (pMarni->gpu_flag).
+         *
+         * @param flag The bit to modify (a marni::GpuFlags value).
+         * @param value true to set the bit, false to clear it.
+         */
+        virtual void setGpuFlag(uint32_t flag, bool value) = 0;
+
+        /**
          * Draws an axis-aligned textured sprite (PSX SPRT) quad.
          *
          * The sprite occupies the screen rectangle (x0, y0) to
@@ -322,6 +368,13 @@ namespace openre::gfx_draw
         explicit LoggingRenderer(std::unique_ptr<Renderer> inner);
 
         void reset() override;
+        void begin() override;
+        void clearOtags() override;
+        void clear() override;
+        void draw() override;
+        void flip() override;
+        void end() override;
+        void setGpuFlag(uint32_t flag, bool value) override;
         int addSprt(const Sprt* p, uint32_t page, int z, int add_back) override;
         void addPolyFt4(const PolyFt4* p, int page, int z, int add_back) override;
         int addMask(const Sprt* p, int page, int z) override;

@@ -385,6 +385,51 @@ namespace openre::gfx_draw
                 setGeomOffset(0, 0);
             }
 
+            // 0x00402290 + 0x00442A50... (frame-start prologue)
+            void begin() override
+            {
+                marni::clear_otags(gGameTable.pMarni);
+                reset();
+            }
+
+            // 0x00402290
+            void clearOtags() override
+            {
+                marni::clear_otags(gGameTable.pMarni);
+            }
+
+            // 0x00404D20
+            void clear() override
+            {
+                marni::clear(gGameTable.pMarni);
+            }
+
+            // 0x00402BC0
+            void draw() override
+            {
+                marni::draw(gGameTable.pMarni);
+            }
+
+            // 0x00402A80
+            void flip() override
+            {
+                marni::flip(gGameTable.pMarni);
+            }
+
+            void end() override
+            {
+                draw();
+                flip();
+            }
+
+            void setGpuFlag(uint32_t flag, bool value) override
+            {
+                if (value)
+                    gGameTable.pMarni->gpu_flag |= flag;
+                else
+                    gGameTable.pMarni->gpu_flag &= ~flag;
+            }
+
             // 0x00440280
             int addSprt(const Sprt* p, uint32_t page, int z, int add_back) override
             {
@@ -1192,6 +1237,41 @@ namespace openre::gfx_draw
     {
         stats = {};
         inner->reset();
+    }
+
+    void LoggingRenderer::begin()
+    {
+        inner->begin();
+    }
+
+    void LoggingRenderer::clearOtags()
+    {
+        inner->clearOtags();
+    }
+
+    void LoggingRenderer::clear()
+    {
+        inner->clear();
+    }
+
+    void LoggingRenderer::draw()
+    {
+        inner->draw();
+    }
+
+    void LoggingRenderer::flip()
+    {
+        inner->flip();
+    }
+
+    void LoggingRenderer::end()
+    {
+        inner->end();
+    }
+
+    void LoggingRenderer::setGpuFlag(uint32_t flag, bool value)
+    {
+        inner->setGpuFlag(flag, value);
     }
 
     int LoggingRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)

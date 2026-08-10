@@ -206,6 +206,13 @@ namespace openre::gfx_draw
     // callers to our implementations.
 
     void reset_geom();
+    void begin();
+    void clear_otags();
+    void clear();
+    void draw();
+    void flip();
+    void end();
+    void set_gpu_flag(uint32_t flag, bool value);
     int add_sprt(const Sprt* p, uint32_t page, int z, int add_back);
     int add_sprt_v(int x, int y, int w, int h, int u, int v, unsigned int clut, int page, int depth, int is_back);
     void add_poly_ft4(const PolyFt4* p, int page, int z, int add_back);

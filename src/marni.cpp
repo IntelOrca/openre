@@ -12536,25 +12536,26 @@ namespace openre::marni
         {
         case 0:
         {
-            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_17;
-            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_18;
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, false);
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, false);
             break;
         }
         case 1:
         {
-            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_17;
-            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_18;
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, true);
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, false);
             break;
         }
         case 2:
         {
-            gGameTable.pMarni->gpu_flag &= ~GpuFlags::GPU_17;
-            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_18;
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, false);
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, true);
             break;
         }
         case 3:
         {
-            gGameTable.pMarni->gpu_flag |= GpuFlags::GPU_17 | GpuFlags::GPU_18;
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_17, true);
+            gfx_draw::set_gpu_flag(GpuFlags::GPU_18, true);
             break;
         }
         }

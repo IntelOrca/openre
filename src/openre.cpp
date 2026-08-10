@@ -2646,12 +2646,6 @@ namespace openre
         interop::call(0x004CAF90);
     }
 
-    // 0x00440250
-    static void reset_geom()
-    {
-        gfx_draw::reset_geom();
-    }
-
     // 0x00442A50
     static void reset_screen()
     {
@@ -2801,23 +2795,20 @@ namespace openre
     {
         if (gGameTable.movie_r0)
         {
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
-            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+            gfx_draw::begin();
+            gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, false);
             movie();
-            marni::clear(gGameTable.pMarni);
+            gfx_draw::clear();
             marni::marni_movie_update(gGameTable.pMarni);
             return true;
         }
         if (gGameTable.reset_r0)
         {
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            gfx_draw::begin();
+            gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, true);
             reset_screen();
-            marni::clear(gGameTable.pMarni);
-            marni::draw(gGameTable.pMarni);
-            marni::flip(gGameTable.pMarni);
+            gfx_draw::clear();
+            gfx_draw::end();
             return true;
         }
         return false;
@@ -2835,10 +2826,9 @@ namespace openre
             // Each psx_main() call must start with a clean ordering table
             // and reset geometry state — psx_main populates draw commands
             // via marni::add_tile/swap_cbuff and leaves state behind.
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
+            gfx_draw::begin();
             gGameTable.bgDrawn = 0;
-            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+            gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, false);
 
             save_reset();
             if (gGameTable.byte_680597 & 1)
@@ -2870,7 +2860,7 @@ namespace openre
         }
 
         if (!gGameTable.bgDrawn && !gGameTable.byte_680598)
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, true);
 
         // 0x004BF760: gallery function
         if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
@@ -2893,24 +2883,24 @@ namespace openre
             gfx_draw::add_scaler(&gGameTable.scaler, 4095);
         }
 
-        marni::clear(gGameTable.pMarni);
-        marni::draw(gGameTable.pMarni);
+        gfx_draw::clear();
+        gfx_draw::draw();
 
         if (gGameTable.can_draw)
         {
             draw_monitor_effect(gGameTable.can_draw);
-            marni::clear_otags(gGameTable.pMarni);
+            gfx_draw::clear_otags();
             psp_trans();
             om_trans();
             moji_trans_main();
-            marni::draw(gGameTable.pMarni);
+            gfx_draw::draw();
             gGameTable.can_draw = 0;
         }
 
         debug::draw();
         save_print_flush();
         marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
-        marni::flip(gGameTable.pMarni);
+        gfx_draw::flip();
     }
 
     // ── WinMain ──────────────────────────────────────────────────────────
@@ -2954,7 +2944,7 @@ namespace openre
             }
 
             cursor_op();
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, true);
             marni::set_gpu_flag();
             if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_13)
             {
