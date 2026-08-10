@@ -367,6 +367,19 @@ namespace openre::audio
         return 1;
     }
 
+    // 0x00433870
+    static int ss_set_coop_level(int /*mode*/)
+    {
+        // The original called IDirectSound::SetCooperativeLevel with
+        // DSSCL_NORMAL (windowed) or DSSCL_EXCLUSIVE (fullscreen) via the
+        // DirectSound object in audio_pMarniSnd. OpenRE replaces DirectSound
+        // with SDL3 audio, which has no cooperative levels, and stores a fake
+        // non-null gate (not a DirectSound object) in audio_pMarniSnd, so the
+        // original implementation would dereference it and crash (e.g. when
+        // cursor_op switches the cursor on a fullscreen toggle). Just succeed.
+        return 1;
+    }
+
     // 0x00433830
     int ss_close()
     {
@@ -3979,6 +3992,7 @@ namespace openre::audio
 
     void bgm_init_hooks()
     {
+        interop::writeJmp(0x00433870, &ss_set_coop_level);
         interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x004338F0, &ss_play);
         interop::writeJmp(0x00433C40, &ss_stop_all);
