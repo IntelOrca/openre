@@ -12300,7 +12300,7 @@ namespace openre::marni
             v7 = 2;
         }
 
-        add_primitive_scaler(gGameTable.pMarni, (Prim*)scaler, a3 + (v7 >> 7));
+        gfx_draw::add_scaler(scaler, a3 + (v7 >> 7));
     }
 
     // 0x004335A0
@@ -12409,7 +12409,7 @@ namespace openre::marni
                 *(uint32_t*)(v4 + 44) = 8421504;
 
                 if (v8 / 3 > 400)
-                    add_primitive_scaler(gGameTable.pMarni, (Prim*)v4, v8 / 3);
+                    gfx_draw::add_scaler((const PrimScaler*)v4, v8 / 3);
                 v4 += 48;
                 if (++v14 >= v34[6])
                     break;
