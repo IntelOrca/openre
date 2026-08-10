@@ -510,14 +510,14 @@ namespace openre::gfx
                 // screen's text into an HDC; the GPU backend backs it with a
                 // DIB section over the surface shadow so the text lands in the
                 // surface's pixel format. For the render target the text is
-                // composited by present() as a separate overlay layer after the
-                // scene pass (textOverlayPending + textTexture), so the room
-                // redraw cannot wipe it.
+                // composited by present() into the guest framebuffer right
+                // after the scene pass (textOverlayPending + textTexture), so
+                // the room redraw cannot wipe it.
                 HDC gdiDc = nullptr;
                 HBITMAP gdiBitmap = nullptr;
                 void* gdiBits = nullptr;
                 bool textOverlayPending = false;
-                SDL_GPUTexture* textTexture = nullptr;       // GDI overlay layer (render target only)
+                SDL_GPUTexture* textTexture = nullptr;       // GDI overlay texture (composited into the framebuffer)
                 SDL_GPUTransferBuffer* textUpload = nullptr; // dedicated upload for the overlay
             };
 
@@ -714,9 +714,13 @@ namespace openre::gfx
 
                 if (sceneTexture != nullptr && rtW != 0 && rtH != 0)
                 {
-                    // Append the letterboxed blit quad (swapchain pixel space)
-                    // to this frame's vertex pool so the single upload below
-                    // covers both the scene and the present blit.
+                    // Append the GDI text overlay quad (full framebuffer) and
+                    // the letterboxed blit quad (swapchain pixel space) to
+                    // this frame's vertex pool so the single upload below
+                    // covers the scene, the overlay composite and the present
+                    // blit.
+                    if (rtEntry != nullptr && rtEntry->textOverlayPending)
+                        appendOverlayQuad(rtW, rtH);
                     appendBlitQuad(winW, winH, rtW, rtH);
 
                     // Grow the vertex pool if this frame needs more room. The
@@ -823,18 +827,22 @@ namespace openre::gfx
                     // GDI text overlay (save screen): the game draws its text
                     // via GDI into a DIB over the surface shadow
                     // (GetDC/ReleaseDC). It must survive the scene redraw
-                    // above, so composite it on top in the present pass as a
-                    // second full-screen blit of a dedicated overlay texture.
-                    bool applyTextOverlay = false;
+                    // above, so composite it into the guest framebuffer right
+                    // after the scene pass (a small render pass over the same
+                    // texture the scene just drew into); the swapchain present
+                    // pass below then only does the single letterboxed blit.
+                    // If the upload fails the overlay is skipped and the scene
+                    // shows without the save-screen text.
                     if (rtEntry != nullptr && rtEntry->textOverlayPending)
                     {
                         if (uploadTextOverlay(*rtEntry, commandBuffer))
-                            applyTextOverlay = true;
+                            compositeTextOverlay(*rtEntry, sceneTexture, commandBuffer);
                         rtEntry->textOverlayPending = false;
                     }
 
-                    // Present pass: letterbox the render target into the
-                    // swapchain (the blit quad was appended to the vertex pool).
+                    // Present pass: letterbox the (text-composited) render
+                    // target into the swapchain (the blit quad was appended to
+                    // the vertex pool).
                     ensureBlitPipeline(SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow));
                     if (mBlitPipeline != nullptr)
                     {
@@ -858,15 +866,6 @@ namespace openre::gfx
                         SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, mBlitQuadOffset };
                         SDL_BindGPUVertexBuffers(presentPass, 0, &vertexBinding, 1);
                         SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
-                        if (applyTextOverlay && rtEntry != nullptr && rtEntry->textTexture != nullptr)
-                        {
-                            // Composite the GDI text layer (room + text, fully
-                            // opaque) over the freshly rendered scene.
-                            SDL_GPUTextureSamplerBinding textBinding = { rtEntry->textTexture, mSamplerLinear };
-                            SDL_BindGPUFragmentSamplers(presentPass, 0, &textBinding, 1);
-                            SDL_BindGPUVertexBuffers(presentPass, 0, &vertexBinding, 1);
-                            SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
-                        }
                         SDL_EndGPURenderPass(presentPass);
                     }
                 }
@@ -2382,6 +2381,41 @@ namespace openre::gfx
                 return true;
             }
 
+            // Composites the GDI text overlay texture (room + text, fully
+            // opaque) into the guest framebuffer right after the scene pass: a
+            // full-framebuffer blit through the overlay pipeline (plain
+            // textured blit into R8G8B8A8_UNORM, no depth target), so the
+            // swapchain present pass below only needs its single letterboxed
+            // blit. Works for both the guest framebuffer and the surface-layer
+            // fallback (both are R8G8B8A8_UNORM).
+            void compositeTextOverlay(SurfaceEntry& entry, SDL_GPUTexture* targetTexture, SDL_GPUCommandBuffer* commandBuffer)
+            {
+                if (mDevice == nullptr || commandBuffer == nullptr || targetTexture == nullptr || entry.textTexture == nullptr)
+                    return;
+                ensureOverlayPipeline();
+                if (mOverlayPipeline == nullptr)
+                    return;
+                SDL_GPUColorTargetInfo target = {};
+                target.texture = targetTexture;
+                target.mip_level = 0;
+                target.layer_or_depth_plane = 0;
+                target.load_op = SDL_GPU_LOADOP_LOAD;
+                target.store_op = SDL_GPU_STOREOP_STORE;
+                auto* pass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
+                SDL_GPUViewport vp
+                    = { 0.0f, 0.0f, static_cast<float>(entry.width), static_cast<float>(entry.height), 0.0f, 1.0f };
+                SDL_SetGPUViewport(pass, &vp);
+                const float vpSize[4] = { 0.0f, 0.0f, static_cast<float>(entry.width), static_cast<float>(entry.height) };
+                SDL_PushGPUVertexUniformData(commandBuffer, 0, vpSize, sizeof(vpSize));
+                SDL_BindGPUGraphicsPipeline(pass, mOverlayPipeline);
+                SDL_GPUTextureSamplerBinding binding = { entry.textTexture, mSamplerLinear };
+                SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+                SDL_GPUBufferBinding vertexBinding = { mVertexBuffer, mOverlayQuadOffset };
+                SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
+                SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
+                SDL_EndGPURenderPass(pass);
+            }
+
             // Fills the given region of the CPU shadow with a DirectDraw fill
             // color in the surface's own pixel format (RGB565 / RGBX8888).
             void fillShadow(SurfaceEntry& entry, const RECT* region, uint32_t color)
@@ -2736,11 +2770,15 @@ namespace openre::gfx
             SDL_GPUFence* mFrameFence = nullptr;
 
             // Pipelines: scene pipelines are cached per PipelineKey; the blit
-            // pipeline presents the render target into the swapchain.
+            // pipeline presents the render target into the swapchain; the
+            // overlay pipeline composites the GDI text layer into the guest
+            // framebuffer (R8G8B8A8, no depth, unlike scene pipelines).
             std::unordered_map<PipelineKey, SDL_GPUGraphicsPipeline*, PipelineKeyHash> mPipelineCache;
             SDL_GPUGraphicsPipeline* mBlitPipeline = nullptr;
             SDL_GPUTextureFormat mBlitSwapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
             Uint32 mBlitQuadOffset = 0;
+            SDL_GPUGraphicsPipeline* mOverlayPipeline = nullptr;
+            Uint32 mOverlayQuadOffset = 0;
 
             // Debug aid (OPENRE_GPU_DUMP=<N>): every N-th frame, read back the
             // scene render target after the scene pass and write it as a BMP so
@@ -3058,6 +3096,11 @@ namespace openre::gfx
                     mBlitPipeline = nullptr;
                 }
                 mBlitSwapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+                if (mOverlayPipeline != nullptr)
+                {
+                    SDL_ReleaseGPUGraphicsPipeline(mDevice, mOverlayPipeline);
+                    mOverlayPipeline = nullptr;
+                }
                 if (mVertexShader != nullptr)
                 {
                     SDL_ReleaseGPUShader(mDevice, mVertexShader);
@@ -3245,6 +3288,25 @@ namespace openre::gfx
                     logging::logError("[gfx:gpu] blit pipeline creation failed: {}", SDL_GetError());
             }
 
+            // The overlay pipeline composites the GDI text layer into the guest
+            // framebuffer: a plain opaque textured blit into an R8G8B8A8_UNORM
+            // target with no depth, the same key as the swapchain blit pipeline
+            // but built for the framebuffer's format (the blit pipeline targets
+            // the swapchain format, which may differ).
+            void ensureOverlayPipeline()
+            {
+                if (mOverlayPipeline != nullptr)
+                    return;
+                PipelineKey key{};
+                key.textured = true;
+                key.primType = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+                mOverlayPipeline = createPipeline(key, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, false);
+                if (mOverlayPipeline != nullptr)
+                    logging::logInfo("[gfx:gpu] overlay pipeline created (R8G8B8A8_UNORM)");
+                else
+                    logging::logError("[gfx:gpu] overlay pipeline creation failed: {}", SDL_GetError());
+            }
+
             // Grows the per-frame vertex pool. Called from present() after the
             // previous frame was submitted and waited on, so releasing and
             // recreating the buffers cannot race in-flight work.
@@ -3295,27 +3357,19 @@ namespace openre::gfx
                 logging::logInfo("[gfx:gpu] vertex pool grown to {} bytes", mVertexBufferCapacity);
             }
 
-            // Appends the letterboxed fullscreen blit quad (in swapchain pixel
+            // Appends a 2D quad covering [x0,y0]-[x1,y1] (in the target's pixel
             // space) to the frame vertex pool; returns the byte offset where
-            // the quad starts so the present pass can bind exactly it.
-            void appendBlitQuad(Uint32 winW, Uint32 winH, Uint32 rtW, Uint32 rtH)
+            // the quad starts so a pass can bind exactly it.
+            Uint32 appendQuad(float x0, float y0, float x1, float y1)
             {
-                if (winW == 0 || winH == 0 || rtW == 0 || rtH == 0)
-                    return;
-                const float scale = std::min(static_cast<float>(winW) / rtW, static_cast<float>(winH) / rtH);
-                const float outW = rtW * scale;
-                const float outH = rtH * scale;
-                const float x0 = (static_cast<float>(winW) - outW) * 0.5f;
-                const float y0 = (static_cast<float>(winH) - outH) * 0.5f;
-
-                mBlitQuadOffset = static_cast<Uint32>(mFrameVertices.size());
+                const auto offset = static_cast<Uint32>(mFrameVertices.size());
                 // D3DTLVERTEX layout (32 bytes): sx, sy, sz, rhw, color, spec, tu, tv.
                 // Color is D3DCOLOR white (0xFFFFFFFF, little-endian FF FF FF FF).
                 const float pos[4][4] = {
-                    { x0, y0, 0.0f, 1.0f },               // top-left
-                    { x0, y0 + outH, 0.0f, 1.0f },        // bottom-left
-                    { x0 + outW, y0, 0.0f, 1.0f },        // top-right
-                    { x0 + outW, y0 + outH, 0.0f, 1.0f }, // bottom-right
+                    { x0, y0, 0.0f, 1.0f }, // top-left
+                    { x0, y1, 0.0f, 1.0f }, // bottom-left
+                    { x1, y0, 0.0f, 1.0f }, // top-right
+                    { x1, y1, 0.0f, 1.0f }, // bottom-right
                 };
                 const float uv[4][2] = {
                     { 0.0f, 0.0f },
@@ -3334,6 +3388,32 @@ namespace openre::gfx
                     std::memcpy(vertex + kTLVertexUvOffset, uv[i], sizeof(uv[i]));
                     mFrameVertices.insert(mFrameVertices.end(), vertex, vertex + kTLVertexStride);
                 }
+                return offset;
+            }
+
+            // Appends the letterboxed fullscreen blit quad (in swapchain pixel
+            // space) to the frame vertex pool; records the byte offset where
+            // the quad starts so the present pass can bind exactly it.
+            void appendBlitQuad(Uint32 winW, Uint32 winH, Uint32 rtW, Uint32 rtH)
+            {
+                if (winW == 0 || winH == 0 || rtW == 0 || rtH == 0)
+                    return;
+                const float scale = std::min(static_cast<float>(winW) / rtW, static_cast<float>(winH) / rtH);
+                const float outW = rtW * scale;
+                const float outH = rtH * scale;
+                const float x0 = (static_cast<float>(winW) - outW) * 0.5f;
+                const float y0 = (static_cast<float>(winH) - outH) * 0.5f;
+                mBlitQuadOffset = appendQuad(x0, y0, x0 + outW, y0 + outH);
+            }
+
+            // Appends the full-framebuffer quad (framebuffer pixel space) used
+            // by the GDI text overlay composite; records the byte offset where
+            // the quad starts so the overlay pass can bind exactly it.
+            void appendOverlayQuad(Uint32 rtW, Uint32 rtH)
+            {
+                if (rtW == 0 || rtH == 0)
+                    return;
+                mOverlayQuadOffset = appendQuad(0.0f, 0.0f, static_cast<float>(rtW), static_cast<float>(rtH));
             }
 
             void submitAndReset(SDL_GPUCommandBuffer* commandBuffer)
@@ -3371,6 +3451,7 @@ namespace openre::gfx
                 mQueuedDraws.clear();
                 mFrameVertices.clear();
                 mBlitQuadOffset = 0;
+                mOverlayQuadOffset = 0;
                 mDeviceState.pendingClearTarget = false;
                 mDeviceState.pendingClearDepth = false;
             }
