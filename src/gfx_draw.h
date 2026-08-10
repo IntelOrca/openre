@@ -173,6 +173,7 @@ namespace openre::gfx_draw
         PolyF4,
         Tile,
         LineF2,
+        Scaler,
         Count,
     };
 
@@ -219,6 +220,7 @@ namespace openre::gfx_draw
     int add_poly_f4(const Tile* p, int z, int is_back);
     int add_tile(const Tile* p, int z, int is_back);
     int add_line_f2(const LineF2* p, int z, int is_back);
+    int add_scaler(const PrimScaler* p, int z);
 
     // ── Texture page management ────────────────────────────────────────
     // The Renderer interface deals only in raw texture handles. Organising

@@ -1091,6 +1091,14 @@ namespace openre::gfx_draw
                 return 1;
             }
 
+            // 0x00402210
+            int addScaler(const PrimScaler* p, int z) override
+            {
+                auto* copy = (PrimScaler*)arena.alloc(sizeof(PrimScaler));
+                std::memcpy(copy, p, sizeof(PrimScaler));
+                return marni::add_primitive_scaler(gGameTable.pMarni, (Prim*)copy, z);
+            }
+
             // 0x00441370
             int addLineF2(const LineF2* p, int z, int is_back) override
             {
@@ -1276,6 +1284,13 @@ namespace openre::gfx_draw
     {
         int result = inner->addLineF2(p, z, is_back);
         record(DrawKind::LineF2, z, -1, p->x0, p->y0, p->x1, p->y1);
+        return result;
+    }
+
+    int LoggingRenderer::addScaler(const PrimScaler* p, int z)
+    {
+        int result = inner->addScaler(p, z);
+        record(DrawKind::Scaler, z, -1, 0, 0, 0, 0);
         return result;
     }
 

@@ -99,6 +99,12 @@ namespace openre::gfx_draw
         return g_renderer->addLineF2(p, z, is_back);
     }
 
+    // 0x00402210
+    int add_scaler(const PrimScaler* p, int z)
+    {
+        return g_renderer->addScaler(p, z);
+    }
+
     const DrawStats& draw_stats()
     {
         static const DrawStats empty{};

@@ -2202,7 +2202,7 @@ namespace openre
                 gGameTable.dword_689800 = set_game_seconds(1);
                 auto v0 = 16 * gGameTable.byte_9888D8;
                 gGameTable.byte_52D8E7[v0] = 2;
-                marni::add_tile(&gGameTable.curtain2[v0], 5, 0);
+                gfx_draw::add_tile((const gfx_draw::Tile*)&gGameTable.curtain2[v0], 5, 0);
                 // marni::prim14
                 interop::call<void, int, int, int, int, int>(0x004C8603, 135, 107, 0, 0x4000, gGameTable.pause);
                 marni::out();
@@ -2226,7 +2226,7 @@ namespace openre
             auto& tile = gGameTable.fade_table->tiles[tileIdx];
             tile.code = 2;
             tile.tag = gGameTable.fade_table->hrate & 3;
-            marni::add_tile(&tile, 0, 0);
+            gfx_draw::add_tile((const gfx_draw::Tile*)&tile, 0, 0);
 
             if (--gGameTable.fade_table->kido < 0)
             {
@@ -2890,7 +2890,7 @@ namespace openre
             gGameTable.scaler.rgb0 = gGameTable.global_rgb;
             gGameTable.scaler.c_x = gGameTable.global_cx + 160;
             gGameTable.scaler.c_y = gGameTable.global_cy + 120;
-            marni::add_primitive_scaler(gGameTable.pMarni, &gGameTable.scaler, 4095);
+            gfx_draw::add_scaler(&gGameTable.scaler, 4095);
         }
 
         marni::clear(gGameTable.pMarni);

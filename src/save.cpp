@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "error.h"
 #include "file.h"
+#include "gfx_draw.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -501,7 +502,7 @@ namespace openre::save
             pPrim.psxRect.y = (int16_t)(15 * (int)cursor + 49);
             pPrim.psxRect.w = 288;
             pPrim.psxRect.h = 14;
-            marni::add_tile(&pPrim, 1, 0);
+            gfx_draw::add_tile((const gfx_draw::Tile*)&pPrim, 1, 0);
         };
 
         // Prints the save list and title without the cursor tile.

@@ -271,6 +271,21 @@ namespace openre::gfx_draw
         virtual int addLineF2(const LineF2* p, int z, int is_back) = 0;
 
         /**
+         * Draws a scaling/transform primitive (PSX-type 0x3DE0).
+         *
+         * The scaler record carries a 3x3 transform matrix plus per-primitive
+         * fields used by the full-screen/door scaler effects (see set_door_prim
+         * and the render_frame scaler setup). Unlike the Add* sprite/quads it is
+         * submitted to the front OT at the given depth without texture-page
+         * checks. The record is copied into the renderer's arena.
+         *
+         * @param p The scaler descriptor (matrix rows, projection, screen centre).
+         * @param z The depth used to sort the primitive into the ordering table.
+         * @return 1 on success.
+         */
+        virtual int addScaler(const PrimScaler* p, int z) = 0;
+
+        /**
          * Uploads `image` as a new GPU texture and returns its handle.
          *
          * The handle can be stored anywhere the game likes; texture page
@@ -320,6 +335,7 @@ namespace openre::gfx_draw
         int addPolyF4(const Tile* p, int z, int is_back) override;
         int addTile(const Tile* p, int z, int is_back) override;
         int addLineF2(const LineF2* p, int z, int is_back) override;
+        int addScaler(const PrimScaler* p, int z) override;
 
         int loadTexture(const Image& image, uint32_t mode) override;
         void unloadTexture(int handle) override;
