@@ -4056,7 +4056,10 @@ namespace openre::marni
     {
         if ((self->flags & 1) != 0)
         {
-            uint32_t v6[3];
+            // Scratch buffer for the primitive record. modify_primitive can copy
+            // up to 40 bytes (0x800400); the 6 texture offset bytes at +12..+17
+            // (v7..v12 in the original) must be contiguous with the copied record.
+            uint32_t v6[10];
             auto* v7 = (uint8_t*)v6 + 12;
             for (uint32_t i = 0; i < self->primCount; ++i)
             {
