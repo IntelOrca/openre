@@ -1,6 +1,7 @@
 #include "gfx_d3d2.h"
 #include "gfx_backend.h"
 #include "logger.h"
+#include "system_gpu.h"
 
 #include <cstring>
 #include <unordered_map>
@@ -803,13 +804,6 @@ namespace openre::gfx
     // Module lifecycle
     // ----------------------------------------------------------------------
 
-    namespace
-    {
-        // True when backend_gpu()->init() succeeded, i.e. the GPU backend exists
-        // and may present.
-        bool g_gpuInitialized = false;
-    }
-
     // The GPU backend is the one and only backend; the active backend is
     // always GPU.
     int active_backend()
@@ -819,27 +813,21 @@ namespace openre::gfx
 
     bool gpu_enabled()
     {
-        return g_gpuInitialized;
-    }
-
-    void init()
-    {
-        g_gpuInitialized = backend_gpu()->init();
-        if (g_gpuInitialized)
-            logging::logInfo("[gfx] GPU backend initialised (active backend: gpu)");
-        else
-            logging::logError("[gfx] GPU backend failed to initialise - the game will not render");
+        // The SDL_GPU device is owned by system_gpu; it exists once created
+        // lazily (first begin()/present()).
+        return system::gpu::is_initialized();
     }
 
     void shutdown()
     {
-        if (g_gpuInitialized)
-            backend_gpu()->shutdown();
+        // The device, window claim and guest framebuffer are owned by
+        // system_gpu; present() also lives there now.
+        system::gpu::shutdown();
         registry::clear();
     }
 
     void notify_present()
     {
-        backend_gpu()->present();
+        system::gpu::present();
     }
 }

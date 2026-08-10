@@ -994,6 +994,10 @@ namespace openre::marni
                 out("Direct3D::ChangeDisplayMode - (%d->%d) w:%d h:%d bpp:%d", "");
                 str::string_assign(&gGameTable.marni_config.display_mode, generate_res_string(&r));
                 self->var_8C8318 = 0;
+                // Keep the config render resolution in sync with the active
+                // display mode so system_gpu's guest framebuffer is re-created
+                // at the new size by the renderer's begin().
+                system::config::set_resolution("video", "render_resolution", { (int32_t)r.width, (int32_t)r.height });
                 logging::logInfo(
                     "[marni] Display mode changed: {} -> {} ({}x{} {}bpp fullscreen:{})",
                     originalMode,
@@ -2043,7 +2047,6 @@ namespace openre::marni
         self->field_8C8410 = 0;
         exception = 9;
         std::memset(self, 0, 0x1800);
-        gfx::init();
         for (auto i = 0; i < 256; i++)
         {
             self->textures[i].var_00 = 0;

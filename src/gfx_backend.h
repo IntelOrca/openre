@@ -21,7 +21,15 @@ namespace openre::gfx
     public:
         virtual ~GfxBackend() = default;
 
-        virtual bool init() = 0;
+        // The SDL_GPU device and window are owned by system_gpu (system_gpu.cpp);
+        // it hands them to the backend once created (lazily, on the first
+        // begin()/present(), never from marni::init). The backend itself never
+        // creates or destroys the device.
+        virtual void attach_device(void* device, void* window) = 0;
+        // The guest framebuffer (the offscreen render target the scene pass
+        // renders into) is owned by system_gpu; it hands it over here whenever
+        // it is created or re-created (render-resolution change).
+        virtual void set_guest_framebuffer(void* texture, int width, int height) = 0;
         virtual void shutdown() = 0;
 
         // ---- surface layer ----
@@ -206,11 +214,12 @@ namespace openre::gfx
     // always GPU.
     int active_backend();
 
-    // True when the GPU backend initialised successfully and can present.
+    // True when the GPU device exists (system_gpu owns it; created lazily on
+    // the first begin()/present()).
     bool gpu_enabled();
 
-    // Called from marni.cpp.
-    void init();
+    // Called from marni.cpp (kill only; init no longer creates the device -
+    // that is system_gpu's lazy job).
     void shutdown();
     void wrap_ddraw(IDirectDraw* dd);
     void notify_present();

@@ -2,6 +2,8 @@
 #include "marni.h"
 #include "openre.h"
 #include "re2.h"
+#include "system_config.h"
+#include "system_gpu.h"
 
 #include <cstdint>
 #include <cstring>
@@ -383,6 +385,14 @@ namespace openre::gfx_draw
             {
                 arena.reset();
                 setGeomOffset(0, 0);
+
+                // Phase 5: lazily ensure the guest framebuffer (the offscreen
+                // render target) exists at the configured render resolution.
+                // system_gpu re-creates it when the size changes (F8 / display
+                // mode change), creating the GPU device and claiming the window
+                // on first use - marni::init no longer does that.
+                const auto renderRes = system::config::get_render_resolution();
+                system::gpu::create_guest_framebuffer(renderRes.width, renderRes.height);
             }
 
             // 0x00402290 + 0x00442A50... (frame-start prologue)

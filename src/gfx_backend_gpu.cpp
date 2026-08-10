@@ -1,7 +1,6 @@
 #include "gfx_backend.h"
 #include "gfx_shaders.h"
 #include "logger.h"
-#include "system_window.h"
 
 #include <SDL3/SDL.h>
 
@@ -530,40 +529,28 @@ namespace openre::gfx
             };
 
         public:
-            bool init() override
+            // system_gpu owns the device and window (created lazily on the first
+            // begin()/present()); this backend only records them for the surface
+            // layer and present().
+            void attach_device(void* device, void* window) override
             {
-                mWindow = static_cast<SDL_Window*>(system::window::get_window());
-                if (mWindow == nullptr)
-                {
-                    logging::logError("[gfx:gpu] init failed: no SDL window available");
-                    return false;
-                }
-
-                mDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
-                if (mDevice == nullptr)
-                {
-                    logging::logError("[gfx:gpu] SDL_CreateGPUDevice failed: {}", SDL_GetError());
-                    return false;
-                }
-                logging::logInfo("[gfx:gpu] device created (driver={})", SDL_GetGPUDeviceDriver(mDevice));
-
-                if (!SDL_ClaimWindowForGPUDevice(mDevice, mWindow))
-                {
-                    logging::logError("[gfx:gpu] SDL_ClaimWindowForGPUDevice failed: {}", SDL_GetError());
-                    SDL_DestroyGPUDevice(mDevice);
-                    mDevice = nullptr;
-                    return false;
-                }
-
-                const auto format = SDL_GetGPUSwapchainTextureFormat(mDevice, mWindow);
-                logging::logInfo(
-                    "[gfx:gpu] window claimed, swapchain format={} (M2: swapchain ready)", static_cast<int>(format));
+                mDevice = static_cast<SDL_GPUDevice*>(device);
+                mWindow = static_cast<SDL_Window*>(window);
 
                 const char* dumpEnv = SDL_getenv("OPENRE_GPU_DUMP");
                 mDumpInterval = dumpEnv != nullptr ? static_cast<Uint32>(std::atoi(dumpEnv)) : 0;
                 if (mDumpInterval != 0)
                     logging::logInfo("[gfx:gpu] scene dump enabled (every {} frames)", mDumpInterval);
-                return true;
+            }
+
+            // system_gpu creates (and re-creates on render-resolution change)
+            // the guest framebuffer; the scene pass renders into it.
+            void set_guest_framebuffer(void* texture, int width, int height) override
+            {
+                mGuestFramebuffer = static_cast<SDL_GPUTexture*>(texture);
+                mGuestFramebufferW = static_cast<Uint32>(width);
+                mGuestFramebufferH = static_cast<Uint32>(height);
+                logging::logInfo("[gfx:gpu] guest framebuffer set ({}x{})", width, height);
             }
 
             void shutdown() override
@@ -584,13 +571,15 @@ namespace openre::gfx
                     for (auto& pair : mSurfaces)
                         releaseSurface(pair.second);
                     mSurfaces.clear();
-                    if (mWindow != nullptr)
-                        SDL_ReleaseWindowFromGPUDevice(mDevice, mWindow);
-                    SDL_DestroyGPUDevice(mDevice);
-                    mDevice = nullptr;
                 }
+                // The device/window/guest framebuffer belong to system_gpu;
+                // it releases them after this call.
+                mGuestFramebuffer = nullptr;
+                mGuestFramebufferW = 0;
+                mGuestFramebufferH = 0;
+                mDevice = nullptr;
                 mWindow = nullptr;
-                logging::logInfo("[gfx:gpu] shutdown (resources released, device destroyed)");
+                logging::logInfo("[gfx:gpu] shutdown (backend resources released)");
             }
 
             void present() override
@@ -681,7 +670,12 @@ namespace openre::gfx
                     return;
                 }
 
-                if (!ensureSceneResources())
+                // The render target the D3D device draws into (surface0).
+                auto* rtEntry = findSurface(mDeviceState.renderTarget);
+                const auto rtW = rtEntry != nullptr ? rtEntry->width : 0u;
+                const auto rtH = rtEntry != nullptr ? rtEntry->height : 0u;
+
+                if (!ensureSceneResources(rtW, rtH))
                 {
                     logging::logDebug("[gfx:gpu] present: scene resources unavailable, showing cleared swapchain");
                     SDL_GPUColorTargetInfo clearTarget = {};
@@ -695,11 +689,17 @@ namespace openre::gfx
                     return;
                 }
 
-                // The render target the D3D device draws into (surface0).
-                auto* rtEntry = findSurface(mDeviceState.renderTarget);
-                SDL_GPUTexture* sceneTexture = rtEntry != nullptr && rtEntry->textureCreated ? rtEntry->texture : nullptr;
-                const auto rtW = rtEntry != nullptr ? rtEntry->width : 0u;
-                const auto rtH = rtEntry != nullptr ? rtEntry->height : 0u;
+                // Phase 5: the scene renders into the system_gpu-owned guest
+                // framebuffer (the offscreen render target, sized to the
+                // configured render resolution) when one exists and matches the
+                // render surface size. Fall back to the surface-layer render
+                // target texture when the framebuffer is unavailable or
+                // mismatched (e.g. a hand-edited render resolution that differs
+                // from the game's current display mode).
+                SDL_GPUTexture* sceneTexture
+                    = (mGuestFramebuffer != nullptr && mGuestFramebufferW == rtW && mGuestFramebufferH == rtH)
+                    ? mGuestFramebuffer
+                    : (rtEntry != nullptr && rtEntry->textureCreated ? rtEntry->texture : nullptr);
                 logging::logDebug(
                     "[gfx:gpu] present: rtKey={} rtEntry={} tex={} rt={}x{} vp={}x{} pendingClearT={} clear={}",
                     static_cast<void*>(mDeviceState.renderTarget),
@@ -2705,6 +2705,13 @@ namespace openre::gfx
             SDL_GPUDevice* mDevice = nullptr;
             SDL_Window* mWindow = nullptr;
 
+            // The guest framebuffer (owned by system_gpu): the offscreen render
+            // target the scene pass renders into, sized to the configured render
+            // resolution. nullptr until the renderer's begin() requests one.
+            SDL_GPUTexture* mGuestFramebuffer = nullptr;
+            Uint32 mGuestFramebufferW = 0;
+            Uint32 mGuestFramebufferH = 0;
+
             // Scene resources (created lazily by ensureSceneResources once the
             // render target surface exists).
             SDL_GPUShader* mVertexShader = nullptr;
@@ -2933,13 +2940,11 @@ namespace openre::gfx
             // ---- pipelines / resources ----
 
             // Lazily creates shaders, samplers and the depth texture once the
-            // render target surface exists. Returns false until then.
-            bool ensureSceneResources()
+            // scene target (the render surface, or the guest framebuffer which
+            // matches its size) is available. Returns false until then.
+            bool ensureSceneResources(Uint32 sceneW, Uint32 sceneH)
             {
-                if (mDevice == nullptr)
-                    return false;
-                auto* rtEntry = findSurface(mDeviceState.renderTarget);
-                if (rtEntry == nullptr || !rtEntry->textureCreated || rtEntry->width == 0 || rtEntry->height == 0)
+                if (mDevice == nullptr || sceneW == 0 || sceneH == 0)
                     return false;
 
                 if (mVertexShader == nullptr)
@@ -3002,15 +3007,15 @@ namespace openre::gfx
                     }
                 }
 
-                if (mDepthTexture == nullptr || mDepthW != rtEntry->width || mDepthH != rtEntry->height)
+                if (mDepthTexture == nullptr || mDepthW != sceneW || mDepthH != sceneH)
                 {
                     if (mDepthTexture != nullptr)
                     {
                         SDL_ReleaseGPUTexture(mDevice, mDepthTexture);
                         mDepthTexture = nullptr;
                     }
-                    mDepthW = rtEntry->width;
-                    mDepthH = rtEntry->height;
+                    mDepthW = sceneW;
+                    mDepthH = sceneH;
                     if (!SDL_GPUTextureSupportsFormat(
                             mDevice,
                             SDL_GPU_TEXTUREFORMAT_D16_UNORM,

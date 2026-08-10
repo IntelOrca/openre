@@ -111,6 +111,7 @@
     <ClCompile Include="system_audio.cpp" />
     <ClCompile Include="system_config.cpp" />
     <ClCompile Include="system_filesystem.cpp" />
+    <ClCompile Include="system_gpu.cpp" />
     <ClCompile Include="system_input.cpp" />
     <ClCompile Include="system_window.cpp" />
     <ClCompile Include="scheduler.cpp" />
@@ -156,6 +157,7 @@
     <ClInclude Include="save.h" />
     <ClInclude Include="system_audio.h" />
     <ClInclude Include="system_config.h" />
+    <ClInclude Include="system_gpu.h" />
     <ClInclude Include="system_input.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
