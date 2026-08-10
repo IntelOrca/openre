@@ -357,6 +357,83 @@ namespace openre::gfx_draw
          * Used during the title / logo sequence to reset all texture state.
          */
         virtual void unloadAllTextures() = 0;
+
+        /**
+         * Initialises the graphics subsystem (MARNI device, surfaces, order
+         * tables). Allocates the global Marni instance and stores it in
+         * gGameTable.pMarni. Called once at startup, before any drawing.
+         */
+        virtual void init() = 0;
+
+        /**
+         * Tears down the graphics subsystem: releases all textures, unloads
+         * the registered surfaces and destroys the Marni instance. Idempotent.
+         * Called on quit and on window close.
+         */
+        virtual void shutdown() = 0;
+
+        /**
+         * Toggles between the current windowed mode and the fullscreen mode
+         * (ALT+ENTER). Leaving fullscreen restores the last windowed mode.
+         *
+         * @return true if the display mode was changed, false otherwise.
+         */
+        virtual bool toggleFullscreen() = 0;
+
+        /**
+         * Cycles to the next windowed render resolution (F8). A no-op while
+         * fullscreen; the fullscreen mode is exclusive to toggleFullscreen().
+         *
+         * @return true if the display mode was changed, false otherwise.
+         */
+        virtual bool changeResolution() = 0;
+
+        /**
+         * Returns the number of display modes available to the renderer.
+         *
+         * @return The mode count when the GPU is active, 0 otherwise.
+         */
+        virtual int requestDisplayModeCount() = 0;
+
+        /**
+         * Loads the game configuration (MARNI config plus window settings).
+         * Called once at startup.
+         */
+        virtual void configReadAll() = 0;
+
+        /**
+         * Saves the game configuration back to disk.
+         */
+        virtual void configFlushAll() = 0;
+
+        /**
+         * Resets the config path strings and shuts the config system down.
+         * Called on fatal exit.
+         */
+        virtual void configShutdown() = 0;
+
+        /**
+         * Toggles the bilinear texture filter flag in the MARNI config (F7).
+         */
+        virtual void configFlipFilter() = 0;
+
+        /**
+         * Applies the GPU filtering flags (GPU_17/GPU_18) selected by
+         * gGameTable.byte_680592. Called every frame and from the gallery.
+         */
+        virtual void setGpuFlag() = 0;
+
+        /**
+         * Transfers the screen font bitmap onto the back buffer surface.
+         * Called every frame before the flip.
+         */
+        virtual void fontTrans() = 0;
+
+        /**
+         * Advances the currently playing movie by one frame, dropping the
+         * fullscreen window styles when the movie has finished.
+         */
+        virtual void movieUpdate() = 0;
     };
 
     // Decorator that records every draw call to the per-frame DrawStats while
@@ -393,6 +470,19 @@ namespace openre::gfx_draw
         int loadTexture(const Image& image, uint32_t mode) override;
         void unloadTexture(int handle) override;
         void unloadAllTextures() override;
+
+        void init() override;
+        void shutdown() override;
+        bool toggleFullscreen() override;
+        bool changeResolution() override;
+        int requestDisplayModeCount() override;
+        void configReadAll() override;
+        void configFlushAll() override;
+        void configShutdown() override;
+        void configFlipFilter() override;
+        void setGpuFlag() override;
+        void fontTrans() override;
+        void movieUpdate() override;
 
         // Per-frame draw-call statistics accumulated by this logger.
         const DrawStats& drawStats() const;

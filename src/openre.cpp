@@ -2484,11 +2484,11 @@ namespace openre
         case VK_F6: debug::toggle(); break;
         case VK_PRIOR: debug::scroll_log(-1); break;
         case VK_NEXT: debug::scroll_log(1); break;
-        case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
+        case VK_F7: gfx_draw::g_renderer->configFlipFilter(); break;
         case VK_F8:
             if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
             {
-                if (marni::change_resolution(gGameTable.pMarni))
+                if (gfx_draw::g_renderer->changeResolution())
                     after_resolution_change();
                 else
                     marni::out("???", "winmain.cpp");
@@ -2557,14 +2557,14 @@ namespace openre
     // 0x0050AA60
     static void config_read()
     {
-        marni::config_read_all(&gGameTable.marni_config);
-        marni::config_flush_all(&gGameTable.marni_config);
+        gfx_draw::g_renderer->configReadAll();
+        gfx_draw::g_renderer->configFlushAll();
     }
 
     // 0x0050AA80
     void config_write()
     {
-        marni::config_flush_all(&gGameTable.marni_config);
+        gfx_draw::g_renderer->configFlushAll();
     }
 
     // 0x00441880
@@ -2681,7 +2681,7 @@ namespace openre
         }
         }
 
-        marni::config_shutdown();
+        gfx_draw::g_renderer->configShutdown();
 
         return error;
     }
@@ -2707,7 +2707,7 @@ namespace openre
     // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
     static bool quit_cleanup()
     {
-        marni::kill();
+        gfx_draw::g_renderer->shutdown();
         config_write();
         if (gGameTable.byte_680592 == 1)
         {
@@ -2730,7 +2730,7 @@ namespace openre
             {
             case system::window::EventType::Quit: return quit_cleanup();
             case system::window::EventType::CloseRequested:
-                marni::kill();
+                gfx_draw::g_renderer->shutdown();
                 gGameTable.hwnd = nullptr;
                 rsrc_release();
                 audio::ss_close();
@@ -2743,7 +2743,7 @@ namespace openre
                     // the last window position/size.
                     if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
                     {
-                        if (marni::toggle_fullscreen(gGameTable.pMarni))
+                        if (gfx_draw::g_renderer->toggleFullscreen())
                             after_resolution_change();
                     }
                 }
@@ -2787,7 +2787,7 @@ namespace openre
             gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, false);
             movie();
             gfx_draw::clear();
-            marni::marni_movie_update(gGameTable.pMarni);
+            gfx_draw::g_renderer->movieUpdate();
             return true;
         }
         if (gGameTable.reset_r0)
@@ -2855,12 +2855,12 @@ namespace openre
         {
             gGameTable.byte_680593 = gGameTable.byte_680592;
             gGameTable.byte_680592 |= 1;
-            marni::set_gpu_flag();
+            gfx_draw::g_renderer->setGpuFlag();
             gGameTable.byte_680592 = gGameTable.byte_680593;
         }
         else
         {
-            marni::set_gpu_flag();
+            gfx_draw::g_renderer->setGpuFlag();
             gGameTable.scaler.type = 15872;
             gGameTable.scaler.rate_x = (float)gGameTable.pMarni->xsize / gGameTable.pMarni->render_w;
             gGameTable.scaler.rate_y = (float)gGameTable.pMarni->ysize / gGameTable.pMarni->render_h;
@@ -2887,7 +2887,7 @@ namespace openre
 
         debug::draw();
         save_print_flush();
-        marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
+        gfx_draw::g_renderer->fontTrans();
         gfx_draw::flip();
     }
 
@@ -2922,9 +2922,8 @@ namespace openre
 
             input_init(&gGameTable.input);
 
-            auto marniPtr = (Marni*)operator_new(sizeof(Marni));
-            gGameTable.pMarni = marni::init(marniPtr, window, 320, 240);
-            if (!gGameTable.pMarni->is_gpu_active || !marni::request_display_mode_count(gGameTable.pMarni))
+            gfx_draw::g_renderer->init();
+            if (!gGameTable.pMarni->is_gpu_active || !gfx_draw::g_renderer->requestDisplayModeCount())
             {
                 win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);
                 system::window::destroy();
@@ -2933,7 +2932,7 @@ namespace openre
 
             cursor_op();
             gfx_draw::set_gpu_flag(marni::GpuFlags::GPU_3, true);
-            marni::set_gpu_flag();
+            gfx_draw::g_renderer->setGpuFlag();
             if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_13)
             {
                 gGameTable.graphics_ptr_data = 1;

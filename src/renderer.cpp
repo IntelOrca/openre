@@ -1195,6 +1195,80 @@ namespace openre::gfx_draw
                 marni::result_unload_textures();
             }
 
+            // 0x00405320
+            void init() override
+            {
+                auto marniPtr = (Marni*)operator_new(sizeof(Marni));
+                gGameTable.pMarni = marni::init(marniPtr, gGameTable.hwnd, 320, 240);
+            }
+
+            // 0x004419A0
+            void shutdown() override
+            {
+                marni::kill();
+            }
+
+            // ALT+ENTER: toggles between the current windowed mode and the
+            // fullscreen mode.
+            bool toggleFullscreen() override
+            {
+                return marni::toggle_fullscreen(gGameTable.pMarni);
+            }
+
+            // 0x00402500
+            bool changeResolution() override
+            {
+                return marni::change_resolution(gGameTable.pMarni);
+            }
+
+            // 0x00402530
+            int requestDisplayModeCount() override
+            {
+                return marni::request_display_mode_count(gGameTable.pMarni);
+            }
+
+            // 0x0050ACB0
+            void configReadAll() override
+            {
+                marni::config_read_all(&gGameTable.marni_config);
+            }
+
+            // 0x0050B020
+            void configFlushAll() override
+            {
+                marni::config_flush_all(&gGameTable.marni_config);
+            }
+
+            // 0x0050B900
+            void configShutdown() override
+            {
+                marni::config_shutdown();
+            }
+
+            // 0x0050B220
+            void configFlipFilter() override
+            {
+                marni::config_flip_filter(&gGameTable.marni_config);
+            }
+
+            // 0x00442CB0
+            void setGpuFlag() override
+            {
+                marni::set_gpu_flag();
+            }
+
+            // 0x00411360
+            void fontTrans() override
+            {
+                marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
+            }
+
+            // 0x00401F70
+            void movieUpdate() override
+            {
+                marni::marni_movie_update(gGameTable.pMarni);
+            }
+
         private:
             static void setGeomOffset(int cx, int cy)
             {
@@ -1387,6 +1461,66 @@ namespace openre::gfx_draw
     void LoggingRenderer::unloadAllTextures()
     {
         inner->unloadAllTextures();
+    }
+
+    void LoggingRenderer::init()
+    {
+        inner->init();
+    }
+
+    void LoggingRenderer::shutdown()
+    {
+        inner->shutdown();
+    }
+
+    bool LoggingRenderer::toggleFullscreen()
+    {
+        return inner->toggleFullscreen();
+    }
+
+    bool LoggingRenderer::changeResolution()
+    {
+        return inner->changeResolution();
+    }
+
+    int LoggingRenderer::requestDisplayModeCount()
+    {
+        return inner->requestDisplayModeCount();
+    }
+
+    void LoggingRenderer::configReadAll()
+    {
+        inner->configReadAll();
+    }
+
+    void LoggingRenderer::configFlushAll()
+    {
+        inner->configFlushAll();
+    }
+
+    void LoggingRenderer::configShutdown()
+    {
+        inner->configShutdown();
+    }
+
+    void LoggingRenderer::configFlipFilter()
+    {
+        inner->configFlipFilter();
+    }
+
+    void LoggingRenderer::setGpuFlag()
+    {
+        inner->setGpuFlag();
+    }
+
+    void LoggingRenderer::fontTrans()
+    {
+        inner->fontTrans();
+    }
+
+    void LoggingRenderer::movieUpdate()
+    {
+        inner->movieUpdate();
     }
 
     const DrawStats& LoggingRenderer::drawStats() const
