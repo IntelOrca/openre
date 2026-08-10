@@ -1041,7 +1041,17 @@ namespace openre::gfx
                         entry->paletted,
                         entry->hasContent);
                 }
-                if (!downloadToShadow(*entry))
+                // While a GDI text overlay is pending, the shadow already
+                // holds the room + GDI text that release_dc merged in and
+                // present() is about to composite. Read the render-target
+                // texture back now and we would wipe that text, so keep the
+                // shadow as-is (font_trans draws its glyphs on top of it).
+                if (entry->textOverlayPending)
+                {
+                    logging::logDebug(
+                        "[gfx:gpu] Lock surface={} (text overlay pending, skipping readback)", static_cast<void*>(surface));
+                }
+                else if (!downloadToShadow(*entry))
                 {
                     logging::logDebug("[gfx:gpu] Lock surface={} (readback failed)", static_cast<void*>(surface));
                     return S_OK;
