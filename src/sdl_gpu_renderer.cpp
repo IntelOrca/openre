@@ -2680,6 +2680,10 @@ struct SdlGpuRenderer::Impl
     // Pending-clear state from clear() / GPU_3.
     bool pendingClearTarget = false;
     bool pendingClearDepth = false;
+    // The D3D target clear colour is the material ambient colour (set via
+    // marni's scaler rgb1 -> ambient_b/g/r -> D3D material). Capture it at
+    // clear() time so draw() can clear the framebuffer to it instead of black.
+    SDL_FColor pendingClearColor{ 0.0f, 0.0f, 0.0f, 1.0f };
 
     // Throttled-log counters.
     uint64_t drawCount = 0;
@@ -3184,10 +3188,21 @@ void SdlGpuRenderer::clear()
     Marni* m = gGameTable.pMarni;
     if (!m)
         return;
-    // GPU_3 (0x8) controls whether the Z buffer is cleared too.
-    impl->pendingClearTarget = true;
-    impl->pendingClearDepth = (m->gpu_flag & GpuFlags::GPU_3) != 0;
-    logging::logDebug("[sdlgpu] clear() pendingClearTarget=1 pendingClearDepth={}", impl->pendingClearDepth);
+    // Match the original marni::clear (0x00404D20): the colour target is only
+    // cleared when GPU_3 is set, and the D3D clear colour is the material
+    // ambient colour (ambient_r/g/b, set by addScaler from rgb1). We capture
+    // that here so the next draw() clears the framebuffer to the ambient
+    // colour (e.g. the dark navy room backdrop) rather than black.
+    impl->pendingClearTarget = (m->gpu_flag & GpuFlags::GPU_3) != 0;
+    impl->pendingClearDepth = true;
+    impl->pendingClearColor = {
+        (float)m->ambient_r / 255.0f,
+        (float)m->ambient_g / 255.0f,
+        (float)m->ambient_b / 255.0f,
+        1.0f
+    };
+    logging::logDebug("[sdlgpu] clear() pendingClearTarget={} pendingClearDepth=1 ambient=({},{},{})",
+        impl->pendingClearTarget, (unsigned)m->ambient_r, (unsigned)m->ambient_g, (unsigned)m->ambient_b);
 }
 
 void SdlGpuRenderer::draw()
@@ -3320,7 +3335,10 @@ void SdlGpuRenderer::draw()
     colorTarget.texture = fb;
     colorTarget.mip_level = 0;
     colorTarget.layer_or_depth_plane = 0;
-    colorTarget.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+    // Clear to the D3D ambient colour (the room's backdrop tint, e.g. dark
+    // navy) captured at clear() time, not plain black. When there is no
+    // pending clear the load_op is LOAD and clear_color is ignored.
+    colorTarget.clear_color = impl->pendingClearColor;
     colorTarget.load_op = impl->pendingClearTarget ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
     colorTarget.store_op = SDL_GPU_STOREOP_STORE;
 
@@ -4158,7 +4176,7 @@ int SdlGpuRenderer::addScaler(const PrimScaler* p, int z)
     auto* copy = (PrimScaler*)impl->arena.alloc(sizeof(PrimScaler));
     std::memcpy(copy, p, sizeof(PrimScaler));
     const int result = addPrimitiveScaler(gGameTable.pMarni, (Prim*)copy, z);
-    logging::logDebug("[sdlgpu] addScaler type 0x{} prj {} rate {}x{} z {}", hexStr((uint32_t)copy->type), copy->prj, copy->rate_x, copy->rate_y, z);
+    logging::logDebug("[sdlgpu] addScaler type 0x{} prj {} rate {}x{} z {} rgb1={}", hexStr((uint32_t)copy->type), copy->prj, copy->rate_x, copy->rate_y, z, (unsigned)copy->rgb1);
     return result;
 }
 
