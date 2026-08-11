@@ -15,9 +15,10 @@
 //
 // The decoders are replicated 1:1 (colour doubling with specular overflow,
 // the 0x100000..0x400000 blend-mode folds, the sub_40E6E0 pixel snap, the
-// perspective projection math). Primitive types with no decoder (3D
-// characters 88/0x188, type 256, trans_matrix scalers) are logged and
-// skipped - never killing is_gpu_active like the original would.
+// perspective projection math, the trans_object 3D character pipeline with
+// per-normal lighting and split-table CLUT sections). Primitive types with
+// no decoder (trans_matrix scalers) are logged and skipped - never killing
+// is_gpu_active like the original would.
 
 #include "sdl_gpu_renderer.h"
 
@@ -542,6 +543,10 @@ namespace
         std::vector<uint8_t>* vertexData = nullptr;
         std::vector<DrawCall>* calls = nullptr;
         SDL_GPUSampler* sampler = nullptr;
+        // Sampler for 3D character models (trans_object): the original uses
+        // set_filtering(self, 1) there (LINEAR when bilinear is enabled),
+        // while sprite/bg prims always sample NEAREST (filter=0).
+        SDL_GPUSampler* charSampler = nullptr;
         ParseStats* stats = nullptr;
         uint64_t* logMissingTexture = nullptr;
         uint64_t* logTextureFallback = nullptr;
@@ -1721,6 +1726,490 @@ namespace
         }
     }
 
+    // ── 3D character models (trans_object, types 88 / 0x188 / 256) ───────
+
+    // Port of marni.cpp apply_matrix_float (0x00411630): 3-vector by the
+    // upper-left 3x3 of a row-major 4x4 matrix (no translation).
+    static void applyMatrixFloat(float* vec, const float* mat)
+    {
+        const float v0 = vec[0];
+        const float v1 = vec[1];
+        const float v2 = vec[2];
+        vec[0] = v0 * mat[0] + v1 * mat[1] + v2 * mat[2];
+        vec[1] = v0 * mat[4] + v1 * mat[5] + v2 * mat[6];
+        vec[2] = v0 * mat[8] + v1 * mat[9] + v2 * mat[10];
+    }
+
+    // Raw accessors for the MARNI polygon object. re2.h only types the
+    // vtable of PolygonObject; the payload matches marni.cpp's
+    // MarniPolyObject overlay:
+    //   +0x04 vertices ptr, +0x08 normals ptr, +0x0C primitives ptr,
+    //   +0x10 9-dword header ([2]=vertex count [4]=normal count [6]=prim
+    //   count [8]=primitive type), +0x30 type, +0x34 flags (bit 0 = valid).
+
+    // Port of marni.cpp refer_vertex (0x00415E80): resolves a vertex index
+    // into world-space float coords.
+    static bool referVertex(const PolygonObject* obj, int index, float* dst)
+    {
+        const auto* s = (const uint8_t*)obj;
+        if ((s[0x34] & 1) == 0 || index >= (int)*(const uint32_t*)(s + 0x18))
+            return false;
+
+        const uint32_t type = *(const uint32_t*)(s + 0x30) & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x800400:
+        case 0x402:
+        case 0x404:
+        case 0x1442:
+        case 0x1800400:
+        case 0x1800401:
+        {
+            const float* v = (const float*)(*(const uint8_t**)(s + 0x04) + 12 * index);
+            dst[0] = v[0];
+            dst[1] = v[1];
+            dst[2] = v[2];
+            return true;
+        }
+        case 0x10014C0:
+        {
+            const float* v = (const float*)(*(const uint8_t**)(s + 0x04) + 32 * index);
+            dst[0] = v[0];
+            dst[1] = v[1];
+            dst[2] = v[2];
+            return true;
+        }
+        case 0x1800080:
+        case 0x1800081:
+        {
+            const double scale = (double)(1 << ((*(const uint32_t*)(s + 0x30) >> 13) & 0x1F));
+            const int16_t* v = (const int16_t*)(*(const uint8_t**)(s + 0x04) + 6 * index);
+            dst[0] = (float)((double)v[0] / scale);
+            dst[1] = (float)((double)v[1] / scale);
+            dst[2] = (float)((double)v[2] / scale);
+            return true;
+        }
+        default: return false;
+        }
+    }
+
+    // Port of marni.cpp refer_normal (0x00415AE0): resolves a normal index
+    // into light-space float coords.
+    static bool referNormal(const PolygonObject* obj, int index, float* dst)
+    {
+        const auto* s = (const uint8_t*)obj;
+        if ((s[0x34] & 1) == 0 || index >= (int)*(const uint32_t*)(s + 0x20))
+            return false;
+
+        const uint32_t type = *(const uint32_t*)(s + 0x30) & 0xFF801FFF;
+        switch (type)
+        {
+        case 0x402:
+        case 0x404:
+        case 0x800400:
+        case 0x1800400:
+        case 0x1800401:
+            return true; // the original leaves dst untouched for these types
+        case 0x1442:
+        {
+            const float* n = (const float*)(*(const uint8_t**)(s + 0x08) + 12 * index);
+            dst[0] = n[0];
+            dst[1] = n[1];
+            dst[2] = n[2];
+            return true;
+        }
+        case 0x10014C0:
+        {
+            const float* n = (const float*)(*(const uint8_t**)(s + 0x04) + 32 * index + 12);
+            dst[0] = n[0];
+            dst[1] = n[1];
+            dst[2] = n[2];
+            return true;
+        }
+        case 0x1800080:
+        case 0x1800081:
+        {
+            const double scale = (double)(1 << ((*(const uint32_t*)(s + 0x30) >> 18) & 0x1F));
+            const int16_t* n = (const int16_t*)(*(const uint8_t**)(s + 0x08) + 6 * index);
+            dst[0] = (float)((double)n[0] / scale);
+            dst[1] = (float)((double)n[1] / scale);
+            dst[2] = (float)((double)n[2] / scale);
+            return true;
+        }
+        default: return false;
+        }
+    }
+
+    // Port of marni.cpp modify_primitive (0x004156E0): copies the
+    // per-primitive record. For 0x1800081 this is 18 bytes: 3x uint16 vertex
+    // indices, 3x uint16 colour (normal) indices and 6 packed U/V bytes.
+    static bool modifyPrimitive(const PolygonObject* obj, int index, uint8_t* dst)
+    {
+        const auto* s = (const uint8_t*)obj;
+        if ((s[0x34] & 1) == 0 || index >= (int)*(const uint32_t*)(s + 0x28))
+            return false;
+
+        const uint32_t type = *(const uint32_t*)(s + 0x30) & 0xFF801FFF;
+        const uint8_t* prims = *(const uint8_t**)(s + 0x0C);
+        switch (type)
+        {
+        case 0x402:
+        case 0x1800401: memcpy(dst, prims + 12 * index, 12); return true;
+        case 0x404: memcpy(dst, prims + 24 * index, 0x18); return true;
+        case 0x1442: memcpy(dst, prims + 14 * index, 14); return true;
+        case 0x10014C0: memcpy(dst, prims + 8 * index, 8); return true;
+        case 0x800400: memcpy(dst, prims + 40 * index, 0x28); return true;
+        case 0x1800400: memcpy(dst, prims + 16 * index, 16); return true;
+        case 0x1800080: memcpy(dst, prims + 24 * index, 0x18); return true;
+        case 0x1800081: memcpy(dst, prims + 18 * index, 18); return true;
+        default: return false;
+        }
+    }
+
+    // Port of marni.cpp sub_407480 (prim type 256): copies the two 4x4 light
+    // matrices from the primitive into the MARNI state consumed by the next
+    // trans_object primitives.
+    static void applyMatrixCopy256(Marni* self, const Prim* pPrim)
+    {
+        const auto* prim = (const uint8_t*)pPrim;
+        memcpy(&self->field_8C7E10, prim + 8, 0x40);
+        memcpy(&self->field_8C7E50, prim + 72, 0x40);
+    }
+
+    // Port of marni.cpp trans_object_ngtin3_vinsnins (0x004157D0): the real
+    // 3D model renderer for 0x1800081 polygon objects. Looks up the base
+    // texture (prim+0x08; up to 4 CLUT sections gated by the split table at
+    // prim+0x58), lights each normal through the two light matrices, projects
+    // the vertices and expands every primitive into three TL vertices.
+    // Returns true when at least one draw call was emitted.
+    static bool decodeTransObjectNgtin3(DecodeEnv& env, const Prim* pPrim)
+    {
+        const auto* prim = (const uint8_t*)pPrim;
+        const uint32_t textureHandle = *(const uint32_t*)(prim + 8);
+        if (textureHandle == 0)
+            return false;
+
+        // The prototype uploads only CLUT 0 for paletted textures, so every
+        // split-table section samples this single SDL texture; the per-chunk
+        // CLUT indexes (prim+0x54..0x57) only gate which sections exist.
+        auto baseIt = env.textures->find((int)textureHandle);
+        if (baseIt == env.textures->end() || baseIt->second.texture == nullptr)
+        {
+            if (throttle(*env.logMissingTexture, 300))
+                logging::logWarning("[sdlgpu] trans_object: no GPU texture for handle {} - skipping model", textureHandle);
+            env.stats->skipped++;
+            return false;
+        }
+        const TextureEntry* baseTex = &baseIt->second;
+
+        for (int i = 1; i < 4; i++)
+        {
+            if (*(const uint16_t*)(prim + 0x58 + 2 * (i - 1)) != 0)
+            {
+                const uint8_t clut = *(const uint8_t*)(prim + 0x54 + i);
+                if (clut != 0 && throttle(*env.logClut, 300))
+                    logging::logWarning("[sdlgpu] trans_object: split-table section {} uses clut {} (only clut 0 uploaded) - reusing base texture", i, clut);
+            }
+        }
+
+        // The polygon object is held in the 2K buffer; when flagged, copy its
+        // header (vertex/normal/primitive counts) from offset 0x10.
+        auto* pObject = env.marni->polygons[*(const uint32_t*)(prim + 0x4C)];
+        uint32_t header[9] = { 0 };
+        if (pObject != nullptr && (((const uint8_t*)pObject)[0x34] & 1) != 0)
+            memcpy(header, (const uint8_t*)pObject + 0x10, sizeof(header));
+
+        // Primitive colour: B/G/R are doubled (modulated by the per-normal
+        // light), A is used raw; each channel is clamped to 8-bit range.
+        const int32_t primType = pPrim->type;
+        const uint8_t alpha = *(const uint8_t*)(prim + 0x53);
+        int32_t primB = 2 * *(const uint8_t*)(prim + 0x52);
+        int32_t primG = 2 * *(const uint8_t*)(prim + 0x51);
+        int32_t primR = 2 * *(const uint8_t*)(prim + 0x50);
+        if (primB >= 256)
+            primB = 255;
+        if (primG >= 256)
+            primG = 255;
+        if (primR >= 256)
+            primR = 255;
+
+        const bool flatShade = (int32_t)primType < 0 || (env.marni->gpu_flag & GpuFlags::GPU_17) != 0;
+        uint32_t fallbackColor = 0;
+        std::vector<uint32_t> colors(0x400, 0);
+        if (flatShade)
+        {
+            // Flat shading: build a single colour from the primitive colour
+            // and the alpha byte picked by the 0x100000..0x400000 mode bits.
+            uint32_t base;
+            switch (primType & 0xF00000)
+            {
+            case 0x100000: base = (uint32_t)primB | 0xFFFF8000; break;
+            case 0x300000: base = (uint32_t)primB | 0x4000; break;
+            case 0x400000: base = (uint32_t)primB | ((uint32_t)alpha << 8); break;
+            default: base = (uint32_t)primB | 0xFFFFFF00; break;
+            }
+            fallbackColor = (uint32_t)primR | (((uint32_t)primG | (base << 8)) << 8);
+        }
+        else
+        {
+            // Per-normal lighting: transform each normal through the two light
+            // matrices, add the ambient colour and modulate by the primitive
+            // colour. Components equal to zero (or unordered/NaN) are clamped.
+            const float* lightMatrix1 = (const float*)&env.marni->field_8C7E10;
+            const float* lightMatrix2 = &env.marni->field_8C7E50;
+            const auto* ambient = (const uint8_t*)&env.marni->field_8C7E90;
+            for (uint32_t n = 0; n < header[4]; n++)
+            {
+                float normal[3] = { 0.0f, 0.0f, 0.0f };
+                referNormal(pObject, (int)n, normal);
+
+                applyMatrixFloat(normal, lightMatrix1);
+                if (!(normal[0] >= 0.0f))
+                    normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f))
+                    normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f))
+                    normal[2] = 0.0f;
+
+                applyMatrixFloat(normal, lightMatrix2);
+                if (!(normal[0] >= 0.0f))
+                    normal[0] = 0.0f;
+                if (!(normal[1] >= 0.0f))
+                    normal[1] = 0.0f;
+                if (!(normal[2] >= 0.0f))
+                    normal[2] = 0.0f;
+
+                // The ambient word at field_8C7E90 is packed B,G,R (bytes 0,1,2).
+                normal[0] += (float)ambient[2];
+                normal[1] += (float)ambient[1];
+                normal[2] += (float)ambient[0];
+
+                if (normal[0] >= 255.0f)
+                    normal[0] = 255.0f;
+                if (normal[1] >= 255.0f)
+                    normal[1] = 255.0f;
+                if (normal[2] >= 255.0f)
+                    normal[2] = 255.0f;
+
+                const int nB = (int)normal[0];
+                const int nG = (int)normal[1];
+                const int nR = (int)normal[2];
+                const int cR = (primR * nR) / 255;
+                const int cG = (primG * nG) / 255;
+                const int cB = (primB * nB) / 255;
+
+                switch (primType & 0xF00000)
+                {
+                case 0x100000: colors[n] = 0x80000000 | (cB << 16) | (cG << 8) | cR; break;
+                case 0x300000: colors[n] = 0x40000000 | (cB << 16) | (cG << 8) | cR; break;
+                case 0x400000: colors[n] = ((uint32_t)alpha << 24) | (cB << 16) | (cG << 8) | cR; break;
+                default: colors[n] = 0xFF000000 | (cB << 16) | (cG << 8) | cR; break;
+                }
+            }
+        }
+
+        // Transform the object's vertices: refer, negate Y, apply the object
+        // matrix and translation, then project into screen space. Vertices
+        // behind the near plane are flattened to the origin.
+        const int32_t prj = (int32_t)env.marni->field_8C7EDC;
+        const double projScale = (double)prj;
+        const double halfPrj = (double)(prj / 2);
+        std::vector<float> verts(0x800 * 3, 0.0f);
+        for (uint32_t i = 0; i < header[2]; i++)
+        {
+            float a1[3] = { 0.0f, 0.0f, 0.0f };
+            referVertex(pObject, (int)i, a1);
+            a1[1] = -a1[1];
+            applyMatrixFloat(a1, (const float*)(prim + 0xC));
+            a1[0] += *(const float*)(prim + 0x18);
+            a1[1] += *(const float*)(prim + 0x28);
+            a1[2] += *(const float*)(prim + 0x38);
+
+            // Only an unordered (NaN) depth is flattened to the origin; any
+            // ordered value (including negative) is projected and left to the
+            // w-clip.
+            if (a1[2] != a1[2])
+            {
+                a1[0] = 0.0f;
+                a1[1] = 0.0f;
+            }
+            else
+            {
+                a1[0] = (float)(((double)a1[0] * projScale / (double)a1[2] + (double)env.marni->field_8C7EC4) * (double)env.marni->aspect_x);
+                a1[1] = (float)(((double)a1[1] * projScale / (double)a1[2] + (double)env.marni->field_8C7EC8) * (double)env.marni->aspect_y);
+            }
+            verts[3 * i + 0] = a1[0];
+            verts[3 * i + 1] = a1[1];
+            verts[3 * i + 2] = a1[2];
+        }
+
+        // Texture coordinate scale factors (width/height minus one) and the
+        // shared U/V adjust value.
+        const int texW = baseTex->width - 1;
+        const int texH = baseTex->height - 1;
+        const float texOffset = *reinterpret_cast<const float*>(&env.marni->field_8C7020);
+
+        // The primitive records (from ModifyPrimitive) reference vertex
+        // indices, colour (normal) indices and packed U/V bytes. The six U/V
+        // bytes map to TU/TV as uN / (width-1), vN / (height-1).
+        struct TransPrimRecord
+        {
+            uint16_t vtx0;
+            uint16_t vtx1;
+            uint16_t vtx2;
+            uint16_t color0;
+            uint16_t color1;
+            uint16_t color2;
+            uint8_t u0;
+            uint8_t v0;
+            uint8_t u1;
+            uint8_t v1;
+            uint8_t u2;
+            uint8_t v2;
+        };
+        static_assert(sizeof(TransPrimRecord) == 18, "prim record is 18 bytes");
+
+        // Expand each primitive into three TL vertices and record section
+        // splits from the split table at primitive offset 0x58.
+        std::vector<uint32_t> chunkStarts;
+        uint32_t threshold = *(const uint16_t*)(prim + 0x58);
+        const uint16_t* splitTable = (const uint16_t*)(prim + 0x58);
+        std::vector<TlVertex> packedVertices(0x800 * 3);
+        int primIdx;
+        for (primIdx = 0; primIdx < (int)header[6]; primIdx++)
+        {
+            if (*(const uint16_t*)(prim + 0x58) != 0 && primIdx == (int)threshold)
+            {
+                chunkStarts.push_back((uint32_t)primIdx);
+                splitTable++;
+                threshold += *splitTable;
+            }
+
+            TransPrimRecord record{};
+            modifyPrimitive(pObject, primIdx, (uint8_t*)&record);
+
+            auto* vout = &packedVertices[3 * primIdx];
+            const float* v0 = &verts[3 * record.vtx0];
+            const float* v1 = &verts[3 * record.vtx1];
+            const float* v2 = &verts[3 * record.vtx2];
+
+            const double invW0 = 1.0 / (double)v0[2];
+            vout[0].sx = v0[0];
+            vout[0].sy = v0[1];
+            vout[0].sz = (float)(1.0 - halfPrj * invW0);
+            vout[0].rhw = (float)invW0;
+            setColor(vout[0], colors[record.color0]);
+            vout[0].tu = (float)((double)record.u0 / (double)texW + (double)texOffset);
+            vout[0].tv = (float)((double)record.v0 / (double)texH + (double)texOffset);
+
+            const double invW1 = 1.0 / (double)v1[2];
+            vout[1].sx = v1[0];
+            vout[1].sy = v1[1];
+            vout[1].sz = (float)(1.0 - halfPrj * invW1);
+            vout[1].rhw = (float)invW1;
+            setColor(vout[1], colors[record.color1]);
+            vout[1].tu = (float)((double)record.u1 / (double)texW + (double)texOffset);
+            vout[1].tv = (float)((double)record.v1 / (double)texH + (double)texOffset);
+
+            const double invW2 = 1.0 / (double)v2[2];
+            vout[2].sx = v2[0];
+            vout[2].sy = v2[1];
+            vout[2].sz = (float)(1.0 - halfPrj * invW2);
+            vout[2].rhw = (float)invW2;
+            setColor(vout[2], colors[record.color2]);
+            vout[2].tu = (float)((double)record.u2 / (double)texW + (double)texOffset);
+            vout[2].tv = (float)((double)record.v2 / (double)texH + (double)texOffset);
+
+            // Software lighting path: override with the flat colour.
+            if (flatShade)
+            {
+                setColor(vout[0], fallbackColor);
+                setColor(vout[1], fallbackColor);
+                setColor(vout[2], fallbackColor);
+            }
+        }
+        chunkStarts.push_back((uint32_t)primIdx);
+
+        // Draw each section (texture) of the primitive list. The SDL
+        // prototype pipeline is a triangle strip, so each triangle is
+        // submitted as its own 3-vertex call (a 3N-vertex batch would stitch
+        // the triangles together into a single strip).
+        const BlendSel blend = selectBlend(env.marni, (uint32_t)primType, false);
+        const int splitCount = (int)chunkStarts.size();
+        bool drew = false;
+        // trans_object uses the bilinear-aware sampler (original filter=1);
+        // the other decoders keep NEAREST via env.sampler.
+        SDL_GPUSampler* prevSampler = env.sampler;
+        if (env.charSampler)
+            env.sampler = env.charSampler;
+        for (int i = 0; i < splitCount; i++)
+        {
+            int start;
+            int end;
+            if (*(const uint16_t*)(prim + 0x58) != 0 && i != 0)
+            {
+                // Section i covers primitives [chunkStarts[i-1], chunkStarts[i]).
+                start = (int)chunkStarts[i - 1];
+                end = (int)chunkStarts[i];
+            }
+            else
+            {
+                start = 0;
+                end = (int)chunkStarts[0];
+            }
+            for (int p = start; p < end; p++)
+            {
+                emitQuad(env, &packedVertices[3 * p], 3, true, blend, true, baseTex->texture);
+                drew = true;
+            }
+        }
+        env.sampler = prevSampler;
+        return drew;
+    }
+
+    // Port of marni.cpp trans_object (0x00408140): the 3D character
+    // dispatch. Reads the polygon object index at prim+0x4C, validates the
+    // object, copies the two light matrices when the 0x100 type bit is set,
+    // then dispatches on the polygon object's primitive type - only 0x1800081
+    // actually renders. Returns true when at least one draw call was emitted.
+    static bool decodeTransObject(DecodeEnv& env, const Prim* pPrim)
+    {
+        const auto* prim = (const uint8_t*)pPrim;
+        const uint32_t objectIndex = *(const uint32_t*)(prim + 0x4C);
+        auto* pObject = env.marni->polygons[objectIndex];
+        if (pObject == nullptr || (((const uint8_t*)pObject)[0x34] & 1) == 0)
+        {
+            env.stats->skipped++;
+            return false;
+        }
+
+        // Copy the polygon object header (obj+0x10, 9 dwords). Fields of
+        // interest: [2]=vertices count [4]=normals count [6]=primitives
+        // count [8]=primitive type.
+        uint32_t header[9];
+        memcpy(header, (const uint8_t*)pObject + 0x10, sizeof(header));
+        if (header[4] > 0x400u || header[2] > 0x800u || header[6] > 0x800u)
+        {
+            env.stats->skipped++;
+            return false;
+        }
+
+        // 0x100 type bit: copy the two 4x4 light matrices into the system.
+        if ((pPrim->type & 0x100) != 0)
+        {
+            memcpy(&env.marni->field_8C7E10, prim + 0x60, 0x40);
+            memcpy(&env.marni->field_8C7E50, prim + 0xA0, 0x40);
+        }
+
+        // Dispatch on the masked polygon object primitive type.
+        if ((header[8] & 0xFF801FFF) != 0x1800081)
+        {
+            env.stats->skipped++;
+            return false;
+        }
+        return decodeTransObjectNgtin3(env, pPrim);
+    }
+
     // Walks one ordering table exactly like the original trans_priority_list.
     static void parseOrderingTable(DecodeEnv& env, MarniOt* ot, int otIndex, int& primCount, uint64_t& skipTypeLogCounter, uint64_t& transObjectLogCounter, uint64_t& transMatrixLogCounter)
     {
@@ -1775,14 +2264,16 @@ namespace
             case 77: decodeSprPoly(env, prim); break;
             case 88:
             case 0x100 | 88:
+            {
+                const bool drew = decodeTransObject(env, prim);
                 if (throttle(transObjectLogCounter, 600))
-                    logging::logInfo("[sdlgpu] ot[{}]: trans_object (3D character) type 0x{} - SKIPPED (prototype)", otIndex, hexStr(type));
-                env.stats->skipped++;
+                    logging::logInfo("[sdlgpu] ot[{}]: trans_object (3D character) type 0x{} - {}", otIndex, hexStr(type), drew ? "rendered" : "no draw");
                 break;
+            }
             case 256:
-                if (throttle(transObjectLogCounter, 600))
-                    logging::logInfo("[sdlgpu] ot[{}]: type 256 matrix copy - SKIPPED (prototype)", otIndex);
-                env.stats->skipped++;
+                applyMatrixCopy256(env.marni, prim);
+                if (throttle(transMatrixLogCounter, 1000))
+                    logging::logInfo("[sdlgpu] ot[{}]: type 256 matrix copy - applied", otIndex);
                 break;
             case 0x10000 | 44:
             case 0x10000 | 45:
@@ -2715,6 +3206,13 @@ void SdlGpuRenderer::draw()
     impl->frameVertices.clear();
     impl->frameCalls.clear();
     impl->stats = ParseStats{};
+    // The original always draws sprite/bg prims with NEAREST filtering
+    // (set_filtering(self, 0) in trans_spr_poly, filter=0 in every
+    // tessellate_insert_draw_op call). LINEAR (filter=1) is used only by the
+    // 3D-character path (trans_object_ngtin3_vinsnins). Sprite UVs land on
+    // exact texel boundaries, so a LINEAR sampler blends adjacent texels into
+    // a per-2-pixel stripe on effect sprites like fire; keep those decoders
+    // on NEAREST and let only trans_object use frameSampler (charSampler).
     impl->frameSampler = (m->gpu_flag & (GpuFlags::GPU_17 | GpuFlags::GPU_18)) == (GpuFlags::GPU_17 | GpuFlags::GPU_18) ? impl->samplerLinear : impl->samplerNearest;
     if (!impl->frameSampler && !impl->ensureShadersAndSamplers(dev))
         return;
@@ -2726,7 +3224,8 @@ void SdlGpuRenderer::draw()
     env.textures = &impl->textures;
     env.vertexData = &impl->frameVertices;
     env.calls = &impl->frameCalls;
-    env.sampler = impl->frameSampler;
+    env.sampler = impl->samplerNearest;
+    env.charSampler = impl->frameSampler;
     env.stats = &impl->stats;
     env.logMissingTexture = &impl->logMissingTexture;
     env.logTextureFallback = &impl->logTextureFallback;
