@@ -11583,6 +11583,66 @@ namespace openre::marni
         }
     }
 
+    // 0x00416730
+    static int __stdcall suspend_texture_use(Marni* self, int handle)
+    {
+        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+            return 1;
+
+        if (handle >= 256)
+        {
+            out("invalid handle. Direct3D::SuspendTextureUse", "Direct3D::SuspendTextureUse");
+            return 0;
+        }
+
+        auto& texture = self->textures[handle];
+        if (texture.var_00 == 0)
+        {
+            out("this texture is invalid. Direct3D::SuspendTextureUse", "Direct3D::SuspendTextureUse");
+            return 0;
+        }
+        if ((texture.var_00 & 0x2000) != 0)
+        {
+            out("this texture is already suspended. Direct3D::SuspendTextureUse", "Direct3D::SuspendTextureUse");
+            return 0;
+        }
+
+#ifndef OPENRE_NO_D3D
+        // Walk the texture object's node chain and release every surface.
+        for (uint16_t index = 0; index < texture.var_36; index++)
+        {
+            auto nodeIndex = search_texture_object_0_from_1(self, handle, index);
+            if (nodeIndex == 0)
+            {
+                out("error happened. Direct3D::SuspendTextureUse", "Direct3D::SuspendTextureUse");
+                return 0;
+            }
+            auto& node = self->texture_nodes[nodeIndex];
+            node.var_14 |= 0x2000;
+            if (node.surface != nullptr)
+            {
+                surfacex_dtor(node.surface);
+                operator_delete(node.surface);
+            }
+            node.surface = nullptr;
+        }
+        texture.var_00 |= 0x2000;
+        return 1;
+#else
+        // OPENRE_NO_D3D: the Marni texture slots are never populated by openre
+        // (create_texture_handle routes uploads straight to the SDL renderer
+        // and texture_pages[].handle stores the renderer handle), so this
+        // slot's node chain is uninitialized debug-CRT fill (0xCD). Walking it
+        // would free garbage and crash in _CrtIsValidHeapPointer. There are no
+        // MarniSurfaceX objects to release here; keep the renderer texture
+        // alive (ResumeTextureUse only marks the slot active again) and mark
+        // the slot suspended the same way the original does.
+        logging::logInfo("[marni] SuspendTextureUse no-op (handle={})", handle);
+        texture.var_00 |= 0x2000;
+        return 1;
+#endif
+    }
+
     // tex_spr rasterizer state (shared globals written by TexSpr, consumed by the texspr_* routines)
     static int& s_uRange = *(int*)0x662A08; // srcU1 - srcU0
     static int& s_vRange = *(int*)0x662A0C; // srcV1 - srcV0
@@ -13798,6 +13858,7 @@ namespace openre::marni
         interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
         interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
+        interop::hookThisCall(0x00416730, &suspend_texture_use);
         interop::hookThisCall(0x0040C6E0, &draw_line_flat);
         interop::hookThisCall(0x0040C790, &draw_line_gourad);
 #ifndef OPENRE_NO_D3D
