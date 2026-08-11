@@ -1016,6 +1016,9 @@ namespace
 
         const uint32_t color = (line->color0 & 0xFF) | ((((line->color0 >> 8) & 0xFF) | (v8 << 8)) << 8);
 
+        if (throttle(*env.logClut, 40))
+            logging::logInfo("[sdlgpu] tile type 0x{} color0=0x{} foldedColor=0x{}", hexStr((uint32_t)pPrim->type), hexStr(line->color0), hexStr(color));
+
         TlVertex v[4]{};
         v[0].sx = (float)((double)line->x0 * (double)env.marni->aspect_x);
         v[0].sy = (float)((double)line->y0 * (double)env.marni->aspect_y);
@@ -1646,6 +1649,13 @@ namespace
             {
                 env.stats->skipped++;
                 return;
+            }
+            if (throttle(*env.logClut, 60))
+            {
+                const auto* spr = (const PrimSprite*)prim;
+                logging::logInfo("[sdlgpu] spr type 0x{} tex {} texw {} texh {} uv({},{})-({},{})",
+                    hexStr(type), spr->texture, entry->width, entry->height,
+                    (unsigned)spr->u0, (unsigned)spr->v0, (unsigned)spr->u1, (unsigned)spr->v1);
             }
         }
 
@@ -2582,7 +2592,10 @@ namespace
                     uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
                     for (int x = 0; x < img.width; x++)
                     {
-                        const uint8_t nib = (x & 1) ? (src[x / 2] & 0xF) : (src[x / 2] >> 4);
+                        // PSX TIM 4bpp layout: in each byte the leftmost (even x)
+                        // texel is in the low nibble (bits 0-3), the next in the
+                        // high nibble. See psx-spx GPU texture bitmaps.
+                        const uint8_t nib = (x & 1) ? (src[x / 2] >> 4) : (src[x / 2] & 0xF);
                         std::memcpy(dst + x * 4, lut + (size_t)nib * 4, 4);
                     }
                 }
@@ -2673,6 +2686,7 @@ struct SdlGpuRenderer::Impl
     uint64_t logMissingTexture = 0;
     uint64_t logTextureFallback = 0;
     uint64_t logClut = 0;
+    uint64_t logClutRaw = 0;
     uint64_t logMovieTex = 0;
     uint64_t logNoDecoder = 0;
     uint64_t logSkipType = 0;
@@ -3551,6 +3565,8 @@ int SdlGpuRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)
         return 0;
 
     uint16_t clut = p->clut;
+    if (throttle(impl->logClutRaw, 200))
+        logging::logInfo("[sdlgpu] addSprt RAW clut {} (clutCount {}) page {}", clut, gGameTable.texture_pages[page].clutCount, page);
     if (clut >= gGameTable.texture_pages[page].clutCount)
         clut = 0;
 
@@ -3593,8 +3609,9 @@ int SdlGpuRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)
         addPrimitiveBack(m, (Prim*)prim, z);
     else
         addPrimitiveFront(m, (Prim*)prim, z);
-    logging::logDebug("[sdlgpu] addSprt page {} clut {} type 0x{} ({},{})-({},{}) -> {}",
-        page, clut, hexStr((uint32_t)prim->type), prim->x0, prim->y0, prim->x1, prim->y1, add_back ? "back" : "front");
+    logging::logDebug("[sdlgpu] addSprt page {} clut {} type 0x{} ({},{})-({},{}) uv({},{})-({},{}) -> {}",
+        page, clut, hexStr((uint32_t)prim->type), prim->x0, prim->y0, prim->x1, prim->y1,
+        (unsigned)prim->u0, (unsigned)prim->v0, (unsigned)prim->u1, (unsigned)prim->v1, add_back ? "back" : "front");
     return 1;
 }
 
