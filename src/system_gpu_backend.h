@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef OPENRE_NO_D3D
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -292,3 +294,5 @@ namespace openre::gfx
         void clear();
     }
 }
+
+#endif // OPENRE_NO_D3D

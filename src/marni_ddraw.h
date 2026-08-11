@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef OPENRE_NO_D3D
+
 #include "system_gpu_backend.h"
 
 namespace openre::gfx
@@ -96,3 +98,5 @@ namespace openre::gfx
     // backends, and records the texture -> base surface mapping.
     void wrap_texture_from_surface(IDirect3DTexture2* texture, IDirectDrawSurface* surface);
 }
+
+#endif // OPENRE_NO_D3D

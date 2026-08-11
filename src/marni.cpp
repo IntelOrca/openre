@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "marni_draw.h"
 #include "marni_movie.h"
+#include "marni_renderer.h"
 #include "openre.h"
 #include "re2.h"
 #include "str.h"
@@ -19,12 +20,22 @@
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+#ifndef OPENRE_NO_D3D
 #include <d3d.h>
 #include <ddraw.h>
+#endif
 #include <windows.h>
 
 namespace openre::marni
 {
+#ifdef OPENRE_NO_D3D
+    // OPENRE_NO_D3D: the D3D-shaped draw state structs below are compiled out;
+    // only opaque forward declarations are needed for the (guarded) function
+    // signatures that reference them.
+    struct DrawInfo;
+    struct D3DTLVERTEX;
+    using LPD3DTLVERTEX = D3DTLVERTEX*;
+#else
     struct DrawInfo
     {
         int zWriteEnable;
@@ -35,15 +46,32 @@ namespace openre::marni
         LPD3DTLVERTEX vertices;
         void* texture;
     };
+#endif
 
     static int d3d_error_routine(int errorCode);
+#ifndef OPENRE_NO_D3D
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2);
-    static int __stdcall create_device(Marni* self);
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ);
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
+    static void sub_40E6E0(D3DTLVERTEX* v);
+    static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc);
+    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count);
+    static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface);
+    static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
+    static void __stdcall tessellate_insert_draw_op(
+        Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount);
+    static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device);
+    static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
+    static int __stdcall insert_draw_op(
+        Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
+        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
+#endif
+
+    static int __stdcall create_device(Marni* self);
     static int __stdcall enum_drivers(Marni* self);
     static int __stdcall create_d3d(Marni* self);
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
-    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int adjust_rect(RECT* clip, const RECT* src, RECT* out);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
@@ -75,19 +103,11 @@ namespace openre::marni
     static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
-    static void sub_40E6E0(D3DTLVERTEX* v);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
     static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect);
     static void __stdcall sub_40EC10(Marni* self);
-    static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc);
-    static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count);
-    static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface);
-    static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
     static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index);
-    static void __stdcall tessellate_insert_draw_op(
-        Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
-        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount);
     static void __stdcall texture_surface_release(Marni* self, int handle);
     static int tex_spr(
         MarniSurface2* dst, MarniSurface2* src, int dstLeft, int dstTop, int dstRight, int dstBottom, int srcU0, int srcV0,
@@ -105,17 +125,12 @@ namespace openre::marni
     static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
-    static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device);
     static void __stdcall surfacex_vrelease(MarniSurfaceX* self);
-    static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4);
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
     char* surface_calc_address(MarniSurface* self, int x, int y);
     static int surface_set_color(MarniSurface2* self, int x, int y, uint32_t color, int alpha);
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self);
-    static int __stdcall insert_draw_op(
-        Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
-        int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices);
     static int __stdcall sub_416B90(Marni* self, int a2);
 
     // 0x0050D905
@@ -524,7 +539,9 @@ namespace openre::marni
         {
             surface_fill(&self->surface0, 0, 0, 0);
             flip(self);
+#ifndef OPENRE_NO_D3D
             ((LPDIRECTDRAW)self->pDirectDraw)->FlipToGDISurface();
+#endif
             auto dwStyle = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
             SetWindowLongA((HWND)self->hWnd, GWL_STYLE, dwStyle & ~(WS_CAPTION | WS_SIZEBOX | WS_TABSTOP));
         }
@@ -605,6 +622,11 @@ namespace openre::marni
             rc.right = 320;
             rc.bottom = 240;
         }
+#ifdef OPENRE_NO_D3D
+        // The SDL3 renderer owns the guest framebuffer; the movie surface
+        // handle is not needed.
+        return movie_open(self->pMovie, path, (HWND)self->hWnd, &rc, nullptr, nullptr);
+#else
         return movie_open(
             self->pMovie,
             path,
@@ -612,6 +634,7 @@ namespace openre::marni
             &rc,
             (LPDIRECTDRAW2)self->pDirectDraw2,
             (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
+#endif
     }
 
     // 0x00402160
@@ -732,6 +755,7 @@ namespace openre::marni
             return;
         }
 
+#ifndef OPENRE_NO_D3D
         if (self->pDirectDraw == nullptr)
         {
             out("invalid class.", "Direct3D::RequestVideoMemory");
@@ -747,6 +771,7 @@ namespace openre::marni
             error(gGameTable.error);
         else
             self->dwVidMemFree = ddcaps[0x10]; // DDCAPS dwVidMemFree
+#endif
 
         auto count_use = 0; // textures with GPU_9 flag
         for (auto i = 0; i < 256; i++)
@@ -848,6 +873,7 @@ namespace openre::marni
     // 0x00402940
     static int __stdcall restore_surfaces(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if (gfx::surface_is_lost((IUnknown*)self->surface2.pDDsurface) == DDERR_SURFACELOST)
         {
             gGameTable.error = gfx::surface_restore((IUnknown*)self->surface2.pDDsurface);
@@ -910,11 +936,13 @@ namespace openre::marni
             }
             break;
         }
+#endif
         return 1;
     }
 
     static void __stdcall flip_blt(Marni* self, DWORD width, DWORD height)
     {
+#ifndef OPENRE_NO_D3D
         auto src = (IUnknown*)self->surface0.pDDsurface;
         auto dst = (IUnknown*)self->surface2.pDDsurface;
 
@@ -931,11 +959,13 @@ namespace openre::marni
 
         gfx::surface_blt(dst, &dstRect, src, &srcRect, DDBLT_DDFX | DDBLT_WAIT, &ddbltfx);
         gfx::notify_present();
+#endif
     }
 
     // 0x00402A80
     void __stdcall flip(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if (self->var_8C7EE0)
             return;
         if (self->pMovie->flag & 2)
@@ -958,11 +988,13 @@ namespace openre::marni
         // blitting it into the window (the original exclusive fullscreen used a
         // DirectDraw flip chain, which is no longer created).
         flip_blt(self, self->xsize, self->ysize);
+#endif
     }
 
     // 0x00402BC0
     void __stdcall draw(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if (self->var_8C7EE0 || !(self->gpu_flag & GpuFlags::GPU_9))
             return;
 
@@ -982,6 +1014,7 @@ namespace openre::marni
         do_render(self, &self->otag[1]); // objects
         do_render(self, &self->otag[0]); // fg text
         self->var_8C8318++;
+#endif
     }
 
     // 0x00403060
@@ -1101,6 +1134,7 @@ namespace openre::marni
         if (!self->is_gpu_active)
             return 0;
 
+#ifndef OPENRE_NO_D3D
         auto& tex = self->textures[texture];
         uint32_t vTbl = tex.var_00;
         if (!vTbl)
@@ -1434,6 +1468,12 @@ namespace openre::marni
             surfacex_dtor(&surfX);
             return 0;
         }
+#else
+        // No DirectDraw textures in the no-D3D build: the SDL renderer owns all
+        // texture memory (create_texture_handle routes straight to it), so a
+        // reload has nothing to do.
+        return 1;
+#endif
     }
 
     // 0x00403ec0
@@ -1506,6 +1546,7 @@ namespace openre::marni
         self->ysize = r.height;
         self->bpp = r.depth;
         self->is_gpu_busy = 1;
+#ifndef OPENRE_NO_D3D
         // Fullscreen is handled via the SDL3 borderless window, so DirectDraw
         // always stays in windowed cooperative level (exclusive fullscreen with
         // SetDisplayMode is unsupported on modern Windows).
@@ -1519,6 +1560,7 @@ namespace openre::marni
             return 0;
         }
         get_z_buffer_caps(self);
+#endif
         if (self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
             // Borderless fullscreen: let SDL3 cover the display and render at the
@@ -1542,11 +1584,13 @@ namespace openre::marni
             invalidate_window((HWND)self->hWnd, self->xsize, self->ysize, 0, (LPRECT)&self->window_rect);
         }
 
+        self->aspect_x = (float)((double)self->xsize / self->render_w);
+        self->aspect_y = (float)((double)self->ysize / self->render_h);
+
+#ifndef OPENRE_NO_D3D
         DDSURFACEDESC desc;
         ZeroMemory(&desc, sizeof(DDSURFACEDESC));
         desc.dwSize = sizeof(DDSURFACEDESC);
-        self->aspect_x = (float)((double)self->xsize / self->render_w);
-        self->aspect_y = (float)((double)self->ysize / self->render_h);
 
         // Both windowed and borderless fullscreen use a window-attached primary
         // surface plus an offscreen render surface. The original exclusive
@@ -1651,6 +1695,76 @@ namespace openre::marni
         self->surface2.var_28 = 0;
         self->surface2.var_29 = 0;
         self->surface2.bOpen = 1;
+#else
+        // OPENRE_NO_D3D: no DirectDraw surfaces exist. Synthesize the surface
+        // descriptors (16-bit 555, the format the D3D render path used) so the
+        // renderer and font code see sane surface0/surface2/surfaceZ fields
+        // without allocating any DDraw surface.
+        self->surface0.pDDpalette = nullptr;
+        self->surface0.height = self->ysize;
+        self->surface0.width = self->xsize;
+        self->surface0.bpp = 16;
+        self->surface0.var_25 = 0;
+        self->surface0.pitch = 2 * self->xsize;
+        self->surface0.var_27 = 1;
+        self->surface0.var_28 = 0;
+        self->surface0.var_29 = 0;
+        self->surface0.bOpen = 1;
+        self->surface0.is_vmem = 0;
+        self->surface0.desc = {};
+        self->surface0.desc.r_shift = 10;
+        self->surface0.desc.r_mask = 31;
+        self->surface0.desc.r_bitcnt = 5;
+        self->surface0.desc.g_shift = 5;
+        self->surface0.desc.g_mask = 31;
+        self->surface0.desc.g_bitcnt = 5;
+        self->surface0.desc.b_shift = 0;
+        self->surface0.desc.b_mask = 31;
+        self->surface0.desc.b_bitcnt = 5;
+        self->surface0.desc.a_shift = 15;
+        self->surface0.desc.a_mask = 1;
+        self->surface0.desc.a_bitcnt = 1;
+        self->gpu_flag |= GpuFlags::GPU_11;
+
+        self->surface2.pDDpalette = nullptr;
+        self->surface2.width = (int16_t)self->xsize;
+        self->surface2.bpp = 16;
+        self->surface2.desc = self->surface0.desc;
+        self->surface2.desc.a_bitcnt = 0;
+        self->surface2.is_vmem = 0;
+        self->surface2.var_25 = 0;
+        self->surface2.height = (int16_t)self->ysize;
+        self->surface2.pitch = 2 * self->xsize;
+        self->surface2.var_27 = 1;
+        self->surface2.var_28 = 0;
+        self->surface2.var_29 = 0;
+        self->surface2.bOpen = 1;
+
+        self->surfaceZ.pDDsurface = nullptr;
+        self->surfaceZ.desc.r_bitcnt = 5;
+        self->surfaceZ.desc.g_shift = 5;
+        self->surfaceZ.desc.g_bitcnt = 5;
+        self->surfaceZ.desc.b_bitcnt = 5;
+        self->surfaceZ.desc.r_mask = 31;
+        self->surfaceZ.desc.g_mask = 31;
+        self->surfaceZ.desc.b_mask = 31;
+        self->surfaceZ.pDDpalette = 0;
+        self->surfaceZ.desc.r_shift = 0;
+        self->surfaceZ.desc.b_shift = 10;
+        self->surfaceZ.bpp = 16;
+        self->surfaceZ.var_25 = 0;
+        self->surfaceZ.width = self->xsize;
+        self->surfaceZ.pitch = 2 * self->xsize;
+        self->surfaceZ.var_27 = 1;
+        self->surfaceZ.var_28 = 0;
+        self->surfaceZ.var_29 = 0;
+        self->surfaceZ.bOpen = 1;
+
+        // The SDL3 renderer needs a guest framebuffer to draw into; create it
+        // at the render resolution (idempotent in system::gpu).
+        system::gpu::create_guest_framebuffer(self->xsize, self->ysize);
+#endif
+#ifndef OPENRE_NO_D3D
         if (!(self->gpu_flag & GpuFlags::GPU_13))
         {
             if (self->surfaceZ.pDDsurface != nullptr)
@@ -1756,8 +1870,13 @@ namespace openre::marni
             self->is_gpu_active = 1;
             return 1;
         }
+#endif
         if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
+        {
+#ifndef OPENRE_NO_D3D
             surface_fill(&self->surface2, 0, 0, 0);
+#endif
+        }
         self->is_gpu_active = 1;
         return 1;
     }
@@ -1786,8 +1905,17 @@ namespace openre::marni
         auto& texture = self->textures[handle];
         if (texture.var_00 != 0)
         {
+#ifndef OPENRE_NO_D3D
             texture_surface_release(self, handle);
             request_video_memory(self);
+#else
+            // No D3D texture objects exist; the SDL renderer owns the GPU
+            // textures, so just hand the handle back to it.
+            logging::logInfo("[marni] unload_texture: handle={} -> g_renderer->unloadTexture", handle);
+            if (g_renderer)
+                g_renderer->unloadTexture(handle);
+            texture.var_00 = 0;
+#endif
         }
     }
 
@@ -1803,6 +1931,7 @@ namespace openre::marni
         if ((self->pMovie->flag & 2) != 0)
             return 1;
 
+#ifndef OPENRE_NO_D3D
         D3DRECT rect;
         rect.x1 = 0;
         rect.y1 = 0;
@@ -1833,11 +1962,17 @@ namespace openre::marni
             return 1;
         out();
         return 0;
+#else
+        // The SDL3 renderer clears through its own frame loop; nothing to do
+        // here (no D3D viewport/device exists).
+        return 1;
+#endif
     }
 
     // 0x00404E40
     static void __stdcall do_render(Marni* self, MarniOt* pOt)
     {
+#ifndef OPENRE_NO_D3D
         if (self->gpu_flag & GpuFlags::GPU_13)
             return;
 
@@ -1878,6 +2013,13 @@ namespace openre::marni
         self->vertices_processed = stats.dwVerticesProcessed - gGameTable.d3d_vertices_processed;
         gGameTable.d3d_triangles_drawn = stats.dwTrianglesDrawn;
         gGameTable.d3d_vertices_processed = stats.dwVerticesProcessed;
+#else
+        // The SDL3 renderer parses the ordering tables itself; no D3D device
+        // exists to render through.
+        (void)self;
+        (void)pOt;
+        return;
+#endif
     }
 
     // 0x00404FA0
@@ -1918,6 +2060,7 @@ namespace openre::marni
             }
         }
 
+#ifndef OPENRE_NO_D3D
         if (self->pMaterial != nullptr)
         {
             ((LPDIRECT3DMATERIAL2)self->pMaterial)->Release();
@@ -1938,6 +2081,7 @@ namespace openre::marni
             ((LPDIRECTDRAWCLIPPER)self->pClipper)->Release();
             self->pClipper = nullptr;
         }
+#endif // OPENRE_NO_D3D
 
         surface_release(&self->surface0);
         surface_release(&self->surfaceZ);
@@ -1981,6 +2125,7 @@ namespace openre::marni
             }
         }
 
+#ifndef OPENRE_NO_D3D
         if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0 && self->pDirectDraw != nullptr)
         {
             self->is_gpu_busy = 1;
@@ -2009,6 +2154,7 @@ namespace openre::marni
             ((LPDIRECTDRAW)self->pDirectDraw)->Release();
             self->pDirectDraw = nullptr;
         }
+#endif // OPENRE_NO_D3D
 
         surfacey_dtor(&self->surface3);
         surfacey_dtor(&self->surface2);
@@ -2023,7 +2169,9 @@ namespace openre::marni
 
         cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
 
+#ifndef OPENRE_NO_D3D
         gfx::shutdown();
+#endif
     }
 
     // 0x00405310
@@ -2163,6 +2311,7 @@ namespace openre::marni
             self->lights->var_20 = 0.5f;
         }
 
+#ifndef OPENRE_NO_D3D
         DWORD isDefault;
         gGameTable.error = create_ddraw(self->gpu_flag & GpuFlags::ENUM_DEVICES, (LPDIRECTDRAW*)&self->pDirectDraw, &isDefault);
         if (gGameTable.error != 0)
@@ -2242,6 +2391,7 @@ namespace openre::marni
             out("failed to detect the mode.", "MarniSystem Direct3D::Direct3D");
             return self;
         }
+#endif // OPENRE_NO_D3D
 
         // Build the display mode list. The original game only offered a single 640x480
         // fullscreen mode (plus an optional 2x windowed mode), so F8 could never cycle
@@ -2329,6 +2479,17 @@ namespace openre::marni
             self->is_gpu_active = 1;
             self->gpu_flag |= GpuFlags::GPU_9;
         }
+#ifdef OPENRE_NO_D3D
+        else
+        {
+            // No D3D device exists in the OPENRE_NO_D3D build; mark the GPU
+            // active the same way the software-renderer branch above does. The
+            // SDL3 renderer owns the swapchain and presents via SDL itself.
+            logging::logInfo("[marni] init: no-D3D build, GPU active (no D3D device)");
+            self->is_gpu_active = 1;
+            self->gpu_flag |= GpuFlags::GPU_9;
+        }
+#else
         else
         {
             auto descA = (LPD3DDEVICEDESC)self->field_8C7088;
@@ -2350,6 +2511,7 @@ namespace openre::marni
             exception = 9;
             surface2_release(&surface);
         }
+#endif // OPENRE_NO_D3D
         return self;
     }
 
@@ -2358,6 +2520,7 @@ namespace openre::marni
     // 0x00405DD0
     static int __stdcall get_z_buffer_caps(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         DDCAPS driverCaps = {};
         DDCAPS helCaps = {};
         driverCaps.dwSize = sizeof(DDCAPS);
@@ -2388,6 +2551,10 @@ namespace openre::marni
 
         self->field_8C7284 = driverCaps.ddsCaps.dwCaps;
         return (int)driverCaps.ddsCaps.dwCaps;
+#else
+        (void)self;
+        return 0;
+#endif
     }
 
     // Thin wrappers around the MarniSurface2 vtable blit functions.
@@ -2792,6 +2959,45 @@ namespace openre::marni
         if (!self->is_gpu_active)
             return 0;
 
+#ifdef OPENRE_NO_D3D
+        if (!pSrcSurface->bOpen)
+        {
+            out("invalid bits specified. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+            return 0;
+        }
+
+        // Route the upload straight to the SDL renderer: build a marni::Image
+        // from the surface (pixels = pitch*height bytes, palette copied as-is,
+        // PSX 555 layout) and let the renderer own the GPU texture.
+        marni::Image image;
+        image.width = pSrcSurface->width;
+        image.height = pSrcSurface->height;
+        image.depth = pSrcSurface->bpp;
+        image.palBpp = pSrcSurface->var_25;
+        image.palCnt = pSrcSurface->var_28 != 0 ? pSrcSurface->pal_cnt : 0;
+        image.psxFormat = true;
+        if (pSrcSurface->pBitmap != nullptr && pSrcSurface->width > 0 && pSrcSurface->height > 0)
+        {
+            auto pitch = pSrcSurface->pitch > 0 ? pSrcSurface->pitch : pSrcSurface->width;
+            auto* src = (const uint8_t*)pSrcSurface->pBitmap;
+            image.pixels.assign(src, src + (size_t)pitch * pSrcSurface->height);
+        }
+        if (pSrcSurface->pPalette != nullptr && image.palCnt > 0)
+        {
+            auto palBytes = (size_t)image.palCnt * (1 << image.depth) * (image.palBpp == 32 ? 4 : 2);
+            auto* src = (const uint8_t*)pSrcSurface->pPalette;
+            image.palette.assign(src, src + palBytes);
+        }
+        logging::logInfo("[marni] create_texture_handle: {}x{} depth={} palCnt={} mode={:#x} -> g_renderer->loadTexture",
+            image.width, image.height, image.depth, image.palCnt, mode);
+        if (!g_renderer)
+            return 0;
+        auto handle = g_renderer->loadTexture(image, mode);
+        if (handle <= 0)
+            out("failed to generate the texture Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
+        return handle;
+#endif
+
         if (!pSrcSurface->bOpen)
         {
             out("invalid bits specified. Direct3D::CreateTextureHandle", "Direct3D::CreateTextureHandle");
@@ -2989,6 +3195,7 @@ namespace openre::marni
         for (auto i = 0; i < 256; i++)
             unload_texture(marni, i);
 
+#ifndef OPENRE_NO_D3D
         auto pClipper = (LPDIRECTDRAWCLIPPER)marni->pClipper;
         marni->hWnd = nullptr;
         if (pClipper != nullptr)
@@ -2996,10 +3203,14 @@ namespace openre::marni
             pClipper->Release();
             marni->pClipper = nullptr;
         }
+#else
+        marni->hWnd = nullptr;
+#endif
 
         surface_release(&marni->surface0);
         surface_release(&marni->surface2);
 
+#ifndef OPENRE_NO_D3D
         if ((marni->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
         {
             marni->is_gpu_busy = 1;
@@ -3007,9 +3218,11 @@ namespace openre::marni
             dd_set_coop_level((HWND)marni->hWnd, 0, (LPDIRECTDRAW2)marni->pDirectDraw2);
             marni->is_gpu_busy = 0;
         }
+#endif // OPENRE_NO_D3D
 
         movie_release(marni->pMovie);
 
+#ifndef OPENRE_NO_D3D
         if (marni->pDirect3D2 != nullptr)
         {
             ((LPDIRECT3D2)marni->pDirect3D2)->Release();
@@ -3021,6 +3234,7 @@ namespace openre::marni
             ((LPDIRECTDRAW2)marni->pDirectDraw2)->Release();
             marni->pDirectDraw2 = nullptr;
         }
+#endif // OPENRE_NO_D3D
     }
 
     // 0x004065C0
@@ -3080,12 +3294,15 @@ namespace openre::marni
     }
 
     // 0x00406860
+    #ifndef OPENRE_NO_D3D
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2)
     {
         return pDD->QueryInterface(IID_IDirectDraw2, (LPVOID*)lpDD2);
     }
 
     // 0x00406920
+    #endif // OPENRE_NO_D3D
+    #ifndef OPENRE_NO_D3D
     static HRESULT CALLBACK cb_enum_texture_format(LPDDSURFACEDESC desc, LPVOID context)
     {
         auto* ctx = (int*)context;
@@ -3103,6 +3320,8 @@ namespace openre::marni
     }
 
     // 0x00406880
+    #endif // OPENRE_NO_D3D
+    #ifndef OPENRE_NO_D3D
     static int d3d_enum_texture_formats(LPDIRECT3DDEVICE2 p3dDevice, int maxFormats, LPDDSURFACEDESC outFormats)
     {
         // The enumeration context is a {count, max} header followed by the
@@ -3132,11 +3351,17 @@ namespace openre::marni
             memcpy(outFormats, ctx.entries, 108 * count);
         }
         return count;
+        (void)p3dDevice;
+        (void)maxFormats;
+        (void)outFormats;
+        return 0;
     }
 
     // 0x00406970
+    #endif // OPENRE_NO_D3D
     static int D3DIBPPToDDBD(int bpp)
     {
+#ifndef OPENRE_NO_D3D
         switch (bpp)
         {
         case 1: return DDBD_1;
@@ -3148,6 +3373,10 @@ namespace openre::marni
         case 32: return DDBD_32;
         default: out("", "D3DIBPPToDDBD"); return 0;
         }
+#else
+        (void)bpp;
+        return 0;
+#endif
     }
 
     // 0x00406A10
@@ -3197,6 +3426,7 @@ namespace openre::marni
     // 0x00406D90
     static int __stdcall create_device(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         // Texture format table stored inline in the Marni object
         // (count at +0x8C78A0, entries from +0x8C78A4).
         constexpr size_t kFormatEntrySize = 0x6C; // legacy DDSURFACEDESC size (modern ddraw.h is 0x7C)
@@ -3312,9 +3542,14 @@ namespace openre::marni
         }
 
         return 1;
+#else
+        (void)self;
+        return 1;
+#endif
     }
 
     // 0x00407020
+    #ifndef OPENRE_NO_D3D
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
     {
         if (self->gpu_flag & GpuFlags::GPU_13)
@@ -3412,9 +3647,16 @@ namespace openre::marni
             *pDDsurfaceZ = 0;
         }
         return 0;
+        (void)self;
+        (void)width;
+        (void)height;
+        (void)pDDsurfaceZ;
+        return 1;
     }
 
     // 0x00407290
+    #endif // OPENRE_NO_D3D
+    #ifndef OPENRE_NO_D3D
     static HRESULT CALLBACK enum_driver_callback(
         GUID* lpGuid, LPSTR lpDeviceDescription, LPSTR lpDeviceName, LPD3DDEVICEDESC descSw, LPD3DDEVICEDESC descHw,
         LPVOID lpContext)
@@ -3435,11 +3677,20 @@ namespace openre::marni
         }
         gGameTable.d3d_device_count++;
         return gGameTable.d3d_device_count < 4 ? D3DENUMRET_OK : D3DENUMRET_CANCEL;
+        (void)lpGuid;
+        (void)lpDeviceDescription;
+        (void)lpDeviceName;
+        (void)descSw;
+        (void)descHw;
+        (void)lpContext;
+        return D3DENUMRET_OK;
     }
 
     // 0x00407340
+    #endif // OPENRE_NO_D3D
     static int __stdcall enum_drivers(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if (self->gpu_flag & GpuFlags::GPU_13)
             return 1;
 
@@ -3471,11 +3722,16 @@ namespace openre::marni
             }
         }
         return 1;
+#else
+        (void)self;
+        return 1;
+#endif
     }
 
     // 0x00407440
     static int __stdcall create_d3d(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if (self->gpu_flag & GpuFlags::GPU_13)
             return 0;
 
@@ -3486,6 +3742,10 @@ namespace openre::marni
             error(gGameTable.error);
         }
         return gGameTable.error;
+#else
+        (void)self;
+        return 0;
+#endif
     }
 
     // 0x00407480
@@ -3537,6 +3797,7 @@ namespace openre::marni
         if ((pScaler->type & 0x1000) != 0)
         {
             *(uint32_t*)&self->ambient_b = pScaler->rgb1;
+#ifndef OPENRE_NO_D3D
             if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
             {
                 D3DMATERIAL mat;
@@ -3555,6 +3816,7 @@ namespace openre::marni
                 ((LPDIRECT3DMATERIAL2)self->pMaterial)->SetMaterial(&mat);
                 gfx::viewport_set_background((IUnknown*)self->pViewport, self->MaterialHandle);
             }
+#endif
         }
 
         return 1;
@@ -5305,6 +5567,7 @@ namespace openre::marni
     }
 
     // 0x0040E9D0
+    #ifndef OPENRE_NO_D3D
     static int sub_40E9D0(
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount)
@@ -5341,8 +5604,10 @@ namespace openre::marni
     }
 
     // 0x00407690
+    #endif // OPENRE_NO_D3D
     static int __stdcall trans_object_ngtin3_vinsnins(Marni* self, MarniOt* pOt, Prim* pPrim)
     {
+#ifndef OPENRE_NO_D3D
         // The 2K object primitive stores a texture handle at offset 0x08; the
         // CLUT index for the base texture section is at offset 0x54.
         const auto* prim = (const uint8_t*)pPrim;
@@ -5705,6 +5970,10 @@ namespace openre::marni
         }
 
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x00408140
@@ -5852,6 +6121,7 @@ namespace openre::marni
     // 0x0040a4b0
     static int __stdcall sub_40A4B0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto* pTri = (PrimGradTri*)pPrim;
         auto* texture = (MarniTextureNode*)drawInfo->texture;
         auto* vertices = drawInfo->vertices;
@@ -5966,6 +6236,10 @@ namespace openre::marni
         drawInfo->specularEnable = hasOverflow;
         drawInfo->vertexCount = 3;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // Prim type 0x45 (69) gouraud quad layout: 4 int16 coordinates, 4 (u,v)
@@ -6000,6 +6274,7 @@ namespace openre::marni
     // 0x0040A830
     static int __stdcall sub_40A830(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto pQuad = (PrimGouraudQuad*)pPrim;
         auto texture = (MarniTextureNode*)drawInfo->texture;
         auto vertices = drawInfo->vertices;
@@ -6122,6 +6397,10 @@ namespace openre::marni
         drawInfo->vertexCount = 4;
         drawInfo->specularEnable = specularEnable;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // Prim type 0x46 (70) gouraud textured quad: four int16 corners, four
@@ -6173,6 +6452,7 @@ namespace openre::marni
     // 0x0040ab60
     static int __stdcall sub_40AB60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto pQuad = (PrimPolyG4*)pPrim;
         auto texture = (MarniTextureNode*)drawInfo->texture;
         auto vertices = drawInfo->vertices;
@@ -6279,11 +6559,16 @@ namespace openre::marni
         drawInfo->specularEnable = specularEnable;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040B260
     static int __stdcall sub_40B260(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Sprite primitive (type 0x49) -> 4 D3D TL vertices. Same shape as
         // sub_40C470 but with projected coordinates: each x/y is first scaled
         // by the projection factor (field_8C7EDC, set by trans_matrix from
@@ -6378,6 +6663,10 @@ namespace openre::marni
         drawInfo->specularEnable = 0;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // Prim type 0x1004C quad layout (4 int16 coords, int16 z, 4 texcoord pairs)
@@ -6408,6 +6697,7 @@ namespace openre::marni
     // 0x0040b560
     static int __stdcall sub_40B560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Projected textured 4-vertex polygon (type 0x4C): four corners, each
         // with its own int16 coordinate and UV byte, plus a shared scaling
         // divisor (offset 0x20). The corners are projected like the sprite
@@ -6502,11 +6792,16 @@ namespace openre::marni
         drawInfo->specularEnable = 1;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040b8d0
     static int __stdcall sub_40B8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Projected textured 4-vertex polygon (type 0x4D): same quad layout as
         // sub_40B560 (four int16 corners, a shared projection divisor at 0x20
         // and per-corner UV bytes) but with its own B,G,R,A colour bytes at
@@ -6628,11 +6923,16 @@ namespace openre::marni
         drawInfo->specularEnable = hasOverflow;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040BCF0
     static int __stdcall sub_40BCF0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Flat-textured 4-vertex polygon (type 0x1004E): like the 0x1004C
         // quad builder (sub_40C100) the four int16 corners are offset from
         // the middle of the render target, but the primitive also carries its
@@ -6767,11 +7067,16 @@ namespace openre::marni
         drawInfo->specularEnable = hasOverflow;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040c100
     static int __stdcall sub_40C100(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Flat-textured 4-vertex polygon (type 0x1004C): fills the draw op with
         // four D3D TL vertices. Unlike the other quad builders this one keeps its
         // own per-vertex z (int16 at offset 0x20), so sz/rhw are computed from it,
@@ -6874,11 +7179,16 @@ namespace openre::marni
         drawInfo->vertexCount = 4;
         drawInfo->specularEnable = 1;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040c470
     static int __stdcall sub_40C470(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Sprite primitive (type 0x10049) -> 4 D3D TL vertices.
         // The primitive carries its B,G,R,A colour bytes at offsets 28..31; the
         // alpha channel depends on the type's 0x100000..0x400000 mode bits and
@@ -6969,6 +7279,10 @@ namespace openre::marni
         drawInfo->specularEnable = 0;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     static inline int draw_line_clamp(int value)
@@ -7358,6 +7672,7 @@ namespace openre::marni
     // bounding rectangle (no such line exists today).
     static void draw_line_gpu(Marni* self, int x0, int y0, int x1, int y1, uint32_t color0, uint32_t color1, int type)
     {
+#ifndef OPENRE_NO_D3D
         auto* device = (IUnknown*)self->pDirectDevice2;
         if (device == nullptr)
             return;
@@ -7448,6 +7763,9 @@ namespace openre::marni
         }
 
         gfx::device_draw_primitive(device, D3DPT_TRIANGLESTRIP, D3DVT_TLVERTEX, v, 4, D3DDP_WAIT);
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040C6E0
@@ -7600,6 +7918,7 @@ namespace openre::marni
     // 0x0040CFD0
     static int __stdcall sub_40CFD0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Textured quad primitive (type 0x1002D): float z projection, 4 int16
         // corners, 4 texcoords, plus per-prim B,G,R,A colour bytes at 0x20..0x23.
         // The colour channels are doubled and any overflow past 8 bits is folded
@@ -7730,6 +8049,10 @@ namespace openre::marni
         drawInfo->specularEnable = overflow;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // Prim type 0x1002C quad layout (float z projection, 4 int16 coords, 4 texcoords)
@@ -7752,6 +8075,7 @@ namespace openre::marni
     // 0x0040D300
     static int __stdcall sub_40D300(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto pQuad = (PrimSprQuad*)pPrim;
         auto texture = (MarniTextureNode*)drawInfo->texture;
         auto vertices = drawInfo->vertices;
@@ -7825,6 +8149,10 @@ namespace openre::marni
         drawInfo->vertexCount = 4;
         drawInfo->specularEnable = 0;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040D560
@@ -7838,6 +8166,7 @@ namespace openre::marni
     // on the type's 0x100000..0x400000 mode bits and gpu_flag bit 0x4000.
     static int __stdcall sub_40D560(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto vertices = drawInfo->vertices;
         auto texture = (MarniTextureNode*)drawInfo->texture;
         const auto* prim = (const uint8_t*)pPrim;
@@ -7978,11 +8307,16 @@ namespace openre::marni
         drawInfo->specularEnable = overflow ? 1 : 0;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x40D8D0
     static int __stdcall sub_40D8D0(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         // Textured quad primitive: 2 int16 coordinate pairs (x0,y0),(x1,y1) at
         // 0x10..0x17, 4 texcoords (u0,v0,u1,v1) at 0x18..0x1B and the B,G,R,A
         // colour bytes at 0x1C..0x1F. The B/G/R channels are doubled; values
@@ -8099,9 +8433,14 @@ namespace openre::marni
         drawInfo->specularEnable = overflow;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040E6E0
+#ifndef OPENRE_NO_D3D
     static void sub_40E6E0(D3DTLVERTEX* v)
     {
         float tu0 = v[0].tu;
@@ -8121,10 +8460,12 @@ namespace openre::marni
         v[3].sx -= 0.5f;
         v[3].sy -= 0.5f;
     }
+#endif // OPENRE_NO_D3D
 
     // 0x0040DBA0
     static int __stdcall MarniDrawPolyFT4(Marni* self, PrimSprite* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto texture = (MarniTextureNode*)drawInfo->texture;
         auto vertices = drawInfo->vertices;
         float invTexW = (float)(1.0 / texture->width);
@@ -8192,11 +8533,16 @@ namespace openre::marni
         drawInfo->vertexCount = 4;
         drawInfo->specularEnable = 0;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040DD90
     static int __stdcall sub_40DD90(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         auto line = (PrimLine*)pPrim;
         auto vertices = drawInfo->vertices;
 
@@ -8309,17 +8655,27 @@ namespace openre::marni
         drawInfo->specularEnable = 0;
         drawInfo->vertexCount = 4;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040DF60
     static int __stdcall sub_40DF60(Marni* self, Prim* pPrim, DrawInfo* drawInfo)
     {
+#ifndef OPENRE_NO_D3D
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040DF70
     static int __stdcall trans_spr_poly(Marni* self, MarniOt* pOt, PrimSprite* pPrim)
     {
+#ifndef OPENRE_NO_D3D
         int v5 = 0;
         int texture = 0;
         char* v7 = nullptr;
@@ -8626,6 +8982,10 @@ namespace openre::marni
             return 1;
         out("", "");
         return 0;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040e6e0
@@ -8633,6 +8993,7 @@ namespace openre::marni
     // 0x0040E770
     static void set_filtering(Marni* self, uint8_t a2)
     {
+#ifndef OPENRE_NO_D3D
         // NOTE: states 17/18 are the retired D3DRENDERSTATE_TEXTUREMAG/TEXTUREMIN
         // renderstates; the values are D3DTEXTUREFILTER modes (see d3dtypes.h).
         auto* device = (IUnknown*)self->pDirectDevice2;
@@ -8651,6 +9012,9 @@ namespace openre::marni
             gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREPERSPECTIVE, 1);
         else
             gfx::device_set_render_state(device, D3DRENDERSTATE_TEXTUREPERSPECTIVE, 0);
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040E800
@@ -8665,6 +9029,7 @@ namespace openre::marni
         Marni* self, int filter, int a3, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX* vertices)
     {
+#ifndef OPENRE_NO_D3D
         // Check if any drawing op slots left
         if (self->num_draw_ops >= 0x10000)
             return self->num_draw_ops;
@@ -8733,6 +9098,10 @@ namespace openre::marni
         {
             return do_draw_op(self, 0);
         }
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040e9d0
@@ -8742,6 +9111,7 @@ namespace openre::marni
         Marni* self, int filter, int a1, int srcBlend, int dstBlend, int textureHandle, int zWriteEnable, int shadeMode,
         int cullMode, int specularEnable, int zFunc, LPD3DTLVERTEX vertices, int vertexCount)
     {
+#ifndef OPENRE_NO_D3D
         if (vertexCount > 2)
         {
             auto v14 = &vertices[2];
@@ -8767,11 +9137,15 @@ namespace openre::marni
                 v14++;
             }
         }
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040EAF0
     static int __stdcall do_draw_op(Marni* self, int index)
     {
+#ifndef OPENRE_NO_D3D
         auto op = self->draw_op_ptrs[index];
         auto* device = (IUnknown*)self->pDirectDevice2;
         set_filtering(self, op->filter);
@@ -8789,11 +9163,16 @@ namespace openre::marni
         gfx::device_set_render_state(device, D3DRENDERSTATE_SRCBLEND, op->src_blend);
         gfx::device_set_render_state(device, D3DRENDERSTATE_DESTBLEND, op->dst_blend);
         return gfx::device_draw_primitive(device, D3DPT_TRIANGLELIST, D3DVT_TLVERTEX, op->vertices, 3, D3DDP_WAIT);
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040EC10
     static void __stdcall sub_40EC10(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         auto* device = (IUnknown*)self->pDirectDevice2;
         gfx::device_set_render_state(device, D3DRENDERSTATE_ZWRITEENABLE, FALSE);
         for (auto i = 0; i < self->num_draw_ops; i++)
@@ -8809,6 +9188,9 @@ namespace openre::marni
             else
                 draw_line_flat(self, (PrimLine2*)record.flat);
         }
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040ec90
@@ -8816,6 +9198,7 @@ namespace openre::marni
     // 0x0040ECA0
     static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("", "Direct3DSurface::CreateTextureObject");
@@ -8841,9 +9224,14 @@ namespace openre::marni
 
         self->pDDtexture = pDDtexture;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040ED20
+    #ifndef OPENRE_NO_D3D
     static int __stdcall surfacex_get_texture_handle(MarniSurfaceX* self, LPDIRECT3DDEVICE2 device)
     {
         // Direct3DSurface::GetTextureHandle — asks the attached D3D texture for its
@@ -8871,6 +9259,7 @@ namespace openre::marni
     }
 
     // 0x0040ED90
+    #endif // OPENRE_NO_D3D
     static MarniSurfaceX* __stdcall surfacex_ctor(MarniSurfaceX* self)
     {
         // MarniSurfaceX::Ctor — MarniSurfaceY::Ctor then override the vtbl with
@@ -8885,11 +9274,15 @@ namespace openre::marni
     // 0x0040EDB0
     static void __stdcall surfacex_dtor(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         // MarniSurfaceX::Dtor — restore the X vtbl, release the D3D texture plus
         // the base surface, then run the MarniSurfaceY dtor chain.
         self->vtbl = (MarniSurfaceVTBL*)0x00517358;
         surfacex_vrelease(self);
         surfacey_dtor((MarniSurface2*)self);
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040EE00
@@ -8897,6 +9290,7 @@ namespace openre::marni
     // 0x0040EE30
     static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc)
     {
+#ifndef OPENRE_NO_D3D
         // IDirect3DTexture2::Load(dst, src) copies the source texture's pixels
         // into this texture's backing surface. The COM front-end wraps the
         // IDirect3DTexture2 object and hooks Load (vtable slot 5, offset 0x14)
@@ -8910,6 +9304,10 @@ namespace openre::marni
             self->var_2C = pSrc->var_2C;
         }
         return result;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040EE60
@@ -8930,6 +9328,7 @@ namespace openre::marni
     }
 
     // 0x0040EF50
+#ifndef OPENRE_NO_D3D
     static int ddrawdesc2surfdesc(LPDDSURFACEDESC pDDesc, MarniSurfaceDesc* pDesc)
     {
         if ((pDDesc->ddpfPixelFormat.dwFlags & (DDPF_PALETTEINDEXED8 | DDPF_PALETTEINDEXED4)) != 0)
@@ -8994,8 +9393,10 @@ namespace openre::marni
 
         return 1;
     }
+#endif // OPENRE_NO_D3D
 
     // 0x0040F090
+#ifndef OPENRE_NO_D3D
     static HRESULT CALLBACK enum_display_mode_callback(LPDDSURFACEDESC pDesc, LPVOID pContext)
     {
         auto max = ((LPDWORD)pContext)[0];
@@ -9012,8 +9413,10 @@ namespace openre::marni
         ((LPDWORD)pContext)[2] = index + 1;
         return DDENUMRET_OK;
     }
+#endif // OPENRE_NO_D3D
 
     // 0x0040F0F0
+    #ifndef OPENRE_NO_D3D
     static int enum_display_mode(LPDIRECTDRAW2 lpDD2, MarniRes* res, size_t max, size_t* count)
     {
         // return interop::thiscall<int, LPDIRECTDRAW2, MarniRes*, int, int*>(0x0040F0F0, lpDD2, res, max, cntFound);
@@ -9031,6 +9434,8 @@ namespace openre::marni
     }
 
     // 0x0040F170
+    #endif // OPENRE_NO_D3D
+    #ifndef OPENRE_NO_D3D
     static HRESULT get_surface_desc(LPDDSURFACEDESC lpDDSurfaceDesc, LPDIRECTDRAWSURFACE lpDDSurface)
     {
         memset(lpDDSurfaceDesc, 0, sizeof(*lpDDSurfaceDesc));
@@ -9039,6 +9444,8 @@ namespace openre::marni
     }
 
     // 0x0040F1A0
+    #endif // OPENRE_NO_D3D
+    #ifndef OPENRE_NO_D3D
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
     {
         LPDIRECTDRAW lpDD = NULL;
@@ -9072,8 +9479,10 @@ namespace openre::marni
     }
 
     // 0x0040F250
+    #endif // OPENRE_NO_D3D
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext)
     {
+#ifndef OPENRE_NO_D3D
         auto lpDDresult = (LPDIRECTDRAW*)lpContext;
         LPDIRECTDRAW lpDD;
         if (lpGUID != NULL && SUCCEEDED(DirectDrawCreate(lpGUID, &lpDD, NULL)))
@@ -9089,9 +9498,14 @@ namespace openre::marni
             lpDD->Release();
         }
         return TRUE;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040F2F0
+    #ifndef OPENRE_NO_D3D
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD)
     {
         if (fullscreen)
@@ -9120,12 +9534,14 @@ namespace openre::marni
         }
         return S_OK;
     }
+    #endif // OPENRE_NO_D3D
 
     // 0x0040f370
 
     // 0x0040f380
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode)
     {
+#ifndef OPENRE_NO_D3D
         if (mode)
             return surface2_vfill(self, pRect, color, mode);
 
@@ -9170,6 +9586,10 @@ namespace openre::marni
         self->bOpen = 0;
         error(hr);
         return 0;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040f520
@@ -9177,6 +9597,7 @@ namespace openre::marni
     // 0x0040F580
     static int __stdcall surfacey_vrelease(MarniSurface2* self)
     {
+#ifndef OPENRE_NO_D3D
         auto surface = (MarniSurface3*)self;
 
         if (surface->var_27)
@@ -9205,11 +9626,16 @@ namespace openre::marni
         surface->pDDpalette = nullptr;
         surface2_vrelease(self);
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040F790
     static int __stdcall surfacex_vlock(MarniSurfaceX* self, int* a2, int* a3)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("this class is invalid.", "DirectDrawSurface::Lock");
@@ -9297,11 +9723,16 @@ namespace openre::marni
 
         self->bLocked = 1;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040f600
     static int __stdcall surfacex_vpallock(MarniSurfaceX* self, int* a2)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("this class is invalid", "DirectDrawSurface::PalLock");
@@ -9362,11 +9793,16 @@ namespace openre::marni
             *a2 = (int)self->pPalette;
         self->bPalLocked = 1;
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040f9c0
     static int __stdcall surfacex_vpalunlock(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("tried to unlock regardless of invalid surface", "DirectDrawSurface::PalUnlock");
@@ -9425,11 +9861,16 @@ namespace openre::marni
         self->pPalette = nullptr;
         self->bPalLocked = 0;
         return 0;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x0040fad0
     static int __stdcall surfacex_vunlock(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("tried to unlock a surface that is not open", "MarniBits::Unlock");
@@ -9479,6 +9920,10 @@ namespace openre::marni
         self->pPalette = nullptr;
         self->bLocked = 0;
         return 0;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // MarniSurfaceX::vRelease (0x40EE00) — the release_fn slot of MarniSurfaceX::vTbl
@@ -9487,6 +9932,7 @@ namespace openre::marni
     // existing surface when the object is (re-)created in place.
     static void __stdcall surfacex_vrelease(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         auto pDDtexture = (LPDIRECT3DTEXTURE2)self->pDDtexture;
         if (pDDtexture)
         {
@@ -9494,9 +9940,13 @@ namespace openre::marni
             self->pDDtexture = nullptr;
         }
         surfacey_vrelease((MarniSurface2*)self);
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040fbe0
+    #ifndef OPENRE_NO_D3D
     static int __stdcall surfacex_create_work(MarniSurfaceX* self, LPDIRECTDRAW pDD, LPDDSURFACEDESC pDesc, int a4)
     {
         // The object can be re-created in place, so release anything it currently owns.
@@ -9680,8 +10130,10 @@ namespace openre::marni
     }
 
     // 0x0040FF70
+    #endif // OPENRE_NO_D3D
     static int surface_get_alpha_bits(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->pDDsurface)
             return 0;
 
@@ -9708,6 +10160,10 @@ namespace openre::marni
             } while (alphaMask & 1);
         }
         return alphaBits;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // 0x004134C0
@@ -9754,6 +10210,7 @@ namespace openre::marni
     // through the alpha-blended draw-op path (see trans_spr_poly / tex_spr).
     static void surfacex_create_surface(MarniSurfaceX* self)
     {
+#ifndef OPENRE_NO_D3D
         uint8_t hasTransparency = 0;
 
         // Only surfaces whose format carries an alpha mask are scanned; surfaces
@@ -9814,6 +10271,9 @@ namespace openre::marni
         }
 
         self->var_2C = hasTransparency;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+#endif
     }
 
     // 0x0040FEF0
@@ -9985,6 +10445,7 @@ namespace openre::marni
     // 0x00412BD0
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode)
     {
+#ifndef OPENRE_NO_D3D
         if (!self->bOpen)
         {
             out("tried to call the service although it is not locked", "MarniBits::Blt");
@@ -10031,6 +10492,10 @@ namespace openre::marni
 
         surface_unlock(self);
         return 1;
+#else
+        // OPENRE_NO_D3D: no D3D device/surface to operate on.
+        return 0;
+#endif
     }
 
     // Skipping a lot until we talk about what the heck is going on.
@@ -11053,9 +11518,11 @@ namespace openre::marni
             if (index < 0 || index >= texture.surface.pal_cnt)
                 return 0;
 
+#ifndef OPENRE_NO_D3D
             auto pDDsurface = (IUnknown*)result->surface->pDDsurface;
             auto pDDpalette = (IUnknown*)result->surface->pDDpalette[index];
             gfx::surface_set_palette(pDDsurface, pDDpalette);
+#endif
             return result;
         }
         default: return nullptr;
@@ -12517,6 +12984,7 @@ namespace openre::marni
     // 0x00416D40
     static int __stdcall flush_surfaces_marni(Marni* self)
     {
+#ifndef OPENRE_NO_D3D
         if ((self->gpu_flag & 0x2000) != 0)
             return 1;
 
@@ -12619,6 +13087,12 @@ namespace openre::marni
         request_video_memory(self);
         surfacex_dtor(&pSrc);
         return 1;
+#else
+        // OPENRE_NO_D3D: no DDraw textures to migrate; the SDL renderer owns
+        // the GPU textures.
+        (void)self;
+        return 1;
+#endif
     }
 
     // 0x004450C0
@@ -13304,12 +13778,16 @@ namespace openre::marni
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x00406D90, &create_device);
+#ifndef OPENRE_NO_D3D
         interop::hookThisCall(0x00407020, &create_zbuffer);
+#endif
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
         interop::hookThisCall(0x0040EE30, &surfacex_load);
+#ifndef OPENRE_NO_D3D
         interop::hookThisCall(0x0040ED20, &surfacex_get_texture_handle);
         interop::hookThisCall(0x0040FBE0, &surfacex_create_work);
+#endif
         interop::hookThisCall(0x0040ED90, &surfacex_ctor);
         interop::hookThisCall(0x0040EDB0, &surfacex_dtor);
         interop::hookThisCall(0x0040EE00, &surfacex_vrelease);
@@ -13322,9 +13800,11 @@ namespace openre::marni
         interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::hookThisCall(0x0040C6E0, &draw_line_flat);
         interop::hookThisCall(0x0040C790, &draw_line_gourad);
+#ifndef OPENRE_NO_D3D
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
+#endif
         interop::writeJmp(0x004DBFD0, &out_internal);
         interop::writeJmp(0x00442CB0, (void (*)())&set_gpu_flag);
         interop::hookThisCall(0x00412BD0, &surface2_vfill);

@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 SET(COMPILER_PREFIX i686-w64-mingw32-)
 SET(CMAKE_C_COMPILER ${COMPILER_PREFIX}gcc)
 SET(CMAKE_CXX_COMPILER ${COMPILER_PREFIX}c++)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -m32 -static-libgcc -static-libstdc++ -fpermissive -w")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -m32 -static-libgcc -static-libstdc++ -fpermissive -w -DOPENRE_NO_D3D")
 
 include_directories(${CMAKE_SOURCE_DIR}/lib/include)
 
@@ -17,7 +17,9 @@ add_library(openre MODULE ${SOURCES})
 
 target_link_directories(openre PRIVATE "${CMAKE_SOURCE_DIR}/lib/lib")
 
-target_link_libraries(openre PRIVATE lua54 ws2_32 ddraw dxguid gdi32 ole32 winmm imm32 mfplat mfuuid d3d11 dxgi ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
+# Note: no ddraw/dxguid/d3d11/dxgi - the OPENRE_NO_D3D prototype removes all
+# D3D/DDRAW usage from the linker.
+target_link_libraries(openre PRIVATE lua54 ws2_32 gdi32 ole32 winmm imm32 mfplat mfuuid ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
 

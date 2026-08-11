@@ -5,6 +5,10 @@
 
 #include <SDL3/SDL.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -757,6 +761,7 @@ namespace openre::gfx
 // ====END GENERATED: shader bytecode (tools\gen_shaders.ps1)====
 
 // ---- GfxBackendGPU (SDL_GPU backend implementation) ----
+#ifndef OPENRE_NO_D3D
 namespace openre::gfx
 {
     namespace
@@ -4520,6 +4525,7 @@ namespace openre::gfx
         return &backend;
     }
 }
+#endif // OPENRE_NO_D3D
 
 // ---- GPU subsystem owner: SDL_GPU device, swapchain, guest framebuffer ----
 namespace openre::system::gpu
@@ -4535,12 +4541,65 @@ namespace openre::system::gpu
         SDL_GPUTexture* g_guestFramebuffer = nullptr;
         int32_t g_fbWidth = 0;
         int32_t g_fbHeight = 0;
+
+        // The swapchain format of the claimed window, cached at init() so the
+        // SDL-only renderer can build its present pipeline.
+        SDL_GPUTextureFormat g_swapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+    }
+
+    // Diagnostic SDL log sink: mirrors every SDL log line (including the
+    // D3D12 backend's SDL_LogError/SDL_LogWarn GPU messages) to a file with
+    // an immediate flush. Without this, a D3D12 SDK-layers break-on-corruption
+    // exception (0x87D) kills the process via WER before the CRT flushes its
+    // buffered stderr, losing the exact corruption message.
+    static void sdlLogToFile(void* userdata, int category, SDL_LogPriority priority, const char* message)
+    {
+        FILE* f = reinterpret_cast<FILE*>(userdata);
+        if (!f)
+            return;
+        std::fprintf(f, "[%d] %s\n", priority, message ? message : "(null)");
+        std::fflush(f);
+    }
+
+    // The D3D12 SDK layers raise exception 0x87D (break-on-corruption) when a
+    // CORRUPTION message is emitted and SetBreakOnSeverity(CORRUPTION,true) is
+    // active (SDL 3.4.12 d3d12 backend sets this in debugMode). SDL registers
+    // its message callback with D3D12_MESSAGE_CALLBACK_FLAG_NONE (async), so
+    // the break kills the process before the corruption description reaches our
+    // log sink. This VEH swallows the break (a bounded number of times) so the
+    // async callback can deliver the message to sdl_gpu_log.txt and we can see
+    // exactly what SDL/D3D12 considers corrupt.
+    static LONG WINAPI sdlGpuVeh(PEXCEPTION_POINTERS ep)
+    {
+        static volatile LONG s_breaks = 0;
+        if (ep->ExceptionRecord->ExceptionCode == 0x87D)
+        {
+            const LONG n = InterlockedIncrement(&s_breaks);
+            if (n <= 4)
+            {
+                if (FILE* f = std::fopen("sdl_gpu_log.txt", "a"))
+                {
+                    std::fprintf(f, "[VEH] caught 0x87D break-on-corruption #%ld at addr %p\n", n, ep->ExceptionRecord->ExceptionAddress);
+                    std::fflush(f);
+                    std::fclose(f);
+                }
+                return EXCEPTION_CONTINUE_EXECUTION; // let the async callback deliver the message
+            }
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
     }
 
     bool init()
     {
         if (g_device != nullptr)
             return true;
+
+        if (std::getenv("OPENRE_SDLGPU_DEBUG") != nullptr)
+        {
+            if (FILE* f = std::fopen("sdl_gpu_log.txt", "w"))
+                SDL_SetLogOutputFunction(&sdlLogToFile, f);
+            AddVectoredExceptionHandler(1, &sdlGpuVeh);
+        }
 
         g_window = static_cast<SDL_Window*>(system::window::get_window());
         if (g_window == nullptr)
@@ -4549,13 +4608,16 @@ namespace openre::system::gpu
             return false;
         }
 
-        g_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+        bool debugMode = false;
+        if (const char* e = std::getenv("OPENRE_SDLGPU_DEBUG"))
+            debugMode = (std::atoi(e) != 0);
+        g_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, debugMode, nullptr);
         if (g_device == nullptr)
         {
             logging::logError("[system:gpu] SDL_CreateGPUDevice failed: {}", SDL_GetError());
             return false;
         }
-        logging::logInfo("[system:gpu] device created (driver={})", SDL_GetGPUDeviceDriver(g_device));
+        logging::logInfo("[system:gpu] device created (driver={}, debug={})", SDL_GetGPUDeviceDriver(g_device), debugMode);
 
         if (!SDL_ClaimWindowForGPUDevice(g_device, g_window))
         {
@@ -4567,8 +4629,11 @@ namespace openre::system::gpu
 
         const auto format = SDL_GetGPUSwapchainTextureFormat(g_device, g_window);
         logging::logInfo("[system:gpu] window claimed, swapchain format={}", static_cast<int>(format));
+        g_swapchainFormat = format;
 
+#ifndef OPENRE_NO_D3D
         gfx::backend_gpu()->attach_device(g_device, g_window);
+#endif
         return true;
     }
 
@@ -4612,7 +4677,9 @@ namespace openre::system::gpu
         g_fbHeight = height;
         logging::logInfo("[system:gpu] guest framebuffer created ({}x{})", width, height);
 
+#ifndef OPENRE_NO_D3D
         gfx::backend_gpu()->set_guest_framebuffer(g_guestFramebuffer, width, height);
+#endif
         return g_guestFramebuffer;
     }
 
@@ -4621,32 +4688,70 @@ namespace openre::system::gpu
         return g_device != nullptr;
     }
 
+    void* device()
+    {
+        return g_device;
+    }
+
+    void* window()
+    {
+        return g_window;
+    }
+
+    void* guest_framebuffer()
+    {
+        return g_guestFramebuffer;
+    }
+
+    int framebuffer_width()
+    {
+        return g_fbWidth;
+    }
+
+    int framebuffer_height()
+    {
+        return g_fbHeight;
+    }
+
+    int swapchain_format()
+    {
+        return static_cast<int>(g_swapchainFormat);
+    }
+
     void present()
     {
+#ifndef OPENRE_NO_D3D
         if (!init())
             return;
         gfx::backend_gpu()->present();
+#endif
     }
 
     void set_movie_frame(const void* pixels, int width, int height, int pitch)
     {
+#ifndef OPENRE_NO_D3D
         if (!init())
             return;
         gfx::backend_gpu()->set_movie_frame(pixels, width, height, pitch);
+#endif
     }
 
     void clear_movie_frame()
     {
+#ifndef OPENRE_NO_D3D
         if (g_device == nullptr)
             return;
         gfx::backend_gpu()->set_movie_frame(nullptr, 0, 0, 0);
+#endif
     }
 
     void shutdown()
     {
+#ifndef OPENRE_NO_D3D
         // The backend holds the surface layer and per-frame replay resources;
         // release them (with an idle wait) before tearing the device down.
         gfx::backend_gpu()->shutdown();
+#endif
 
         if (g_device != nullptr)
         {
@@ -4661,6 +4766,7 @@ namespace openre::system::gpu
                 SDL_ReleaseWindowFromGPUDevice(g_device, g_window);
             SDL_DestroyGPUDevice(g_device);
             g_device = nullptr;
+            g_swapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
         }
         g_window = nullptr;
         logging::logInfo("[system:gpu] shutdown (framebuffer released, window released, device destroyed)");

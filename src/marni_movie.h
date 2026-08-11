@@ -4,14 +4,27 @@
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+#ifndef OPENRE_NO_D3D
 #include <d3d.h>
 #include <ddraw.h>
+#endif
 #include <windows.h>
 
 namespace openre::marni
 {
     int __stdcall
-    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
+    movie_open(
+        MarniMovie* self,
+        LPCSTR path,
+        HWND hWnd,
+        LPRECT pRect,
+#ifndef OPENRE_NO_D3D
+        LPDIRECTDRAW2 pDD2,
+        LPDIRECTDRAWSURFACE pSurface);
+#else
+        void* pDD2,
+        void* pSurface);
+#endif
     MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode);
     void __stdcall movie_dtor(MarniMovie* self);
     void __stdcall movie_release(MarniMovie* self);

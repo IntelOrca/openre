@@ -43,14 +43,14 @@
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;OPENRE_NO_D3D;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>lua54.lib;ws2_32.lib;ddraw.lib;dxguid.lib;winmm.lib;Imm32.lib;SDL3.lib;mfplat.lib;mfuuid.lib;strmiids.lib;d3d11.lib;dxgi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>lua54.lib;ws2_32.lib;winmm.lib;Imm32.lib;SDL3.lib;mfplat.lib;mfuuid.lib;strmiids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -102,6 +102,7 @@
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="room.cpp" />
     <ClCompile Include="save.cpp" />
+    <ClCompile Include="sdl_gpu_renderer.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
     <ClCompile Include="script.cpp" />
@@ -145,6 +146,7 @@
     <ClInclude Include="marni_ddraw.h" />
     <ClInclude Include="marni_draw.h" />
     <ClInclude Include="marni_renderer.h" />
+    <ClInclude Include="sdl_gpu_renderer.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="marni_movie.h" />
     <ClInclude Include="math.h" />

@@ -1,3 +1,5 @@
+#ifndef OPENRE_NO_D3D
+
 #include "marni_ddraw.h"
 #include "logger.h"
 #include "system_gpu.h"
@@ -995,3 +997,5 @@ namespace openre::gfx
         system::gpu::present();
     }
 }
+
+#endif // OPENRE_NO_D3D

@@ -749,7 +749,18 @@ namespace openre::marni
 
     // 0x00414CF0
     int __stdcall
-    movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
+    movie_open(
+        MarniMovie* self,
+        LPCSTR path,
+        HWND hWnd,
+        LPRECT pRect,
+#ifndef OPENRE_NO_D3D
+        LPDIRECTDRAW2 pDD2,
+        LPDIRECTDRAWSURFACE pSurface)
+#else
+        void* pDD2,
+        void* pSurface)
+#endif
     {
         (void)pDD2;
         (void)pSurface;

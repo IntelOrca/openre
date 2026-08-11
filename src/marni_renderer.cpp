@@ -2,6 +2,7 @@
 #include "marni.h"
 #include "openre.h"
 #include "re2.h"
+#include "sdl_gpu_renderer.h"
 #include "system_config.h"
 #include "system_gpu.h"
 
@@ -13,6 +14,7 @@
 
 namespace openre::marni
 {
+#ifndef OPENRE_NO_D3D
     namespace
     {
         // Semi-transparency blend-mode modifiers, ORed into the primitive
@@ -1289,13 +1291,20 @@ namespace openre::marni
             PrimitiveArena arena;
         };
     }
+#endif // OPENRE_NO_D3D
 
     // 0x00440250: ResetGeom
     std::unique_ptr<Renderer> g_renderer;
 
     void initRenderer()
     {
+#ifdef OPENRE_NO_D3D
+        // SDL-only prototype: every renderer method is implemented directly on
+        // top of the SDL3 GPU API (see sdl_gpu_renderer.cpp). No D3D/DDRAW.
+        g_renderer = std::make_unique<LoggingRenderer>(std::make_unique<SdlGpuRenderer>());
+#else
         g_renderer = std::make_unique<LoggingRenderer>(std::make_unique<MarniRenderer>());
+#endif
     }
 
     LoggingRenderer::LoggingRenderer(std::unique_ptr<Renderer> inner)

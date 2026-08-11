@@ -26,6 +26,18 @@ namespace openre::system::gpu
     // True once the GPU device exists (and the window is claimed).
     bool is_initialized();
 
+    // ---- raw SDL_GPU access (SDL-only renderer prototype) ----
+    // The SDL-only renderer (SdlGpuRenderer) drives SDL_GPU directly and
+    // bypasses the COM-shaped GfxBackend replay path, so it needs the raw
+    // device/window/framebuffer objects. Return nullptr/0 until the device
+    // has been created (or after shutdown()).
+    void* device();            // SDL_GPUDevice*
+    void* window();            // SDL_Window*
+    void* guest_framebuffer(); // SDL_GPUTexture* (nullptr until create_guest_framebuffer)
+    int framebuffer_width();
+    int framebuffer_height();
+    int swapchain_format();    // SDL_GPUTextureFormat value (SDL stays out of this header)
+
     // Acquires the swapchain texture and presents the guest framebuffer (the
     // GPU backend replays the frame's draws into it, then letterboxes it into
     // the swapchain). Creates the device on first use.

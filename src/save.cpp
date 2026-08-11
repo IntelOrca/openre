@@ -20,7 +20,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#ifndef OPENRE_NO_D3D
 #include <ddraw.h>
+#endif
 #include <windows.h>
 
 using namespace openre;
@@ -688,6 +690,7 @@ namespace openre::save
         if (!gGameTable.FontIndex)
             return 1;
 
+#ifndef OPENRE_NO_D3D
         auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
         HDC hdc;
         if (pSurface->GetDC(&hdc) != DD_OK)
@@ -773,6 +776,11 @@ namespace openre::save
         SetBkMode(hdc, oldMode);
         pSurface->ReleaseDC(hdc);
         return 1;
+#else
+        // No DirectDraw surface in the no-D3D build; the SDL renderer draws its
+        // own text overlay. Keep the queue intact (cleared by the next SavePrint).
+        return 1;
+#endif
     }
 
     // 0x00431470
@@ -904,10 +912,12 @@ namespace openre::save
         int y2[2] = { 288, 576 };
         char String[264];
 
+#ifndef OPENRE_NO_D3D
         auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
         HDC hdc;
         pSurface->GetDC(&hdc);
         auto oldFont = SelectObject(hdc, gGameTable.hFont);
+#endif
 
         SIZE psizl;
         auto is_480p = gGameTable.is_480p;
@@ -938,7 +948,11 @@ namespace openre::save
                         int v18 = a4 + 276 * v17;
                         strcpy(String, (char*)(v18 - 276));
                         strip_save_extension(String);
+#ifndef OPENRE_NO_D3D
                         GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+#else
+                        psizl.cx = 0;
+#endif
                         int8_t v23;
                         int v22 = y2[is_480p];
                         if (psizl.cx <= v22)
@@ -973,8 +987,10 @@ namespace openre::save
             } while (v14 < (int)gGameTable.dword_986394);
         }
 
+#ifndef OPENRE_NO_D3D
         SelectObject(hdc, oldFont);
         pSurface->ReleaseDC(hdc);
+#endif // OPENRE_NO_D3D
         *(int32_t*)a8 = v12;
         auto result = gGameTable.dword_669B00 != v12;
         gGameTable.dword_669B00 = v12;

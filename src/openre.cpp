@@ -32,7 +32,9 @@
 #include "tim.h"
 #include "title.h"
 #include "window.h"
+#ifndef OPENRE_NO_D3D
 #include <ddraw.h>
+#endif
 
 #include <cstdarg>
 #include <cstdio>
