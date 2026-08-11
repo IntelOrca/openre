@@ -366,6 +366,8 @@ namespace
         SDL_GPUTexture* texture = nullptr;
         int width = 0;
         int height = 0;
+        bool hasAlpha = false;    // decoded pixels include transparent (black-keyed) ones -> v40
+        bool noAlphaFlag = false; // mode bit 0x4 set -> v41 = 0 -> v32 && v40 blend fallback disabled
     };
 
     // Blend-mode variants (LABEL_74 in the original: the 0xF00000 type bits
@@ -493,9 +495,9 @@ namespace
 
     // Blend selection (LABEL_74): the 0xF00000 type bits select the pair;
     // otherwise fall through to the v32 && v40 surface-alpha path or no
-    // blending. v40 mirrors the surface alpha flag; v32 requires the texture
-    // node to have no alpha flag, which we treat as always true (we have no
-    // node metadata).
+    // blending. v40 mirrors the surface alpha flag (hasAlpha); v32 requires
+    // the texture node to carry no alpha flag (mode bit 0x4 clear), which is
+    // folded into the v40 argument at the call sites.
     static BlendSel selectBlend(const Marni* m, uint32_t type, bool v40)
     {
         const uint32_t v33 = type & 0xF00000;
@@ -724,7 +726,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40D300 (0x1002C): float-z sprite quad, colour from the blend bits.
@@ -804,7 +806,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40D560 (type 45): float-centre projected sprite quad.
@@ -871,7 +873,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40D8D0 (type 37): shaded sprite quad with its own colour dword at
@@ -919,7 +921,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, false), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
     }
 
     // MarniDrawPolyFT4 (type 36): white quad, colour from the blend bits.
@@ -973,7 +975,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)p->type, false), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)p->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
     }
 
     // sub_40DD90 (type 33): flat untextured quad.
@@ -1101,7 +1103,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)texOffset);
         }
 
-        emitQuad(env, v, 3, true, selectBlend(env.marni, (uint32_t)tri->type, false), true, entry.texture);
+        emitQuad(env, v, 3, true, selectBlend(env.marni, (uint32_t)tri->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40A830 (type 69): flat-colour gouraud quad, direct coordinates.
@@ -1157,7 +1159,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)uvOffset);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, false), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
     }
 
     // sub_40AB60 (type 70): per-vertex-colour gouraud quad.
@@ -1191,7 +1193,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)uvOffset);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, false), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
     }
 
     // sub_40B260 (type 73): projected sprite, corners at prim+8..+22, colour
@@ -1246,7 +1248,7 @@ namespace
             setColor(v[i], color);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40B560 (type 76): projected flat quad, colour from blend bits.
@@ -1320,7 +1322,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40B8D0 (type 77): projected flat quad with colour bytes at 0x2C..0x2F.
@@ -1360,7 +1362,7 @@ namespace
             v[i].tv = (float)((double)prim[35 + 2 * i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40BCF0 (0x1004D): projected flat quad with colour bytes at 0x2C..0x2F
@@ -1402,7 +1404,7 @@ namespace
             v[i].tv = (float)((double)prim[35 + 2 * i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40C100 (0x1004C): centre-relative projected flat quad, colour from
@@ -1478,7 +1480,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // sub_40C470 (0x10049): sprite with direct corners (prim+8..+22) and the
@@ -1532,7 +1534,7 @@ namespace
             setColor(v[i], color);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, false), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
     }
 
     // draw_line_flat / draw_line_gourad / draw_line_gpu (types 17/18).
@@ -2007,6 +2009,7 @@ namespace
                 return false;
             }
             const auto* src = (const uint16_t*)img.pixels.data();
+
             for (int y = 0; y < img.height; y++)
             {
                 const uint16_t* row = src + (size_t)y * img.width;
@@ -2014,13 +2017,20 @@ namespace
                 for (int x = 0; x < img.width; x++)
                 {
                     const uint16_t v = row[x];
+                    // RE2 PC transparency: the original applied a black color key
+                    // (DDCOLORKEY {0,0}) to texture surfaces and the software
+                    // surface reads collapse black pixels (RGB == 0, e.g. 0x0000
+                    // or 0x8000) to fully transparent. Bit 15 is otherwise not
+                    // used by the game data (16bpp textures are effectively
+                    // X1R5G5B5), so only the colour channels decide alpha.
+                    const bool transparent = (v & 0x7FFF) == 0;
                     if (img.psxFormat)
                     {
                         // PSX 555: red low, no alpha.
                         dst[0] = (uint8_t)((v & 0x1F) << 3);
                         dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
                         dst[2] = (uint8_t)(((v >> 10) & 0x1F) << 3);
-                        dst[3] = 0xFF;
+                        dst[3] = transparent ? 0x00 : 0xFF;
                     }
                     else
                     {
@@ -2028,7 +2038,7 @@ namespace
                         dst[0] = (uint8_t)(((v >> 10) & 0x1F) << 3);
                         dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
                         dst[2] = (uint8_t)((v & 0x1F) << 3);
-                        dst[3] = (v & 0x8000) ? 0xFF : 0x00;
+                        dst[3] = transparent ? 0x00 : 0xFF;
                     }
                     dst += 4;
                 }
@@ -2054,14 +2064,17 @@ namespace
             // Prototype: all paletted uploads use clut 0.
             const int clut = 0;
             const auto* pal = (const uint16_t*)img.palette.data() + (size_t)clut * entriesPerPal;
+
             uint8_t lut[256 * 4];
             for (int i = 0; i < entriesPerPal; i++)
             {
                 const uint16_t e = pal[i];
+                // Same black color-key semantics as the 16bpp path: palette
+                // entries with no colour (0x0000/0x8000) are transparent.
                 lut[i * 4 + 0] = (uint8_t)((e & 0x1F) << 3);
                 lut[i * 4 + 1] = (uint8_t)(((e >> 5) & 0x1F) << 3);
                 lut[i * 4 + 2] = (uint8_t)(((e >> 10) & 0x1F) << 3);
-                lut[i * 4 + 3] = 0xFF;
+                lut[i * 4 + 3] = ((e & 0x7FFF) == 0) ? 0x00 : 0xFF;
             }
 
             if (img.depth == 4)
@@ -3705,10 +3718,22 @@ int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
     }
 
     std::vector<uint8_t> rgba;
+    bool hasAlpha = false;
     if ((mode & 0x4000) == 0)
     {
         if (!decodeToRgba(image, rgba))
             return 0;
+        // The original marks a surface as alpha-bearing (var_2C / v40) when any
+        // pixel's alpha bits are not fully set; here that is any decoded pixel
+        // with alpha < 0xFF (the black-keyed transparent pixels).
+        for (size_t i = 3; i < rgba.size(); i += 4)
+        {
+            if (rgba[i] != 0xFF)
+            {
+                hasAlpha = true;
+                break;
+            }
+        }
     }
 
     SDL_GPUTextureCreateInfo tci{};
@@ -3782,7 +3807,7 @@ int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
         logging::logInfo("[sdlgpu] loadTexture: temp texture (mode 0x4000) - registered without GPU upload");
     }
 
-    impl->textures[handle] = { tex, image.width, image.height };
+    impl->textures[handle] = { tex, image.width, image.height, hasAlpha, (mode & 4) != 0 };
     Marni* m = gGameTable.pMarni;
     if (m)
         m->textures[handle].var_00 = mode;
