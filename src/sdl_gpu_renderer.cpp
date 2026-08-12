@@ -2582,6 +2582,37 @@ namespace
             return true;
         }
 
+        if (img.depth == 32)
+        {
+            const size_t needed = (size_t)img.width * img.height * 4;
+            if (img.pixels.size() < needed)
+            {
+                logging::logWarning("[sdlgpu] loadTexture: 32bpp image pixels too small ({} < {})", img.pixels.size(), needed);
+                return false;
+            }
+            const auto* src = (const uint32_t*)img.pixels.data();
+            for (int y = 0; y < img.height; y++)
+            {
+                const uint32_t* row = src + (size_t)y * img.width;
+                uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
+                for (int x = 0; x < img.width; x++)
+                {
+                    const uint32_t v = row[x];
+                    // Marni 32bpp work surfaces are A8R8G8B8 (desc a_shift=24,
+                    // r_shift=16, g_shift=8, b_shift=0). The kage shadow texture
+                    // is built this way: each pixel is a packed 0xAARRGGBB where
+                    // 0 is fully transparent and non-zero pixels are semi-opaque
+                    // dark grey.
+                    dst[0] = (uint8_t)((v >> 16) & 0xFF);
+                    dst[1] = (uint8_t)((v >> 8) & 0xFF);
+                    dst[2] = (uint8_t)(v & 0xFF);
+                    dst[3] = (uint8_t)((v >> 24) & 0xFF);
+                    dst += 4;
+                }
+            }
+            return true;
+        }
+
         if (img.depth == 4 || img.depth == 8)
         {
             if (img.palBpp != 16 || img.palCnt <= 0)
