@@ -361,14 +361,31 @@ namespace
 
     // ── renderer-side state ──────────────────────────────────────────────
 
-    // Texture registry entry: the SDL_GPU texture for a MARNI texture handle.
+    // Texture registry entry: one SDL_GPU texture per CLUT for a MARNI
+    // texture handle. Paletted images with palCnt > 1 get one texture per
+    // palette (all same width/height, so UVs stay valid); `texture` is the
+    // clut-0 variant. Mirrors the D3D texture object model where mode
+    // 0x22/0x41/0x42/0xC1/0xC2 allocates pal_count texture nodes.
     struct TextureEntry
     {
-        SDL_GPUTexture* texture = nullptr;
+        SDL_GPUTexture* texture = nullptr;       // clut-0 texture
+        std::vector<SDL_GPUTexture*> clutTextures; // clut-1..N textures (same dims)
         int width = 0;
         int height = 0;
+        int clutCount = 1;                       // number of CLUT variants uploaded
         bool hasAlpha = false;    // decoded pixels include transparent (black-keyed) ones -> v40
         bool noAlphaFlag = false; // mode bit 0x4 set -> v41 = 0 -> v32 && v40 blend fallback disabled
+
+        // Selects the texture for a CLUT index, clamping out-of-range indexes
+        // back to clut 0 (the Add* methods already clamp to clutCount).
+        SDL_GPUTexture* textureForClut(int clut) const
+        {
+            if (clut <= 0 || clutTextures.empty())
+                return texture;
+            if (clut >= (int)clutTextures.size() + 1)
+                return texture;
+            return clutTextures[clut - 1];
+        }
     };
 
     // Blend-mode variants (LABEL_74 in the original: the 0xF00000 type bits
@@ -662,15 +679,28 @@ namespace
 
         if (sprite->clut != 0 && (tex->var_00 & 0x82) != 0)
         {
-            // Paletted texture (var_00 low bits 0x82/0x42/0xA2) decoded with
-            // clut 0 only; a prim using another clut would sample wrong
-            // colours.
-            if (throttle(*env.logClut, 300))
-                logging::logWarning("[sdlgpu] prim uses clut {} on paletted handle {} (decoded with clut 0) - colours may be wrong", sprite->clut, handle);
+            // Paletted texture (var_00 low bits 0x82/0x42/0xA2) - check the
+            // clut index is within the uploaded CLUT count.
+            auto clutIt = env.textures->find(handle);
+            const int clutCount = (clutIt != env.textures->end()) ? clutIt->second.clutCount : 1;
+            if (sprite->clut >= (uint32_t)clutCount)
+            {
+                if (throttle(*env.logClut, 300))
+                    logging::logWarning("[sdlgpu] prim uses clut {} on handle {} (clutCount {}) - out of range, falling back to clut 0", sprite->clut, handle, clutCount);
+            }
         }
 
         auto it = env.textures->find(handle);
         return it != env.textures->end() ? &it->second : nullptr;
+    }
+
+    // Selects the per-CLUT SDL_GPU texture for a sprite-family prim. Every
+    // textured MARNI record carries texture at 0x08 and clut at 0x0C, so we
+    // can read the CLUT index directly off the prim head.
+    static SDL_GPUTexture* spriteClutTexture(const TextureEntry& entry, const Prim* pPrim)
+    {
+        const auto* spr = (const PrimSprite*)pPrim;
+        return entry.textureForClut((int)spr->clut);
     }
 
     // sub_40CFD0 (0x1002D): float-z shaded sprite quad.
@@ -731,7 +761,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40D300 (0x1002C): float-z sprite quad, colour from the blend bits.
@@ -811,7 +841,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40D560 (type 45): float-centre projected sprite quad.
@@ -878,7 +908,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40D8D0 (type 37): shaded sprite quad with its own colour dword at
@@ -926,7 +956,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), false, spriteClutTexture(entry, pPrim));
     }
 
     // MarniDrawPolyFT4 (type 36): white quad, colour from the blend bits.
@@ -980,7 +1010,7 @@ namespace
         v[3].tv = v[2].tv;
 
         snapQuad(v);
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)p->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)p->type, entry.hasAlpha && !entry.noAlphaFlag), false, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40DD90 (type 33): flat untextured quad.
@@ -1111,7 +1141,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)texOffset);
         }
 
-        emitQuad(env, v, 3, true, selectBlend(env.marni, (uint32_t)tri->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 3, true, selectBlend(env.marni, (uint32_t)tri->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40A830 (type 69): flat-colour gouraud quad, direct coordinates.
@@ -1167,7 +1197,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)uvOffset);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40AB60 (type 70): per-vertex-colour gouraud quad.
@@ -1201,7 +1231,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)uvOffset);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), false, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40B260 (type 73): projected sprite, corners at prim+8..+22, colour
@@ -1256,7 +1286,7 @@ namespace
             setColor(v[i], color);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40B560 (type 76): projected flat quad, colour from blend bits.
@@ -1330,7 +1360,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40B8D0 (type 77): projected flat quad with colour bytes at 0x2C..0x2F.
@@ -1370,7 +1400,7 @@ namespace
             v[i].tv = (float)((double)prim[35 + 2 * i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)pPrim->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40BCF0 (0x1004D): projected flat quad with colour bytes at 0x2C..0x2F
@@ -1488,7 +1518,7 @@ namespace
             v[i].tv = (float)((double)vs[i] * (double)invTexH + (double)adjustV);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)q->type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // sub_40C470 (0x10049): sprite with direct corners (prim+8..+22) and the
@@ -1542,7 +1572,7 @@ namespace
             setColor(v[i], color);
         }
 
-        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, entry.texture);
+        emitQuad(env, v, 4, true, selectBlend(env.marni, (uint32_t)type, entry.hasAlpha && !entry.noAlphaFlag), true, spriteClutTexture(entry, pPrim));
     }
 
     // draw_line_flat / draw_line_gourad / draw_line_gpu (types 17/18).
@@ -1899,9 +1929,6 @@ namespace
         if (textureHandle == 0)
             return false;
 
-        // The prototype uploads only CLUT 0 for paletted textures, so every
-        // split-table section samples this single SDL texture; the per-chunk
-        // CLUT indexes (prim+0x54..0x57) only gate which sections exist.
         auto baseIt = env.textures->find((int)textureHandle);
         if (baseIt == env.textures->end() || baseIt->second.texture == nullptr)
         {
@@ -1912,13 +1939,17 @@ namespace
         }
         const TextureEntry* baseTex = &baseIt->second;
 
+        // Each split-table section samples the CLUT at prim+0x54+i (matching
+        // the original search_texture_object_0_from_1_in_condition call per
+        // section); sections beyond the uploaded clut count fall back to
+        // clut 0 via textureForClut.
         for (int i = 1; i < 4; i++)
         {
             if (*(const uint16_t*)(prim + 0x58 + 2 * (i - 1)) != 0)
             {
                 const uint8_t clut = *(const uint8_t*)(prim + 0x54 + i);
-                if (clut != 0 && throttle(*env.logClut, 300))
-                    logging::logWarning("[sdlgpu] trans_object: split-table section {} uses clut {} (only clut 0 uploaded) - reusing base texture", i, clut);
+                if (clut >= baseTex->clutCount && throttle(*env.logClut, 300))
+                    logging::logWarning("[sdlgpu] trans_object: section {} uses clut {} (clutCount {}) - out of range, falling back to clut 0", i, clut, baseTex->clutCount);
             }
         }
 
@@ -2167,9 +2198,13 @@ namespace
                 start = 0;
                 end = (int)chunkStarts[0];
             }
+            // Section i uses the CLUT at prim+0x54+i (the base section is
+            // prim+0x54), matching trans_object_ngtin3_vinsnins.
+            const uint8_t sectionClut = *(const uint8_t*)(prim + 0x54 + i);
+            SDL_GPUTexture* sectionTex = baseTex->textureForClut(sectionClut);
             for (int p = start; p < end; p++)
             {
-                emitQuad(env, &packedVertices[3 * p], 3, true, blend, true, baseTex->texture);
+                emitQuad(env, &packedVertices[3 * p], 3, true, blend, true, sectionTex);
                 drew = true;
             }
         }
@@ -2497,7 +2532,7 @@ namespace
     }
 
     // ── texture decoding (Image -> RGBA8) ────────────────────────────────
-    static bool decodeToRgba(const Image& img, std::vector<uint8_t>& rgba)
+    static bool decodeToRgba(const Image& img, std::vector<uint8_t>& rgba, int clut = 0)
     {
         rgba.assign((size_t)img.width * img.height * 4, 0);
 
@@ -2562,8 +2597,11 @@ namespace
                 return false;
             }
 
-            // Prototype: all paletted uploads use clut 0.
-            const int clut = 0;
+            if (clut < 0 || clut >= img.palCnt)
+            {
+                logging::logWarning("[sdlgpu] loadTexture: clut {} out of range (palCnt {})", clut, img.palCnt);
+                return false;
+            }
             const auto* pal = (const uint16_t*)img.palette.data() + (size_t)clut * entriesPerPal;
 
             uint8_t lut[256 * 4];
@@ -3072,6 +3110,11 @@ struct SdlGpuRenderer::Impl
             (void)handle;
             if (entry.texture)
                 SDL_ReleaseGPUTexture(dev, entry.texture);
+            for (SDL_GPUTexture* t : entry.clutTextures)
+            {
+                if (t)
+                    SDL_ReleaseGPUTexture(dev, t);
+            }
         }
         textures.clear();
         for (auto& [key, pipe] : pipelines)
@@ -4251,24 +4294,14 @@ int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
         return 0;
     }
 
-    std::vector<uint8_t> rgba;
-    bool hasAlpha = false;
-    if ((mode & 0x4000) == 0)
-    {
-        if (!decodeToRgba(image, rgba))
-            return 0;
-        // The original marks a surface as alpha-bearing (var_2C / v40) when any
-        // pixel's alpha bits are not fully set; here that is any decoded pixel
-        // with alpha < 0xFF (the black-keyed transparent pixels).
-        for (size_t i = 3; i < rgba.size(); i += 4)
-        {
-            if (rgba[i] != 0xFF)
-            {
-                hasAlpha = true;
-                break;
-            }
-        }
-    }
+    // Paletted images carry palCnt CLUTs; upload one SDL texture per CLUT so
+    // prims can pick the right palette (mirrors the D3D pal_count texture
+    // nodes). Each variant is decoded with a different palette but shares the
+    // same pixel data, so all textures keep the image's width/height and UVs
+    // stay valid.
+    const bool tempTexture = (mode & 0x4000) != 0;
+    const bool paletted = (image.depth == 4 || image.depth == 8) && image.palBpp == 16 && image.palCnt > 0;
+    const int clutCount = (!tempTexture && paletted) ? image.palCnt : 1;
 
     SDL_GPUTextureCreateInfo tci{};
     tci.type = SDL_GPU_TEXTURETYPE_2D;
@@ -4279,73 +4312,120 @@ int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
     tci.layer_count_or_depth = 1;
     tci.num_levels = 1;
     tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
-    SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &tci);
-    if (!tex)
-    {
-        logging::logError("[sdlgpu] loadTexture: SDL_CreateGPUTexture failed: {}", SDL_GetError());
-        return 0;
-    }
 
-    if ((mode & 0x4000) == 0)
+    std::vector<SDL_GPUTexture*> texs;
+    bool hasAlpha = false;
+    for (int clut = 0; clut < clutCount; clut++)
     {
-        SDL_GPUTransferBufferCreateInfo tbci{};
-        tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        tbci.size = (Uint32)rgba.size();
-        SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(dev, &tbci);
-        if (!tb)
+        std::vector<uint8_t> rgba;
+        if (!tempTexture)
         {
-            logging::logError("[sdlgpu] loadTexture: SDL_CreateGPUTransferBuffer failed: {}", SDL_GetError());
-            SDL_ReleaseGPUTexture(dev, tex);
+            if (!decodeToRgba(image, rgba, clut))
+            {
+                for (SDL_GPUTexture* t : texs)
+                    SDL_ReleaseGPUTexture(dev, t);
+                return 0;
+            }
+            // The original marks a surface as alpha-bearing (var_2C / v40)
+            // when any pixel's alpha bits are not fully set; here that is any
+            // decoded pixel with alpha < 0xFF (the black-keyed transparent
+            // pixels). Any clut variant carrying transparency sets the flag.
+            for (size_t i = 3; i < rgba.size(); i += 4)
+            {
+                if (rgba[i] != 0xFF)
+                {
+                    hasAlpha = true;
+                    break;
+                }
+            }
+        }
+
+        SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &tci);
+        if (!tex)
+        {
+            logging::logError("[sdlgpu] loadTexture: SDL_CreateGPUTexture failed: {}", SDL_GetError());
+            for (SDL_GPUTexture* t : texs)
+                SDL_ReleaseGPUTexture(dev, t);
             return 0;
         }
-        void* mapped = SDL_MapGPUTransferBuffer(dev, tb, false);
-        if (!mapped)
-        {
-            logging::logError("[sdlgpu] loadTexture: SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
-            SDL_ReleaseGPUTransferBuffer(dev, tb);
-            SDL_ReleaseGPUTexture(dev, tex);
-            return 0;
-        }
-        std::memcpy(mapped, rgba.data(), rgba.size());
-        SDL_UnmapGPUTransferBuffer(dev, tb);
 
-        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(dev);
-        if (!cmd)
+        if (!tempTexture)
         {
-            logging::logError("[sdlgpu] loadTexture: SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
-            SDL_ReleaseGPUTransferBuffer(dev, tb);
-            SDL_ReleaseGPUTexture(dev, tex);
-            return 0;
+            SDL_GPUTransferBufferCreateInfo tbci{};
+            tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            tbci.size = (Uint32)rgba.size();
+            SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(dev, &tbci);
+            if (!tb)
+            {
+                logging::logError("[sdlgpu] loadTexture: SDL_CreateGPUTransferBuffer failed: {}", SDL_GetError());
+                SDL_ReleaseGPUTexture(dev, tex);
+                for (SDL_GPUTexture* t : texs)
+                    SDL_ReleaseGPUTexture(dev, t);
+                return 0;
+            }
+            void* mapped = SDL_MapGPUTransferBuffer(dev, tb, false);
+            if (!mapped)
+            {
+                logging::logError("[sdlgpu] loadTexture: SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
+                SDL_ReleaseGPUTransferBuffer(dev, tb);
+                SDL_ReleaseGPUTexture(dev, tex);
+                for (SDL_GPUTexture* t : texs)
+                    SDL_ReleaseGPUTexture(dev, t);
+                return 0;
+            }
+            std::memcpy(mapped, rgba.data(), rgba.size());
+            SDL_UnmapGPUTransferBuffer(dev, tb);
+
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(dev);
+            if (!cmd)
+            {
+                logging::logError("[sdlgpu] loadTexture: SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
+                SDL_ReleaseGPUTransferBuffer(dev, tb);
+                SDL_ReleaseGPUTexture(dev, tex);
+                for (SDL_GPUTexture* t : texs)
+                    SDL_ReleaseGPUTexture(dev, t);
+                return 0;
+            }
+            SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+            if (cp)
+            {
+                SDL_GPUTextureTransferInfo src{};
+                src.transfer_buffer = tb;
+                src.pixels_per_row = (Uint32)image.width;
+                src.rows_per_layer = (Uint32)image.height;
+                SDL_GPUTextureRegion dst{};
+                dst.texture = tex;
+                dst.w = (Uint32)image.width;
+                dst.h = (Uint32)image.height;
+                dst.d = 1;
+                SDL_UploadToGPUTexture(cp, &src, &dst, false);
+                SDL_EndGPUCopyPass(cp);
+            }
+            SDL_SubmitGPUCommandBuffer(cmd);
+            submitDiag(dev, "loadTexture-upload");
+            SDL_ReleaseGPUTransferBuffer(dev, tb); // deferred: safe after submit
         }
-        SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
-        if (cp)
+        else
         {
-            SDL_GPUTextureTransferInfo src{};
-            src.transfer_buffer = tb;
-            src.pixels_per_row = (Uint32)image.width;
-            src.rows_per_layer = (Uint32)image.height;
-            SDL_GPUTextureRegion dst{};
-            dst.texture = tex;
-            dst.w = (Uint32)image.width;
-            dst.h = (Uint32)image.height;
-            dst.d = 1;
-            SDL_UploadToGPUTexture(cp, &src, &dst, false);
-            SDL_EndGPUCopyPass(cp);
+            logging::logInfo("[sdlgpu] loadTexture: temp texture (mode 0x4000) - registered without GPU upload");
         }
-        SDL_SubmitGPUCommandBuffer(cmd);
-        submitDiag(dev, "loadTexture-upload");
-        SDL_ReleaseGPUTransferBuffer(dev, tb); // deferred: safe after submit
-    }
-    else
-    {
-        logging::logInfo("[sdlgpu] loadTexture: temp texture (mode 0x4000) - registered without GPU upload");
+        texs.push_back(tex);
     }
 
-    impl->textures[handle] = { tex, image.width, image.height, hasAlpha, (mode & 4) != 0 };
+    TextureEntry entry;
+    entry.texture = texs[0];
+    if (texs.size() > 1)
+        entry.clutTextures.assign(texs.begin() + 1, texs.end());
+    entry.width = image.width;
+    entry.height = image.height;
+    entry.clutCount = clutCount;
+    entry.hasAlpha = hasAlpha;
+    entry.noAlphaFlag = (mode & 4) != 0;
+    impl->textures[handle] = entry;
     Marni* m = gGameTable.pMarni;
     if (m)
         m->textures[handle].var_00 = mode;
-    logging::logInfo("[sdlgpu] loadTexture -> handle {} (SDL texture {})", handle, (void*)tex);
+    logging::logInfo("[sdlgpu] loadTexture -> handle {} ({} clut(s), SDL texture {})", handle, clutCount, (void*)entry.texture);
     return handle;
 }
 
@@ -4365,6 +4445,14 @@ void SdlGpuRenderer::unloadTexture(int handle)
         SDL_WaitForGPUIdle(dev);
         SDL_ReleaseGPUTexture(dev, it->second.texture);
     }
+    if (dev)
+    {
+        for (SDL_GPUTexture* t : it->second.clutTextures)
+        {
+            if (t)
+                SDL_ReleaseGPUTexture(dev, t);
+        }
+    }
     impl->textures.erase(it);
     if (gGameTable.pMarni)
         gGameTable.pMarni->textures[handle].var_00 = 0;
@@ -4381,6 +4469,14 @@ void SdlGpuRenderer::unloadAllTextures()
     {
         if (dev && entry.texture)
             SDL_ReleaseGPUTexture(dev, entry.texture);
+        if (dev)
+        {
+            for (SDL_GPUTexture* t : entry.clutTextures)
+            {
+                if (t)
+                    SDL_ReleaseGPUTexture(dev, t);
+            }
+        }
         if (gGameTable.pMarni)
             gGameTable.pMarni->textures[handle].var_00 = 0;
     }
