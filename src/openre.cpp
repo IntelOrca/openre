@@ -2791,7 +2791,7 @@ namespace openre
         if (gGameTable.movie_r0)
         {
             marni::begin();
-            marni::set_gpu_flag(marni::GpuFlags::GPU_3, false);
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, false);
             movie();
             marni::clear();
             marni::g_renderer->movieUpdate();
@@ -2806,7 +2806,7 @@ namespace openre
         if (gGameTable.reset_r0)
         {
             marni::begin();
-            marni::set_gpu_flag(marni::GpuFlags::GPU_3, true);
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
             reset_screen();
             marni::clear();
             marni::end();
@@ -2829,7 +2829,7 @@ namespace openre
             // via marni::add_tile/swap_cbuff and leaves state behind.
             marni::begin();
             gGameTable.bgDrawn = 0;
-            marni::set_gpu_flag(marni::GpuFlags::GPU_3, false);
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, false);
 
             save_reset();
             if (gGameTable.byte_680597 & 1)
@@ -2864,7 +2864,7 @@ namespace openre
         }
 
         if (!gGameTable.bgDrawn && !gGameTable.byte_680598)
-            marni::set_gpu_flag(marni::GpuFlags::GPU_3, true);
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
 
         // 0x004BF760: gallery function
         if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
@@ -2952,15 +2952,15 @@ namespace openre
             }
 
             cursor_op();
-            marni::set_gpu_flag(marni::GpuFlags::GPU_3, true);
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
             marni::g_renderer->setGpuFlag();
-            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_13)
+            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::SOFTWARE_GPU)
             {
                 gGameTable.graphics_ptr_data = 1;
             }
             else
             {
-                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_3) ? 0 : 2;
+                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::CLEAR_TARGET) ? 0 : 2;
             }
             update_timer();
 

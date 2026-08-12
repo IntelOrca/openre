@@ -722,11 +722,11 @@ namespace openre::marni
         }
 
         auto cnt_2k_buffer = self->polygons_count; // cnt_2K_buffer
-        auto count_use_gpu1 = 0;                   // textures with GPU_9 + GPU_1 flags
+        auto count_use_gpu1 = 0;                   // textures with GPU_ENABLED + TEXTURE_PAL8 flags
         self->field_8C8418 = 0;
         self->field_8C8420 = 0;
         self->field_8C841C = 0;
-        auto count_use_gpu0 = 0; // textures with GPU_9 + GPU_0 flags
+        auto count_use_gpu0 = 0; // textures with GPU_ENABLED + TEXTURE_PAL4 flags
         self->field_8C8414 = 0;
 
         // Count used entries (index 1..cnt-1) in the 2K buffer.
@@ -739,16 +739,16 @@ namespace openre::marni
             }
         }
 
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
         {
             for (auto i = 0; i < 256; i++)
             {
                 if (self->textures[i].var_00)
                 {
                     self->field_8C8418++;
-                    if (self->textures[i].var_00 & GpuFlags::GPU_1)
+                    if (self->textures[i].var_00 & GpuFlags::TEXTURE_PAL8)
                         self->field_8C8420++;
-                    if (self->textures[i].var_00 & GpuFlags::GPU_0)
+                    if (self->textures[i].var_00 & GpuFlags::TEXTURE_PAL4)
                         self->field_8C841C++;
                 }
             }
@@ -773,23 +773,23 @@ namespace openre::marni
             self->dwVidMemFree = ddcaps[0x10]; // DDCAPS dwVidMemFree
 #endif
 
-        auto count_use = 0; // textures with GPU_9 flag
+        auto count_use = 0; // textures with GPU_ENABLED flag
         for (auto i = 0; i < 256; i++)
         {
             auto flags = self->texture_nodes[i].var_14;
-            if (flags && (flags & GpuFlags::GPU_13) == 0)
+            if (flags && (flags & GpuFlags::SOFTWARE_GPU) == 0)
             {
                 self->field_8C8418++;
-                if (flags & GpuFlags::GPU_1)
+                if (flags & GpuFlags::TEXTURE_PAL8)
                     self->field_8C8420++;
-                if (flags & GpuFlags::GPU_0)
+                if (flags & GpuFlags::TEXTURE_PAL4)
                     self->field_8C841C++;
-                if (flags & GpuFlags::GPU_9)
+                if (flags & GpuFlags::GPU_ENABLED)
                 {
                     count_use++;
-                    if (flags & GpuFlags::GPU_1)
+                    if (flags & GpuFlags::TEXTURE_PAL8)
                         count_use_gpu1++;
-                    if (flags & GpuFlags::GPU_0)
+                    if (flags & GpuFlags::TEXTURE_PAL4)
                         count_use_gpu0++;
                 }
             }
@@ -896,7 +896,7 @@ namespace openre::marni
             }
         }
 
-        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) != 0)
             return 1;
 
         if (gfx::surface_is_lost((IUnknown*)self->surfaceZ.pDDsurface) == DDERR_SURFACELOST)
@@ -977,9 +977,9 @@ namespace openre::marni
             gfx::notify_present();
             return;
         }
-        if (!(self->gpu_flag & GpuFlags::GPU_9))
+        if (!(self->gpu_flag & GpuFlags::GPU_ENABLED))
             return;
-        if ((self->gpu_flag & GpuFlags::GPU_13) && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) && self->var_8C8318 < 4)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) && self->var_8C8318 < 4)
         {
             surface_fill(&self->surface2, 0, 0, 0);
         }
@@ -995,7 +995,7 @@ namespace openre::marni
     void __stdcall draw(Marni* self)
     {
 #ifndef OPENRE_NO_D3D
-        if (self->var_8C7EE0 || !(self->gpu_flag & GpuFlags::GPU_9))
+        if (self->var_8C7EE0 || !(self->gpu_flag & GpuFlags::GPU_ENABLED))
             return;
 
         if (gGameTable.dword_54413C > 0 && (self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
@@ -1004,7 +1004,7 @@ namespace openre::marni
             surface_fill(&self->surface2, 0, 0, 1024);
         }
 
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
         {
             // Not implemented yet
         }
@@ -1069,10 +1069,10 @@ namespace openre::marni
     // 0x00403220
     static int __stdcall change_mode(Marni* self, uint32_t width, uint32_t height, uint32_t depth)
     {
-        if ((self->gpu_flag & GpuFlags::GPU_9) == 0)
+        if ((self->gpu_flag & GpuFlags::GPU_ENABLED) == 0)
             return 0;
 
-        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) != 0)
         {
             self->aspect_x = 1.0;
             self->aspect_y = 1.0;
@@ -1124,7 +1124,7 @@ namespace openre::marni
                 return 0;
             }
         }
-        self->gpu_flag |= GpuFlags::GPU_9;
+        self->gpu_flag |= GpuFlags::GPU_ENABLED;
         return 1;
     }
 
@@ -1606,7 +1606,7 @@ namespace openre::marni
         }
         desc.dwWidth = self->xsize;
         desc.ddsCaps.dwCaps
-            = ((self->gpu_flag & GpuFlags::GPU_4) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
+            = ((self->gpu_flag & GpuFlags::SURFACE_NO_PALETTE) ? 0 : DDSCAPS_PALETTE) | DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN;
         desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
         desc.dwHeight = self->ysize;
         gGameTable.error = ((LPDIRECTDRAW2)self->pDirectDraw2)
@@ -1671,9 +1671,9 @@ namespace openre::marni
         if (self->surface0.bpp == 16)
         {
             if (self->surface0.desc.b_bitcnt + self->surface0.desc.r_bitcnt + self->surface0.desc.g_bitcnt == 15)
-                self->gpu_flag |= GpuFlags::GPU_11;
+                self->gpu_flag |= GpuFlags::RGB555;
             else
-                self->gpu_flag &= ~GpuFlags::GPU_11;
+                self->gpu_flag &= ~GpuFlags::RGB555;
         }
         surface_fill(&self->surface0, 0, 0, 0);
         gGameTable.error = get_surface_desc(&desc, (LPDIRECTDRAWSURFACE)self->surface2.pDDsurface);
@@ -1724,7 +1724,7 @@ namespace openre::marni
         self->surface0.desc.a_shift = 15;
         self->surface0.desc.a_mask = 1;
         self->surface0.desc.a_bitcnt = 1;
-        self->gpu_flag |= GpuFlags::GPU_11;
+        self->gpu_flag |= GpuFlags::RGB555;
 
         self->surface2.pDDpalette = nullptr;
         self->surface2.width = (int16_t)self->xsize;
@@ -1765,7 +1765,7 @@ namespace openre::marni
         system::gpu::create_guest_framebuffer(self->xsize, self->ysize);
 #endif
 #ifndef OPENRE_NO_D3D
-        if (!(self->gpu_flag & GpuFlags::GPU_13))
+        if (!(self->gpu_flag & GpuFlags::SOFTWARE_GPU))
         {
             if (self->surfaceZ.pDDsurface != nullptr)
             {
@@ -1922,8 +1922,8 @@ namespace openre::marni
     // 0x00404D20
     int __stdcall clear(Marni* self)
     {
-        if (!(self->gpu_flag & GpuFlags::GPU_9) || !self->is_gpu_active || self->var_8C7EE0
-            || !(self->gpu_flag & GpuFlags::GPU_13) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
+        if (!(self->gpu_flag & GpuFlags::GPU_ENABLED) || !self->is_gpu_active || self->var_8C7EE0
+            || !(self->gpu_flag & GpuFlags::SOFTWARE_GPU) && (self->pDirectDevice2 == nullptr || self->pViewport == nullptr))
         {
             return 0;
         }
@@ -1939,16 +1939,16 @@ namespace openre::marni
         rect.y2 = self->ysize;
 
         restore_surfaces(self);
-        if ((self->gpu_flag & GpuFlags::GPU_3) == 0)
+        if ((self->gpu_flag & GpuFlags::CLEAR_TARGET) == 0)
         {
-            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
             {
                 gGameTable.error = gfx::viewport_clear((IUnknown*)self->pViewport, 1, &rect, D3DCLEAR_ZBUFFER);
             }
         }
         else
         {
-            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
             {
                 gGameTable.error
                     = gfx::viewport_clear((IUnknown*)self->pViewport, 1, &rect, D3DCLEAR_ZBUFFER | D3DCLEAR_TARGET);
@@ -1973,7 +1973,7 @@ namespace openre::marni
     static void __stdcall do_render(Marni* self, MarniOt* pOt)
     {
 #ifndef OPENRE_NO_D3D
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return;
 
         auto* device = (IUnknown*)self->pDirectDevice2;
@@ -2027,7 +2027,7 @@ namespace openre::marni
     {
         // Deactivate the GPU and clear the "device created" flag.
         self->is_gpu_active = 0;
-        self->gpu_flag &= ~GpuFlags::GPU_9;
+        self->gpu_flag &= ~GpuFlags::GPU_ENABLED;
 
         // Free every texture node's surface object.
         for (int i = 0; i < 256; i++)
@@ -2277,7 +2277,7 @@ namespace openre::marni
         self->desktop_bpp = GetDeviceCaps(dc, BITSPIXEL) * GetDeviceCaps(dc, PLANES);
         ReleaseDC(NULL, dc);
         self->bpp = self->desktop_bpp;
-        self->gpu_flag |= GpuFlags::GPU_4;
+        self->gpu_flag |= GpuFlags::SURFACE_NO_PALETTE;
         self->is_gpu_busy = 0;
         *((uint32_t*)&self->ambient_b) = 0;
         self->var_8C8318 = 0;
@@ -2313,7 +2313,7 @@ namespace openre::marni
 
 #ifndef OPENRE_NO_D3D
         DWORD isDefault;
-        gGameTable.error = create_ddraw(self->gpu_flag & GpuFlags::ENUM_DEVICES, (LPDIRECTDRAW*)&self->pDirectDraw, &isDefault);
+        gGameTable.error = create_ddraw(self->gpu_flag & GpuFlags::ENUMERATE_DEVICES, (LPDIRECTDRAW*)&self->pDirectDraw, &isDefault);
         if (gGameTable.error != 0)
         {
             out("The Marni failed to generate DirectDraw com.", "MarniSystem Direct3D::Direct3D");
@@ -2321,7 +2321,7 @@ namespace openre::marni
             return self;
         }
 
-        self->gpu_flag |= isDefault == 0 ? 0 : GpuFlags::GPU_7;
+        self->gpu_flag |= isDefault == 0 ? 0 : GpuFlags::DEFAULT_DDRAW;
         gGameTable.error = query_ddraw2((LPDIRECTDRAW)self->pDirectDraw, (LPDIRECTDRAW2*)&self->pDirectDraw2);
         if (gGameTable.error != 0)
         {
@@ -2371,7 +2371,7 @@ namespace openre::marni
         str::string_assign(&gGameTable.marni_config.device_name, gGameTable.d3d_devices[self->device_cnt].lpDeviceName);
         exception = 11;
 
-        if (gGameTable.d3d_devices[self->device_cnt].hwAccelerated2 || (self->gpu_flag & GpuFlags::GPU_13))
+        if (gGameTable.d3d_devices[self->device_cnt].hwAccelerated2 || (self->gpu_flag & GpuFlags::SOFTWARE_GPU))
         {
             self->gpu_flag |= GpuFlags::INCLUDE_2X;
         }
@@ -2474,10 +2474,10 @@ namespace openre::marni
             out("%d x %d x %d full=%d", "MarniSystem Direct3D::Direct3D");
         }
 
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
         {
             self->is_gpu_active = 1;
-            self->gpu_flag |= GpuFlags::GPU_9;
+            self->gpu_flag |= GpuFlags::GPU_ENABLED;
         }
 #ifdef OPENRE_NO_D3D
         else
@@ -2487,7 +2487,7 @@ namespace openre::marni
             // SDL3 renderer owns the swapchain and presents via SDL itself.
             logging::logInfo("[marni] init: no-D3D build, GPU active (no D3D device)");
             self->is_gpu_active = 1;
-            self->gpu_flag |= GpuFlags::GPU_9;
+            self->gpu_flag |= GpuFlags::GPU_ENABLED;
         }
 #else
         else
@@ -2505,7 +2505,7 @@ namespace openre::marni
             surface.desc.a_bitcnt = 0;
             surface2_vfill(&surface, 0, 0xFFFFFF, 0);
             gGameTable.dword_6449BC = create_texture_handle(self, &surface, 2);
-            self->gpu_flag |= GpuFlags::GPU_9;
+            self->gpu_flag |= GpuFlags::GPU_ENABLED;
             self->is_gpu_active = 1;
             request_video_memory(self);
             exception = 9;
@@ -3005,7 +3005,7 @@ namespace openre::marni
         }
 
         auto gpu_flg = self->gpu_flag;
-        if ((gpu_flg & GpuFlags::GPU_13) != 0 || (mode & 0x4000) != 0)
+        if ((gpu_flg & GpuFlags::SOFTWARE_GPU) != 0 || (mode & 0x4000) != 0)
         {
             // Temporary texture object: allocate the slot and copy the source
             // surface into it without creating a GPU texture (no reload).
@@ -3055,15 +3055,15 @@ namespace openre::marni
         // hardware palette: convert to an RGB texture (clear bit 0x20, set bit
         // 0x40) so the texture can be generated without hardware palette support.
         auto bpp = pSrcSurface->bpp;
-        if ((gpu_flg & (GpuFlags::GPU_0 | GpuFlags::GPU_1)) == 0 && (mode & 0x20) != 0)
+        if ((gpu_flg & (GpuFlags::TEXTURE_PAL4 | GpuFlags::TEXTURE_PAL8)) == 0 && (mode & 0x20) != 0)
         {
             mode = (mode & ~0x20) | 0x40;
         }
         else if (
             pSrcSurface->var_28
             && ((
-                (bpp == 4 && ((gpu_flg & GpuFlags::GPU_1) != 0 || (gpu_flg & GpuFlags::GPU_0) != 0))
-                || (bpp == 8 && (gpu_flg & GpuFlags::GPU_1) != 0))))
+                (bpp == 4 && ((gpu_flg & GpuFlags::TEXTURE_PAL8) != 0 || (gpu_flg & GpuFlags::TEXTURE_PAL4) != 0))
+                || (bpp == 8 && (gpu_flg & GpuFlags::TEXTURE_PAL8) != 0))))
         {
             mode |= 0x80;
             if ((gpu_flg & 0x100) == 0)
@@ -3188,7 +3188,7 @@ namespace openre::marni
     // 0x004064D0
     static void __stdcall destroy(Marni* marni)
     {
-        marni->gpu_flag &= ~GpuFlags::GPU_9;
+        marni->gpu_flag &= ~GpuFlags::GPU_ENABLED;
 
         clear_buffers(marni);
 
@@ -3277,7 +3277,7 @@ namespace openre::marni
         }
 
         marni->is_gpu_busy = 1;
-        if (!(gpu_flg & GpuFlags::GPU_9))
+        if (!(gpu_flg & GpuFlags::GPU_ENABLED))
             return 0;
 
         clear_buffers(marni);
@@ -3286,7 +3286,7 @@ namespace openre::marni
         {
             restore_surfaces(marni);
             marni->is_gpu_busy = 0;
-            marni->gpu_flag |= GpuFlags::GPU_9;
+            marni->gpu_flag |= GpuFlags::GPU_ENABLED;
             DefWindowProcA(hWnd, msg, wParam, lParam);
             return 1;
         }
@@ -3438,8 +3438,8 @@ namespace openre::marni
             self->pDirectDevice2 = nullptr;
         }
 
-        // Software renderer (GPU_13): no D3D device is created.
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        // Software renderer (SOFTWARE_GPU): no D3D device is created.
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 1;
 
         // Pick the device class: use the HAL device when the selected driver is
@@ -3515,7 +3515,7 @@ namespace openre::marni
         }
 
         out("texture formats detected here...%d", "MD3DCreateDevice");
-        self->gpu_flag &= ~(GpuFlags::GPU_0 | GpuFlags::GPU_1);
+        self->gpu_flag &= ~(GpuFlags::TEXTURE_PAL4 | GpuFlags::TEXTURE_PAL8);
 
         auto formatCount = *(int32_t*)((uint8_t*)self + 0x8C78A0);
         if (formatCount > 0)
@@ -3552,7 +3552,7 @@ namespace openre::marni
     #ifndef OPENRE_NO_D3D
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
     {
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 1;
 
         if (!gGameTable.d3d_devices[self->device_cnt].supportsZbuffer)
@@ -3691,7 +3691,7 @@ namespace openre::marni
     static int __stdcall enum_drivers(Marni* self)
     {
 #ifndef OPENRE_NO_D3D
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 1;
 
         auto pD3D2 = (LPDIRECT3D2)self->pDirect3D2;
@@ -3712,7 +3712,7 @@ namespace openre::marni
             device.supportsZbuffer = desc->dwDeviceZBufferBitDepth != 0;
             device.hwAccelerated2 = device.hwAccelerated;
             auto supportsDepth
-                = (D3DIBPPToDDBD(self->bpp) & desc->dwDeviceRenderBitDepth) != 0 && ((self->gpu_flag & GpuFlags::GPU_7) != 0);
+                = (D3DIBPPToDDBD(self->bpp) & desc->dwDeviceRenderBitDepth) != 0 && ((self->gpu_flag & GpuFlags::DEFAULT_DDRAW) != 0);
             auto score = (device.supportsZbuffer != 0) + (supportsDepth ? 2 : 0) + (device.supportsFloat != 0)
                 + (device.hwAccelerated != 0 ? 4 : 0);
             if (bestScore < score)
@@ -3732,7 +3732,7 @@ namespace openre::marni
     static int __stdcall create_d3d(Marni* self)
     {
 #ifndef OPENRE_NO_D3D
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 0;
 
         auto dd2 = (LPDIRECTDRAW2)self->pDirectDraw2;
@@ -3793,12 +3793,12 @@ namespace openre::marni
 
         // 0x1000: ambient colour - write the RGBA dword across the four channel
         // fields (memory order is B, G, R, A) and refresh the viewport background
-        // material unless the GPU is in software mode (GPU_13).
+        // material unless the GPU is in software mode (SOFTWARE_GPU).
         if ((pScaler->type & 0x1000) != 0)
         {
             *(uint32_t*)&self->ambient_b = pScaler->rgb1;
 #ifndef OPENRE_NO_D3D
-            if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+            if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
             {
                 D3DMATERIAL mat;
                 ZeroMemory(&mat, sizeof(mat));
@@ -5665,7 +5665,7 @@ namespace openre::marni
 
         uint32_t fallbackColor = 0;
         uint32_t colors[0x400] = { 0 };
-        if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::GPU_17) != 0)
+        if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::FILTER_BIT_0) != 0)
         {
             // Flat shading: build a single colour from the primitive colour and
             // the alpha byte picked by the 0x100000..0x400000 mode bits.
@@ -5856,7 +5856,7 @@ namespace openre::marni
             vout[2].tv = (float)((double)record.v2 / (double)texH + (double)texOffset);
 
             // Software lighting path: override with the flat colour.
-            if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::GPU_17) != 0)
+            if ((int32_t)primType < 0 || (self->gpu_flag & GpuFlags::FILTER_BIT_0) != 0)
             {
                 vout[0].color = fallbackColor;
                 vout[1].color = fallbackColor;
@@ -7780,14 +7780,14 @@ namespace openre::marni
         {
             type |= 2;
         }
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             // GPU backend: emit the line as a GPU primitive instead of
             // software-rasterizing it into surface0 (see draw_line_gpu).
             draw_line_gpu(self, line->x0, line->y0, line->x1, line->y1, line->color0, line->color0, type);
             return;
         }
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             surface_lock(&self->surface0, 0, 0);
         }
@@ -7804,7 +7804,7 @@ namespace openre::marni
             line->color0,
             line->color0,
             type);
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             surface_unlock(&self->surface0);
         }
@@ -7822,14 +7822,14 @@ namespace openre::marni
         {
             type |= 2;
         }
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             // GPU backend: emit the line as a GPU primitive instead of
             // software-rasterizing it into surface0 (see draw_line_gpu).
             draw_line_gpu(self, line->x0, line->y0, line->x1, line->y1, line->color0, line->color1, type);
             return;
         }
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             surface_lock(&self->surface0, 0, 0);
         }
@@ -7846,7 +7846,7 @@ namespace openre::marni
             line->color0,
             line->color1,
             type);
-        if ((self->gpu_flag & GpuFlags::GPU_13) == 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) == 0)
         {
             surface_unlock(&self->surface0);
         }
@@ -7858,7 +7858,7 @@ namespace openre::marni
         if (pOt == nullptr)
             return;
 
-        if (self->gpu_flag & GpuFlags::GPU_13)
+        if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
         {
             // Not implemented (software rendering?)
         }
@@ -8708,7 +8708,7 @@ namespace openre::marni
         auto v41 = 1;
         auto v40 = 0;
         MarniTexture* tex;
-        if ((pPrim->type & 4) == 0 && (self->gpu_flag & GpuFlags::GPU_19))
+        if ((pPrim->type & 4) == 0 && (self->gpu_flag & GpuFlags::PER_PRIM_TEXTURE))
         {
             textureHandle = 0;
             goto LABEL_4;
@@ -8754,7 +8754,7 @@ namespace openre::marni
             if ((pPrim->type & 0xFFFFF) != 0x24)
                 goto LABEL_26;
             v39 = 0;
-            if ((self->gpu_flag & GpuFlags::GPU_11) != 0)
+            if ((self->gpu_flag & GpuFlags::RGB555) != 0)
                 v39 = 0x8000;
             v15 = &self->textures[pPrim->texture];
             if ((v15->var_00 & 4) == 0 && (pPrim->type & 0x10000000) == 0)
@@ -8781,7 +8781,7 @@ namespace openre::marni
                 case 0x100000:
                     v20 = v39 | 0x10;
                     v39 |= 0x10;
-                    if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
+                    if ((self->gpu_flag & GpuFlags::FILTER_BIT_1) != 0)
                     {
                         v19 = v20 | 0x100;
                         v39 = v19;
@@ -8790,7 +8790,7 @@ namespace openre::marni
                 case 0x200000:
                     v18 = v39 | 0x20;
                     v39 |= 0x20;
-                    if ((self->gpu_flag & GpuFlags::GPU_18) != 0)
+                    if ((self->gpu_flag & GpuFlags::FILTER_BIT_1) != 0)
                     {
                         v19 = v18 | 0x100;
                         v39 = v19;
@@ -11586,7 +11586,7 @@ namespace openre::marni
     // 0x00416730
     static int __stdcall suspend_texture_use(Marni* self, int handle)
     {
-        if ((self->gpu_flag & GpuFlags::GPU_13) != 0)
+        if ((self->gpu_flag & GpuFlags::SOFTWARE_GPU) != 0)
             return 1;
 
         if (handle >= 256)
@@ -13723,26 +13723,26 @@ namespace openre::marni
         {
         case 0:
         {
-            marni::set_gpu_flag(GpuFlags::GPU_17, false);
-            marni::set_gpu_flag(GpuFlags::GPU_18, false);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_0, false);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_1, false);
             break;
         }
         case 1:
         {
-            marni::set_gpu_flag(GpuFlags::GPU_17, true);
-            marni::set_gpu_flag(GpuFlags::GPU_18, false);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_0, true);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_1, false);
             break;
         }
         case 2:
         {
-            marni::set_gpu_flag(GpuFlags::GPU_17, false);
-            marni::set_gpu_flag(GpuFlags::GPU_18, true);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_0, false);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_1, true);
             break;
         }
         case 3:
         {
-            marni::set_gpu_flag(GpuFlags::GPU_17, true);
-            marni::set_gpu_flag(GpuFlags::GPU_18, true);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_0, true);
+            marni::set_gpu_flag(GpuFlags::FILTER_BIT_1, true);
             break;
         }
         }

@@ -47,7 +47,7 @@ namespace openre::marni
          * the geometry/arena state (equivalent to the original
          * `clear_otags + reset_geom` prologue of the frame loop). The back
          * buffer is NOT cleared here: the game calls clear() separately, after
-         * any GPU_3 flag changes, because that flag controls what clear() does.
+         * any CLEAR_TARGET flag changes, because that flag controls what clear() does.
          */
         virtual void begin() = 0;
 
@@ -60,7 +60,7 @@ namespace openre::marni
         virtual void clearOtags() = 0;
 
         /**
-         * Clears the back buffer (and Z buffer, controlled by the GPU_3 flag).
+         * Clears the back buffer (and Z buffer, controlled by the CLEAR_TARGET flag).
          */
         virtual void clear() = 0;
 
@@ -418,7 +418,7 @@ namespace openre::marni
         virtual void configFlipFilter() = 0;
 
         /**
-         * Applies the GPU filtering flags (GPU_17/GPU_18) selected by
+         * Applies the GPU filtering flags (FILTER_BIT_0/FILTER_BIT_1) selected by
          * gGameTable.byte_680592. Called every frame and from the gallery.
          */
         virtual void setGpuFlag() = 0;

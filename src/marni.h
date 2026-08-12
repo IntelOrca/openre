@@ -15,20 +15,20 @@ namespace openre::marni
 {
     namespace GpuFlags
     {
-        constexpr uint32_t GPU_0 = 0x1;
-        constexpr uint32_t GPU_1 = 0x2;
+        constexpr uint32_t TEXTURE_PAL4 = 0x1;
+        constexpr uint32_t TEXTURE_PAL8 = 0x2;
         constexpr uint32_t INCLUDE_2X = 0x4;
-        constexpr uint32_t GPU_3 = 0x8;
-        constexpr uint32_t GPU_4 = 0x10;
-        constexpr uint32_t ENUM_DEVICES = 0x40;
-        constexpr uint32_t GPU_7 = 0x80;
-        constexpr uint32_t GPU_9 = 0x200;
+        constexpr uint32_t CLEAR_TARGET = 0x8;
+        constexpr uint32_t SURFACE_NO_PALETTE = 0x10;
+        constexpr uint32_t ENUMERATE_DEVICES = 0x40;
+        constexpr uint32_t DEFAULT_DDRAW = 0x80;
+        constexpr uint32_t GPU_ENABLED = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
-        constexpr uint32_t GPU_11 = 0x800;
-        constexpr uint32_t GPU_13 = 0x2000;
-        constexpr uint32_t GPU_17 = 0x20000;
-        constexpr uint32_t GPU_18 = 0x40000;
-        constexpr uint32_t GPU_19 = 0x80000;
+        constexpr uint32_t RGB555 = 0x800;
+        constexpr uint32_t SOFTWARE_GPU = 0x2000;
+        constexpr uint32_t FILTER_BIT_0 = 0x20000;
+        constexpr uint32_t FILTER_BIT_1 = 0x40000;
+        constexpr uint32_t PER_PRIM_TEXTURE = 0x80000;
     }
 
     Marni* __stdcall init(Marni* self, void* hWnd, int width, int height);

@@ -223,7 +223,7 @@ namespace openre::gfx
         // primary surface: with our wrapped (foreign) vtable installed it skips
         // releasing the primary/window association, and the next
         // CreateSurface(primary) fails with DDERR_PRIMARYSURFACEALREADYEXISTS.
-        // That failure makes change_mode bail out with GPU_9 cleared, so every
+        // That failure makes change_mode bail out with GPU_ENABLED cleared, so every
         // clear/draw/flip early-returns and rendering freezes (window still
         // resizes) after a mode change (F8) or fullscreen toggle (ALT+ENTER).
         // The earlier comment claimed ddraw.dll overwrites the AddRef/Release

@@ -618,7 +618,7 @@ namespace
         int handle = 0;
         if ((type & 4) != 0)
             handle = (int)sprite->texture;
-        else if ((env.marni->gpu_flag & GpuFlags::GPU_19) == 0)
+        else if ((env.marni->gpu_flag & GpuFlags::PER_PRIM_TEXTURE) == 0)
             handle = (int)gGameTable.dword_6449BC;
 
         auto inRegistry = [&](int h) {
@@ -654,7 +654,7 @@ namespace
         const MarniTexture* tex = &env.marni->textures[handle];
         if ((tex->var_00 & 0x4000) != 0)
         {
-            // Temp / movie texture (GPU_13 path): registered but empty.
+            // Temp / movie texture (SOFTWARE_GPU path): registered but empty.
             if (throttle(*env.logMovieTex, 300))
                 logging::logInfo("[sdlgpu] prim references temp/movie texture {} (var_00=0x{}) - skipping", handle, hexStr(tex->var_00));
             return nullptr;
@@ -1943,7 +1943,7 @@ namespace
         if (primR >= 256)
             primR = 255;
 
-        const bool flatShade = (int32_t)primType < 0 || (env.marni->gpu_flag & GpuFlags::GPU_17) != 0;
+        const bool flatShade = (int32_t)primType < 0 || (env.marni->gpu_flag & GpuFlags::FILTER_BIT_0) != 0;
         uint32_t fallbackColor = 0;
         std::vector<uint32_t> colors(0x400, 0);
         if (flatShade)
@@ -2677,7 +2677,7 @@ struct SdlGpuRenderer::Impl
     ParseStats stats;
     SDL_GPUSampler* frameSampler = nullptr;
 
-    // Pending-clear state from clear() / GPU_3.
+    // Pending-clear state from clear() / CLEAR_TARGET.
     bool pendingClearTarget = false;
     bool pendingClearDepth = false;
     // The D3D target clear colour is the material ambient colour (set via
@@ -3189,11 +3189,11 @@ void SdlGpuRenderer::clear()
     if (!m)
         return;
     // Match the original marni::clear (0x00404D20): the colour target is only
-    // cleared when GPU_3 is set, and the D3D clear colour is the material
+    // cleared when CLEAR_TARGET is set, and the D3D clear colour is the material
     // ambient colour (ambient_r/g/b, set by addScaler from rgb1). We capture
     // that here so the next draw() clears the framebuffer to the ambient
     // colour (e.g. the dark navy room backdrop) rather than black.
-    impl->pendingClearTarget = (m->gpu_flag & GpuFlags::GPU_3) != 0;
+    impl->pendingClearTarget = (m->gpu_flag & GpuFlags::CLEAR_TARGET) != 0;
     impl->pendingClearDepth = true;
     impl->pendingClearColor = {
         (float)m->ambient_r / 255.0f,
@@ -3242,7 +3242,7 @@ void SdlGpuRenderer::draw()
     // exact texel boundaries, so a LINEAR sampler blends adjacent texels into
     // a per-2-pixel stripe on effect sprites like fire; keep those decoders
     // on NEAREST and let only trans_object use frameSampler (charSampler).
-    impl->frameSampler = (m->gpu_flag & (GpuFlags::GPU_17 | GpuFlags::GPU_18)) == (GpuFlags::GPU_17 | GpuFlags::GPU_18) ? impl->samplerLinear : impl->samplerNearest;
+    impl->frameSampler = (m->gpu_flag & (GpuFlags::FILTER_BIT_0 | GpuFlags::FILTER_BIT_1)) == (GpuFlags::FILTER_BIT_0 | GpuFlags::FILTER_BIT_1) ? impl->samplerLinear : impl->samplerNearest;
     if (!impl->frameSampler && !impl->ensureShadersAndSamplers(dev))
         return;
     if (!impl->frameSampler)
