@@ -1375,7 +1375,7 @@ namespace openre::gfx
                     char fpsBuf[16];
                     double fps = mStatFrameAccumUs ? 1000000.0 * statInterval / mStatFrameAccumUs : 0.0;
                     std::snprintf(fpsBuf, sizeof(fpsBuf), "%.1f", fps);
-                    logging::logInfo(
+                    logging::logDebug(
                         "[gfx:gpu] draw stats: fps={} textured+content={} textured-no-content={} untextured={} "
                         "lock={} unlock={} dl={} up={} upB={} dlB={} tload={} palset={} palreup={} idleWaitMs={} "
                         "fenceWaitMs={} draws={}",
@@ -1800,14 +1800,14 @@ namespace openre::gfx
                 if (mLoggedLocks.find(surface) == mLoggedLocks.end())
                 {
                     mLoggedLocks.insert(surface);
-                    logging::logInfo(
-                        "[gfx:gpu] perf: Lock surface={} {}x{} bpp={} paletted={} hasContent={}",
-                        static_cast<void*>(surface),
-                        entry->width,
-                        entry->height,
-                        entry->bpp,
-                        entry->paletted,
-                        entry->hasContent);
+                    // logging::logInfo(
+                    //     "[gfx:gpu] perf: Lock surface={} {}x{} bpp={} paletted={} hasContent={}",
+                    //     static_cast<void*>(surface),
+                    //     entry->width,
+                    //     entry->height,
+                    //     entry->bpp,
+                    //     entry->paletted,
+                    //     entry->hasContent);
                 }
                 // While a GDI text overlay is pending, the shadow already
                 // holds the room + GDI text that release_dc merged in and
@@ -1856,13 +1856,13 @@ namespace openre::gfx
                 if (mLoggedUnlocks.find(surface) == mLoggedUnlocks.end())
                 {
                     mLoggedUnlocks.insert(surface);
-                    logging::logInfo(
-                        "[gfx:gpu] perf: Unlock surface={} {}x{} bpp={} paletted={}",
-                        static_cast<void*>(surface),
-                        entry->width,
-                        entry->height,
-                        entry->bpp,
-                        entry->paletted);
+                    // logging::logInfo(
+                    //     "[gfx:gpu] perf: Unlock surface={} {}x{} bpp={} paletted={}",
+                    //     static_cast<void*>(surface),
+                    //     entry->width,
+                    //     entry->height,
+                    //     entry->bpp,
+                    //     entry->paletted);
                 }
                 if (uploadFromShadow(*entry, nullptr))
                 {

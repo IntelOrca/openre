@@ -1,9 +1,8 @@
 @echo off
-set OPENRE_LOG_VERBOSITY=debug
+set OPENRE_LOG_VERBOSITY=info
 set OPENRE_RE2_DATA=F:\games\openre\data
 set OPENRE_SAVE_PATH=M:\git\openre\bin\Debug\savedata\
-
-set OPENRE_LOG_VERBOSITY=info
+set OPENRE_SCRIPTS=%~dp0\scripts
 
 for /f "delims=" %%i in ('git -C "%~dp0." branch --show-current 2^>nul') do set "OPENRE_GIT_BRANCH=%%i"
 if defined OPENRE_GIT_BRANCH goto set_branch

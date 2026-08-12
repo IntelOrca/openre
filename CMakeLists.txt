@@ -15,8 +15,11 @@ file(GLOB SOURCES "src/*.cpp")
 
 add_library(openre MODULE ${SOURCES})
 
-target_link_libraries(openre PRIVATE ddraw dxguid gdi32 ole32 winmm imm32 mfplat mfuuid d3d11 dxgi ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
+target_link_directories(openre PRIVATE "${CMAKE_SOURCE_DIR}/lib/lib")
+
+target_link_libraries(openre PRIVATE lua54 ws2_32 ddraw dxguid gdi32 ole32 winmm imm32 mfplat mfuuid d3d11 dxgi ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
 set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
 
 add_custom_command(TARGET openre POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/lib/bin/x86/SDL3.dll" $<TARGET_FILE_DIR:openre>)
+add_custom_command(TARGET openre POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/lib/bin/lua54.dll" $<TARGET_FILE_DIR:openre>)

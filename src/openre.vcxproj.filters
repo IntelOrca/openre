@@ -93,6 +93,24 @@
     <ClCompile Include="scheduler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="script.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_bindings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_network.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_vm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="script_watch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="str.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -177,6 +195,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="scheduler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_bindings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_network.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_vm.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="script_watch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="str.h">

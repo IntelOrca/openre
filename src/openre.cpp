@@ -26,6 +26,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "script.h"
 #include "system_gpu.h"
 #include "system_window.h"
 #include "tim.h"
@@ -2843,6 +2844,9 @@ namespace openre
             gGameTable.frame_current = 0;
             ++gGameTable.game_seconds;
         }
+
+        // Lua script hooks (menus + gameplay)
+        openre::script::tick();
     }
 
     static void render_frame()
@@ -3112,6 +3116,7 @@ void onAttach()
         marni::init_hooks();
         marni::init_draw_hooks();
     }
+    openre::script::init();
 }
 
 extern "C" {
@@ -3142,6 +3147,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
     case DLL_PROCESS_DETACH:
         // Perform any necessary cleanup.
+        openre::script::shutdown();
         system::window::destroy();
         break;
     }
