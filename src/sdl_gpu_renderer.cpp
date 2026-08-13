@@ -4493,25 +4493,11 @@ void SdlGpuRenderer::unloadTexture(int handle)
 void SdlGpuRenderer::unloadAllTextures()
 {
     logging::logInfo("[sdlgpu] unloadAllTextures() ({} entries)", impl->textures.size());
-    SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
-    if (dev)
-        SDL_WaitForGPUIdle(dev);
-    for (auto& [handle, entry] : impl->textures)
-    {
-        if (dev && entry.texture)
-            SDL_ReleaseGPUTexture(dev, entry.texture);
-        if (dev)
-        {
-            for (SDL_GPUTexture* t : entry.clutTextures)
-            {
-                if (t)
-                    SDL_ReleaseGPUTexture(dev, t);
-            }
-        }
-        if (gGameTable.pMarni)
-            gGameTable.pMarni->textures[handle].var_00 = 0;
-    }
-    impl->textures.clear();
+    // Mirror the D3D reference result_unload_textures(): only the room
+    // texture pages (0-7, 16-33) are unloaded. The persistent pages (8-9
+    // fonts, 10-15 espcore effect sprites) keep their handles so effects
+    // like the room-100 smoke (page 10) still have a valid texture.
+    marni::result_unload_textures();
 }
 
 // 0x00405320
