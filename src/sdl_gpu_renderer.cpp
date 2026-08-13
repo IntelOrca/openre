@@ -2735,6 +2735,20 @@ struct SdlGpuRenderer::Impl
     SDL_GPUBuffer* presentVertexBuffer = nullptr;
     SDL_GPUTransferBuffer* presentTransfer = nullptr;
 
+    // Movie overlay (OPENRE_NO_D3D): the movie player captures decoded
+    // DirectShow frames (top-down RGB24) and forwards them via
+    // system::gpu::set_movie_frame; flip() uploads each new frame into
+    // movieTexture and composites it into the guest framebuffer right after
+    // the scene pass, so cutscenes render into the framebuffer instead of a
+    // child video window. Mirrors the D3D backend's movie state.
+    SDL_GPUTexture* movieTexture = nullptr;
+    SDL_GPUTransferBuffer* movieUpload = nullptr;
+    Uint32 movieTexW = 0;
+    Uint32 movieTexH = 0;
+    SDL_GPUGraphicsPipeline* moviePipeline = nullptr;
+    SDL_GPUBuffer* movieVertexBuffer = nullptr;
+    SDL_GPUTransferBuffer* movieVertexTransfer = nullptr;
+
     // Texture registry keyed by the MARNI texture handle.
     std::unordered_map<int, TextureEntry> textures;
     int nextHandle = 1;
@@ -3131,6 +3145,244 @@ struct SdlGpuRenderer::Impl
         return true;
     }
 
+    // Movie overlay (OPENRE_NO_D3D): uploads the latest captured DirectShow
+    // frame (top-down RGB24) into movieTexture and composites it into the
+    // guest framebuffer, so cutscenes render into the framebuffer instead of a
+    // child video window. Mirrors the D3D backend's uploadMovieFrame +
+    // blitOverlayTexture. Runs on the main thread during flip().
+    void uploadAndCompositeMovie(SDL_GPUDevice* dev, SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* fb, Uint32 fbW, Uint32 fbH)
+    {
+        if (!dev || !cmd || !fb || fbW == 0 || fbH == 0)
+            return;
+
+        // Pull the latest captured frame (top-down RGB24). movie_frame() also
+        // clears the "new frame" flag; before the first capture the flag is
+        // false and we do nothing (the scene shows), and while no new frame has
+        // arrived the last texture is re-blitted each flip.
+        int frameW = 0;
+        int frameH = 0;
+        int framePitch = 0;
+        const void* pixels = nullptr;
+        if (system::gpu::movie_frame_new())
+            pixels = system::gpu::movie_frame(frameW, frameH, framePitch);
+
+        if (pixels != nullptr && frameW > 0 && frameH > 0 && framePitch > 0)
+        {
+            // (Re)create the movie texture/upload when the frame size changes
+            // (a different movie / re-opened file).
+            if (movieTexture == nullptr || movieTexW != (Uint32)frameW || movieTexH != (Uint32)frameH)
+            {
+                SDL_WaitForGPUIdle(dev);
+                if (movieTexture)
+                {
+                    SDL_ReleaseGPUTexture(dev, movieTexture);
+                    movieTexture = nullptr;
+                }
+                if (movieUpload)
+                {
+                    SDL_ReleaseGPUTransferBuffer(dev, movieUpload);
+                    movieUpload = nullptr;
+                }
+
+                SDL_GPUTextureCreateInfo info{};
+                info.type = SDL_GPU_TEXTURETYPE_2D;
+                info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+                info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+                info.width = (Uint32)frameW;
+                info.height = (Uint32)frameH;
+                info.layer_count_or_depth = 1;
+                info.num_levels = 1;
+                info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+                movieTexture = SDL_CreateGPUTexture(dev, &info);
+
+                SDL_GPUTransferBufferCreateInfo transferInfo{};
+                transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+                transferInfo.size = (Uint32)frameW * (Uint32)frameH * 4;
+                movieUpload = SDL_CreateGPUTransferBuffer(dev, &transferInfo);
+
+                if (movieTexture == nullptr || movieUpload == nullptr)
+                {
+                    logging::logError("[sdlgpu] movie texture/upload creation failed: {}", SDL_GetError());
+                    if (movieTexture)
+                    {
+                        SDL_ReleaseGPUTexture(dev, movieTexture);
+                        movieTexture = nullptr;
+                    }
+                    if (movieUpload)
+                    {
+                        SDL_ReleaseGPUTransferBuffer(dev, movieUpload);
+                        movieUpload = nullptr;
+                    }
+                    movieTexW = 0;
+                    movieTexH = 0;
+                    return;
+                }
+                movieTexW = (Uint32)frameW;
+                movieTexH = (Uint32)frameH;
+                logging::logInfo("[sdlgpu] movie texture created ({}x{})", frameW, frameH);
+            }
+
+            // Expand the RGB24 rows into the texture's RGBA8 layout (same
+            // row-wise conversion as the D3D backend's uploadMovieFrame).
+            void* mapped = SDL_MapGPUTransferBuffer(dev, movieUpload, false);
+            if (mapped == nullptr)
+            {
+                logging::logError("[sdlgpu] movie frame upload map failed: {}", SDL_GetError());
+                return;
+            }
+            auto* dst = static_cast<uint8_t*>(mapped);
+            for (int row = 0; row < frameH; row++)
+            {
+                const auto* src = static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * framePitch;
+                auto* dstRow = dst + static_cast<size_t>(row) * frameW * 4;
+                for (int x = 0; x < frameW; x++)
+                {
+                    dstRow[x * 4 + 0] = src[x * 3 + 2];
+                    dstRow[x * 4 + 1] = src[x * 3 + 1];
+                    dstRow[x * 4 + 2] = src[x * 3 + 0];
+                    dstRow[x * 4 + 3] = 0xFF;
+                }
+            }
+            SDL_UnmapGPUTransferBuffer(dev, movieUpload);
+
+            SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmd);
+            if (copyPass)
+            {
+                SDL_GPUTextureTransferInfo source{};
+                source.transfer_buffer = movieUpload;
+                source.pixels_per_row = (Uint32)frameW;
+                source.rows_per_layer = (Uint32)frameH;
+                SDL_GPUTextureRegion destination{};
+                destination.texture = movieTexture;
+                destination.w = (Uint32)frameW;
+                destination.h = (Uint32)frameH;
+                destination.d = 1;
+                SDL_UploadToGPUTexture(copyPass, &source, &destination, false);
+                SDL_EndGPUCopyPass(copyPass);
+            }
+        }
+
+        // Composite the (latest) movie texture over the guest framebuffer: a
+        // full-framebuffer opaque blit through the movie pipeline (plain
+        // textured blit into R8G8B8A8_UNORM, no depth target). Only drawn once
+        // a frame has been captured.
+        if (movieTexture == nullptr)
+            return;
+
+        if (!moviePipeline)
+        {
+            moviePipeline = createPipeline(dev, texturedFrag, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, BlendSel::None, false, false, false);
+            if (!moviePipeline)
+            {
+                logging::logError("[sdlgpu] movie pipeline creation failed: {}", SDL_GetError());
+                return;
+            }
+        }
+
+        // Full-framebuffer quad (guest framebuffer pixel space).
+        if (!movieVertexBuffer)
+        {
+            SDL_GPUBufferCreateInfo bci{};
+            bci.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+            bci.size = 4 * sizeof(TlVertex);
+            movieVertexBuffer = SDL_CreateGPUBuffer(dev, &bci);
+            SDL_GPUTransferBufferCreateInfo tbci{};
+            tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+            tbci.size = 4 * sizeof(TlVertex);
+            movieVertexTransfer = SDL_CreateGPUTransferBuffer(dev, &tbci);
+            if (!movieVertexBuffer || !movieVertexTransfer)
+            {
+                logging::logError("[sdlgpu] movie vertex buffer creation failed: {}", SDL_GetError());
+                if (movieVertexBuffer)
+                {
+                    SDL_ReleaseGPUBuffer(dev, movieVertexBuffer);
+                    movieVertexBuffer = nullptr;
+                }
+                if (movieVertexTransfer)
+                {
+                    SDL_ReleaseGPUTransferBuffer(dev, movieVertexTransfer);
+                    movieVertexTransfer = nullptr;
+                }
+                return;
+            }
+        }
+
+        TlVertex verts[4]{};
+        verts[0].sx = 0.0f; verts[0].sy = 0.0f; verts[0].tu = 0.0f; verts[0].tv = 0.0f;
+        verts[1].sx = (float)fbW; verts[1].sy = 0.0f; verts[1].tu = 1.0f; verts[1].tv = 0.0f;
+        verts[2].sx = 0.0f; verts[2].sy = (float)fbH; verts[2].tu = 0.0f; verts[2].tv = 1.0f;
+        verts[3].sx = (float)fbW; verts[3].sy = (float)fbH; verts[3].tu = 1.0f; verts[3].tv = 1.0f;
+        for (auto& vert : verts)
+        {
+            vert.sz = 0.5f;
+            vert.rhw = 1.0f;
+            setColor(vert, 0xFFFFFFFF);
+        }
+
+        void* mapped = SDL_MapGPUTransferBuffer(dev, movieVertexTransfer, true);
+        if (!mapped)
+        {
+            logging::logError("[sdlgpu] SDL_MapGPUTransferBuffer(movie) failed: {}", SDL_GetError());
+            return;
+        }
+        std::memcpy(mapped, verts, sizeof(verts));
+        SDL_UnmapGPUTransferBuffer(dev, movieVertexTransfer);
+
+        SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+        if (cp)
+        {
+            SDL_GPUTransferBufferLocation src{};
+            src.transfer_buffer = movieVertexTransfer;
+            SDL_GPUBufferRegion dst{};
+            dst.buffer = movieVertexBuffer;
+            dst.size = sizeof(verts);
+            SDL_UploadToGPUBuffer(cp, &src, &dst, true);
+            SDL_EndGPUCopyPass(cp);
+        }
+
+        // Composite into the guest framebuffer (LOAD, preserving anything the
+        // scene pass drew; the movie quad covers the whole framebuffer).
+        SDL_GPUColorTargetInfo target{};
+        target.texture = fb;
+        target.mip_level = 0;
+        target.layer_or_depth_plane = 0;
+        target.load_op = SDL_GPU_LOADOP_LOAD;
+        target.store_op = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
+        if (!pass)
+        {
+            logging::logError("[sdlgpu] movie composite: SDL_BeginGPURenderPass failed: {}", SDL_GetError());
+            return;
+        }
+        SDL_GPUViewport vp{};
+        vp.x = 0.0f;
+        vp.y = 0.0f;
+        vp.w = (float)fbW;
+        vp.h = (float)fbH;
+        vp.min_depth = 0.0f;
+        vp.max_depth = 1.0f;
+        SDL_SetGPUViewport(pass, &vp);
+
+        const float viewportData[4] = { 0.0f, 0.0f, (float)fbW, (float)fbH };
+        SDL_PushGPUVertexUniformData(cmd, 0, viewportData, sizeof(viewportData));
+
+        SDL_BindGPUGraphicsPipeline(pass, moviePipeline);
+
+        SDL_GPUTextureSamplerBinding binding{};
+        binding.texture = movieTexture;
+        binding.sampler = samplerLinear ? samplerLinear : samplerNearest;
+        SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+
+        SDL_GPUBufferBinding vbBind{};
+        vbBind.buffer = movieVertexBuffer;
+        vbBind.offset = 0;
+        SDL_BindGPUVertexBuffers(pass, 0, &vbBind, 1);
+
+        SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
+        SDL_EndGPURenderPass(pass);
+    }
+
     void releaseAll(SDL_GPUDevice* dev)
     {
         if (!dev)
@@ -3185,6 +3437,33 @@ struct SdlGpuRenderer::Impl
             SDL_ReleaseGPUTransferBuffer(dev, presentTransfer);
             presentTransfer = nullptr;
         }
+        if (movieTexture)
+        {
+            SDL_ReleaseGPUTexture(dev, movieTexture);
+            movieTexture = nullptr;
+        }
+        if (movieUpload)
+        {
+            SDL_ReleaseGPUTransferBuffer(dev, movieUpload);
+            movieUpload = nullptr;
+        }
+        if (moviePipeline)
+        {
+            SDL_ReleaseGPUGraphicsPipeline(dev, moviePipeline);
+            moviePipeline = nullptr;
+        }
+        if (movieVertexBuffer)
+        {
+            SDL_ReleaseGPUBuffer(dev, movieVertexBuffer);
+            movieVertexBuffer = nullptr;
+        }
+        if (movieVertexTransfer)
+        {
+            SDL_ReleaseGPUTransferBuffer(dev, movieVertexTransfer);
+            movieVertexTransfer = nullptr;
+        }
+        movieTexW = 0;
+        movieTexH = 0;
         if (vertexShader)
         {
             SDL_ReleaseGPUShader(dev, vertexShader);
@@ -3536,6 +3815,13 @@ void SdlGpuRenderer::flip()
         SDL_CancelGPUCommandBuffer(cmd);
         return;
     }
+
+    // Movie composite (OPENRE_NO_D3D): cutscenes render into the guest
+    // framebuffer (captured DirectShow frames handed over by the movie player;
+    // no child video window). Composited before the letterbox present below so
+    // the swapchain blit shows the movie on top of the scene.
+    if (system::gpu::movie_frame_valid())
+        impl->uploadAndCompositeMovie(dev, cmd, fb, fbW, fbH);
 
     // Letterbox the guest framebuffer into the swapchain (aspect preserved,
     // black bars).

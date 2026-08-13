@@ -4545,6 +4545,19 @@ namespace openre::system::gpu
         // The swapchain format of the claimed window, cached at init() so the
         // SDL-only renderer can build its present pipeline.
         SDL_GPUTextureFormat g_swapchainFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+
+        // Movie frame bridge (OPENRE_NO_D3D path): the movie player
+        // (marni_movie.cpp) captures decoded DirectShow frames (top-down RGB24)
+        // and hands them over via set_movie_frame; the SDL-only renderer reads
+        // them in flip() and composites them into the guest framebuffer, so
+        // cutscenes render without a child video window. Mirrors the D3D
+        // backend's GfxBackendGPU movie state.
+        std::vector<uint8_t> g_movieFrame;
+        int32_t g_movieW = 0;
+        int32_t g_movieH = 0;
+        int32_t g_moviePitch = 0;
+        bool g_movieFrameValid = false;
+        bool g_movieFrameNew = false;
     }
 
     // Diagnostic SDL log sink: mirrors every SDL log line (including the
@@ -4733,6 +4746,29 @@ namespace openre::system::gpu
         if (!init())
             return;
         gfx::backend_gpu()->set_movie_frame(pixels, width, height, pitch);
+#else
+        // OPENRE_NO_D3D: store the frame for the SDL-only renderer to pick up
+        // during flip(). Called on the main thread only (same as flip()); the
+        // pixels are copied immediately, so the caller may reuse its buffer.
+        if (pixels == nullptr || width <= 0 || height <= 0 || pitch <= 0)
+        {
+            g_movieFrame.clear();
+            g_movieW = 0;
+            g_movieH = 0;
+            g_moviePitch = 0;
+            g_movieFrameValid = false;
+            g_movieFrameNew = false;
+            return;
+        }
+        const auto bytes = static_cast<size_t>(pitch) * static_cast<size_t>(height);
+        if (g_movieFrame.size() != bytes)
+            g_movieFrame.resize(bytes);
+        std::memcpy(g_movieFrame.data(), pixels, bytes);
+        g_movieW = width;
+        g_movieH = height;
+        g_moviePitch = pitch;
+        g_movieFrameValid = true;
+        g_movieFrameNew = true;
 #endif
     }
 
@@ -4742,7 +4778,36 @@ namespace openre::system::gpu
         if (g_device == nullptr)
             return;
         gfx::backend_gpu()->set_movie_frame(nullptr, 0, 0, 0);
+#else
+        g_movieFrame.clear();
+        g_movieW = 0;
+        g_movieH = 0;
+        g_moviePitch = 0;
+        g_movieFrameValid = false;
+        g_movieFrameNew = false;
 #endif
+    }
+
+    // OPENRE_NO_D3D movie frame readout for the SDL-only renderer. Returns the
+    // latest captured frame (top-down RGB24) and clears the "new frame" flag so
+    // flip() only re-uploads when a fresh frame arrived.
+    const void* movie_frame(int& width, int& height, int& pitch)
+    {
+        width = g_movieW;
+        height = g_movieH;
+        pitch = g_moviePitch;
+        g_movieFrameNew = false;
+        return g_movieFrameValid ? g_movieFrame.data() : nullptr;
+    }
+
+    bool movie_frame_valid()
+    {
+        return g_movieFrameValid;
+    }
+
+    bool movie_frame_new()
+    {
+        return g_movieFrameNew;
     }
 
     void shutdown()

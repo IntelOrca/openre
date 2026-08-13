@@ -57,6 +57,18 @@ namespace openre::system::gpu
     // Clears the movie overlay (no movie frame is composited any more).
     void clear_movie_frame();
 
+    // OPENRE_NO_D3D movie frame readout for the SDL-only renderer: returns the
+    // latest captured frame (top-down RGB24, `pitch` bytes/row) or nullptr when
+    // none is available, filling width/height/pitch. Clears the "new frame"
+    // flag so flip() only re-uploads when a fresh frame arrived.
+    const void* movie_frame(int& width, int& height, int& pitch);
+
+    // True while a movie frame is set (composite even without a fresh frame).
+    bool movie_frame_valid();
+
+    // True when a fresh movie frame arrived since the last movie_frame() read.
+    bool movie_frame_new();
+
     // Releases the guest framebuffer, unclaims the window and destroys the
     // device. Idempotent.
     void shutdown();
