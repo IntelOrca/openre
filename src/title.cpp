@@ -639,8 +639,8 @@ namespace openre::title
         stage_init_item();
         gGameTable.word_98E9B6 = 200;
         gGameTable.pl.life = 200;
-        gGameTable.byte_99270E = gGameTable.byte_98E9AA;
-        gGameTable.byte_98E9AA = 0;
+        gGameTable.byte_99270E = gGameTable.input_mapping_idx;
+        gGameTable.input_mapping_idx = 0;
         gGameTable.byte_98F1BB = 0;
         gGameTable.dword_99CF6C = 0;
     }
@@ -704,8 +704,8 @@ namespace openre::title
                     set_flag(FlagGroup::Status, FG_STATUS_EASY, false);
                     gGameTable.inventory_size = 8;
                     std::memcpy(gGameTable.inventory, &pdemo.inventory, 44);
-                    gGameTable.byte_99270E = gGameTable.byte_98E9AA;
-                    gGameTable.byte_98E9AA = pdemo.key_idx;
+                    gGameTable.byte_99270E = gGameTable.input_mapping_idx;
+                    gGameTable.input_mapping_idx = pdemo.key_idx;
                     gGameTable.word_98E9B6 = 200;
                     gGameTable.pl.life = 200;
                     gGameTable.byte_98F1BB = 0;
@@ -733,7 +733,7 @@ namespace openre::title
                     gGameTable.pl.life = 200;
                     gGameTable.poison_status = 0;
                     gGameTable.poison_timer = 0;
-                    gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+                    gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
                     stage_init_item();
                     gGameTable.dword_689F20 = 1;
                     bg_set_mode(2, 0);
@@ -865,7 +865,7 @@ namespace openre::title
                 gGameTable.pl.ground = gGameTable.pl.m.pos.y;
                 gGameTable.poison_status = 0;
                 gGameTable.poison_timer = 0;
-                gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+                gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
                 stage_init_item();
                 gGameTable.byte_98EF2C = gGameTable.hard_mode;
                 gGameTable.byte_98EF2D = gGameTable.censorship_off;

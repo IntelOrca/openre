@@ -941,7 +941,7 @@ declare     misc_text_j             u8[728]                 0x0052F310
 declare     misc_ptr_j              u16[512]                0x0052F5E8
 declare     desc_txt_j              u8[4832]                0x0052F9E8
 declare     desc_ptr_j              u16[256]                0x00530CC8
-declare     word_5338D8             u16[32]                 0x005338D8
+declare     input_mapping_table      u16[32]                 0x005338D8
 declare     byte_533938             u8                      0x00533938
 declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
@@ -1335,7 +1335,7 @@ declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     obj_ptr                 ObjectEntity*           0x0098E51C
 declare     aot_count               u8                      0x0098E528
 declare     pickup_item             u8                      0x0098E529
-declare     word_98E52A             u16                     0x0098E52A
+declare     demo_frame              u16                     0x0098E52A
 declare     itembox_obj_index       u8                      0x0098E533
 declare     byte_98E541             u8                      0x0098E541
 declare     question_state          u8                      0x0098E542
@@ -1350,7 +1350,7 @@ declare     inventory_size          u8                      0x0098E9A4
 declare     byte_98E9A5             u8                      0x0098E9A5
 declare     byte_98E9A6             u8                      0x0098E9A6
 declare     byte_98E9A7             u8                      0x0098E9A7
-declare     byte_98E9AA             u8                      0x0098E9AA
+declare     input_mapping_idx       u8                      0x0098E9AA
 declare     byte_98E9AB             u8                      0x0098E9AB
 declare     word_98E9AC             s16                     0x0098E9AC
 declare     nExtremeLv              s16                     0x0098E9AE

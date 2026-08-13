@@ -1178,7 +1178,7 @@ namespace openre
         gGameTable.fade_table[2].kido = -1;
         gGameTable.fade_table[3].kido = -1;
         gGameTable.last_cut = -1;
-        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
         gGameTable.dword_9885AC = 0xFFFF0000;
         gGameTable.dword_9885D0 = 0xFFFF0000;
     }
@@ -1539,7 +1539,7 @@ namespace openre
 
     static bool is_demo_timeout()
     {
-        return check_flag(FlagGroup::System, FG_SYSTEM_DEMO) && gGameTable.word_98E52A > gGameTable.pdemo.frames;
+        return check_flag(FlagGroup::System, FG_SYSTEM_DEMO) && gGameTable.demo_frame > gGameTable.pdemo.frames;
     }
 
     static bool game_check_status_trigger()
@@ -1767,7 +1767,7 @@ namespace openre
             }
             if (gGameTable.byte_991F80 == 0 && is_demo_timeout())
             {
-                gGameTable.byte_98E9AA = gGameTable.byte_99270E;
+                gGameTable.input_mapping_idx = gGameTable.byte_99270E;
                 gGameTable.fg_stop |= 0xFF000000;
                 if (gGameTable.byte_98F1BB)
                 {

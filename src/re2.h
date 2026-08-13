@@ -1202,7 +1202,7 @@ struct GameTable
     uint8_t desc_txt_j[4832];           // 0x52F9E8
     uint16_t desc_ptr_j[256];           // 0x530CC8
     uint8_t pad_530EC8[10768];          // 0x530EC8
-    uint16_t word_5338D8[32];           // 0x5338D8
+    uint16_t input_mapping_table[32];   // 0x5338D8
     uint8_t pad_533918[32];             // 0x533918
     uint8_t byte_533938;                // 0x533938
     uint8_t pad_533939[27084];          // 0x533939
@@ -1751,7 +1751,7 @@ struct GameTable
     uint8_t pad_98E520[8];              // 0x98E520
     uint8_t aot_count;                  // 0x98E528
     uint8_t pickup_item;                // 0x98E529
-    uint16_t word_98E52A;               // 0x98E52A
+    uint16_t demo_frame;                // 0x98E52A
     uint8_t pad_98E52C[7];              // 0x98E52C
     uint8_t itembox_obj_index;          // 0x98E533
     uint8_t pad_98E534[13];             // 0x98E534
@@ -1775,7 +1775,7 @@ struct GameTable
     uint8_t byte_98E9A6;                // 0x98E9A6
     uint8_t byte_98E9A7;                // 0x98E9A7
     uint8_t pad_98E9A8[2];              // 0x98E9A8
-    uint8_t byte_98E9AA;                // 0x98E9AA
+    uint8_t input_mapping_idx;          // 0x98E9AA
     uint8_t byte_98E9AB;                // 0x98E9AB
     int16_t word_98E9AC;                // 0x98E9AC
     int16_t nExtremeLv;                 // 0x98E9AE

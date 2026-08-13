@@ -1278,7 +1278,7 @@ namespace openre::save
         uint8_t result = gGameTable.byte_98F1B6;
         gGameTable.pad_98E9A8[1] = gGameTable.bgm_vol; // byte_98E9A9
         gGameTable.byte_98E9A5 = gGameTable.byte_9888D9;
-        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
         return result;
     }
 
@@ -1302,7 +1302,7 @@ namespace openre::save
         gGameTable.sfx_vol = gGameTable.pad_98E9A8[0];
         gGameTable.bgm_vol = gGameTable.pad_98E9A8[1];
         gGameTable.byte_9888D9 = result;
-        gGameTable.byte_98F1B6 = gGameTable.byte_98E9AA;
+        gGameTable.byte_98F1B6 = gGameTable.input_mapping_idx;
         return result;
     }
 

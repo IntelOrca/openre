@@ -888,14 +888,14 @@ namespace openre::input
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
         {
             auto inputChanged = (rawInput & (rawInput ^ prevInput) & 0xFFF) != 0;
-            if (inputChanged || gGameTable.word_98E52A >= gGameTable.pdemo.frames || (gGameTable.vk_press & 0x40))
+            if (inputChanged || gGameTable.demo_frame >= gGameTable.pdemo.frames || (gGameTable.vk_press & 0x40))
             {
                 gGameTable.vk_press &= ~0x40;
                 if (check_flag(FlagGroup::System, FG_SYSTEM_1))
                 {
-                    if (gGameTable.word_98E52A < gGameTable.pdemo.frames)
+                    if (gGameTable.demo_frame < gGameTable.pdemo.frames)
                         gGameTable.byte_98F1BB = 1;
-                    gGameTable.word_98E52A = gGameTable.pdemo.frames + 1;
+                    gGameTable.demo_frame = gGameTable.pdemo.frames + 1;
                     gGameTable.dword_9885F4 = 0;
                     rawInput = 0;
                 }
@@ -906,8 +906,8 @@ namespace openre::input
             }
             else if (check_flag(FlagGroup::System, FG_SYSTEM_1))
             {
-                rawInput = gGameTable.pdemo.input[gGameTable.word_98E52A];
-                gGameTable.word_98E52A++;
+                rawInput = gGameTable.pdemo.input[gGameTable.demo_frame];
+                gGameTable.demo_frame++;
                 gGameTable.dword_9885F4 = rawInput;
             }
         }
@@ -924,8 +924,8 @@ namespace openre::input
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
         {
             // Demo replay: map raw input bits to logical key bits via the
-            // legacy table (byte_98E9AA selects the keyboard/gamepad row).
-            auto* mapping = &gGameTable.word_5338D8[16 * gGameTable.byte_98E9AA];
+            // legacy table (input_mapping_idx selects the keyboard/gamepad row).
+            auto* mapping = &gGameTable.input_mapping_table[16 * gGameTable.input_mapping_idx];
             for (int i = 0; i < 16; i++)
             {
                 if (mapping[i] & rawInput)
