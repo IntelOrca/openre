@@ -14,6 +14,7 @@
 #include "system_window.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -11389,10 +11390,11 @@ namespace openre::marni
 
         ecx0a.var_27 = 0;
 
-        DWORD bytesWritten;
-        HANDLE hFile = CreateFileA(lpFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        WriteFile(hFile, buffer, dataSize, &bytesWritten, nullptr);
-        CloseHandle(hFile);
+        if (FILE* file = std::fopen(lpFileName, "wb"))
+        {
+            std::fwrite(buffer, 1, dataSize, file);
+            std::fclose(file);
+        }
         std::free(buffer);
 
         surface2_release(&ecx0a);

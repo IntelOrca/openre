@@ -3,7 +3,9 @@
 #include "interop.hpp"
 #include "re2.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <cstring>
 #include <string>
@@ -135,6 +137,7 @@ namespace openre::str
 
     std::string sjis_to_utf8(const std::string& s)
     {
+#ifdef _WIN32
         if (s.empty())
             return {};
 
@@ -152,10 +155,18 @@ namespace openre::str
         std::string utf8(utf8Length, '\0');
         WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideLength, utf8.data(), utf8Length, nullptr, nullptr);
         return utf8;
+#else
+        // No SJIS code page is available off Windows. The callers use this
+        // conversion for file names only, and Linux file names are arbitrary
+        // byte sequences, so passing the bytes through unchanged is lossless
+        // (utf8_to_sjis(sjis_to_utf8(s)) == s for every byte string).
+        return s;
+#endif
     }
 
     std::string utf8_to_sjis(const std::string& s)
     {
+#ifdef _WIN32
         if (s.empty())
             return {};
 
@@ -173,5 +184,9 @@ namespace openre::str
         std::string sjis(sjisLength, '\0');
         WideCharToMultiByte(932, 0, wide.c_str(), wideLength, sjis.data(), sjisLength, nullptr, nullptr);
         return sjis;
+#else
+        // Passthrough counterpart of sjis_to_utf8(); see above.
+        return s;
+#endif
     }
 }

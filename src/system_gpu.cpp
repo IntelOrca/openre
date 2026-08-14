@@ -4562,6 +4562,45 @@ namespace openre::gfx
         static GfxBackendGPU backend;
         return &backend;
     }
+
+    // ----------------------------------------------------------------------
+    // Module lifecycle (declared in system_gpu_backend.h; called from
+    // marni.cpp). Re-homed here from marni_ddraw.cpp so the COM front-end
+    // stays Windows-only while these stay available everywhere the GfxBackend
+    // exists.
+    // ----------------------------------------------------------------------
+
+    // The GPU backend is the one and only backend; the active backend is
+    // always GPU.
+    int active_backend()
+    {
+        return 1;
+    }
+
+    bool gpu_enabled()
+    {
+        // The SDL_GPU device is owned by system_gpu; it exists once created
+        // lazily (first begin()/present()).
+        return system::gpu::is_initialized();
+    }
+
+    void shutdown()
+    {
+        // The device, window claim and guest framebuffer are owned by
+        // system_gpu; backend_gpu()->shutdown() runs inside
+        // system::gpu::shutdown() before the device is torn down.
+        system::gpu::shutdown();
+#ifdef _WIN32
+        // Drop the COM front-end's wrap registry (its replacement vtables are
+        // heap-allocated by marni_ddraw.cpp).
+        registry::clear();
+#endif
+    }
+
+    void notify_present()
+    {
+        system::gpu::present();
+    }
 }
 #endif // OPENRE_NO_D3D
 

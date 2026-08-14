@@ -113,7 +113,7 @@ namespace openre::gfx
     GfxBackend* backend_gpu();
 
     // ---------------------------------------------------------------------
-    // Real DirectDraw forwards
+    // Real DirectDraw forwards (Windows only)
     // ---------------------------------------------------------------------
     // The game's original code (create_device 0x00406D90, create_zbuffer
     // 0x00407020, surface work 0x0040F580/0x00412BD0/0x00414750,
@@ -126,6 +126,11 @@ namespace openre::gfx
     // ReleaseDC) are intentionally NOT forwarded: the GPU backend replays them
     // on its own textures and supplies its own DIB-backed HDC, matching the
     // base behaviour while the GPU backend is active.
+    //
+    // Implemented in marni_ddraw.cpp, which is Windows-only; the inline
+    // surface_* helpers below call them on Windows and fall back to the GPU
+    // backend alone elsewhere.
+#ifdef _WIN32
     HRESULT surface_forward_add_attached_surface(IUnknown* surface, IUnknown* attached);
     HRESULT surface_forward_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc);
     HRESULT surface_forward_set_clipper(IUnknown* surface, IUnknown* clipper);
@@ -136,6 +141,7 @@ namespace openre::gfx
     HRESULT surface_forward_is_lost(IUnknown* surface);
     HRESULT surface_forward_restore(IUnknown* surface);
     HRESULT surface_forward_query_texture_interface(IUnknown* surface, LPVOID* outTexture);
+#endif
 
     // ---------------------------------------------------------------------
     // Forwarding helpers for the decompiled render path
@@ -192,18 +198,34 @@ namespace openre::gfx
         return backend_gpu()->set_background(viewport, materialHandle);
     }
 
+    // Each surface-layer helper replays the operation on the GPU backend's own
+    // textures. On Windows it ALSO forwards to the real DirectDraw surface
+    // (through the wrap registry in marni_ddraw.cpp): the game's lost/restore
+    // logic, the surface descriptors it reads back (size, pitch, pixel format,
+    // caps) and the real D3D2 device creation (which validates the render
+    // target and its attached z-buffer against the real ddraw state) all
+    // depend on it, so the forwards are kept on Windows and skipped elsewhere.
+
     inline HRESULT surface_is_lost(IUnknown* surface)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_is_lost(surface);
         backend_gpu()->is_lost(surface);
         return hr;
+#else
+        return backend_gpu()->is_lost(surface);
+#endif
     }
 
     inline HRESULT surface_restore(IUnknown* surface)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_restore(surface);
         backend_gpu()->restore(surface);
         return hr;
+#else
+        return backend_gpu()->restore(surface);
+#endif
     }
 
     inline HRESULT surface_blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx)
@@ -213,58 +235,99 @@ namespace openre::gfx
 
     inline HRESULT surface_get_surface_desc(IUnknown* surface, LPDDSURFACEDESC desc)
     {
+#ifdef _WIN32
+        // The real desc first: the GPU backend adopts the real size/format
+        // from whatever the desc carries before filling width/height/pitch.
         const auto hr = surface_forward_get_surface_desc(surface, desc);
         backend_gpu()->get_surface_desc(surface, desc);
         return hr;
+#else
+        return backend_gpu()->get_surface_desc(surface, desc);
+#endif
     }
 
     inline HRESULT surface_add_attached_surface(IUnknown* surface, IUnknown* attached)
     {
+#ifdef _WIN32
+        // The real ddraw surface must learn about the attachment: the original
+        // D3D2 CreateDevice validates the render target's attached z-buffer.
         const auto hr = surface_forward_add_attached_surface(surface, attached);
         backend_gpu()->add_attached_surface(surface, attached);
         return hr;
+#else
+        return backend_gpu()->add_attached_surface(surface, attached);
+#endif
     }
 
     inline HRESULT surface_set_color_key(IUnknown* surface, DWORD flags, const DDCOLORKEY* key)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_set_color_key(surface, flags, key);
         backend_gpu()->set_color_key(surface, flags, key);
         return hr;
+#else
+        return backend_gpu()->set_color_key(surface, flags, key);
+#endif
     }
 
     inline HRESULT surface_set_palette(IUnknown* surface, IUnknown* palette)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_set_palette(surface, palette);
         backend_gpu()->set_palette(surface, palette);
         return hr;
+#else
+        return backend_gpu()->set_palette(surface, palette);
+#endif
     }
 
     inline HRESULT surface_set_clipper(IUnknown* surface, IUnknown* clipper)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_set_clipper(surface, clipper);
         backend_gpu()->set_clipper(surface, clipper);
         return hr;
+#else
+        return backend_gpu()->set_clipper(surface, clipper);
+#endif
     }
 
     inline HRESULT surface_lock(IUnknown* surface, LPRECT rect, LPDDSURFACEDESC desc, DWORD flags, HANDLE event)
     {
+#ifdef _WIN32
+        // The real Lock fills the full desc (including ddpfPixelFormat, which
+        // the game reads back); the backend then hands out its own shadow
+        // pointer/pitch on top.
         const auto hr = surface_forward_lock(surface, rect, desc, flags, event);
         backend_gpu()->lock(surface, rect, desc, flags, event);
         return hr;
+#else
+        return backend_gpu()->lock(surface, rect, desc, flags, event);
+#endif
     }
 
     inline HRESULT surface_unlock(IUnknown* surface, void* lpRect)
     {
+#ifdef _WIN32
         const auto hr = surface_forward_unlock(surface, lpRect);
         backend_gpu()->unlock(surface, lpRect);
         return hr;
+#else
+        return backend_gpu()->unlock(surface, lpRect);
+#endif
     }
 
     inline HRESULT surface_query_texture_interface(IUnknown* surface, LPVOID* outTexture)
     {
+#ifdef _WIN32
+        // The game needs a real IDirect3DTexture2 object (the backend has none
+        // to hand out), so the real QI runs here and wraps the result.
         const auto hr = surface_forward_query_texture_interface(surface, outTexture);
         backend_gpu()->query_texture_interface(surface, outTexture);
         return hr;
+#else
+        return backend_gpu()->query_texture_interface(surface, outTexture);
+#endif
     }
 
     // The GPU backend is the one and only backend; the active backend is
@@ -296,3 +359,31 @@ namespace openre::gfx
 }
 
 #endif // OPENRE_NO_D3D
+
+// ---------------------------------------------------------------------------
+// Non-Windows stubs
+// ---------------------------------------------------------------------------
+// The COM front-end (marni_ddraw.cpp) is Windows-only, so on other platforms
+// the wrap registry and the wrap_ddraw entry point (both referenced by
+// marni.cpp's create_ddraw) are no-ops: no COM objects are ever wrapped and
+// the GPU backend is driven entirely through the gfx:: helpers above. Only
+// active when the D3D-shaped GfxBackend above is compiled in (no
+// OPENRE_NO_D3D); the OPENRE_NO_D3D builds compile all of this out.
+#if !defined(_WIN32) && !defined(OPENRE_NO_D3D)
+namespace openre::gfx
+{
+    inline void wrap_ddraw(IDirectDraw* /*dd*/) {}
+
+    namespace registry
+    {
+        inline const Entry* find(void* /*obj*/)
+        {
+            return nullptr;
+        }
+
+        inline void set(void* /*obj*/, void** /*origVtbl*/, void** /*newVtbl*/) {}
+
+        inline void clear() {}
+    }
+}
+#endif // !_WIN32 && !OPENRE_NO_D3D

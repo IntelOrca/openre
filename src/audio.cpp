@@ -8,9 +8,9 @@
 #include "system_filesystem.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <string>
-#include <windows.h>
 
 using namespace openre::file;
 
@@ -273,10 +273,10 @@ namespace openre::audio
     static int ss_stop_all();
     static int ss_stop_group(int type, int id);
     static int ss_shutdown();
-    static int ss_create_buffer_data(const uint8_t* data, int size, DWORD type, DWORD sub);
-    static int ss_load_sap(DWORD type, int id, int bank, int player);
+    static int ss_create_buffer_data(const uint8_t* data, int size, uint32_t type, uint32_t sub);
+    static int ss_load_sap(uint32_t type, int id, int bank, int player);
     static int ss_load_steps(const char* name, int a2);
-    static int ss_load_bgm(const char* name, DWORD type, int sample);
+    static int ss_load_bgm(const char* name, uint32_t type, int sample);
     static void snd_sys_init_sub();
 
     // Registers every buffer described by an .sap payload (8-byte mask header
@@ -284,7 +284,7 @@ namespace openre::audio
     // system_audio. mask0 covers subs subBase..subBase+31, mask1 covers
     // subBase+32..subBase+47. Mirrors the original's per-bit ss_create_buffer
     // calls.
-    static void sap_load_masked(const std::vector<uint8_t>& data, DWORD type, int subBase, uint32_t mask0, uint32_t mask1)
+    static void sap_load_masked(const std::vector<uint8_t>& data, uint32_t type, int subBase, uint32_t mask0, uint32_t mask1)
     {
         size_t pos = 8;
         for (int b = 0; b < 32; b++)
@@ -658,7 +658,7 @@ namespace openre::audio
 
     // Data-based implementation of SsCreateBuffer (0x00435930). `data` points
     // at a complete RIFF WAV (.sap payload) and `size` is its length.
-    static int ss_create_buffer_data(const uint8_t* data, int size, DWORD type, DWORD sub)
+    static int ss_create_buffer_data(const uint8_t* data, int size, uint32_t type, uint32_t sub)
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;
@@ -754,7 +754,7 @@ namespace openre::audio
     }
 
     // 0x00435540
-    static int ss_init_buffers(DWORD type)
+    static int ss_init_buffers(uint32_t type)
     {
         auto& ss = gGameTable.ss_file_string;
         logging::logInfo("[AUDIO OPEN] {}", ss.data);
@@ -1499,7 +1499,7 @@ namespace openre::audio
                 if (vol - 15 < 0)
                     v6 = 0;
             }
-            v4 = v6 * (unsigned __int8)gGameTable.bgm_vol / 100;
+            v4 = v6 * (uint8_t)gGameTable.bgm_vol / 100;
         }
         else if (type == 7)
         {
@@ -1507,7 +1507,7 @@ namespace openre::audio
         }
         else
         {
-            v4 = vol * (unsigned __int8)gGameTable.sfx_vol / 100;
+            v4 = vol * (uint8_t)gGameTable.sfx_vol / 100;
         }
 
         // Convert the linear 0..255 volume into a DirectSound attenuation in
@@ -1676,13 +1676,13 @@ namespace openre::audio
         // BGM/SBGM channels scale against the BGM master volume, all other
         // channels against the SFX master volume.
         if (type == 5 || type == 6)
-            return 100 * v4 / (unsigned __int8)gGameTable.bgm_vol;
+            return 100 * v4 / (uint8_t)gGameTable.bgm_vol;
         else
-            return 100 * v4 / (unsigned __int8)gGameTable.sfx_vol;
+            return 100 * v4 / (uint8_t)gGameTable.sfx_vol;
     }
 
     // 0x00434EA0
-    static int ss_load_sap(DWORD type, int id, int bank, int player)
+    static int ss_load_sap(uint32_t type, int id, int bank, int player)
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;
@@ -1693,32 +1693,32 @@ namespace openre::audio
         switch (type)
         {
         case 0:
-            wsprintfA(path, "common\\sound\\door\\door%02d.sap", id);
+            sprintf(path, "common\\sound\\door\\door%02d.sap", id);
             strcpy(gGameTable.ss_name_door, path);
             break;
         case 1:
-            wsprintfA(path, "common\\sound\\arms\\weapon%02d.sap", id);
+            sprintf(path, "common\\sound\\arms\\weapon%02d.sap", id);
             strcpy(gGameTable.ss_name_arms, path);
             break;
         case 2:
-            wsprintfA(path, "common\\sound\\room\\room%d%02x.sap", id + 1, bank);
+            sprintf(path, "common\\sound\\room\\room%d%02x.sap", id + 1, bank);
             if (id + 1 > 0)
                 strcpy(gGameTable.ss_name_room, path);
             break;
         case 3:
-            wsprintfA(path, "common\\sound\\enemy\\enemy%02d.sap", id);
+            sprintf(path, "common\\sound\\enemy\\enemy%02d.sap", id);
             strcpy(gGameTable.ss_name_enemy, path);
             break;
         case 4:
-            wsprintfA(path, "common\\sound\\core\\core%02d.sap", id);
+            sprintf(path, "common\\sound\\core\\core%02d.sap", id);
             if (id != 22)
                 strcpy(gGameTable.ss_name_core, path);
             break;
         case 7:
             if (player)
-                wsprintfA(path, "pl1\\voice\\stage%d\\v%03d.sap", id, bank);
+                sprintf(path, "pl1\\voice\\stage%d\\v%03d.sap", id, bank);
             else
-                wsprintfA(path, "pl0\\voice\\stage%d\\v%03d.sap", id, bank);
+                sprintf(path, "pl0\\voice\\stage%d\\v%03d.sap", id, bank);
             mode = 8;
             break;
         default: return 1;
@@ -1777,7 +1777,7 @@ namespace openre::audio
     }
 
     // 0x00435300
-    static int ss_load_bgm(const char* name, DWORD type, int sample)
+    static int ss_load_bgm(const char* name, uint32_t type, int sample)
     {
         if (!gGameTable.audio_pMarniSnd || !*name)
             return 1;

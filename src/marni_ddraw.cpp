@@ -1,4 +1,6 @@
-#ifndef OPENRE_NO_D3D
+// Pure D3D/DDraw COM front-end: compiles out on non-Windows (and on the
+// OPENRE_NO_D3D prototype builds, which use the SDL-only renderer instead).
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
 
 #include "marni_ddraw.h"
 #include "logger.h"
@@ -965,37 +967,6 @@ namespace openre::gfx
         textureToSurface()[texture] = baseSurface(surface);
         wrap_texture2(texture);
     }
-
-    // ----------------------------------------------------------------------
-    // Module lifecycle
-    // ----------------------------------------------------------------------
-
-    // The GPU backend is the one and only backend; the active backend is
-    // always GPU.
-    int active_backend()
-    {
-        return 1;
-    }
-
-    bool gpu_enabled()
-    {
-        // The SDL_GPU device is owned by system_gpu; it exists once created
-        // lazily (first begin()/present()).
-        return system::gpu::is_initialized();
-    }
-
-    void shutdown()
-    {
-        // The device, window claim and guest framebuffer are owned by
-        // system_gpu; present() also lives there now.
-        system::gpu::shutdown();
-        registry::clear();
-    }
-
-    void notify_present()
-    {
-        system::gpu::present();
-    }
 }
 
-#endif // OPENRE_NO_D3D
+#endif // _WIN32 && !OPENRE_NO_D3D

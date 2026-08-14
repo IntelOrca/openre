@@ -10,7 +10,6 @@
 #include <array>
 #include <cstring>
 #include <vector>
-#include <windows.h>
 
 using namespace openre::file;
 using namespace openre::rdt;

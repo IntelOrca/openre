@@ -11,7 +11,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 // Memory card save structures (forward-declared in file.h)
 // Must be packed to match the original binary's 1-byte alignment.
@@ -87,8 +90,11 @@ namespace openre::file
     {
         auto* discPath = reinterpret_cast<OldStdString*>(0x689F34);
 
+#ifdef _WIN32
         uint32_t logicalDrives = GetLogicalDrives();
+#endif
         int foundDrive = -1;
+#ifdef _WIN32
         for (int i = 0; i < 0x20; i++)
         {
             if (((1u << i) & logicalDrives) == 0)
@@ -118,6 +124,9 @@ namespace openre::file
                 break;
             }
         }
+#endif
+        // No Windows drive enumeration off-Windows: foundDrive stays -1 and the
+        // disc path is left empty (the reimplementation serves data from data://).
 
         std::string root;
         if (foundDrive >= 0)

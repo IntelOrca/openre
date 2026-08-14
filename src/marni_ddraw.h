@@ -1,6 +1,8 @@
 #pragma once
 
-#ifndef OPENRE_NO_D3D
+// Pure D3D/DDraw COM front-end: compiles out on non-Windows (and on the
+// OPENRE_NO_D3D prototype builds, which use the SDL-only renderer instead).
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
 
 #include "system_gpu_backend.h"
 
@@ -99,4 +101,4 @@ namespace openre::gfx
     void wrap_texture_from_surface(IDirect3DTexture2* texture, IDirectDrawSurface* surface);
 }
 
-#endif // OPENRE_NO_D3D
+#endif // _WIN32 && !OPENRE_NO_D3D
