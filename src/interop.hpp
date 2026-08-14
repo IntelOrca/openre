@@ -6,11 +6,12 @@
 #include <stdexcept>
 #include <vector>
 
-// The x86 calling-convention keywords (__stdcall, __thiscall) are only provided
-// by the toolchain on 32-bit x86 targets. On other platforms (e.g. x86-64 or
-// ARM Linux) they do not exist, so define them away to keep the declarations
-// compilable.
-#if !defined(_WIN32) && !defined(__i386__)
+// The x86 calling-convention keywords (__stdcall, __thiscall) are provided by
+// the toolchain on Windows (MSVC and MinGW alike). On non-Windows platforms
+// they do not exist - even on 32-bit x86 Linux - so define them away to keep
+// the declarations compilable. Native Linux does not use these conventions
+// anyway (the default cdecl applies).
+#if !defined(_WIN32)
 #define __stdcall
 #define __thiscall
 #define __cdecl

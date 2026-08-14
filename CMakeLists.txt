@@ -60,28 +60,24 @@ if(OPENRE_NATIVE_LINUX)
         add_executable(openre ${SOURCES})
     endif()
 
-    # Host compiler, no MinGW prefix, no -m32. -fpermissive for MSVC-isms and
-    # -w to keep the scaffold build quiet, mirroring the MinGW build.
-    target_compile_options(openre PRIVATE -fpermissive -w)
+    # Host compiler, no MinGW prefix. The re2.h memory model mirrors the 32-bit
+    # RE2 binary, so the native target must compile with -m32 (its structs use
+    # 4-byte pointers; a 64-bit build trips ~150 re2.h static_asserts). -fpermissive
+    # for MSVC-isms and -w to keep the scaffold build quiet, mirroring the MinGW
+    # build. On 64-bit hosts -m32 requires g++-multilib.
+    target_compile_options(openre PRIVATE -m32 -fpermissive -w)
+    target_link_options(openre PRIVATE -m32)
 
     # OPENRE_NO_D3D is REQUIRED for the native target, verified by compiling:
     #  * openre.cpp fails without it: `#ifndef OPENRE_NO_D3D` -> #include <ddraw.h>
     #    which does not exist on Linux (d3d_shim.h is included by the marni/
     #    system_gpu_backend headers, not by openre.cpp's raw <ddraw.h> include).
     #  * marni.cpp without it: 111 errors (SetRect/LPUNKNOWN/DDBD_*/incomplete
-    #    IDirectDraw* COM types the shim deliberately leaves opaque, plus the
-    #    re2.h layout asserts below). With OPENRE_NO_D3D marni.cpp is down to
-    #    the shared issues below, and marni_draw.cpp/marni_renderer.cpp/
-    #    sdl_gpu_renderer.cpp compile modulo the re2.h asserts.
+    #    IDirectDraw* COM types the shim deliberately leaves opaque).
     #
-    # Remaining native-compile blockers (deep Linux port, not fixed here):
-    #  * re2.h static_assert(sizeof(...) == ...) failures: re2.h is generated
-    #    for the 32-bit RE2 binary, so structs with pointers assume 4-byte
-    #    pointers; on a 64-bit host sizeof(void*) == 8 breaks the layouts.
-    #  * src/file.h uses size_t without including <cstddef> (worked on MSVC
-    #    only because windows.h pulled it in transitively).
-    #  * A few unguarded Win32 calls remain in marni.cpp/system_gpu.cpp
-    #    (SetRect, WM_* constants, AddVectoredExceptionHandler, ...).
+    # Native compile status: the whole tree compiles with -m32 (the re2.h
+    # static_asserts pass because a 32-bit target matches the RE2 binary's
+    # memory model). The native main() in openre.cpp is scaffolding only.
     target_compile_definitions(openre PRIVATE OPENRE_NO_D3D)
 
     # SDL3: prefer pkg-config, then find_package(SDL3) (works e.g. with

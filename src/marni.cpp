@@ -184,6 +184,7 @@ namespace openre::marni
         interop::thiscall<int, MarniSurface2*>((uintptr_t)self->vtbl->unlock_fn, self);
     }
 
+#ifdef _WIN32
     static int __stdcall com_nop(LPUNKNOWN obj)
     {
         return 0;
@@ -200,6 +201,7 @@ namespace openre::marni
         auto vtable = (void**)obj;
         vtable[0] = newTable;
     }
+#endif // _WIN32
 
     // 0x00401000
     int error(HRESULT hr)
@@ -3197,10 +3199,9 @@ namespace openre::marni
     {
         switch (msg)
         {
-        case WM_MOVE: move(self); break;
 #ifdef _WIN32
+        case WM_MOVE: move(self); break;
         case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
-#endif
         case WM_DESTROY: destroy(self); break;
         case WM_SYSKEYDOWN:
             if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
@@ -3208,6 +3209,7 @@ namespace openre::marni
                 syskeydown(self);
             }
             break;
+#endif
         }
         return 1;
     }

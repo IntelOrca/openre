@@ -74,6 +74,14 @@ struct RECT
 using LPRECT = RECT*;
 using LPCRECT = const RECT*;
 
+inline void SetRect(RECT* rc, int left, int top, int right, int bottom)
+{
+    rc->left = left;
+    rc->top = top;
+    rc->right = right;
+    rc->bottom = bottom;
+}
+
 struct GUID
 {
     uint32_t Data1;

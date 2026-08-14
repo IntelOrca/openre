@@ -3,6 +3,7 @@
 #include "openre.h"
 
 #include <cmath>
+#include <cstring>
 
 namespace openre::math
 {
@@ -488,8 +489,16 @@ namespace openre::math
         if (a0 < 0)
             a0 = -a0;
 
+        // _BitScanReverse: index of the highest set bit.
         unsigned long v2;
+#if defined(_MSC_VER)
         _BitScanReverse(&v2, static_cast<unsigned long>(a0));
+#else
+        v2 = 0;
+        unsigned long value = static_cast<unsigned long>(a0);
+        while (value >>= 1)
+            v2++;
+#endif
         int v3 = static_cast<int>(31 - v2) & 0xFE;
 
         int v4;
