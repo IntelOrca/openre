@@ -8,7 +8,8 @@ jobs:
     - name: Install dependencies
       run: |
           sudo apt update
-          sudo apt install -y g++-mingw-w64
+          sudo apt install -y g++-mingw-w64 unzip
+          bash getdeps.sh
     - name: Build
       run: |
           cmake -B out
