@@ -4,7 +4,9 @@
 #include "re2.h"
 #include "system_window.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cstdarg>
@@ -54,6 +56,7 @@ namespace openre::debug
     // recreated (e.g. on resolution change).
     static int measure_text(const char* str)
     {
+#ifdef _WIN32
         static HDC s_dc = nullptr;
         static void* s_font = nullptr;
 
@@ -76,6 +79,11 @@ namespace openre::debug
         if (!GetTextExtentPoint32A(s_dc, str, (int)strlen(str), &size))
             return 0;
         return size.cx;
+#else
+        // No GDI on non-Windows platforms: estimate the width from the string
+        // length (half a line-height per byte approximates the game font).
+        return static_cast<int>(strlen(str)) * gGameTable.byte_6634F8 / 2;
+#endif
     }
 
     // Queues a string right-aligned so its right edge sits at x_right.

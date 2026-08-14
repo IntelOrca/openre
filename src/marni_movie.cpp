@@ -14,11 +14,15 @@
 #include <mutex>
 #include <vector>
 
+#ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <dshow.h>
 #include <dvdmedia.h>
 #include <windows.h>
+#endif
+
+#ifdef _WIN32
 
 // The Windows 10 SDK no longer ships qedit.h (DirectShow Editing Services),
 // which used to declare the sample-grabber filter and its interfaces. Declare
@@ -748,18 +752,12 @@ namespace openre::marni
     }
 
     // 0x00414CF0
-    int __stdcall
-    movie_open(
-        MarniMovie* self,
-        LPCSTR path,
-        HWND hWnd,
-        LPRECT pRect,
+    int __stdcall movie_open(
+        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect,
 #ifndef OPENRE_NO_D3D
-        LPDIRECTDRAW2 pDD2,
-        LPDIRECTDRAWSURFACE pSurface)
+        LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
 #else
-        void* pDD2,
-        void* pSurface)
+        void* pDD2, void* pSurface)
 #endif
     {
         (void)pDD2;
@@ -910,3 +908,115 @@ namespace openre::marni
         system::gpu::clear_movie_frame();
     }
 }
+
+#else
+
+namespace openre::marni
+{
+    // 0x00414B30
+    int __stdcall sub_414B30(MarniMovie* self)
+    {
+        if (!(self->flag & 0x01))
+            return 0;
+        return movie_seek(self);
+    }
+
+    // 0x00414B50
+    int __stdcall movie_update_window(MarniMovie* self)
+    {
+        uint32_t flag = self->flag;
+        if ((flag & 1) == 0)
+            return 0;
+
+        self->flag |= 2;
+        return 1;
+    }
+
+    // 0x00414C00
+    int __stdcall movie_update(MarniMovie* self)
+    {
+        uint32_t flag = self->flag;
+        if ((flag & 1) == 0 || (flag & 2) == 0)
+            return 1;
+
+        if (self->duration > 0.0 && self->pos >= self->duration)
+            movie_seek(self);
+
+        return 1;
+    }
+
+    // 0x00414C80
+    int __stdcall movie_seek(MarniMovie* self)
+    {
+        uint32_t flag = self->flag;
+        if ((flag & 1) == 0)
+            return 0;
+
+        self->pos = 0.0;
+        self->flag = (flag & ~2u) | 4u;
+
+        // Clear the movie overlay so a stale cutscene frame does not linger
+        // in the framebuffer while the movie restarts.
+        system::gpu::clear_movie_frame();
+        return 1;
+    }
+
+    // 0x00414CF0
+    int __stdcall movie_open(
+        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect,
+#ifndef OPENRE_NO_D3D
+        LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
+#else
+        void* pDD2, void* pSurface)
+#endif
+    {
+        // Movies cannot be played without DirectShow; always fail.
+        (void)self;
+        (void)path;
+        (void)hWnd;
+        (void)pRect;
+        (void)pDD2;
+        (void)pSurface;
+        return 0;
+    }
+
+    // 0x00414F50
+    MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode)
+    {
+        memset(self, 0, sizeof(MarniMovie));
+        self->flag = (mode != 0) ? 8 : 0;
+        return self;
+    }
+
+    // 0x00414FC0
+    void __stdcall movie_dtor(MarniMovie* self)
+    {
+        movie_release(self);
+    }
+
+    // 0x00414FD0
+    void __stdcall movie_release(MarniMovie* self)
+    {
+        // No COM/DirectShow state to release; keep the flag semantics.
+        self->pMediaControl = nullptr;
+        self->pMediaPosition = nullptr;
+        self->pGraphBuilder = nullptr;
+
+        self->field_6C = nullptr;
+        self->field_78 = nullptr;
+        self->field_88 = nullptr;
+        self->field_8C = nullptr;
+        self->field_90 = nullptr;
+        self->pMediaStream = nullptr;
+        self->pVideoWindow = nullptr;
+
+        self->flag = self->flag & 8;
+        self->pos = 0.0;
+        self->duration = 0.0;
+
+        // Drop any lingering movie overlay in the guest framebuffer.
+        system::gpu::clear_movie_frame();
+    }
+}
+
+#endif // _WIN32

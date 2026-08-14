@@ -3,11 +3,15 @@
 #include "openre.h"
 
 #include <cstring>
+
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 namespace openre::window
 {
     // 0x00508DF0
+#ifdef _WIN32
     static INT_PTR __cdecl
     show_dialog(HINSTANCE hInstance, LPCSTR lpTemplateName, HWND hWnd, DLGPROC lpDialogFunc, LPARAM dwInitParam)
     {
@@ -15,8 +19,16 @@ namespace openre::window
             ShowWindow(hWnd, SW_RESTORE);
         return DialogBoxParamA(hInstance, lpTemplateName, hWnd, lpDialogFunc, dwInitParam);
     }
+#else
+    // Non-Windows stub so the hook registration below still compiles.
+    static intptr_t show_dialog(void*, const char*, void*, void*, intptr_t)
+    {
+        return -1;
+    }
+#endif
 
     // 0x00508E30
+#ifdef _WIN32
     static BOOL __stdcall dialog_proc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (msg == WM_INITDIALOG)
@@ -58,6 +70,13 @@ namespace openre::window
 
         return FALSE;
     }
+#else
+    // Non-Windows stub so the hook registration below still compiles.
+    static int dialog_proc(void*, unsigned int, uintptr_t, intptr_t)
+    {
+        return 0;
+    }
+#endif
 
     void window_init_hooks()
     {

@@ -18,12 +18,15 @@
 #include "title.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
 #include <ddraw.h>
 #endif
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 using namespace openre;
 using namespace openre::audio;
@@ -95,6 +98,16 @@ namespace openre::save
         "\x8f\x91\x82\xab\x8d\x9e\x82\xdd\x82\xc9\x8e\xb8\x94\x73\x82\xb5\x82\xdc\x82\xb5\x82\xbd", // 書き込みに失敗しました
         nullptr,
     };
+
+#ifndef _WIN32
+    // Portable substitutes for the Win32 virtual-key codes that get_menu_key()
+    // returns (menu_vk_codes in input.cpp) and mem_card's CARD_STATE_MENU
+    // switch matches.
+    constexpr int VK_PRIOR = 0x21; // PageUp
+    constexpr int VK_NEXT = 0x22;  // PageDown
+    constexpr int VK_END = 0x23;
+    constexpr int VK_HOME = 0x24;
+#endif
 
     // 0x004C6C40
     static void cardaccess_init()
@@ -690,7 +703,7 @@ namespace openre::save
         if (!gGameTable.FontIndex)
             return 1;
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
         HDC hdc;
         if (pSurface->GetDC(&hdc) != DD_OK)
@@ -777,8 +790,9 @@ namespace openre::save
         pSurface->ReleaseDC(hdc);
         return 1;
 #else
-        // No DirectDraw surface in the no-D3D build; the SDL renderer draws its
-        // own text overlay. Keep the queue intact (cleared by the next SavePrint).
+        // No DirectDraw surface (OPENRE_NO_D3D build) or no GDI on non-Windows
+        // platforms: text rendering is skipped. Keep the queue intact (cleared
+        // by the next SavePrint).
         return 1;
 #endif
     }
@@ -859,6 +873,15 @@ namespace openre::save
     // defined further down.
     static OldStdString* save_path_string();
 
+    // Portable lowercase-in-place (the MSVC CRT's _strlwr equivalent, which
+    // mutates its buffer in place and returns it).
+    static char* str_to_lower(char* str)
+    {
+        for (char* p = str; *p != '\0'; ++p)
+            *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+        return str;
+    }
+
     // 0x00432860
     // Strips a trailing ".biohazard2" or ".resident2" extension (case-insensitive)
     // from a memory card file name. Returns str if truncated, otherwise 0 if the
@@ -875,7 +898,7 @@ namespace openre::save
         len = strlen(buf);
         if (len >= strlen(aBiohazard2))
         {
-            _strlwr(buf);
+            str_to_lower(buf);
             strstr(buf, aBiohazard2); // return value discarded in the original binary
             if (strcmp(aBiohazard2, &buf[len - 11]) == 0)
             {
@@ -890,7 +913,7 @@ namespace openre::save
         const char* result = 0;
         if (len >= strlen(aResident2))
         {
-            _strlwr(buf);
+            str_to_lower(buf);
             strstr(buf, aResident2); // return value discarded in the original binary
             result = (const char*)strcmp(aResident2, &buf[len - 10]);
             if (result == 0)
@@ -912,14 +935,18 @@ namespace openre::save
         int y2[2] = { 288, 576 };
         char String[264];
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
         HDC hdc;
         pSurface->GetDC(&hdc);
         auto oldFont = SelectObject(hdc, gGameTable.hFont);
 #endif
 
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         SIZE psizl;
+#else
+        int psizl_cx = 0;
+#endif
         auto is_480p = gGameTable.is_480p;
         int v12 = 0;
         int v37 = 0;
@@ -948,17 +975,17 @@ namespace openre::save
                         int v18 = a4 + 276 * v17;
                         strcpy(String, (char*)(v18 - 276));
                         strip_save_extension(String);
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
                         GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
 #else
-                        psizl.cx = 0;
+                        psizl_cx = 0;
 #endif
                         int8_t v23;
                         int v22 = y2[is_480p];
-                        if (psizl.cx <= v22)
+                        if (psizl_cx <= v22)
                             v23 = 0;
                         else
-                            v23 = (int8_t)((psizl.cx - v22) / (gGameTable.FontH / 2));
+                            v23 = (int8_t)((psizl_cx - v22) / (gGameTable.FontH / 2));
                         if (*(int32_t*)a8 < v23)
                             v23 = (int8_t)*(int32_t*)a8;
                         int v24 = v23;
@@ -987,10 +1014,10 @@ namespace openre::save
             } while (v14 < (int)gGameTable.dword_986394);
         }
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         SelectObject(hdc, oldFont);
         pSurface->ReleaseDC(hdc);
-#endif // OPENRE_NO_D3D
+#endif // _WIN32 && !OPENRE_NO_D3D
         *(int32_t*)a8 = v12;
         auto result = gGameTable.dword_669B00 != v12;
         gGameTable.dword_669B00 = v12;
@@ -1728,7 +1755,7 @@ namespace openre::save
             {
                 char ext[260];
                 strcpy(ext, dot);
-                _strlwr(ext);
+                str_to_lower(ext);
                 if (strcmp(ext, ".biohazard2") != 0)
                     strcat(gGameTable.save_path, ".BIOHAZARD2");
             }

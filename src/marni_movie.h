@@ -2,6 +2,7 @@
 
 #include "re2.h"
 
+#ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #ifndef OPENRE_NO_D3D
@@ -9,21 +10,33 @@
 #include <ddraw.h>
 #endif
 #include <windows.h>
+#else
+// Minimal portable shims so the declarations below compile on non-WIN32
+// (there is no DirectShow movie player off Windows).
+using LONG = long;
+using HWND = void*;
+using LPCSTR = const char*;
+struct RECT
+{
+    LONG left;
+    LONG top;
+    LONG right;
+    LONG bottom;
+};
+using LPRECT = RECT*;
+using LPDIRECTDRAW2 = void*;
+using LPDIRECTDRAWSURFACE = void*;
+#define __stdcall
+#endif
 
 namespace openre::marni
 {
-    int __stdcall
-    movie_open(
-        MarniMovie* self,
-        LPCSTR path,
-        HWND hWnd,
-        LPRECT pRect,
+    int __stdcall movie_open(
+        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect,
 #ifndef OPENRE_NO_D3D
-        LPDIRECTDRAW2 pDD2,
-        LPDIRECTDRAWSURFACE pSurface);
+        LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface);
 #else
-        void* pDD2,
-        void* pSurface);
+        void* pDD2, void* pSurface);
 #endif
     MarniMovie* __stdcall movie_ctor(MarniMovie* self, int mode);
     void __stdcall movie_dtor(MarniMovie* self);

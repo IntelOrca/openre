@@ -9,6 +9,7 @@
 #include <windows.h>
 #else
 #include <sys/mman.h>
+#include <cstdlib>
 #endif // _WIN32
 
 #include "interop.hpp"
@@ -454,11 +455,19 @@ namespace openre::interop
 
     void* createThiscallThunk(uint32_t address, uint32_t* retStore)
     {
+#ifdef _WIN32
         auto mem = VirtualAlloc(NULL, 20, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
         if (mem == NULL)
         {
             throw std::runtime_error("Failed to allocate memory for thiscall");
         }
+#else
+        auto mem = mmap(NULL, 20, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mem == MAP_FAILED)
+        {
+            throw std::runtime_error("Failed to allocate memory for thiscall");
+        }
+#endif // _WIN32
 
         auto bytes = static_cast<uint8_t*>(mem);
         auto dst = bytes;
@@ -495,6 +504,10 @@ namespace openre::interop
 
     void deleteThiscallThunk(void* mem)
     {
+#ifdef _WIN32
         VirtualFree(mem, 0, MEM_RELEASE);
+#else
+        munmap(mem, 20);
+#endif // _WIN32
     }
 }

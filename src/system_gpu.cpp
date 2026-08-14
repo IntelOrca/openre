@@ -1259,10 +1259,14 @@ namespace openre::gfx
                 // surface's pixel format. For the render target the text is
                 // composited by present() into the guest framebuffer right
                 // after the scene pass (textOverlayPending + textTexture), so
-                // the room redraw cannot wipe it.
+                // the room redraw cannot wipe it. The GDI state is Win32-only;
+                // on other platforms GetDC fails and no text overlay is
+                // requested.
+#ifdef _WIN32
                 HDC gdiDc = nullptr;
                 HBITMAP gdiBitmap = nullptr;
                 void* gdiBits = nullptr;
+#endif
                 bool textOverlayPending = false;
                 SDL_GPUTexture* textTexture = nullptr;       // GDI overlay texture (composited into the framebuffer)
                 SDL_GPUTransferBuffer* textUpload = nullptr; // dedicated upload for the overlay
@@ -1891,6 +1895,7 @@ namespace openre::gfx
             // surface shadow so GDI text can be copied straight in/out:
             // 32bpp BI_RGB and 16bpp BI_BITFIELDS (using the surface's masks)
             // are byte-identical to the DirectDraw layouts the shadow stores.
+#ifdef _WIN32
             bool ensureGdiDc(SurfaceEntry& entry)
             {
                 if (entry.gdiDc != nullptr)
@@ -2006,9 +2011,24 @@ namespace openre::gfx
                         static_cast<size_t>(entry.width) * texel);
                 }
             }
+#else
+            // No GDI on non-Windows platforms: the DIB-backed HDC bridge is
+            // unavailable, so get_dc below reports failure and the game skips
+            // text rendering. No-op definitions keep the guarded call sites
+            // compiling.
+            bool ensureGdiDc(SurfaceEntry& /*entry*/)
+            {
+                return false;
+            }
+
+            void copyShadowToGdi(SurfaceEntry& /*entry*/) {}
+
+            void copyGdiToShadow(SurfaceEntry& /*entry*/) {}
+#endif
 
             HRESULT get_dc(IUnknown* surface, HDC* hdc) override
             {
+#ifdef _WIN32
                 if (hdc == nullptr)
                     return E_POINTER;
                 if (mDevice == nullptr)
@@ -2046,10 +2066,19 @@ namespace openre::gfx
                 copyShadowToGdi(*entry);
                 *hdc = entry->gdiDc;
                 return S_OK;
+#else
+                // No GDI on non-Windows platforms: report failure so the
+                // caller (save_print_flush) skips text rendering. The surface
+                // is left untouched.
+                (void)surface;
+                (void)hdc;
+                return E_FAIL;
+#endif
             }
 
             HRESULT release_dc(IUnknown* surface, HDC hdc) override
             {
+#ifdef _WIN32
                 if (mDevice == nullptr)
                     return S_OK;
                 auto* entry = findSurface(surface);
@@ -2081,6 +2110,13 @@ namespace openre::gfx
                     }
                 }
                 return S_OK;
+#else
+                // No GDI on non-Windows platforms: nothing was handed out by
+                // get_dc, so there is nothing to merge back.
+                (void)surface;
+                (void)hdc;
+                return S_OK;
+#endif
             }
 
             HRESULT blt(IUnknown* dst, LPRECT dstRect, IUnknown* src, LPRECT srcRect, DWORD flags, LPDDBLTFX fx) override
@@ -2959,6 +2995,7 @@ namespace openre::gfx
                 }
                 // Delete the DC before the bitmap it has selected: deleting an
                 // object that is still selected into a DC is invalid.
+#ifdef _WIN32
                 if (entry.gdiDc != nullptr)
                 {
                     DeleteDC(entry.gdiDc);
@@ -2970,6 +3007,7 @@ namespace openre::gfx
                     entry.gdiBitmap = nullptr;
                 }
                 entry.gdiBits = nullptr;
+#endif
                 entry.shadow.clear();
                 entry.textureCreated = false;
                 entry.hasContent = false;
@@ -4592,7 +4630,11 @@ namespace openre::system::gpu
             {
                 if (FILE* f = std::fopen("sdl_gpu_log.txt", "a"))
                 {
-                    std::fprintf(f, "[VEH] caught 0x87D break-on-corruption #%ld at addr %p\n", n, ep->ExceptionRecord->ExceptionAddress);
+                    std::fprintf(
+                        f,
+                        "[VEH] caught 0x87D break-on-corruption #%ld at addr %p\n",
+                        n,
+                        ep->ExceptionRecord->ExceptionAddress);
                     std::fflush(f);
                     std::fclose(f);
                 }

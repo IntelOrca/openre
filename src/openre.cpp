@@ -36,16 +36,53 @@
 #include <ddraw.h>
 #endif
 
+#include <cctype>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
-#include <windows.h>
 
-#ifdef DEBUG
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#if defined(DEBUG) && defined(_MSC_VER)
 #include <crtdbg.h>
 #include <rtcapi.h>
+#endif
+
+#ifndef _WIN32
+// SDL3 is used by the portable main() entry point at the bottom of this file.
+// We provide our own main(), so tell SDL not to supply/redefine one.
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL.h>
+
+// Minimal stand-ins for the Win32 VK_* codes used by handle_key(). The SDL
+// window module maps SDL keycodes to these VK codes on all platforms, so the
+// values (from winuser.h) must stay stable.
+constexpr int VK_PRIOR = 0x21;    // Page Up
+constexpr int VK_NEXT = 0x22;     // Page Down
+constexpr int VK_SNAPSHOT = 0x2C; // Print Screen
+constexpr int VK_F1 = 0x70;
+constexpr int VK_F2 = 0x71;
+constexpr int VK_F3 = 0x72;
+constexpr int VK_F4 = 0x73;
+constexpr int VK_F5 = 0x74;
+constexpr int VK_F6 = 0x75;
+constexpr int VK_F7 = 0x76;
+constexpr int VK_F8 = 0x77;
+constexpr int VK_F9 = 0x78;
+constexpr int VK_F10 = 0x79;
+constexpr int VK_F11 = 0x7A;
+
+// Portable in-place lowercase; replaces the MSVC-only _strlwr().
+static char* str_lwr(char* s)
+{
+    for (char* p = s; *p; ++p)
+        *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+    return s;
+}
 #endif
 
 using namespace openre;
@@ -2293,6 +2330,7 @@ namespace openre
     // 0x00431000
     void font_create()
     {
+#ifdef _WIN32
         if (gGameTable.hFont)
             DeleteObject((HFONT)gGameTable.hFont);
         if (gGameTable.is_480p)
@@ -2335,12 +2373,20 @@ namespace openre
             gGameTable.byte_6634F8 = 15;
             gGameTable.FontH = 12;
         }
+#else
+        // GDI fonts are Windows-only; leave gGameTable.hFont null.
+        (void)fontFaceName;
+#endif
     }
 
     // 0x004310A0
     static void font_delete()
     {
+#ifdef _WIN32
         DeleteObject(gGameTable.hFont);
+#else
+        // Nothing to delete: font_create() left hFont null.
+#endif
     }
 
     // 0x00441780
@@ -2376,6 +2422,7 @@ namespace openre
     }
 
     // 0x00442800
+#ifdef _WIN32
     static INT_PTR CALLBACK about_dialog(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (msg == WM_INITDIALOG)
@@ -2404,6 +2451,13 @@ namespace openre
         }
         return FALSE;
     }
+#else
+    // Non-Windows stub: there are no Win32 dialogs, so do nothing.
+    [[maybe_unused]] static int about_dialog(void*, unsigned int, uintptr_t, intptr_t)
+    {
+        return 0;
+    }
+#endif
 
     // 0x00442750
     static void screenshot()
@@ -2425,14 +2479,18 @@ namespace openre
             if (!gGameTable.byte_6805B2)
             {
                 gGameTable.byte_6805B2 = 1;
+#ifdef _WIN32
                 ShowCursor(FALSE);
+#endif
                 interop::call<int>(0x00433870, 0); // SsSetCoopLevel(0)
             }
         }
         else if (gGameTable.byte_6805B2 == 1)
         {
             gGameTable.byte_6805B2 = 0;
+#ifdef _WIN32
             ShowCursor(TRUE);
+#endif
             interop::call<int>(0x00433870, 1); // SsSetCoopLevel(1)
         }
     }
@@ -2456,34 +2514,50 @@ namespace openre
         gGameTable.byte_689ABC = 1;
         gGameTable.vk_press |= 0x80;
 
+#ifdef _WIN32
         auto hWnd = (HWND)system::window::get_hwnd();
+#endif
         switch (vk)
         {
         case VK_F11:
         case VK_SNAPSHOT:
             screenshot();
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
-        case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
+        case VK_F1:
+#ifdef _WIN32
+            DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0);
+#endif
+            break;
         case VK_F2:
             g_speed_multiplier -= 1;
             if (g_speed_multiplier < 1)
                 g_speed_multiplier = 1;
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         case VK_F3:
             g_speed_multiplier += 1;
             if (g_speed_multiplier > 5)
                 g_speed_multiplier = 5;
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         case VK_F4:
             gGameTable.vk_press |= 1; // inventory
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         case VK_F5:
             gGameTable.vk_press |= 2; // options
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         case VK_F6: debug::toggle(); break;
         case VK_PRIOR: debug::scroll_log(-1); break;
@@ -2503,17 +2577,21 @@ namespace openre
             break;
         case VK_F10:
             // The D3D reference backend was removed (Phase 3); F10 is a no-op.
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         default:
             input_wmkeydown(&gGameTable.input, vk);
+#ifdef _WIN32
             SetFocus(hWnd);
+#endif
             break;
         }
     }
 
     // 0x00441910
-    static int cheat_line_cmd0(LPSTR lpCmdLine, int a1)
+    static int cheat_line_cmd0(char* lpCmdLine, int a1)
     {
         auto* v2 = strchr(lpCmdLine, '/');
         if (!v2)
@@ -2522,7 +2600,11 @@ namespace openre
             if (!v2)
                 return -1;
         }
+#ifdef _WIN32
         auto* v3 = _strlwr(v2);
+#else
+        auto* v3 = str_lwr(v2);
+#endif
         auto* v4 = strstr(v3, gGameTable.cheat_cmds[a1]);
         if (!v4)
             return -1;
@@ -2537,12 +2619,16 @@ namespace openre
     }
 
     // 0x00441890
-    static int cheat_line_cmd1(LPSTR lpCmdLine, int a1, int a2)
+    static int cheat_line_cmd1(char* lpCmdLine, int a1, int a2)
     {
         auto* v3 = strchr(lpCmdLine, '/');
         if (v3 || (v3 = strchr(lpCmdLine, '-')) != nullptr)
         {
+#ifdef _WIN32
             auto* v4 = _strlwr(v3);
+#else
+            auto* v4 = str_lwr(v3);
+#endif
             auto v5 = a1;
             if (a1 < 13)
             {
@@ -2646,6 +2732,7 @@ namespace openre
 
     static int win_exit(uint32_t error)
     {
+#ifdef _WIN32
         static const char* aHighColor16bit = (const char*)0x00525098;
         static const char* aInNIN = (const char*)0x0052506C;
 
@@ -2691,9 +2778,45 @@ namespace openre
         marni::g_renderer->configShutdown();
 
         return error;
+#else
+        // No Win32 message boxes on non-Windows builds; report to stderr instead.
+        switch (error)
+        {
+        case ERROR_0: [[fallthrough]];
+        case ERROR_1: [[fallthrough]];
+        case ERROR_2: [[fallthrough]];
+        case ERROR_11: [[fallthrough]];
+        case ERROR_18: [[fallthrough]];
+        case ERROR_255: break;
+
+        case ERROR_FAILED_TO_INITIALIZE_DIRECTX:
+        {
+            logging::logError(
+                "Failed to initialize the graphics backend (is_gpu_active={}, display mode count={})",
+                gGameTable.pMarni ? gGameTable.pMarni->is_gpu_active : 0,
+                gGameTable.pMarni ? marni::request_display_mode_count(gGameTable.pMarni) : 0);
+            break;
+        }
+        case ERROR_INSERT_DISC:
+        {
+            std::fprintf(stderr, "%s: Please insert BIOHAZARD(R) 2 PC DISC\n", windowTitle);
+            break;
+        }
+        default:
+        {
+            std::fprintf(stderr, "%s: Fatal error (%u).\n", windowTitle, error);
+            break;
+        }
+        }
+
+        marni::g_renderer->configShutdown();
+
+        return error;
+#endif
     }
 
     // 0x00441DC0
+#ifdef _WIN32
     static bool init_instance(HINSTANCE hInstance, HINSTANCE hPrevInstance)
     {
         if (!system::window::init())
@@ -2706,12 +2829,21 @@ namespace openre
         gGameTable.window_active = 1; // SDL may not deliver a focus event if another window owns focus
         return true;
     }
+#else
+    // Non-Windows stub: window creation is driven by win_main, which cannot
+    // run without the original binary.
+    [[maybe_unused]] static bool init_instance(void*, void*)
+    {
+        return false;
+    }
+#endif
 
     static void loopthing() {}
 
     // ── Helper functions ──────────────────────────────────────────────────
 
     // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
+#ifdef _WIN32
     static bool quit_cleanup()
     {
         marni::g_renderer->shutdown();
@@ -2724,8 +2856,15 @@ namespace openre
         SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
         return false;
     }
+#else
+    [[maybe_unused]] static bool quit_cleanup()
+    {
+        return false;
+    }
+#endif
 
     // Returns false when quit requested (caller should exit immediately)
+#ifdef _WIN32
     static bool process_messages()
     {
         system::window::Event ev;
@@ -2784,6 +2923,13 @@ namespace openre
         }
         return true;
     }
+#else
+    // Non-Windows stub: the event loop belongs to the win_main entry point.
+    [[maybe_unused]] static bool process_messages()
+    {
+        return true;
+    }
+#endif
 
     // Returns true if a special state (movie / reset) consumed this frame
     static bool handle_special_states()
@@ -2910,6 +3056,7 @@ namespace openre
     // ── WinMain ──────────────────────────────────────────────────────────
 
     // 0x00441ED0
+#ifdef _WIN32
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
         marni::out();
@@ -3020,9 +3167,17 @@ namespace openre
 
         return 0;
     }
+#else
+    // Non-Windows stub: the real game loop cannot run without the original
+    // RE2 Windows binary.
+    [[maybe_unused]] int win_main(void*, void*, char*, int)
+    {
+        return 0;
+    }
+#endif
 }
 
-#ifdef DEBUG
+#if defined(DEBUG) && defined(_MSC_VER)
 /// Redirects RTC failures (e.g. "Run-Time Check Failure #0" stack corruption)
 /// to stderr and terminates instead of showing the default error dialog.
 static int __cdecl
@@ -3061,8 +3216,15 @@ static void init_rtc_error_handlers()
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
 }
+#elif defined(DEBUG)
+// MSVC RTC/CRT hooks are not available outside the MSVC CRT; keep the
+// onAttach call site compiling with a no-op.
+[[maybe_unused]] static void init_rtc_error_handlers()
+{
+}
 #endif
 
+#ifdef _WIN32
 void onAttach()
 {
 #ifdef DEBUG
@@ -3120,7 +3282,14 @@ void onAttach()
     }
     openre::script::init();
 }
+#else
+// Non-Windows stub: hook installation requires the original RE2 binary.
+[[maybe_unused]] void onAttach()
+{
+}
+#endif
 
+#ifdef _WIN32
 extern "C" {
 __declspec(dllexport) BOOL /* WINAPI */
 openre_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
@@ -3156,3 +3325,16 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
     return TRUE; // Successful DLL_PROCESS_ATTACH.
 }
 }
+#endif
+
+#ifndef _WIN32
+// Portable entry point for a future native build. The real game logic
+// requires the original RE2 Windows binary, so this is only scaffolding.
+int main()
+{
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+        return 1;
+    SDL_Quit();
+    return 0;
+}
+#endif
