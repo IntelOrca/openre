@@ -43,7 +43,7 @@
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;OPENRE_NO_D3D;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
@@ -88,7 +88,6 @@
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
     <ClCompile Include="logger.cpp" />
-    <ClCompile Include="marni_ddraw.cpp" />
     <ClCompile Include="marni_draw.cpp" />
     <ClCompile Include="marni_renderer.cpp" />
     <ClCompile Include="marni_config.cpp" />
@@ -143,12 +142,12 @@
     <ClInclude Include="itembox.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="marni_config.h" />
-    <ClInclude Include="marni_ddraw.h" />
     <ClInclude Include="marni_draw.h" />
     <ClInclude Include="marni_renderer.h" />
     <ClInclude Include="sdl_gpu_renderer.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="marni_movie.h" />
+    <ClInclude Include="win_compat.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="msadpcm.h" />
@@ -172,7 +171,6 @@
     <ClInclude Include="system_audio.h" />
     <ClInclude Include="system_config.h" />
     <ClInclude Include="system_filesystem.h" />
-    <ClInclude Include="system_gpu_backend.h" />
     <ClInclude Include="system_gpu.h" />
     <ClInclude Include="system_input.h" />
     <ClInclude Include="system_window.h" />

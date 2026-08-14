@@ -752,15 +752,9 @@ namespace openre::marni
     }
 
     // 0x00414CF0
-    int __stdcall movie_open(
-        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect,
-#ifndef OPENRE_NO_D3D
-        LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
-#else
-        void* pDD2, void* pSurface)
-#endif
+    int __stdcall movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, void* pDraw2, void* pSurface)
     {
-        (void)pDD2;
+        (void)pDraw2;
         (void)pSurface;
 
         movie_release(self);
@@ -962,20 +956,14 @@ namespace openre::marni
     }
 
     // 0x00414CF0
-    int __stdcall movie_open(
-        MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect,
-#ifndef OPENRE_NO_D3D
-        LPDIRECTDRAW2 pDD2, LPDIRECTDRAWSURFACE pSurface)
-#else
-        void* pDD2, void* pSurface)
-#endif
+    int __stdcall movie_open(MarniMovie* self, LPCSTR path, HWND hWnd, LPRECT pRect, void* pDraw2, void* pSurface)
     {
         // Movies cannot be played without DirectShow; always fail.
         (void)self;
         (void)path;
         (void)hWnd;
         (void)pRect;
-        (void)pDD2;
+        (void)pDraw2;
         (void)pSurface;
         return 0;
     }

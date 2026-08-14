@@ -32,9 +32,6 @@
 #include "tim.h"
 #include "title.h"
 #include "window.h"
-#ifndef OPENRE_NO_D3D
-#include <ddraw.h>
-#endif
 
 #include <cctype>
 #include <cstdarg>
@@ -2520,8 +2517,7 @@ namespace openre
         switch (vk)
         {
         case VK_F11:
-        case VK_SNAPSHOT:
-            screenshot();
+        case VK_SNAPSHOT: screenshot();
 #ifdef _WIN32
             SetFocus(hWnd);
 #endif
@@ -2547,14 +2543,12 @@ namespace openre
             SetFocus(hWnd);
 #endif
             break;
-        case VK_F4:
-            gGameTable.vk_press |= 1; // inventory
+        case VK_F4: gGameTable.vk_press |= 1; // inventory
 #ifdef _WIN32
             SetFocus(hWnd);
 #endif
             break;
-        case VK_F5:
-            gGameTable.vk_press |= 2; // options
+        case VK_F5: gGameTable.vk_press |= 2; // options
 #ifdef _WIN32
             SetFocus(hWnd);
 #endif
@@ -2576,13 +2570,12 @@ namespace openre
             gGameTable.vk_press |= 0x40; // exit to menu
             break;
         case VK_F10:
-            // The D3D reference backend was removed (Phase 3); F10 is a no-op.
+            // The reference GPU backend was removed; F10 is a no-op.
 #ifdef _WIN32
             SetFocus(hWnd);
 #endif
             break;
-        default:
-            input_wmkeydown(&gGameTable.input, vk);
+        default: input_wmkeydown(&gGameTable.input, vk);
 #ifdef _WIN32
             SetFocus(hWnd);
 #endif
@@ -3219,9 +3212,7 @@ static void init_rtc_error_handlers()
 #elif defined(DEBUG)
 // MSVC RTC/CRT hooks are not available outside the MSVC CRT; keep the
 // onAttach call site compiling with a no-op.
-[[maybe_unused]] static void init_rtc_error_handlers()
-{
-}
+[[maybe_unused]] static void init_rtc_error_handlers() {}
 #endif
 
 #ifdef _WIN32
@@ -3284,9 +3275,7 @@ void onAttach()
 }
 #else
 // Non-Windows stub: hook installation requires the original RE2 binary.
-[[maybe_unused]] void onAttach()
-{
-}
+[[maybe_unused]] void onAttach() {}
 #endif
 
 #ifdef _WIN32

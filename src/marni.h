@@ -2,7 +2,7 @@
 
 #include "re2.h"
 
-#include "d3d_shim.h"
+#include "win_compat.h"
 
 #include <cstdint>
 
@@ -18,7 +18,7 @@ namespace openre::marni
         constexpr uint32_t CLEAR_TARGET = 0x8;
         constexpr uint32_t SURFACE_NO_PALETTE = 0x10;
         constexpr uint32_t ENUMERATE_DEVICES = 0x40;
-        constexpr uint32_t DEFAULT_DDRAW = 0x80;
+        constexpr uint32_t DEFAULT_SURFACE = 0x80;
         constexpr uint32_t GPU_ENABLED = 0x200;
         constexpr uint32_t GPU_FULLSCREEN = 0x400;
         constexpr uint32_t RGB555 = 0x800;

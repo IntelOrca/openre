@@ -1,7 +1,7 @@
 // Untextured fragment shader for the OpenRE GPU backend: outputs the
 // interpolated vertex color. Used when no texture handle is bound/resolvable
-// (D3D renders with a white texture in that case; the vertex color carries
-// the actual shading).
+// (the reference path renders with a white texture in that case; the vertex
+// color carries the actual shading).
 
 struct PSInput
 {

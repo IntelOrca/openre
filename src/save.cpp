@@ -21,9 +21,6 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-#include <ddraw.h>
-#endif
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -703,98 +700,9 @@ namespace openre::save
         if (!gGameTable.FontIndex)
             return 1;
 
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
-        HDC hdc;
-        if (pSurface->GetDC(&hdc) != DD_OK)
-            return 1;
-
-        auto oldFont = SelectObject(hdc, gGameTable.hFont);
-        if (!oldFont)
-            return 0;
-        auto oldMode = SetBkMode(hdc, TRANSPARENT);
-
-        for (int i = 0; i < gGameTable.FontIndex; i++)
-        {
-            auto* str = &gGameTable.String[261 * i];
-            if (!*str)
-                continue;
-
-            auto x = gGameTable.FontXY[2 * i];
-            auto y = gGameTable.FontXY[2 * i + 1];
-
-            if (x != 0)
-            {
-                // Centered text with shadow (offset by +1 pixel)
-                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowColor = RGB(shadowR, shadowG, shadowB);
-
-                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
-                    return 0;
-                TextOutA(hdc, gGameTable.is_480p + x + 1, y, str, (int)strlen(str));
-
-                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
-                    return 0;
-                if (!TextOutA(hdc, x, y, str, (int)strlen(str)))
-                    return 0;
-            }
-            else
-            {
-                // Left-aligned text with clipping rectangle and shadow
-                SIZE psizl;
-                GetTextExtentPoint32A(hdc, str, (int)strlen(str), &psizl);
-                auto cx = psizl.cx;
-
-                RECT rect;
-                int v6;
-                if (gGameTable.is_480p)
-                {
-                    if (cx > 576)
-                        cx = 576;
-                    rect.left = 32;
-                    rect.right = 608;
-                    v6 = (576 - cx) / 2 + 32;
-                    rect.bottom = y + gGameTable.byte_6634F8;
-                }
-                else
-                {
-                    if (cx > 288)
-                        cx = 288;
-                    rect.left = 16;
-                    rect.right = 304;
-                    v6 = (288 - cx) / 2 + 16;
-                    rect.bottom = y + gGameTable.byte_6634F8;
-                }
-                rect.top = y;
-
-                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowColor = RGB(shadowR, shadowG, shadowB);
-
-                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
-                    return 0;
-                ExtTextOutA(hdc, gGameTable.is_480p + v6 + 1, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr);
-
-                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
-                    return 0;
-                if (!ExtTextOutA(hdc, v6, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr))
-                    return 0;
-            }
-        }
-
-        SelectObject(hdc, oldFont);
-        SetBkMode(hdc, oldMode);
-        pSurface->ReleaseDC(hdc);
+        // No GPU surface or no GDI on non-Windows platforms: text rendering is
+        // skipped. Keep the queue intact (cleared by the next SavePrint).
         return 1;
-#else
-        // No DirectDraw surface (OPENRE_NO_D3D build) or no GDI on non-Windows
-        // platforms: text rendering is skipped. Keep the queue intact (cleared
-        // by the next SavePrint).
-        return 1;
-#endif
     }
 
     // 0x00431470
@@ -935,18 +843,7 @@ namespace openre::save
         int y2[2] = { 288, 576 };
         char String[264];
 
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
-        HDC hdc;
-        pSurface->GetDC(&hdc);
-        auto oldFont = SelectObject(hdc, gGameTable.hFont);
-#endif
-
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-        SIZE psizl;
-#else
         int psizl_cx = 0;
-#endif
         auto is_480p = gGameTable.is_480p;
         int v12 = 0;
         int v37 = 0;
@@ -975,11 +872,7 @@ namespace openre::save
                         int v18 = a4 + 276 * v17;
                         strcpy(String, (char*)(v18 - 276));
                         strip_save_extension(String);
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-                        GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
-#else
                         psizl_cx = 0;
-#endif
                         int8_t v23;
                         int v22 = y2[is_480p];
                         if (psizl_cx <= v22)
@@ -1014,10 +907,6 @@ namespace openre::save
             } while (v14 < (int)gGameTable.dword_986394);
         }
 
-#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-        SelectObject(hdc, oldFont);
-        pSurface->ReleaseDC(hdc);
-#endif // _WIN32 && !OPENRE_NO_D3D
         *(int32_t*)a8 = v12;
         auto result = gGameTable.dword_669B00 != v12;
         gGameTable.dword_669B00 = v12;

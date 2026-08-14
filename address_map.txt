@@ -645,8 +645,8 @@ declare     var_2E                  s16
 
 struct      MarniSurface3
 base        MarniSurface2
-declare     pDDsurface              void*
-declare     pDDpalette              void**
+declare     pSurface                void*
+declare     pPalette                void**
 
 struct      MarniSurface
 base        MarniSurface3
@@ -655,12 +655,12 @@ declare     is_vmem                 u32
 struct      MarniSurfaceX
 base        MarniSurface
 declare     texture_handle          u32
-declare     pDDtexture              void*
+declare     pTexture                void*
 
 struct      MarniSurfaceY
 base        MarniSurface
 declare     texture_handle          u32
-declare     pDDtexture              void*
+declare     pTexture                void*
 
 struct      MarniMovie
 declare     surf_pad                u8[0x6C]                0x00
@@ -773,7 +773,7 @@ declare     polygons                PolygonObject**         0x008C7698
 declare     polygons_count          u32                     0x008C769C
 declare     var_8C76A0              Unknown8C76A0*[128]     0x008C76A0
 declare     window_rect             WindowRect              0x008C7CDC
-declare     pClipper                void*                   0x008C7CEC
+declare     pClip                   void*                   0x008C7CEC
 declare     lights                  MarniLight[6]           0x008C7CF0
 declare     field_8C7E10            u32                     0x008C7E10
 declare     field_8C7E14            u32                     0x008C7E14
@@ -810,8 +810,8 @@ declare     field_8C7E8C            u32                     0x008C7E8C
 declare     field_8C7E90            u32                     0x008C7E90
 declare     pMaterial               void*                   0x008C7E94
 declare     MaterialHandle          u32                     0x008C7E98
-declare     pDirect3D2              void*                   0x008C7E9C
-declare     pDirectDevice2          void*                   0x008C7EA0
+declare     p3D                     void*                   0x008C7E9C
+declare     pDevice2                void*                   0x008C7EA0
 declare     pViewport               void*                   0x008C7EA4
 declare     hWnd                    void*                   0x008C7EA8
 declare     render_w                s32                     0x008C7EAC
@@ -840,8 +840,8 @@ declare     ambient_b               u8                      0x008C831C
 declare     ambient_g               u8                      0x008C831D
 declare     ambient_r               u8                      0x008C831E
 declare     ambient_a               u8                      0x008C831F
-declare     pDirectDraw             void*                   0x008C8320
-declare     pDirectDraw2            void*                   0x008C8324
+declare     pDraw                   void*                   0x008C8320
+declare     pDraw2                  void*                   0x008C8324
 declare     pMovie                  MarniMovie*             0x008C8328
 declare     xsize                   s32                     0x008C832C
 declare     ysize                   s32                     0x008C8330
@@ -896,7 +896,7 @@ declare     device_name             OldStdString
 declare     display_mode            OldStdString
 declare     var_5C                  u8
 
-struct      D3DDeviceInfo
+struct      GpuDeviceInfo
 declare     lpDeviceName            char[30]
 declare     lpDeviceDescription     char[50]
 declare     desc                    u8[252]
@@ -957,12 +957,12 @@ declare     map_info1               MapStageInfo[20]        0x0053EB98
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_543A14            void*                   0x00543A14
 declare     error                   u32                     0x00543A18
-declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
+declare     gpu_devices             GpuDeviceInfo[5]        0x00543A20
 declare     dword_54413C            s32                     0x0054413C
-declare     d3d_vertices_processed  u32                     0x00544140
-declare     d3d_triangles_drawn     u32                     0x00544144
+declare     vertices_processed      u32                     0x00544140
+declare     triangles_drawn         u32                     0x00544144
 declare     unk_544148              u8[1050736]             0x00544148
-declare     d3d_device_count        s32                     0x006449B8
+declare     device_count            s32                     0x006449B8
 declare     dword_6449BC            s32                     0x006449BC
 declare     FontH                   u32                     0x00662E58
 declare     Cards                   void*                   0x00662E5C

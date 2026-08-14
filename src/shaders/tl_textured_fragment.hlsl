@@ -1,6 +1,6 @@
 // Textured fragment shader for the OpenRE GPU backend: samples the bound
 // texture and multiplies by the interpolated vertex color (which carries the
-// D3D TLVERTEX diffuse color; alpha drives alpha blending when enabled).
+// TL vertex diffuse color; alpha drives alpha blending when enabled).
 //
 // Resource layout per SDL_GPU conventions (SDL_gpu.h, SDL_CreateGPUShader):
 // DXIL pixel shaders place sampled textures at (t[n], space2) with matching

@@ -47,10 +47,6 @@ if(OPENRE_NATIVE_LINUX)
     # ------------------------------------------------------------------
     # Native Linux target
     # ------------------------------------------------------------------
-    # marni_ddraw.cpp is entirely #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
-    # gated and would be an empty translation unit on Linux; exclude it cleanly.
-    # marni_draw.cpp IS portable and stays in the build.
-    list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/marni_ddraw.cpp")
 
     if(OPENRE_LINUX_MODULE)
         add_library(openre MODULE ${SOURCES})
@@ -67,18 +63,6 @@ if(OPENRE_NATIVE_LINUX)
     # build. On 64-bit hosts -m32 requires g++-multilib.
     target_compile_options(openre PRIVATE -m32 -fpermissive -w)
     target_link_options(openre PRIVATE -m32)
-
-    # OPENRE_NO_D3D is REQUIRED for the native target, verified by compiling:
-    #  * openre.cpp fails without it: `#ifndef OPENRE_NO_D3D` -> #include <ddraw.h>
-    #    which does not exist on Linux (d3d_shim.h is included by the marni/
-    #    system_gpu_backend headers, not by openre.cpp's raw <ddraw.h> include).
-    #  * marni.cpp without it: 111 errors (SetRect/LPUNKNOWN/DDBD_*/incomplete
-    #    IDirectDraw* COM types the shim deliberately leaves opaque).
-    #
-    # Native compile status: the whole tree compiles with -m32 (the re2.h
-    # static_asserts pass because a 32-bit target matches the RE2 binary's
-    # memory model). The native main() in openre.cpp is scaffolding only.
-    target_compile_definitions(openre PRIVATE OPENRE_NO_D3D)
 
     # SDL3: an explicit library path (-DOPENRE_SDL3_LIBRARY=) wins; otherwise
     # prefer pkg-config, then find_package(SDL3) (works e.g. with
@@ -141,15 +125,14 @@ else()
     # ------------------------------------------------------------------
     # MinGW cross-compile to Windows DLL (default, used by CI)
     # ------------------------------------------------------------------
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -m32 -static-libgcc -static-libstdc++ -fpermissive -w -DOPENRE_NO_D3D")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -m32 -static-libgcc -static-libstdc++ -fpermissive -w")
 
     add_library(openre MODULE ${SOURCES})
 
     target_link_directories(openre PRIVATE "${CMAKE_SOURCE_DIR}/lib/lib")
 
-    # Note: no ddraw/dxguid/d3d11/dxgi - the OPENRE_NO_D3D prototype removes all
-    # D3D/DDRAW usage from the linker. strmiids/uuid provide the DirectShow
-    # MEDIASUBTYPE_* and IID_*/CLSID_* GUIDs referenced by marni_movie.cpp.
+    # Note: strmiids/uuid provide the DirectShow MEDIASUBTYPE_* and IID_*/
+    # CLSID_* GUIDs referenced by marni_movie.cpp.
     target_link_libraries(openre PRIVATE lua54 ws2_32 gdi32 ole32 oleaut32 winmm imm32 mfplat mfuuid strmiids uuid ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
     set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")

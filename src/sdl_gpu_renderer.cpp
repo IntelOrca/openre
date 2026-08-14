@@ -1,14 +1,14 @@
-// SDL3/GPU-only renderer for the OPENRE_NO_D3D build.
+// SDL3/GPU-only renderer for the SDL-only build.
 //
 // Implements the full Renderer interface (marni_renderer.h) directly on top
-// of the SDL3 GPU API. Zero DirectDraw, zero D3D, zero GfxBackend replay: the
+// of the SDL3 GPU API. No legacy backend replay: the
 // only integration points are the raw SDL_GPU accessors in system_gpu.h
 // (device/window/guest framebuffer) and the MARNI ordering tables that the
 // decompiled game code shares with the original binary.
 //
 // draw() walks the ordering tables (otag[3] backgrounds, otag[1] objects,
 // otag[0] front text) exactly like the original trans_priority_list and
-// decodes each primitive into D3D-style TL vertices using the same math as
+// decodes each primitive into transformed/lighted (TL) vertices using the same math as
 // sub_40CFD0/sub_40D300/sub_40D560/... and submits them with SDL_GPU into
 // the system_gpu-owned guest framebuffer. flip() presents the framebuffer
 // into the swapchain (letterboxed).
@@ -56,7 +56,7 @@ namespace
     // Semitransparency modifiers ORed into the primitive type by the Add*
     // methods (s_sprtTypeMods/s_polyTypeMods/s_tileTypeMods in
     // marni_renderer.cpp). Duplicated here because those tables live inside
-    // the OPENRE_NO_D3D-guarded MarniRenderer.
+    // the MarniRenderer.
     const uint32_t s_sprtTypeMods[8] = {
         kBlendAverage, kBlendAdd, kBlendAverage, kBlendAverage,
         kBlendQuarter, kBlendAverage, kBlendAverage, kBlendAverage,
@@ -67,7 +67,7 @@ namespace
     // ── TL vertex (matches kTLVertexStride in system_gpu.cpp, 32 bytes) ──
     // Position (sx, sy, sz) in pixels with a top-left origin; the vertex
     // shader converts to NDC using the gViewport uniform. The colour dword is
-    // D3DCOLOR byte order (B, G, R, A) - UBYTE4_NORM at offset 16.
+    // packed RGBA color (little-endian byte order B, G, R, A) - UBYTE4_NORM at offset 16.
     struct TlVertex
     {
         float sx;       // 0x00
@@ -138,7 +138,7 @@ namespace
 
     // ── Concrete MARNI primitive record layouts ──────────────────────────
     // Identical to the records in marni_renderer.cpp (they are guarded out of
-    // that file under OPENRE_NO_D3D, so they are duplicated here). Each Add*
+    // that file under the SDL-only build guard, so they are duplicated here). Each Add*
     // method carves one of these out of the arena; the head matches the
     // MarniPrim (PrimSprite, 0x1C bytes) layout.
     using MarniPrim = PrimSprite;
@@ -364,7 +364,7 @@ namespace
     // Texture registry entry: one SDL_GPU texture per CLUT for a MARNI
     // texture handle. Paletted images with palCnt > 1 get one texture per
     // palette (all same width/height, so UVs stay valid); `texture` is the
-    // clut-0 variant. Mirrors the D3D texture object model where mode
+    // clut-0 variant. Mirrors the texture object model where mode
     // 0x22/0x41/0x42/0xC1/0xC2 allocates pal_count texture nodes.
     struct TextureEntry
     {
@@ -389,7 +389,7 @@ namespace
     };
 
     // Blend-mode variants (LABEL_74 in the original: the 0xF00000 type bits
-    // select the D3D blend pair; anything else falls through to the
+    // select the blend pair; anything else falls through to the
     // v32 && v40 alpha path or no blending at all).
     enum class BlendSel : uint8_t
     {
@@ -437,13 +437,13 @@ namespace
         return counter <= 5 || (counter % every) == 0;
     }
 
-    static void setColor(TlVertex& v, uint32_t d3dColor)
+    static void setColor(TlVertex& v, uint32_t packedColor)
     {
-        // D3DCOLOR little-endian byte order is B, G, R, A.
-        v.b = (uint8_t)(d3dColor & 0xFF);
-        v.g = (uint8_t)((d3dColor >> 8) & 0xFF);
-        v.r = (uint8_t)((d3dColor >> 16) & 0xFF);
-        v.a = (uint8_t)((d3dColor >> 24) & 0xFF);
+        // packed RGBA little-endian byte order is B, G, R, A.
+        v.b = (uint8_t)(packedColor & 0xFF);
+        v.g = (uint8_t)((packedColor >> 8) & 0xFF);
+        v.r = (uint8_t)((packedColor >> 16) & 0xFF);
+        v.a = (uint8_t)((packedColor >> 24) & 0xFF);
     }
 
     // Doubles the B/G/R channels, clamps at 255 and folds the excess into
@@ -453,7 +453,7 @@ namespace
     // anything else -> 0xFF).
     struct FoldedColor
     {
-        uint32_t color;   // D3DCOLOR (B,G,R,A)
+        uint32_t color;   // packed RGBA (B,G,R,A)
         uint32_t specular; // channel overflow (dropped; no specular shader input)
         bool overflow;
     };
@@ -485,7 +485,7 @@ namespace
         }
 
         // Fold the mode bits into the red/alpha dword (bytes 2-3 of the
-        // D3DCOLOR): redAlpha = R | (A << 8).
+        // packed RGBA): redAlpha = R | (A << 8).
         uint32_t redAlpha = r;
         const uint32_t mode = type & 0xF00000;
         const bool hasFlag = (m->gpu_flag & 0x4000) != 0;
@@ -622,9 +622,9 @@ namespace
 
     // Resolves the SDL_GPU texture for a primitive. Mirrors the original's
     // texture selection in trans_spr_poly: `type & 4` picks prim->texture,
-    // otherwise dword_6449BC (the "current" texture). Under OPENRE_NO_D3D
-    // dword_6449BC is never created (it is a 16x16 white D3D texture made in
-    // init), so we fall back to prim->texture, which is what the MarniRenderer
+    // otherwise dword_6449BC (the "current" texture). dword_6449BC is never
+    // created (it is a 16x16 white texture made in init), so we fall back to
+    // prim->texture, which is what the MarniRenderer
     // Add* methods packed from texture_pages[page].handle.
     static const TextureEntry* resolveTexture(DecodeEnv& env, const Prim* prim)
     {
@@ -2335,7 +2335,7 @@ namespace
     }
 
     // ── ordering-table helpers (reimplemented locally; the marni.cpp
-    //    versions route through the binary or D3D) ───────────────────────
+    //    versions route through the original rendering path) ─────────────
 
     static int otAddPrimitiveAsZ(MarniOt* ot, Prim* prim, int z)
     {
@@ -2570,7 +2570,7 @@ namespace
                     }
                     else
                     {
-                        // D3D 555: blue low, alpha in bit 15.
+                        // 555 layout: blue low, alpha in bit 15.
                         dst[0] = (uint8_t)(((v >> 10) & 0x1F) << 3);
                         dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
                         dst[2] = (uint8_t)((v & 0x1F) << 3);
@@ -2735,12 +2735,11 @@ struct SdlGpuRenderer::Impl
     SDL_GPUBuffer* presentVertexBuffer = nullptr;
     SDL_GPUTransferBuffer* presentTransfer = nullptr;
 
-    // Movie overlay (OPENRE_NO_D3D): the movie player captures decoded
-    // DirectShow frames (top-down RGB24) and forwards them via
-    // system::gpu::set_movie_frame; flip() uploads each new frame into
-    // movieTexture and composites it into the guest framebuffer right after
-    // the scene pass, so cutscenes render into the framebuffer instead of a
-    // child video window. Mirrors the D3D backend's movie state.
+    // Movie overlay: the movie player captures decoded DirectShow frames
+    // (top-down RGB24) and forwards them via system::gpu::set_movie_frame;
+    // flip() uploads each new frame into movieTexture and composites it into
+    // the guest framebuffer right after the scene pass, so cutscenes render
+    // into the framebuffer instead of a child video window.
     SDL_GPUTexture* movieTexture = nullptr;
     SDL_GPUTransferBuffer* movieUpload = nullptr;
     Uint32 movieTexW = 0;
@@ -2763,8 +2762,8 @@ struct SdlGpuRenderer::Impl
     // Pending-clear state from clear() / CLEAR_TARGET.
     bool pendingClearTarget = false;
     bool pendingClearDepth = false;
-    // The D3D target clear colour is the material ambient colour (set via
-    // marni's scaler rgb1 -> ambient_b/g/r -> D3D material). Capture it at
+    // The target clear colour is the material ambient colour (set via
+    // marni's scaler rgb1 -> ambient_b/g/r -> material). Capture it at
     // clear() time so draw() can clear the framebuffer to it instead of black.
     SDL_FColor pendingClearColor{ 0.0f, 0.0f, 0.0f, 1.0f };
 
@@ -3145,10 +3144,10 @@ struct SdlGpuRenderer::Impl
         return true;
     }
 
-    // Movie overlay (OPENRE_NO_D3D): uploads the latest captured DirectShow
+    // Movie overlay: uploads the latest captured DirectShow
     // frame (top-down RGB24) into movieTexture and composites it into the
     // guest framebuffer, so cutscenes render into the framebuffer instead of a
-    // child video window. Mirrors the D3D backend's uploadMovieFrame +
+    // child video window. Mirrors the reference uploadMovieFrame +
     // blitOverlayTexture. Runs on the main thread during flip().
     void uploadAndCompositeMovie(SDL_GPUDevice* dev, SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* fb, Uint32 fbW, Uint32 fbH)
     {
@@ -3223,7 +3222,7 @@ struct SdlGpuRenderer::Impl
             }
 
             // Expand the RGB24 rows into the texture's RGBA8 layout (same
-            // row-wise conversion as the D3D backend's uploadMovieFrame).
+            // row-wise conversion as the reference uploadMovieFrame).
             void* mapped = SDL_MapGPUTransferBuffer(dev, movieUpload, false);
             if (mapped == nullptr)
             {
@@ -3542,7 +3541,7 @@ void SdlGpuRenderer::clear()
     if (!m)
         return;
     // Match the original marni::clear (0x00404D20): the colour target is only
-    // cleared when CLEAR_TARGET is set, and the D3D clear colour is the material
+    // cleared when CLEAR_TARGET is set, and the clear colour is the material
     // ambient colour (ambient_r/g/b, set by addScaler from rgb1). We capture
     // that here so the next draw() clears the framebuffer to the ambient
     // colour (e.g. the dark navy room backdrop) rather than black.
@@ -3688,7 +3687,7 @@ void SdlGpuRenderer::draw()
     colorTarget.texture = fb;
     colorTarget.mip_level = 0;
     colorTarget.layer_or_depth_plane = 0;
-    // Clear to the D3D ambient colour (the room's backdrop tint, e.g. dark
+    // Clear to the ambient colour (the room's backdrop tint, e.g. dark
     // navy) captured at clear() time, not plain black. When there is no
     // pending clear the load_op is LOAD and clear_color is ignored.
     colorTarget.clear_color = impl->pendingClearColor;
@@ -3816,7 +3815,7 @@ void SdlGpuRenderer::flip()
         return;
     }
 
-    // Movie composite (OPENRE_NO_D3D): cutscenes render into the guest
+    // Movie composite: cutscenes render into the guest
     // framebuffer (captured DirectShow frames handed over by the movie player;
     // no child video window). Composited before the letterbox present below so
     // the swapchain blit shows the movie on top of the scene.
@@ -4612,7 +4611,7 @@ int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
     }
 
     // Paletted images carry palCnt CLUTs; upload one SDL texture per CLUT so
-    // prims can pick the right palette (mirrors the D3D pal_count texture
+    // prims can pick the right palette (mirrors the pal_count texture
     // nodes). Each variant is decoded with a different palette but shares the
     // same pixel data, so all textures keep the image's width/height and UVs
     // stay valid.
@@ -4779,7 +4778,7 @@ void SdlGpuRenderer::unloadTexture(int handle)
 void SdlGpuRenderer::unloadAllTextures()
 {
     logging::logInfo("[sdlgpu] unloadAllTextures() ({} entries)", impl->textures.size());
-    // Mirror the D3D reference result_unload_textures(): only the room
+    // Mirror the reference result_unload_textures(): only the room
     // texture pages (0-7, 16-33) are unloaded. The persistent pages (8-9
     // fonts, 10-15 espcore effect sprites) keep their handles so effects
     // like the room-100 smoke (page 10) still have a valid texture.
@@ -4879,10 +4878,10 @@ void SdlGpuRenderer::setGpuFlag()
     marni::set_gpu_flag();
 }
 
-// 0x00411360 - the GDI font path is D3D-bound; skipped for the prototype.
+// 0x00411360 - the GDI font path is tied to the removed backend; skipped for the prototype.
 void SdlGpuRenderer::fontTrans()
 {
-    logging::logDebug("[sdlgpu] fontTrans(): GDI font path is D3D-bound - SKIPPED (prototype)");
+    logging::logDebug("[sdlgpu] fontTrans(): GDI font path is tied to the removed backend - SKIPPED (prototype)");
 }
 
 // 0x00401F70

@@ -8,10 +8,9 @@
 namespace openre::marni
 {
     // SDL3/GPU-only renderer. Implements the full Renderer interface from
-    // scratch on top of the SDL3 GPU API only: no DirectDraw, no D3D, no
-    // GfxBackend replay. The guest framebuffer, device and window are owned by
-    // system_gpu (system_gpu.cpp); this renderer drives them directly via the
-    // raw accessors in system_gpu.h.
+    // scratch on top of the SDL3 GPU API. The guest framebuffer, device and
+    // window are owned by system_gpu (system_gpu.cpp); this renderer drives
+    // them directly via the raw accessors in system_gpu.h.
     //
     // The draw path parses the MARNI ordering tables (gGameTable.pMarni->otag,
     // five tables) the same way the original binary's trans_priority_list does
@@ -19,7 +18,7 @@ namespace openre::marni
     // otag[1] objects/scaler, otag[0] front text. flip() presents by
     // letterboxing the guest framebuffer into the swapchain. Every method logs
     // its activity: the renderer doubles as a diagnostic harness proving the
-    // no-D3D goal is reachable.
+    // SDL-only goal is reachable.
     //
     // Supported primitive families (matching trans_priority_list):
     //   - lines (17/18)        -> untextured quads (flat/gouraud)

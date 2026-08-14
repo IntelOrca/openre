@@ -12,8 +12,8 @@
 # since the GPU stack was merged into a single translation unit).
 #
 # Requires DXC. It is looked up in the Vulkan SDK first, then in the Windows
-# Kits. Both produce DXIL (D3D12) and SPIR-V (Vulkan) per shader; the SPIR-V
-# is compiled with -fvk-use-dx-layout so HLSL register spaces map to the
+# Kits. Both produce DXIL and SPIR-V (Vulkan) per shader; the SPIR-V is
+# compiled with -fvk-use-dx-layout so HLSL register spaces map to the
 # descriptor sets SDL_GPU expects (see the comments in the .hlsl files).
 
 $ErrorActionPreference = 'Stop'

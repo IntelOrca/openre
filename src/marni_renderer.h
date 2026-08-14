@@ -20,7 +20,7 @@ namespace openre::marni
         int depth = 0;         // pixel bit depth: 4, 8 or 16
         int palBpp = 0;        // palette entry bit depth (16); 0 = not paletted
         int palCnt = 0;        // number of palettes; 0 = not paletted
-        bool psxFormat = true; // PSX 555 layout (red low, no alpha); false = D3D 555 (blue low, alpha in bit 15)
+        bool psxFormat = true; // PSX 555 layout (red low, no alpha); false = alternate 555 (blue low, alpha in bit 15)
         std::vector<uint8_t> pixels;
         std::vector<uint8_t> palette;
     };

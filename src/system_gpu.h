@@ -9,7 +9,7 @@ namespace openre::system::gpu
     // into before being letterboxed into the swapchain).
     //
     // The window is claimed exactly once (at first init()). init() is called
-    // eagerly from marni::init (so the ddraw surfaces created by init_all can
+    // eagerly from marni::init (so the surfaces created by init_all can
     // register against the backend device) and is idempotent, so
     // create_guest_framebuffer/present() may also trigger it safely.
 
@@ -28,7 +28,7 @@ namespace openre::system::gpu
 
     // ---- raw SDL_GPU access (SDL-only renderer prototype) ----
     // The SDL-only renderer (SdlGpuRenderer) drives SDL_GPU directly and
-    // bypasses the COM-shaped GfxBackend replay path, so it needs the raw
+    // bypasses the replay path, so it needs the raw
     // device/window/framebuffer objects. Return nullptr/0 until the device
     // has been created (or after shutdown()).
     void* device();            // SDL_GPUDevice*
@@ -36,7 +36,7 @@ namespace openre::system::gpu
     void* guest_framebuffer(); // SDL_GPUTexture* (nullptr until create_guest_framebuffer)
     int framebuffer_width();
     int framebuffer_height();
-    int swapchain_format();    // SDL_GPUTextureFormat value (SDL stays out of this header)
+    int swapchain_format(); // SDL_GPUTextureFormat value (SDL stays out of this header)
 
     // Acquires the swapchain texture and presents the guest framebuffer (the
     // GPU backend replays the frame's draws into it, then letterboxes it into
@@ -57,8 +57,8 @@ namespace openre::system::gpu
     // Clears the movie overlay (no movie frame is composited any more).
     void clear_movie_frame();
 
-    // OPENRE_NO_D3D movie frame readout for the SDL-only renderer: returns the
-    // latest captured frame (top-down RGB24, `pitch` bytes/row) or nullptr when
+    // Movie frame readout for the SDL-only renderer: returns the latest
+    // captured frame (top-down RGB24, `pitch` bytes/row) or nullptr when
     // none is available, filling width/height/pitch. Clears the "new frame"
     // flag so flip() only re-uploads when a fresh frame arrived.
     const void* movie_frame(int& width, int& height, int& pitch);
