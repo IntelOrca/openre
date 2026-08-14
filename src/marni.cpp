@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #ifndef OPENRE_NO_D3D
@@ -26,6 +27,7 @@
 #include <ddraw.h>
 #endif
 #include <windows.h>
+#endif
 
 namespace openre::marni
 {
@@ -72,7 +74,9 @@ namespace openre::marni
     static int __stdcall create_device(Marni* self);
     static int __stdcall enum_drivers(Marni* self);
     static int __stdcall create_d3d(Marni* self);
+#ifdef _WIN32
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext);
+#endif
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int adjust_rect(RECT* clip, const RECT* src, RECT* out);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
@@ -101,7 +105,9 @@ namespace openre::marni
     static int __stdcall ot_clear(MarniOt* self);
     static int __stdcall ot_alloc(MarniOt* self, int depth, int a3);
     static void __stdcall ot_dtor(MarniOt* self);
+#ifdef _WIN32
     static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
@@ -540,11 +546,13 @@ namespace openre::marni
         {
             surface_fill(&self->surface0, 0, 0, 0);
             flip(self);
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
             ((LPDIRECTDRAW)self->pDirectDraw)->FlipToGDISurface();
 #endif
+#ifdef _WIN32
             auto dwStyle = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
             SetWindowLongA((HWND)self->hWnd, GWL_STYLE, dwStyle & ~(WS_CAPTION | WS_SIZEBOX | WS_TABSTOP));
+#endif
         }
         return movie_update_window(self->pMovie);
     }
@@ -572,8 +580,10 @@ namespace openre::marni
         if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
             return;
 
+#ifdef _WIN32
         auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
         SetWindowLongA((HWND)self->hWnd, GWL_STYLE, (dwValue & ~WS_SIZEBOX) | WS_MAXIMIZEBOX);
+#endif
     }
 
     // 0x00401F70
@@ -589,11 +599,13 @@ namespace openre::marni
         if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
             return;
 
+#ifdef _WIN32
         auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
         SetWindowLongA(
             (HWND)self->hWnd,
             GWL_STYLE,
             (dwValue & ~WS_POPUP) | (WS_TABSTOP | WS_GROUP | WS_SIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_BORDER));
+#endif
     }
 
     // 0x00401FD0
@@ -611,7 +623,9 @@ namespace openre::marni
             // Borderless fullscreen: the movie window covers the whole screen.
             // (The original offset it up by the frame/caption height to
             // compensate for the exclusive-fullscreen window frame.)
+#ifdef _WIN32
             GetClientRect((HWND)self->hWnd, &rc);
+#endif
         }
         else if (self->resolutions[self->modes].width == 640)
         {
@@ -1489,6 +1503,7 @@ namespace openre::marni
     // window and look stretched).
     static void compute_fullscreen_window_rect(Marni* self)
     {
+#ifdef _WIN32
         RECT window;
         if (GetWindowRect((HWND)self->hWnd, &window) && (window.right - window.left) > 0 && (window.bottom - window.top) > 0)
         {
@@ -1508,6 +1523,14 @@ namespace openre::marni
         {
             SetRect((LPRECT)&self->window_rect, 0, 0, self->xsize, self->ysize);
         }
+#else
+        // No Win32 window metrics off Windows; fall back to the full render
+        // area (the SDL window already covers the display).
+        self->window_rect.left = 0;
+        self->window_rect.top = 0;
+        self->window_rect.right = self->xsize;
+        self->window_rect.bottom = self->ysize;
+#endif
     }
 
     // Computes the letterboxed presentation rect (in screen coordinates) for a
@@ -1517,6 +1540,7 @@ namespace openre::marni
     // from the actual client area instead of the render size.
     static void compute_windowed_window_rect(HWND hWnd, int width, int height, LPRECT outRect)
     {
+#ifdef _WIN32
         RECT client;
         if (GetClientRect(hWnd, &client) && client.right > 0 && client.bottom > 0)
         {
@@ -1533,6 +1557,13 @@ namespace openre::marni
         {
             SetRect(outRect, 0, 0, width, height);
         }
+#else
+        (void)hWnd;
+        outRect->left = 0;
+        outRect->top = 0;
+        outRect->right = width;
+        outRect->bottom = height;
+#endif
     }
 
     // 0x00403F30
@@ -1547,7 +1578,7 @@ namespace openre::marni
         self->ysize = r.height;
         self->bpp = r.depth;
         self->is_gpu_busy = 1;
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
         // Fullscreen is handled via the SDL3 borderless window, so DirectDraw
         // always stays in windowed cooperative level (exclusive fullscreen with
         // SetDisplayMode is unsupported on modern Windows).
@@ -1588,7 +1619,7 @@ namespace openre::marni
         self->aspect_x = (float)((double)self->xsize / self->render_w);
         self->aspect_y = (float)((double)self->ysize / self->render_h);
 
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
         DDSURFACEDESC desc;
         ZeroMemory(&desc, sizeof(DDSURFACEDESC));
         desc.dwSize = sizeof(DDSURFACEDESC);
@@ -1765,7 +1796,7 @@ namespace openre::marni
         // at the render resolution (idempotent in system::gpu).
         system::gpu::create_guest_framebuffer(self->xsize, self->ysize);
 #endif
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
         if (!(self->gpu_flag & GpuFlags::SOFTWARE_GPU))
         {
             if (self->surfaceZ.pDDsurface != nullptr)
@@ -1874,7 +1905,7 @@ namespace openre::marni
 #endif
         if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
         {
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
             surface_fill(&self->surface2, 0, 0, 0);
 #endif
         }
@@ -2126,7 +2157,7 @@ namespace openre::marni
             }
         }
 
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
         if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0 && self->pDirectDraw != nullptr)
         {
             self->is_gpu_busy = 1;
@@ -2170,7 +2201,7 @@ namespace openre::marni
 
         cstd_vector_dtor(self->textures, sizeof(MarniTextureNode), 256, (void*)0x00405310);
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         gfx::shutdown();
 #endif
     }
@@ -2272,11 +2303,19 @@ namespace openre::marni
         self->field_8C8300 = 3;
         self->field_8C7E90 = 0;
         self->field_8C82FC = 0;
+#ifdef _WIN32
         self->desktop_w = GetSystemMetrics(SM_CXSCREEN);
         self->desktop_h = GetSystemMetrics(SM_CYSCREEN);
         auto dc = GetDC(NULL);
         self->desktop_bpp = GetDeviceCaps(dc, BITSPIXEL) * GetDeviceCaps(dc, PLANES);
         ReleaseDC(NULL, dc);
+#else
+        // No Win32 display metrics off Windows; assume a 32bpp desktop. The
+        // desktop size is unused outside this branch.
+        self->desktop_w = 0;
+        self->desktop_h = 0;
+        self->desktop_bpp = 32;
+#endif
         self->bpp = self->desktop_bpp;
         self->gpu_flag |= GpuFlags::SURFACE_NO_PALETTE;
         self->is_gpu_busy = 0;
@@ -2312,7 +2351,7 @@ namespace openre::marni
             self->lights->var_20 = 0.5f;
         }
 
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D) && defined(_WIN32)
         DWORD isDefault;
         gGameTable.error = create_ddraw(self->gpu_flag & GpuFlags::ENUMERATE_DEVICES, (LPDIRECTDRAW*)&self->pDirectDraw, &isDefault);
         if (gGameTable.error != 0)
@@ -2480,12 +2519,13 @@ namespace openre::marni
             self->is_gpu_active = 1;
             self->gpu_flag |= GpuFlags::GPU_ENABLED;
         }
-#ifdef OPENRE_NO_D3D
+#if defined(OPENRE_NO_D3D) || !defined(_WIN32)
         else
         {
-            // No D3D device exists in the OPENRE_NO_D3D build; mark the GPU
-            // active the same way the software-renderer branch above does. The
-            // SDL3 renderer owns the swapchain and presents via SDL itself.
+            // No D3D device exists in the OPENRE_NO_D3D build (and off Windows
+            // there is no DirectDraw at all); mark the GPU active the same way
+            // the software-renderer branch above does. The SDL3 renderer owns
+            // the swapchain and presents via SDL itself.
             logging::logInfo("[marni] init: no-D3D build, GPU active (no D3D device)");
             self->is_gpu_active = 1;
             self->gpu_flag |= GpuFlags::GPU_ENABLED;
@@ -3158,7 +3198,9 @@ namespace openre::marni
         switch (msg)
         {
         case WM_MOVE: move(self); break;
+#ifdef _WIN32
         case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
+#endif
         case WM_DESTROY: destroy(self); break;
         case WM_SYSKEYDOWN:
             if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
@@ -3196,7 +3238,7 @@ namespace openre::marni
         for (auto i = 0; i < 256; i++)
             unload_texture(marni, i);
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         auto pClipper = (LPDIRECTDRAWCLIPPER)marni->pClipper;
         marni->hWnd = nullptr;
         if (pClipper != nullptr)
@@ -3211,7 +3253,7 @@ namespace openre::marni
         surface_release(&marni->surface0);
         surface_release(&marni->surface2);
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         if ((marni->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
         {
             marni->is_gpu_busy = 1;
@@ -3223,7 +3265,7 @@ namespace openre::marni
 
         movie_release(marni->pMovie);
 
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         if (marni->pDirect3D2 != nullptr)
         {
             ((LPDIRECT3D2)marni->pDirect3D2)->Release();
@@ -3239,6 +3281,7 @@ namespace openre::marni
     }
 
     // 0x004065C0
+#ifdef _WIN32
     static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (!marni->is_gpu_active)
@@ -3293,16 +3336,28 @@ namespace openre::marni
         }
         return result;
     }
+#endif // _WIN32
 
     // 0x00406860
-    #ifndef OPENRE_NO_D3D
+    #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
     static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2)
     {
         return pDD->QueryInterface(IID_IDirectDraw2, (LPVOID*)lpDD2);
     }
+    #elif !defined(OPENRE_NO_D3D)
+    // Non-WIN32 build without OPENRE_NO_D3D: there is no DirectDraw, and the
+    // hook target (0x00406860) is never reached because Marni::Init is hooked.
+    // Keep the function as a graceful failure stub for our own init().
+    static int query_ddraw2(LPDIRECTDRAW pDD, LPDIRECTDRAW2* lpDD2)
+    {
+        (void)pDD;
+        if (lpDD2)
+            *lpDD2 = nullptr;
+        return -1;
+    }
+    #endif // OPENRE_NO_D3D
 
     // 0x00406920
-    #endif // OPENRE_NO_D3D
     #ifndef OPENRE_NO_D3D
     static HRESULT CALLBACK cb_enum_texture_format(LPDDSURFACEDESC desc, LPVOID context)
     {
@@ -3427,7 +3482,7 @@ namespace openre::marni
     // 0x00406D90
     static int __stdcall create_device(Marni* self)
     {
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         // Texture format table stored inline in the Marni object
         // (count at +0x8C78A0, entries from +0x8C78A4).
         constexpr size_t kFormatEntrySize = 0x6C; // legacy DDSURFACEDESC size (modern ddraw.h is 0x7C)
@@ -3550,7 +3605,7 @@ namespace openre::marni
     }
 
     // 0x00407020
-    #ifndef OPENRE_NO_D3D
+    #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
     static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
     {
         if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
@@ -3654,9 +3709,22 @@ namespace openre::marni
         (void)pDDsurfaceZ;
         return 1;
     }
+    #elif !defined(OPENRE_NO_D3D)
+    // Non-WIN32 build without OPENRE_NO_D3D: no DirectDraw surfaces exist and
+    // the hook target (0x00407020) is never reached (Marni::InitAll is only
+    // called from our own init()/resize()). Keep a graceful failure stub.
+    static int __stdcall create_zbuffer(Marni* self, int width, int height, LPDIRECTDRAWSURFACE* pDDsurfaceZ)
+    {
+        (void)self;
+        (void)width;
+        (void)height;
+        if (pDDsurfaceZ)
+            *pDDsurfaceZ = nullptr;
+        return 1;
+    }
+    #endif // OPENRE_NO_D3D
 
     // 0x00407290
-    #endif // OPENRE_NO_D3D
     #ifndef OPENRE_NO_D3D
     static HRESULT CALLBACK enum_driver_callback(
         GUID* lpGuid, LPSTR lpDeviceDescription, LPSTR lpDeviceName, LPD3DDEVICEDESC descSw, LPD3DDEVICEDESC descHw,
@@ -3691,7 +3759,7 @@ namespace openre::marni
     #endif // OPENRE_NO_D3D
     static int __stdcall enum_drivers(Marni* self)
     {
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 1;
 
@@ -3732,7 +3800,7 @@ namespace openre::marni
     // 0x00407440
     static int __stdcall create_d3d(Marni* self)
     {
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         if (self->gpu_flag & GpuFlags::SOFTWARE_GPU)
             return 0;
 
@@ -9324,7 +9392,9 @@ namespace openre::marni
         if (lpResRect)
             compute_windowed_window_rect(hWnd, width, height, lpResRect);
 
+#ifdef _WIN32
         InvalidateRect(hWnd, nullptr, TRUE);
+#endif
         return 1;
     }
 
@@ -9446,7 +9516,7 @@ namespace openre::marni
 
     // 0x0040F1A0
     #endif // OPENRE_NO_D3D
-    #ifndef OPENRE_NO_D3D
+    #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
     static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
     {
         LPDIRECTDRAW lpDD = NULL;
@@ -9478,12 +9548,25 @@ namespace openre::marni
 
         return 0;
     }
+    #elif !defined(OPENRE_NO_D3D)
+    // Non-WIN32 build without OPENRE_NO_D3D: DirectDrawCreate does not exist
+    // and the hook target (0x0040F1A0) is never reached (Marni::Init is
+    // hooked). Keep a graceful failure stub for our own init().
+    static int create_ddraw(bool bEnumDevices, LPDIRECTDRAW* lplpDD, LPDWORD lpIsDefault)
+    {
+        (void)bEnumDevices;
+        if (lplpDD)
+            *lplpDD = nullptr;
+        if (lpIsDefault)
+            *lpIsDefault = 0;
+        return 0x80004005; // E_FAIL
+    }
+    #endif // OPENRE_NO_D3D
 
     // 0x0040F250
-    #endif // OPENRE_NO_D3D
+    #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
     static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext)
     {
-#ifndef OPENRE_NO_D3D
         auto lpDDresult = (LPDIRECTDRAW*)lpContext;
         LPDIRECTDRAW lpDD;
         if (lpGUID != NULL && SUCCEEDED(DirectDrawCreate(lpGUID, &lpDD, NULL)))
@@ -9499,14 +9582,22 @@ namespace openre::marni
             lpDD->Release();
         }
         return TRUE;
-#else
-        // OPENRE_NO_D3D: no D3D device/surface to operate on.
-        return 0;
-#endif
     }
+    #elif !defined(OPENRE_NO_D3D)
+    // Non-WIN32 build without OPENRE_NO_D3D: no DirectDraw drivers to
+    // enumerate (only reachable from the create_ddraw stub above).
+    static BOOL CALLBACK ddrawEnumCallback(GUID* lpGUID, LPSTR lpName, LPSTR lpDesc, LPVOID lpContext)
+    {
+        (void)lpGUID;
+        (void)lpName;
+        (void)lpDesc;
+        (void)lpContext;
+        return 0;
+    }
+    #endif
 
     // 0x0040F2F0
-    #ifndef OPENRE_NO_D3D
+    #if defined(_WIN32) && !defined(OPENRE_NO_D3D)
     static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD)
     {
         if (fullscreen)
@@ -9534,6 +9625,17 @@ namespace openre::marni
             }
         }
         return S_OK;
+    }
+    #elif !defined(OPENRE_NO_D3D)
+    // Non-WIN32 build without OPENRE_NO_D3D: SetCooperativeLevel does not
+    // exist and the hook target (0x0040F2F0) is only reached from Marni
+    // methods that are all hooked/implemented. Keep a graceful failure stub.
+    static HRESULT dd_set_coop_level(HWND hWnd, int fullscreen, LPDIRECTDRAW2 pDD)
+    {
+        (void)hWnd;
+        (void)fullscreen;
+        (void)pDD;
+        return 0x80004005; // E_FAIL
     }
     #endif // OPENRE_NO_D3D
 
@@ -13756,8 +13858,10 @@ namespace openre::marni
     {
         if (self->pMovie->flag && !movie_update(self->pMovie) && self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
+#ifdef _WIN32
             auto windowStyles = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
             SetWindowLongA((HWND)self->hWnd, GWL_STYLE, windowStyles & 0x7F30FFFF | 0xCF0000);
+#endif
         }
 
         return 1;
@@ -13837,11 +13941,13 @@ namespace openre::marni
         interop::hookThisCall(0x00405320, &init);
         interop::hookThisCall(0x00406450, &move);
         interop::hookThisCall(0x004064D0, &destroy);
+#ifdef _WIN32
         interop::hookThisCall(0x00407340, &enum_drivers);
         interop::hookThisCall(0x00407440, &create_d3d);
         interop::hookThisCall(0x00406D90, &create_device);
-#ifndef OPENRE_NO_D3D
+#if !defined(OPENRE_NO_D3D)
         interop::hookThisCall(0x00407020, &create_zbuffer);
+#endif
 #endif
         interop::hookThisCall(0x0040EAF0, &do_draw_op);
         interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
@@ -13863,7 +13969,7 @@ namespace openre::marni
         interop::hookThisCall(0x00416730, &suspend_texture_use);
         interop::hookThisCall(0x0040C6E0, &draw_line_flat);
         interop::hookThisCall(0x0040C790, &draw_line_gourad);
-#ifndef OPENRE_NO_D3D
+#if defined(_WIN32) && !defined(OPENRE_NO_D3D)
         interop::writeJmp(0x00406860, &query_ddraw2);
         interop::writeJmp(0x0040F1A0, &create_ddraw);
         interop::writeJmp(0x0040F2F0, &dd_set_coop_level);
@@ -13884,6 +13990,8 @@ namespace openre::marni
         interop::hookThisCall(0x00430A60, &marni_poly_object_open);
         interop::writeJmp(0x00432CD0, &door_disp1);
         interop::writeJmp(0x00443620, &mapping_tmd);
+#ifdef _WIN32
         interop::writeJmp(0x00406A10, &d3d_error_routine);
+#endif
     }
 }
