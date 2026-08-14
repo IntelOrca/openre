@@ -145,8 +145,9 @@ else()
     target_link_directories(openre PRIVATE "${CMAKE_SOURCE_DIR}/lib/lib")
 
     # Note: no ddraw/dxguid/d3d11/dxgi - the OPENRE_NO_D3D prototype removes all
-    # D3D/DDRAW usage from the linker.
-    target_link_libraries(openre PRIVATE lua54 ws2_32 gdi32 ole32 winmm imm32 mfplat mfuuid ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
+    # D3D/DDRAW usage from the linker. strmiids/uuid provide the DirectShow
+    # MEDIASUBTYPE_* and IID_*/CLSID_* GUIDs referenced by marni_movie.cpp.
+    target_link_libraries(openre PRIVATE lua54 ws2_32 gdi32 ole32 oleaut32 winmm imm32 mfplat mfuuid strmiids uuid ${CMAKE_SOURCE_DIR}/lib/lib/x86/SDL3.lib)
 
     set_target_properties(openre PROPERTIES PREFIX "" SUFFIX ".dll")
 
