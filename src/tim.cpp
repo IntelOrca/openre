@@ -54,8 +54,8 @@ namespace openre::tim
     {
         const uint32_t* pTimData = (const uint32_t*)pTim;
 
-        self->pPalette = nullptr;
-        self->pSurface = nullptr;
+        self->pDDpalette = nullptr;
+        self->pDDsurface = nullptr;
         self->var_3C = 0;
         self->is_vmem = 0;
 
@@ -79,8 +79,8 @@ namespace openre::tim
         {
             // Clut block: pTim[2] = block length (unused), pTim[3] = clut x/y,
             // pTim[4] = colors/palettes; clut pixel data starts at pTim[5].
-            self->pSurface = (void*)(uint16_t)pTimData[3];
-            self->pPalette = (void**)(uintptr_t)(pTimData[3] >> 16);
+            self->pDDsurface = (void*)(uint16_t)pTimData[3];
+            self->pDDpalette = (void**)(uintptr_t)(pTimData[3] >> 16);
             clutWidth = (uint16_t)pTimData[4];
             palCount = (int)(pTimData[4] >> 16);
             clutData = pTimData + 5;

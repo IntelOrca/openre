@@ -754,7 +754,7 @@ namespace openre::marni
         self->surface2.var_29 = 0;
         self->surface2.bOpen = 1;
 
-        self->surfaceZ.pSurface = nullptr;
+        self->surfaceZ.pDDsurface = nullptr;
         self->surfaceZ.desc.r_bitcnt = 5;
         self->surfaceZ.desc.g_shift = 5;
         self->surfaceZ.desc.g_bitcnt = 5;
@@ -4824,8 +4824,8 @@ namespace openre::marni
         // members are MarniSurface (0x3C) and surface3 sits at the exact tail of Marni.
         surface2_ctor(self);
         self->vtbl = (MarniSurfaceVTBL*)0x0051737C;
-        self->pSurface = nullptr;
-        self->pPalette = nullptr;
+        self->pDDsurface = nullptr;
+        self->pDDpalette = nullptr;
         self->var_29 = 0;
         self->bOpen = 0;
         self->var_27 = 0;
@@ -5441,7 +5441,7 @@ namespace openre::marni
     static int __stdcall surface3_vrelease(MarniSurface3* self)
     {
         surface2_vrelease(self);
-        self->pSurface = nullptr;
+        self->pDDsurface = nullptr;
         return 1;
     }
 

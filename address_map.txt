@@ -645,8 +645,8 @@ declare     var_2E                  s16
 
 struct      MarniSurface3
 base        MarniSurface2
-declare     pSurface                void*
-declare     pPalette                void**
+declare     pDDsurface              void*
+declare     pDDpalette              void**
 
 struct      MarniSurface
 base        MarniSurface3

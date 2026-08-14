@@ -816,8 +816,8 @@ static_assert(sizeof(MarniSurface2) == 0x30);
 
 struct MarniSurface3 : MarniSurface2
 {
-    void* pSurface;                     // 0x0030
-    void** pPalette;                    // 0x0034
+    void* pDDsurface;                   // 0x0030
+    void** pDDpalette;                  // 0x0034
 };
 static_assert(sizeof(MarniSurface3) == 0x38);
 
