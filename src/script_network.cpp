@@ -1,5 +1,7 @@
 #include "script_network.h"
 
+#ifdef _WIN32
+
 #define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -798,3 +800,30 @@ namespace openre::script
         NetworkManager::get().shutdown();
     }
 }
+
+#else // !_WIN32
+
+#include <lua.hpp>
+
+namespace openre::script
+{
+    // Non-Windows: the TCP networking module is implemented with Winsock
+    // sockets (script_network.cpp) which do not exist off Windows. Provide
+    // no-op stubs so callers in script.cpp compile; the re.network.* Lua
+    // bindings are simply not registered.
+    void registerNetworkBindings(lua_State* L, LuaVm* vm)
+    {
+        (void)L;
+        (void)vm;
+    }
+
+    void networkInit()
+    {
+    }
+
+    void networkShutdown()
+    {
+    }
+}
+
+#endif // _WIN32

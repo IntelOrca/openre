@@ -3,6 +3,7 @@
 #include "system_filesystem.h"
 #include <algorithm>
 #include <cerrno>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>

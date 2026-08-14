@@ -13,6 +13,7 @@
 #if !defined(_WIN32) && !defined(__i386__)
 #define __stdcall
 #define __thiscall
+#define __cdecl
 #endif
 
 #if defined(__i386__)

@@ -1,7 +1,8 @@
 #include "math.h"
 #include "interop.hpp"
 #include "openre.h"
-#include <intrin.h>
+
+#include <cmath>
 
 namespace openre::math
 {

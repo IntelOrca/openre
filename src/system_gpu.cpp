@@ -4658,7 +4658,8 @@ namespace openre::system::gpu
     // the break kills the process before the corruption description reaches our
     // log sink. This VEH swallows the break (a bounded number of times) so the
     // async callback can deliver the message to sdl_gpu_log.txt and we can see
-    // exactly what SDL/D3D12 considers corrupt.
+    // exactly what SDL/D3D12 considers corrupt. Windows-only (SEH API).
+#ifdef _WIN32
     static LONG WINAPI sdlGpuVeh(PEXCEPTION_POINTERS ep)
     {
         static volatile LONG s_breaks = 0;
@@ -4682,6 +4683,7 @@ namespace openre::system::gpu
         }
         return EXCEPTION_CONTINUE_SEARCH;
     }
+#endif
 
     bool init()
     {
@@ -4692,7 +4694,9 @@ namespace openre::system::gpu
         {
             if (FILE* f = std::fopen("sdl_gpu_log.txt", "w"))
                 SDL_SetLogOutputFunction(&sdlLogToFile, f);
+#ifdef _WIN32
             AddVectoredExceptionHandler(1, &sdlGpuVeh);
+#endif
         }
 
         g_window = static_cast<SDL_Window*>(system::window::get_window());

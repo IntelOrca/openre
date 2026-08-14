@@ -1173,14 +1173,14 @@ namespace openre::save
             for (int cardIndex = 0; cardIndex < gGameTable.cnt0; cardIndex++)
             {
                 if (dupCount == 0)
-                    return wsprintfA(str, candidate); // unreachable: dupCount only increments
+                    return (int)strlen(strcpy(str, candidate)); // unreachable: dupCount only increments
 
                 strcpy(cardName, (const char*)gGameTable.Cards + 276 * cardIndex);
                 if (char* dot = strrchr(cardName, '.'))
                     *dot = '\0';
                 if (strcmp(cardName, candidate) == 0)
                 {
-                    wsprintfA(candidate, "%s_%d", base, ++dupCount);
+                    sprintf(candidate, "%s_%d", base, ++dupCount);
                     duplicate = true;
                     break;
                 }
@@ -1223,7 +1223,7 @@ namespace openre::save
             for (int i = 0; i < gGameTable.cnt0; i++)
             {
                 if (!suffix)
-                    return wsprintfA(str, candidate); // unreachable: suffix only increments
+                    return (int)strlen(strcpy(str, candidate)); // unreachable: suffix only increments
                 strcpy(cardName, (const char*)gGameTable.Cards + i * 276);
                 char* dot = strrchr(cardName, '.');
                 if (dot)
@@ -1232,7 +1232,7 @@ namespace openre::save
                 {
                     if (cardCursor + cardSelect - 1 != i)
                     {
-                        wsprintfA(candidate, "%s_%d", name, ++suffix);
+                        sprintf(candidate, "%s_%d", name, ++suffix);
                         restart = true;
                     }
                     break;
@@ -1973,7 +1973,11 @@ namespace openre::save
         // Resolve the path to absolute so relative paths are interpreted
         // against the current directory rather than the savedata folder.
         char absPath[MAX_PATH];
+#ifdef _WIN32
         if (GetFullPathNameA(path, MAX_PATH, absPath, nullptr) == 0)
+#else
+        if (realpath(path, absPath) == nullptr)
+#endif
         {
             logging::logError("[cmdline] Failed to resolve save path: {}", path);
             return false;
