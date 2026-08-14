@@ -233,7 +233,7 @@ namespace openre::title
                     gGameTable.byte_689F24 = 0;
                 }
                 title_bg_reload();
-                if (gGameTable.byte_98F1BB == 2)
+                if (gGameTable.demo_ended == 2)
                 {
                     set_flag(FlagGroup::System, FG_SYSTEM_30, false);
                 }
@@ -371,8 +371,8 @@ namespace openre::title
     // 0x004D1150
     static void pad_rep_set(uint32_t arg0, uint16_t arg1)
     {
-        gGameTable.dword_98F074 = arg0;
-        gGameTable.word_98F078 = arg1;
+        gGameTable.key_repeat_mask = arg0;
+        gGameTable.key_repeat_timing = arg1;
     }
 
     // 0x00440480
@@ -641,7 +641,7 @@ namespace openre::title
         gGameTable.pl.life = 200;
         gGameTable.byte_99270E = gGameTable.input_mapping_idx;
         gGameTable.input_mapping_idx = 0;
-        gGameTable.byte_98F1BB = 0;
+        gGameTable.demo_ended = 0;
         gGameTable.dword_99CF6C = 0;
     }
 
@@ -708,7 +708,7 @@ namespace openre::title
                     gGameTable.input_mapping_idx = pdemo.key_idx;
                     gGameTable.word_98E9B6 = 200;
                     gGameTable.pl.life = 200;
-                    gGameTable.byte_98F1BB = 0;
+                    gGameTable.demo_ended = 0;
                     gGameTable.dword_99CF6C = 0;
                 }
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_4))

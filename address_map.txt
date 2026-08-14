@@ -468,12 +468,12 @@ declare     mapping                 u8[31]
 declare     keyboard_raw_state      u32                     0x24
 declare     keyboard_trg            u32                     0x28
 declare     keyboard_old            u32                     0x2C
-declare     var_1F8                 u32                     0x1F8
+declare     keyboard_ready          u32                     0x1F8
 declare     gamepad_raw_state       u32                     0x1FC
 declare     gamepad_trg             u32                     0x200
 declare     gamepad_old             u32                     0x204
-declare     var_3D0                 u32                     0x3D0
-declare     var_3B24                u32                     0x3B24
+declare     gamepad_present         u32                     0x3D0
+declare     joystick_count          u32                     0x3B24
 declare     keyboard                u32                     0x3B28
 
 struct      DemoPlayer
@@ -942,7 +942,7 @@ declare     misc_ptr_j              u16[512]                0x0052F5E8
 declare     desc_txt_j              u8[4832]                0x0052F9E8
 declare     desc_ptr_j              u16[256]                0x00530CC8
 declare     input_mapping_table      u16[32]                 0x005338D8
-declare     byte_533938             u8                      0x00533938
+declare     key_repeat_counter      u8                      0x00533938
 declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -996,7 +996,7 @@ declare     audio_BufferVoice        u32[2]                 0x00669F38
 declare     MarniSnd_SoundDepth      u16                    0x00669F40
 declare     XA_idx                  s32                     0x00669F44
 declare     bgm_channels            BgmChannel[30]          0x00669F50
-declare     dword_66D394            u32                     0x0066D394
+declare     raw_input_state         u32                     0x0066D394
 declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
 declare     dword_67140C            u32                     0x0067140C
@@ -1091,7 +1091,7 @@ declare     card_name_index         s32                     0x00689AA4
 declare     byte_689AA8             u8                      0x00689AA8
 declare     card_write_result       s32                     0x00689AAC
 declare     byte_689ABC             u8                      0x00689ABC
-declare     dword_689B3C            u32                     0x00689B3C
+declare     fg_stop_latch           u32                     0x00689B3C
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10
 declare     rdt_top_ptr             void*                   0x00689C14
@@ -1274,13 +1274,13 @@ declare     byte_988528             u8*                     0x00988528
 declare     dword_9885A8            u32                     0x009885A8
 declare     dword_9885AC            u32                     0x009885AC
 declare     dword_9885D0            u32                     0x009885D0
-declare     dword_9885F4            u32                     0x009885F4
-declare     dword_9885F8            u32                     0x009885F8
-declare     word_9885FC             u16                     0x009885FC
-declare     dword_9885FE            u32                     0x009885FE
+declare     raw_state               u32                     0x009885F4
+declare     raw_edge                u32                     0x009885F8
+declare     raw_state_lo            u16                     0x009885FC
+declare     key_edge                u32                     0x009885FE
 declare     g_key                   u32                     0x00988604
 declare     key_trg                 u32                     0x00988608
-declare     dword_98860C            u32                     0x0098860C
+declare     key_copy                u32                     0x0098860C
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     dword_988620            u32                     0x00988620
@@ -1412,8 +1412,8 @@ declare     byte_98EF2D             u8                      0x0098EF2D
 declare     byte_98EF2E             u8                      0x0098EF2E
 declare     main                    u8*                     0x0098EF40
 declare     dword_98F070            u32                     0x0098F070
-declare     dword_98F074            u32                     0x0098F074
-declare     word_98F078             u16                     0x0098F078
+declare     key_repeat_mask         u32                     0x0098F074
+declare     key_repeat_timing       u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
@@ -1425,7 +1425,7 @@ declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F1B8             u8                      0x0098F1B8
 declare     byte_98F1B9             u8                      0x0098F1B9
 declare     pause                   u8                      0x0098F1BA
-declare     byte_98F1BB             u8                      0x0098F1BB
+declare     demo_ended              u8                      0x0098F1BB
 declare     roomptr                 s32[16]                 0x0098F1E0
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     dword_991F70            u32                     0x00991F70
@@ -1444,9 +1444,9 @@ declare     lc_matrix               Mat16                   0x0099CE60
 declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
-declare     dword_99CF64            u32                     0x0099CF64
+declare     keyboard_state          u32                     0x0099CF64
 declare     dword_99CF6C            u32                     0x0099CF6C
-declare     dword_99CF70            u32                     0x0099CF70
+declare     gamepad_state           u32                     0x0099CF70
 declare     adt_in_pos              u32                     0x0099DAA0
 declare     adt_buffer_in           void*                   0x0099DAA4
 declare     adt_out_ptr             u8*                     0x0099DAA8

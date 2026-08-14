@@ -1551,12 +1551,12 @@ namespace openre
         {
             return false;
         }
-        if ((gGameTable.dword_9885FE & 0x100) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
+        if ((gGameTable.key_edge & 0x100) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
         {
             set_flag(FlagGroup::System, FG_SYSTEM_4, true);
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
-        if ((gGameTable.dword_9885FE & 0x800) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
+        if ((gGameTable.key_edge & 0x800) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
         {
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
@@ -1671,7 +1671,7 @@ namespace openre
             gGameTable.vk_press = vk_press;
             if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
             {
-                gGameTable.dword_9885FE |= 0x800;
+                gGameTable.key_edge |= 0x800;
             }
         }
         if (vk_press & 2)
@@ -1680,7 +1680,7 @@ namespace openre
             gGameTable.vk_press = vk_press;
             if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
             {
-                gGameTable.dword_9885FE |= 0x100;
+                gGameTable.key_edge |= 0x100;
             }
         }
         if ((vk_press & 0x40) && !(vk_press & 4))
@@ -1692,7 +1692,7 @@ namespace openre
         if (vk_press & 4)
         {
             gGameTable.vk_press = vk_press & ~4u;
-            gGameTable.word_9885FC = 0;
+            gGameTable.raw_state_lo = 0;
             bg_set_mode(2, 0);
             task_kill(0);
             task_kill(1);
@@ -1769,7 +1769,7 @@ namespace openre
             {
                 gGameTable.input_mapping_idx = gGameTable.byte_99270E;
                 gGameTable.fg_stop |= 0xFF000000;
-                if (gGameTable.byte_98F1BB)
+                if (gGameTable.demo_ended)
                 {
                     hud_fade_set(512, 2048, 7, 1);
                 }
@@ -2043,9 +2043,9 @@ namespace openre
                 marni::out();
             LABEL_80:
                 bg_set_mode(2, 0);
-                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || gGameTable.byte_98F1BB)
+                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || gGameTable.demo_ended)
                 {
-                    gGameTable.byte_98F1BB = 1;
+                    gGameTable.demo_ended = 1;
                     init_global();
                     task_chain(title::title);
                     ctcb.var_08 = 0;
@@ -2188,7 +2188,7 @@ namespace openre
             if (gGameTable.pause)
             {
                 movie_set(1);
-                if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+                if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
                 {
                     marni::out();
                     gGameTable.pause = 0;
@@ -2198,7 +2198,7 @@ namespace openre
                 return;
             }
 
-            if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+            if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
             {
                 gGameTable.pause = 1;
                 update_timer();

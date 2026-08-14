@@ -270,7 +270,7 @@ namespace openre::door
                     mess_print(32, 200, &str_please_wait[_word_525F5A], 0);
             }
             gGameTable.door->ctr2++;
-            if ((gGameTable.dword_9885F8 & 0x8D0) != 0)
+            if ((gGameTable.raw_edge & 0x8D0) != 0)
                 t->status = SCD_STATUS_EMPTY;
             task_sleep(1);
         }

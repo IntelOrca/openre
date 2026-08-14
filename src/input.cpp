@@ -86,8 +86,8 @@ namespace openre::input
     // The command engine turns raw mouse/keyboard/gamepad input into a 20-bit
     // command state via the [input] INI bindings, OR-merges the three devices,
     // computes the rising edge once on the merged state, and fans the result
-    // out to the 6 legacy outputs (g_key, key_trg, dword_9885F4/word_9885FC,
-    // dword_9885F8, dword_9885FE).
+    // out to the 6 legacy outputs (g_key, key_trg, raw_state/raw_state_lo,
+    // raw_edge, key_edge).
 
     namespace
     {
@@ -134,8 +134,8 @@ namespace openre::input
         constexpr int32_t kBindingsVersion = 2;
 
         // Legacy output bits each command contributes. rawState feeds
-        // dword_9885F4/word_9885FC (state), rawEdgeF8 feeds dword_9885F8 and
-        // rawEdgeFE feeds dword_9885FE (edges). key_trg is derived from the
+        // raw_state/raw_state_lo (state), rawEdgeF8 feeds raw_edge and
+        // rawEdgeFE feeds key_edge (edges). key_trg is derived from the
         // g_key edge (key_trg = newKey & ~oldKey), so most commands only need
         // gKey bits; a command that needs a key_trg bit without changing g_key
         // (change_target, quick_turn) puts it in
@@ -144,16 +144,16 @@ namespace openre::input
         // right/turn_right) intentionally repeat: movement and turning share
         // the same g_key bits in the original binary.
         //
-        // The original Pad_set wrote dword_9885F4/F8/FE unconditionally on
+        // The original Pad_set wrote raw_state/raw_edge/key_edge unconditionally on
         // every path, so menu/UI commands (cancel, accept, fire, reload,
         // interact) carry identical bits in rawState and both edge outputs.
         // accept carries the interact bit 0x80 -- the same raw bit the
         // original return/enter key produced -- so the title screen still
-        // advances on it (dword_9885FE & 0x9FF) while it never opens the
+        // advances on it (key_edge & 0x9FF) while it never opens the
         // in-game status screen (game_check_status_trigger only reads
-        // dword_9885FE & 0x800, which the inventory command emits). Consumers:
-        // Title_main_wait tests dword_9885FE & 0x9FF, Computer200 tests
-        // dword_9885FE & 0xF0 / & 0xF, and Config_main tests dword_9885F4
+        // key_edge & 0x800, which the inventory command emits). Consumers:
+        // Title_main_wait tests key_edge & 0x9FF, Computer200 tests
+        // key_edge & 0xF0 / & 0xF, and Config_main tests raw_state
         // & 0x80 (interact) to drive the speaker/volume toggles.
         struct CommandOutput
         {
@@ -634,12 +634,12 @@ namespace openre::input
     int joy_get_pos_ex(Input* self)
     {
         // Update keyboard trg/old tracking
-        auto someByte = input_get_keyboard_bits();
-        auto changes = someByte ^ self->keyboard_raw_state;
+        auto keyboardBits = input_get_keyboard_bits();
+        auto keyboardChanges = keyboardBits ^ self->keyboard_raw_state;
         self->keyboard_old = self->keyboard_raw_state;
-        self->keyboard_raw_state = someByte;
-        self->keyboard_trg = someByte & changes;
-        self->var_1F8 = 1;
+        self->keyboard_raw_state = keyboardBits;
+        self->keyboard_trg = keyboardBits & keyboardChanges;
+        self->keyboard_ready = 1;
 
         // Per-joystick data starts at offset 0x208 with stride 0x1D8
         auto joystick_base = reinterpret_cast<uint8_t*>(self) + 0x208;
@@ -683,10 +683,10 @@ namespace openre::input
                     result = dir | (joystick[8] << 8); // buttons (dwButtons)
 
                     // Update gamepad state trg/old tracking
-                    auto v = rising_edge(result, gamepadState[0]); // gamepad_trg
-                    gamepadState[2] = gamepadState[0];             // gamepad_old = old gamepad_raw_state
-                    gamepadState[0] = result;                      // gamepad_raw_state = result
-                    gamepadState[1] = v;
+                    auto gamepadTrigger = rising_edge(result, gamepadState[0]); // gamepad_trg
+                    gamepadState[2] = gamepadState[0];                          // gamepad_old = old gamepad_raw_state
+                    gamepadState[0] = result;                                   // gamepad_raw_state = result
+                    gamepadState[1] = gamepadTrigger;
                 }
             }
             else
@@ -704,26 +704,26 @@ namespace openre::input
     // 0x0043BB00
     int sub_43BB00()
     {
-        auto v1 = gGameTable.dword_66D394;
+        auto rawInput = gGameTable.raw_input_state;
 
         joy_get_pos_ex(reinterpret_cast<Input*>(gGameTable.input.mapping));
 
-        // joy_get_pos_ex always sets var_1F8 = 1 (matching the original
+        // joy_get_pos_ex always sets keyboard_ready = 1 (matching the original
         // joyGetPosEx), so this branch is effectively unconditional.
-        v1 = get_input_device_state(gGameTable.input.keyboard_raw_state, INPUT_DEVICE_KEYBOARD);
+        rawInput = get_input_device_state(gGameTable.input.keyboard_raw_state, INPUT_DEVICE_KEYBOARD);
 
-        gGameTable.dword_99CF64 = gGameTable.input.keyboard_raw_state;
-        gGameTable.dword_66D394 = v1;
-        gGameTable.dword_99CF70 = 0;
-        if (gGameTable.input.var_3B24 >= 2 && gGameTable.input.var_3D0 != 0)
+        gGameTable.keyboard_state = gGameTable.input.keyboard_raw_state;
+        gGameTable.raw_input_state = rawInput;
+        gGameTable.gamepad_state = 0;
+        if (gGameTable.input.joystick_count >= 2 && gGameTable.input.gamepad_present != 0)
         {
-            auto v2 = get_input_device_state(gGameTable.input.gamepad_raw_state, INPUT_DEVICE_GAMEPAD);
-            v1 |= v2;
-            gGameTable.dword_99CF70 = v2;
-            gGameTable.dword_66D394 = v1;
+            auto gamepadInput = get_input_device_state(gGameTable.input.gamepad_raw_state, INPUT_DEVICE_GAMEPAD);
+            rawInput |= gamepadInput;
+            gGameTable.gamepad_state = gamepadInput;
+            gGameTable.raw_input_state = rawInput;
         }
 
-        return v1;
+        return rawInput;
     }
 
     // Fills the JOYCAPS-compatible buffer + JOYINFOEX header for one legacy
@@ -757,17 +757,17 @@ namespace openre::input
     }
 
     // Re-syncs the legacy joystick slots (init flags, caps) and the
-    // var_3B24/var_3D0 bookkeeping with the current SDL gamepad set, so pads
-    // plugged in while the game runs are picked up by joy_get_pos_ex and the
-    // config screen.
+    // joystick_count/gamepad_present bookkeeping with the current SDL gamepad
+    // set, so pads plugged in while the game runs are picked up by
+    // joy_get_pos_ex and the config screen.
     static void sync_joystick_slots(Input* self)
     {
         auto joyCount = static_cast<uint32_t>(system::input::get_gamepad_count() + 1);
-        self->var_3B24 = joyCount;
+        self->joystick_count = joyCount;
         // Gate for the legacy gamepad raw merge (sub_43BB00 / sub_43BB80).
         // This doubles as the init flag of joystick slot 1 (offset 0x3D0), so
         // it must be set after the joystick area is cleared.
-        self->var_3D0 = (joyCount > 1) ? 1 : 0;
+        self->gamepad_present = (joyCount > 1) ? 1 : 0;
 
         auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208;
         for (auto slot = 1u; slot < system::input::kMaxGamepads; slot++)
@@ -832,7 +832,7 @@ namespace openre::input
 
         // Report the connected pads (the slots initialized by the sync).
         auto joystick = reinterpret_cast<uint8_t*>(self) + 0x208;
-        for (auto joy = 1u; joy < self->var_3B24; joy++)
+        for (auto joy = 1u; joy < self->joystick_count; joy++)
         {
             if (*reinterpret_cast<uint32_t*>(joystick + 0x1C8) != 0)
             {
@@ -867,7 +867,7 @@ namespace openre::input
         update_gamepads();
 
         // Save previous raw input
-        gGameTable.dword_9885F8 = gGameTable.dword_9885F4;
+        gGameTable.raw_edge = gGameTable.raw_state;
 
         // Copy Vk_press bit 4 (0x10) to bit 5 (0x20), then clear bit 4
         auto vk = gGameTable.vk_press;
@@ -877,12 +877,12 @@ namespace openre::input
         vk = vk & 0xEF;
         gGameTable.vk_press = vk;
 
-        // Legacy raw layer: updates dword_99CF64/99CF70/66D394 (used by the
+        // Legacy raw layer: updates keyboard_state/gamepad_state/raw_input_state (used by the
         // config screen and other legacy consumers). In live play the command
         // engine below produces the actual outputs.
         int rawInput = sub_43BB00();
-        int prevInput = gGameTable.dword_9885F8;
-        gGameTable.dword_9885F4 = rawInput;
+        int prevInput = gGameTable.raw_edge;
+        gGameTable.raw_state = rawInput;
 
         // Demo playback: if demo flag is set, replay recorded input
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
@@ -894,9 +894,9 @@ namespace openre::input
                 if (check_flag(FlagGroup::System, FG_SYSTEM_1))
                 {
                     if (gGameTable.demo_frame < gGameTable.pdemo.frames)
-                        gGameTable.byte_98F1BB = 1;
+                        gGameTable.demo_ended = 1;
                     gGameTable.demo_frame = gGameTable.pdemo.frames + 1;
-                    gGameTable.dword_9885F4 = 0;
+                    gGameTable.raw_state = 0;
                     rawInput = 0;
                 }
                 else
@@ -908,17 +908,17 @@ namespace openre::input
             {
                 rawInput = gGameTable.pdemo.input[gGameTable.demo_frame];
                 gGameTable.demo_frame++;
-                gGameTable.dword_9885F4 = rawInput;
+                gGameTable.raw_state = rawInput;
             }
         }
 
         int oldKey = gGameTable.g_key;
         int newKey = 0;
-        gGameTable.dword_98860C = gGameTable.g_key;
+        gGameTable.key_copy = gGameTable.g_key;
         gGameTable.g_key = 0;
 
-        uint32_t rawTrigger = 0;  // edge value for dword_9885F8
-        uint32_t feEdge = 0;      // edge value for dword_9885FE (low word)
+        uint32_t rawTrigger = 0;  // edge value for raw_edge
+        uint32_t feEdge = 0;      // edge value for key_edge (low word)
         uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target, quick_turn)
 
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
@@ -939,22 +939,22 @@ namespace openre::input
         {
             // The config screen is capturing a key. Suppress only the game
             // command outputs (g_key); the original Pad_set wrote the raw
-            // layer (dword_9885F4/F8/FE) unconditionally on every path, and
+            // layer (raw_state/raw_edge/key_edge) unconditionally on every path, and
             // the capture state (Config_main case 15) navigates via
-            // em_damage_table[0] (dword_9885F8) and dword_9885F4, so those
+            // em_damage_table[0] (raw_edge) and raw_state, so those
             // must keep flowing.
             s_rebindLockout = false;
             gGameTable.g_key = 0;
             rawTrigger = rising_edge(rawInput, prevInput);
             feEdge = rawTrigger & 0xFFFF;
-            gGameTable.dword_9885F4 = rawInput;
+            gGameTable.raw_state = rawInput;
         }
         else
         {
             // Command engine: merge per-device command states (mouse, keyboard,
             // gamepad), compute the rising edge once on the merged state, then
             // fan out to the legacy outputs.
-            gGameTable.dword_9885F4 = 0;
+            gGameTable.raw_state = 0;
             uint32_t cmdState = transform_keyboard(s_commandBindings);
             cmdState |= transform_gamepad(s_commandBindings);
             cmdState |= transform_mouse(s_commandBindings);
@@ -967,7 +967,7 @@ namespace openre::input
                 if (cmdState & bit)
                 {
                     newKey |= kCommandOutput[cmd].gKey;
-                    gGameTable.dword_9885F4 |= kCommandOutput[cmd].rawState;
+                    gGameTable.raw_state |= kCommandOutput[cmd].rawState;
                 }
                 if (cmdEdge & bit)
                 {
@@ -984,15 +984,15 @@ namespace openre::input
         {
             newKey &= 0x3C00;
             keyTrgExtra = 0;
-            gGameTable.dword_689B3C = gGameTable.fg_stop;
+            gGameTable.fg_stop_latch = gGameTable.fg_stop;
             gGameTable.g_key = newKey;
         }
-        else if (gGameTable.dword_689B3C & 0x1000000)
+        else if (gGameTable.fg_stop_latch & 0x1000000)
         {
             oldKey = newKey;
             keyTrgExtra = 0;
-            gGameTable.dword_689B3C = 0;
-            gGameTable.dword_98860C = newKey;
+            gGameTable.fg_stop_latch = 0;
+            gGameTable.key_copy = newKey;
         }
 
         // Calculate trigger (edge detection) values. key_trg is the rising
@@ -1002,26 +1002,26 @@ namespace openre::input
         // change_target and quick_turn).
         uint32_t keyTrigger = rising_edge(newKey, oldKey) | keyTrgExtra;
 
-        gGameTable.dword_9885FE = (gGameTable.dword_9885FE & 0xFFFF0000) | (feEdge & 0xFFFF);
-        gGameTable.word_9885FC = (uint16_t)gGameTable.dword_9885F4;
+        gGameTable.key_edge = (gGameTable.key_edge & 0xFFFF0000) | (feEdge & 0xFFFF);
+        gGameTable.raw_state_lo = (uint16_t)gGameTable.raw_state;
         gGameTable.key_trg = keyTrigger;
-        gGameTable.dword_9885F8 = rawTrigger;
+        gGameTable.raw_edge = rawTrigger;
 
-        // Key repeat handling for the mask bits in dword_98F074
-        if (gGameTable.dword_98F074 & rawTrigger)
+        // Key repeat handling for the mask bits in key_repeat_mask
+        if (gGameTable.key_repeat_mask & rawTrigger)
         {
-            gGameTable.byte_533938 = gGameTable.word_98F078 & 0xFF;
+            gGameTable.key_repeat_counter = gGameTable.key_repeat_timing & 0xFF;
             set_flag(FlagGroup::System, FG_SYSTEM_0, true);
         }
-        else if (gGameTable.byte_533938)
+        else if (gGameTable.key_repeat_counter)
         {
-            if (gGameTable.dword_98F074 & gGameTable.dword_9885F4)
-                gGameTable.byte_533938--;
+            if (gGameTable.key_repeat_mask & gGameTable.raw_state)
+                gGameTable.key_repeat_counter--;
             set_flag(FlagGroup::System, FG_SYSTEM_0, false);
         }
         else
         {
-            gGameTable.byte_533938 = (gGameTable.word_98F078 >> 8) & 0xFF;
+            gGameTable.key_repeat_counter = (gGameTable.key_repeat_timing >> 8) & 0xFF;
             set_flag(FlagGroup::System, FG_SYSTEM_0, true);
         }
     }

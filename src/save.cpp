@@ -1524,7 +1524,7 @@ namespace openre::save
                 messErr = 1;
                 break;
             default:
-                if ((gGameTable.word_9885FC & 0x4000) != 0)
+                if ((gGameTable.raw_state_lo & 0x4000) != 0)
                 {
                     if (++gGameTable.card_cursor >= gGameTable.dword_986394)
                     {
@@ -1544,7 +1544,7 @@ namespace openre::save
                     gGameTable.card_mess_timer = 3;
                     snd_se_on(0x4040000);
                 }
-                else if ((gGameTable.word_9885FC & 0x1000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x1000) != 0)
                 {
                     gGameTable.card_mess_timer = 2;
                     if (--gGameTable.card_cursor < 0)
@@ -1560,12 +1560,12 @@ namespace openre::save
                     snd_se_on(0x4040000);
                     gGameTable.card_mess_timer = 3;
                 }
-                else if ((gGameTable.word_9885FC & 0x2000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x2000) != 0)
                 {
                     gGameTable.card_fade += 8;
                     messErr = 1;
                 }
-                else if ((gGameTable.word_9885FC & 0x8000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x8000) != 0)
                 {
                     gGameTable.card_fade -= 8;
                     if (gGameTable.card_fade < 0)
@@ -1574,7 +1574,7 @@ namespace openre::save
                 }
                 else
                 {
-                    if ((gGameTable.key_trg & 0x1000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+                    if ((gGameTable.key_trg & 0x1000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
                     {
                         switch (card_menu_action(gGameTable.card_scroll, &gGameTable.card_select, cardMode))
                         {
@@ -1651,19 +1651,19 @@ namespace openre::save
             break;
         }
         case CARD_STATE_SAVE_OPTIONS:
-            if ((gGameTable.dword_9885FE & 0x8000) != 0)
+            if ((gGameTable.key_edge & 0x8000) != 0)
             {
                 if (--gGameTable.card_sub_cursor < 0)
                     gGameTable.card_sub_cursor = 2;
                 snd_se_on(0x4040000);
             }
-            else if ((gGameTable.dword_9885FE & 0x2000) != 0)
+            else if ((gGameTable.key_edge & 0x2000) != 0)
             {
                 if (++gGameTable.card_sub_cursor >= 3)
                     gGameTable.card_sub_cursor = 0;
                 snd_se_on(0x4040000);
             }
-            else if ((gGameTable.key_trg & 0x1000) == 0 && (gGameTable.dword_9885F8 & 0x800) == 0)
+            else if ((gGameTable.key_trg & 0x1000) == 0 && (gGameTable.raw_edge & 0x800) == 0)
             {
                 if ((gGameTable.key_trg & 0x2000) != 0)
                 {
@@ -1764,7 +1764,7 @@ namespace openre::save
             break;
         case CARD_STATE_WAIT_OVERWRITE:
         case CARD_STATE_WAIT_NEW:
-            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
             {
                 gGameTable.card_mess_timer = 0;
                 cardState = CARD_STATE_EXIT;
@@ -1806,7 +1806,7 @@ namespace openre::save
             }
             break;
         case CARD_STATE_CONFIRM_EXIT:
-            if ((gGameTable.dword_9885FE & 0xA000) != 0)
+            if ((gGameTable.key_edge & 0xA000) != 0)
             {
                 gGameTable.card_sub_cursor ^= 1;
                 snd_se_on(0x4040000);
@@ -1833,7 +1833,7 @@ namespace openre::save
             exitCardAccess();
             return;
         case CARD_STATE_ERROR:
-            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
             {
                 snd_se_on(0x4040000);
                 cardState = CARD_STATE_MENU;

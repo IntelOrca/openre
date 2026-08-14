@@ -628,7 +628,7 @@ namespace openre::hud
     // 0x004FC0C0
     static void hud_select_menu_m()
     {
-        if ((gGameTable.word_9885FC & 0x4000) != 0)
+        if ((gGameTable.raw_state_lo & 0x4000) != 0)
         {
             gGameTable._st++;
             gGameTable.inventory_cursor = 1;
@@ -653,7 +653,7 @@ namespace openre::hud
                 auto selection = gGameTable.inventory_cursor;
                 auto prevSelection = selection;
                 auto inventorySize = gGameTable.inventory_size;
-                if (gGameTable.word_9885FC & 0x2000) // right
+                if (gGameTable.raw_state_lo & 0x2000) // right
                 {
                     if (selection < inventorySize - 1)
                     {
@@ -665,7 +665,7 @@ namespace openre::hud
                         selection++;
                     }
                 }
-                if (gGameTable.word_9885FC & 0x8000) // left
+                if (gGameTable.raw_state_lo & 0x8000) // left
                 {
                     if (selection > 0 && selection != 10)
                     {
@@ -680,7 +680,7 @@ namespace openre::hud
                         selection--;
                     }
                 }
-                if (gGameTable.word_9885FC & 0x4000) // down
+                if (gGameTable.raw_state_lo & 0x4000) // down
                 {
                     if (selection >= inventorySize - 2)
                     {
@@ -694,7 +694,7 @@ namespace openre::hud
                         selection += 2;
                     }
                 }
-                if (gGameTable.word_9885FC & 0x1000) // up
+                if (gGameTable.raw_state_lo & 0x1000) // up
                 {
                     if (selection <= 1 || selection == 10)
                     {
@@ -724,7 +724,7 @@ namespace openre::hud
                 snd_se_on(0x4050000);
                 gGameTable._st = 0;
             }
-            else if (gGameTable.dword_9885FE & 0x0800)
+            else if (gGameTable.key_edge & 0x0800)
             {
                 if (gGameTable.byte_691F76 == 1)
                 {
@@ -760,19 +760,19 @@ namespace openre::hud
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
                 break;
             }
-            if (gGameTable.word_9885FC & 0x1000) // up
+            if (gGameTable.raw_state_lo & 0x1000) // up
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_UP;
                 break;
             }
-            if (gGameTable.word_9885FC & 0x4000) // down
+            if (gGameTable.raw_state_lo & 0x4000) // down
             {
                 snd_se_on(0x2140000);
                 gGameTable.itembox_state = ITEM_BOX_STATE_SCROLL_DOWN;
                 break;
             }
-            if (gGameTable.word_9885FC & 4)
+            if (gGameTable.raw_state_lo & 4)
             {
                 if (!(gGameTable.key_trg & 0x2000))
                 {
@@ -790,7 +790,7 @@ namespace openre::hud
                 gGameTable.itembox_state = ITEM_BOX_STATE_SELECT_INVENTORY;
                 break;
             }
-            if (!(gGameTable.word_9885FC & 8)) // inventory item selected
+            if (!(gGameTable.raw_state_lo & 8)) // inventory item selected
             {
                 if (!(gGameTable.key_trg & 0x2000))
                 {
@@ -819,7 +819,7 @@ namespace openre::hud
             }
             else
             {
-                if (gGameTable.word_9885FC & 0x1000)
+                if (gGameTable.raw_state_lo & 0x1000)
                 {
                     snd_se_on(0x2140000);
                 }
@@ -845,7 +845,7 @@ namespace openre::hud
             }
             else
             {
-                if (gGameTable.word_9885FC & 0x4000)
+                if (gGameTable.raw_state_lo & 0x4000)
                 {
                     snd_se_on(0x2140000);
                 }
@@ -1034,7 +1034,7 @@ namespace openre::hud
             if (check_flag(FlagGroup::System, FG_SYSTEM_0))
             {
                 // Right
-                if (gGameTable.word_9885FC & 0x2000 && greenCursor < inventorySize - 1)
+                if (gGameTable.raw_state_lo & 0x2000 && greenCursor < inventorySize - 1)
                 {
                     if (greenItem.Part == 1)
                     {
@@ -1043,7 +1043,7 @@ namespace openre::hud
                     greenCursor++;
                 }
                 // Left
-                if (gGameTable.word_9885FC & 0x8000 && greenCursor && greenCursor != INVENTORY_SPECIAL_ITEM_SLOT)
+                if (gGameTable.raw_state_lo & 0x8000 && greenCursor && greenCursor != INVENTORY_SPECIAL_ITEM_SLOT)
                 {
                     auto auxGreenCursor = greenCursor;
                     if (greenItem.Part == 2)
@@ -1060,7 +1060,7 @@ namespace openre::hud
                     greenCursor = --auxGreenCursor;
                 }
                 // Down
-                if (gGameTable.word_9885FC & 0x4000)
+                if (gGameTable.raw_state_lo & 0x4000)
                 {
                     if (greenCursor >= inventorySize - 2)
                     {
@@ -1075,7 +1075,7 @@ namespace openre::hud
                     }
                 }
                 // Up
-                if (gGameTable.word_9885FC & 0x1000 && greenCursor != INVENTORY_SPECIAL_ITEM_SLOT)
+                if (gGameTable.raw_state_lo & 0x1000 && greenCursor != INVENTORY_SPECIAL_ITEM_SLOT)
                 {
                     if (greenCursor <= 1)
                     {
@@ -1452,7 +1452,7 @@ namespace openre::hud
 
             if (gGameTable.fg_system & 0x80000000)
             {
-                if (gGameTable.word_9885FC & 0x2000 && cursor < gGameTable.inventory_size - 1)
+                if (gGameTable.raw_state_lo & 0x2000 && cursor < gGameTable.inventory_size - 1)
                 {
                     if (inventory[cursor].Part == 1 && cursor < gGameTable.inventory_size - 2)
                     {
@@ -1468,7 +1468,7 @@ namespace openre::hud
                 {
                     v1 = cursor;
                 }
-                if (gGameTable.word_9885FC & 0x8000 && v1 && v1 != 10)
+                if (gGameTable.raw_state_lo & 0x8000 && v1 && v1 != 10)
                 {
                     if (inventory[cursor].Part == 2)
                     {
@@ -1476,7 +1476,7 @@ namespace openre::hud
                     }
                     cursor = --v1;
                 }
-                if (gGameTable.word_9885FC & 0x4000)
+                if (gGameTable.raw_state_lo & 0x4000)
                 {
                     if (cursor >= gGameTable.inventory_size - 2)
                     {
@@ -1492,7 +1492,7 @@ namespace openre::hud
                         cursor = v1;
                     }
                 }
-                if (gGameTable.word_9885FC & 0x1000)
+                if (gGameTable.raw_state_lo & 0x1000)
                 {
                     if (v1 == 10)
                     {
@@ -1544,7 +1544,7 @@ namespace openre::hud
                 snd_se_on(0x4050000);
                 gGameTable._st = 2;
             }
-            else if (gGameTable.dword_9885FE & 0x80000000 && gGameTable.byte_691F76 == 1)
+            else if (gGameTable.key_edge & 0x80000000 && gGameTable.byte_691F76 == 1)
             {
                 snd_se_on(0x4050000);
                 gGameTable._st = 0;
@@ -1560,7 +1560,7 @@ namespace openre::hud
             {
                 if (gGameTable.dword_689DF4)
                 {
-                    if (gGameTable.word_9885FC & 0x4000)
+                    if (gGameTable.raw_state_lo & 0x4000)
                     {
                         if (gGameTable.byte_691F6F)
                         {
@@ -1571,7 +1571,7 @@ namespace openre::hud
                             gGameTable.byte_691F6F = 3;
                         }
                     }
-                    if (!(gGameTable.word_9885FC & 0x1000))
+                    if (!(gGameTable.raw_state_lo & 0x1000))
                     {
                         goto LABEL_63;
                     }
@@ -1583,7 +1583,7 @@ namespace openre::hud
                 }
                 else
                 {
-                    if (gGameTable.word_9885FC & 0x4000)
+                    if (gGameTable.raw_state_lo & 0x4000)
                     {
                         if (gGameTable.byte_691F6F == 1)
                         {
@@ -1594,7 +1594,7 @@ namespace openre::hud
                             gGameTable.byte_691F6F--;
                         }
                     }
-                    if (!(gGameTable.word_9885FC & 0x1000))
+                    if (!(gGameTable.raw_state_lo & 0x1000))
                     {
                         goto LABEL_63;
                     }
@@ -1606,7 +1606,7 @@ namespace openre::hud
                 }
                 gGameTable.byte_691F6F++;
             LABEL_63:
-                if (gGameTable.word_9885FC & 0x5000)
+                if (gGameTable.raw_state_lo & 0x5000)
                 {
                     snd_se_on(0x4040000);
                 }
@@ -1807,7 +1807,7 @@ namespace openre::hud
 
             if ((int32_t)gGameTable.fg_system < 0 && gGameTable.byte_691F7A > 1)
             {
-                if (gGameTable.word_9885FC & KEY_TYPE_4096 && map_up_floor[gGameTable.byte_691F7A] > 1)
+                if (gGameTable.raw_state_lo & KEY_TYPE_4096 && map_up_floor[gGameTable.byte_691F7A] > 1)
                 {
                     if (bitarray_get(&gGameTable.dword_98EC00, map_up_floor[gGameTable.byte_691F7A]))
                     {
@@ -1815,7 +1815,7 @@ namespace openre::hud
                     }
                 }
 
-                if (gGameTable.word_9885FC & KEY_TYPE_16384 && map_down_floor[gGameTable.byte_691F7A] > 1)
+                if (gGameTable.raw_state_lo & KEY_TYPE_16384 && map_down_floor[gGameTable.byte_691F7A] > 1)
                 {
                     if (bitarray_get(&gGameTable.dword_98EC00, map_down_floor[gGameTable.byte_691F7A]))
                     {
