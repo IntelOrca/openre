@@ -80,23 +80,24 @@ if(OPENRE_NATIVE_LINUX)
     # memory model). The native main() in openre.cpp is scaffolding only.
     target_compile_definitions(openre PRIVATE OPENRE_NO_D3D)
 
-    # SDL3: prefer pkg-config, then find_package(SDL3) (works e.g. with
-    # -DCMAKE_PREFIX_PATH=/path/to/sdl3-build), then an explicit library path.
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(SDL3 QUIET sdl3)
-    endif()
-    if(SDL3_FOUND)
-        target_link_libraries(openre PRIVATE ${SDL3_LIBRARIES})
-        target_link_directories(openre PRIVATE ${SDL3_LIBRARY_DIRS})
+    # SDL3: an explicit library path (-DOPENRE_SDL3_LIBRARY=) wins; otherwise
+    # prefer pkg-config, then find_package(SDL3) (works e.g. with
+    # -DCMAKE_PREFIX_PATH=/path/to/sdl3-build), then a plain find_library.
+    set(OPENRE_SDL3_LIBRARY "" CACHE FILEPATH "Path to a Linux libSDL3.so (used when pkg-config/find_package find none)")
+    if(OPENRE_SDL3_LIBRARY)
+        target_link_libraries(openre PRIVATE "${OPENRE_SDL3_LIBRARY}")
     else()
-        find_package(SDL3 QUIET)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(SDL3 QUIET sdl3)
+        endif()
         if(SDL3_FOUND)
-            target_link_libraries(openre PRIVATE SDL3::SDL3)
+            target_link_libraries(openre PRIVATE ${SDL3_LIBRARIES})
+            target_link_directories(openre PRIVATE ${SDL3_LIBRARY_DIRS})
         else()
-            set(OPENRE_SDL3_LIBRARY "" CACHE FILEPATH "Path to a Linux libSDL3.so (used when pkg-config/find_package find none)")
-            if(OPENRE_SDL3_LIBRARY)
-                target_link_libraries(openre PRIVATE "${OPENRE_SDL3_LIBRARY}")
+            find_package(SDL3 QUIET)
+            if(SDL3_FOUND)
+                target_link_libraries(openre PRIVATE SDL3::SDL3)
             else()
                 find_library(SDL3_LIBRARY NAMES SDL3 libSDL3 PATHS /usr/local/lib /usr/lib/x86_64-linux-gnu /usr/lib)
                 if(SDL3_LIBRARY)
@@ -108,26 +109,32 @@ if(OPENRE_NATIVE_LINUX)
         endif()
     endif()
 
-    # Lua: lua54 on Windows; try the usual Linux names. Headers come from the
-    # bundled lib/include. The library itself is Windows-only in lib/, so on a
-    # stock Ubuntu without liblua5.4-dev the executable link will fail on
-    # undefined lua_* symbols; use -DOPENRE_LINUX_MODULE=ON for an openre.so
-    # that tolerates that until a Linux Lua is available.
-    if(PkgConfig_FOUND)
-        pkg_check_modules(LUA QUIET lua5.4)
-        if(NOT LUA_FOUND)
-            pkg_check_modules(LUA QUIET lua)
+    # Lua: an explicit library path (-DLUA_LIBRARY=) wins; otherwise try the
+    # usual Linux names via pkg-config then find_library. Headers come from the
+    # bundled lib/include. On a stock Ubuntu without liblua5.4-dev the
+    # executable link will fail on undefined lua_* symbols unless you pass
+    # -DLUA_LIBRARY (or use -DOPENRE_LINUX_MODULE=ON for an openre.so that
+    # tolerates that until a Linux Lua is available).
+    if(NOT LUA_LIBRARY)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(LUA QUIET lua5.4)
+            if(NOT LUA_FOUND)
+                pkg_check_modules(LUA QUIET lua)
+            endif()
         endif()
-    endif()
-    if(LUA_FOUND)
-        target_link_libraries(openre PRIVATE ${LUA_LIBRARIES})
-    else()
-        find_library(LUA_LIBRARY NAMES lua5.4 lua54 lua-5.4 lua PATHS /usr/local/lib /usr/lib/x86_64-linux-gnu /usr/lib)
-        if(LUA_LIBRARY)
-            target_link_libraries(openre PRIVATE ${LUA_LIBRARY})
+        if(LUA_FOUND)
+            target_link_libraries(openre PRIVATE ${LUA_LIBRARIES})
         else()
-            message(WARNING "Lua library not found. The executable link will fail on lua_* symbols unless you install Lua (or use -DOPENRE_LINUX_MODULE=ON).")
+            find_library(LUA_LIBRARY NAMES lua5.4 lua54 lua-5.4 lua PATHS /usr/local/lib /usr/lib/x86_64-linux-gnu /usr/lib)
+            if(LUA_LIBRARY)
+                target_link_libraries(openre PRIVATE ${LUA_LIBRARY})
+            else()
+                message(WARNING "Lua library not found. The executable link will fail on lua_* symbols unless you install Lua (or use -DOPENRE_LINUX_MODULE=ON).")
+            endif()
         endif()
+    else()
+        target_link_libraries(openre PRIVATE "${LUA_LIBRARY}")
     endif()
 
 else()
