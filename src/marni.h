@@ -2,10 +2,7 @@
 
 #include "re2.h"
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "d3d_shim.h"
 
 #include <cstdint>
 

@@ -2,12 +2,7 @@
 
 #ifndef OPENRE_NO_D3D
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <d3d.h>
-#include <ddraw.h>
-#include <windows.h>
+#include "d3d_shim.h"
 
 namespace openre::gfx
 {

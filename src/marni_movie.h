@@ -3,31 +3,11 @@
 #include "re2.h"
 
 #ifdef _WIN32
-#define NOMINMAX
+// Preserved: marni_movie.cpp relies on the lean windows.h surface (d3d_shim.h
+// deliberately does not define WIN32_LEAN_AND_MEAN itself).
 #define WIN32_LEAN_AND_MEAN
-#ifndef OPENRE_NO_D3D
-#include <d3d.h>
-#include <ddraw.h>
 #endif
-#include <windows.h>
-#else
-// Minimal portable shims so the declarations below compile on non-WIN32
-// (there is no DirectShow movie player off Windows).
-using LONG = long;
-using HWND = void*;
-using LPCSTR = const char*;
-struct RECT
-{
-    LONG left;
-    LONG top;
-    LONG right;
-    LONG bottom;
-};
-using LPRECT = RECT*;
-using LPDIRECTDRAW2 = void*;
-using LPDIRECTDRAWSURFACE = void*;
-#define __stdcall
-#endif
+#include "d3d_shim.h"
 
 namespace openre::marni
 {
