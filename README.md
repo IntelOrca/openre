@@ -8,6 +8,11 @@ Open source clone of the original Resident Evil 2.
 * Visual Studio 2026
   * Desktop development with C++ workload
 
+Download the third-party libraries (SDL3, Lua) into `lib`:
+```
+getdeps.bat
+```
+
 Using a Visual Studio 2026 development prompt:
 ```
 msbuild openre.sln
