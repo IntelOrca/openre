@@ -87,6 +87,7 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
+    <ClCompile Include="kage.cpp" />
     <ClCompile Include="logger.cpp" />
     <ClCompile Include="marni_draw.cpp" />
     <ClCompile Include="marni_renderer.cpp" />
@@ -139,6 +140,7 @@
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
+    <ClInclude Include="kage.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="marni_config.h" />
     <ClInclude Include="marni_draw.h" />

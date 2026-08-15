@@ -171,13 +171,14 @@ static_assert(sizeof(PartsW) == 0xAC);
 
 struct Kage
 {
-    uint8_t pad_0000[4];                // 0x0000
-    uint16_t var_04;                    // 0x0004
-    uint16_t var_06;                    // 0x0006
+    int16_t off_x;                      // 0x0000
+    int16_t off_z;                      // 0x0002
+    int16_t half_x;                     // 0x0004
+    int16_t half_z;                     // 0x0006
     uint8_t pad_0008[20];               // 0x0008
-    uint32_t var_1C;                    // 0x001C
+    uint32_t prim0_rgb;                 // 0x001C
     uint8_t pad_0020[36];               // 0x0020
-    uint32_t var_44;                    // 0x0044
+    uint32_t prim1_rgb;                 // 0x0044
 };
 static_assert(sizeof(Kage) == 0x48);
 

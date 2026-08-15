@@ -451,8 +451,8 @@ namespace openre::enemy
             auto colour = gGameTable.blood_censor ? 0xBF10BF : 0xBFBF10;
             if (kage != nullptr)
             {
-                kage->var_1C = (kage->var_1C & 0xFF000000) | colour;
-                kage->var_44 = (kage->var_44 & 0xFF000000) | colour;
+                kage->prim0_rgb = (kage->prim0_rgb & 0xFF000000) | colour;
+                kage->prim1_rgb = (kage->prim1_rgb & 0xFF000000) | colour;
             }
             enemy->timer3 = 90;
         }
@@ -463,8 +463,8 @@ namespace openre::enemy
 
         if (kage != nullptr)
         {
-            kage->var_04 += 8;
-            kage->var_06 += 8;
+            kage->half_x += 8;
+            kage->half_z += 8;
         }
 
         enemy->timer3--;

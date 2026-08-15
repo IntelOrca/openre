@@ -24,6 +24,9 @@
     <ClCompile Include="interop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="kage.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="scd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -144,6 +147,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="item.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="kage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="rdt.h">

@@ -124,10 +124,12 @@ declare     oya_parts               PartsW*
 declare     free                    u16[10]
 
 struct      Kage
-declare     var_04                  u16         0x04
-declare     var_06                  u16         0x06
-declare     var_1C                  u32         0x1C
-declare     var_44                  u32         0x44
+declare     off_x                   s16         0x00
+declare     off_z                   s16         0x02
+declare     half_x                  s16         0x04
+declare     half_z                  s16         0x06
+declare     prim0_rgb               u32         0x1C
+declare     prim1_rgb               u32         0x44
 
 struct      At
 declare     pos                     Vec32

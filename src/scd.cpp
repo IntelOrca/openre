@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "enemy.h"
 #include "interop.hpp"
+#include "kage.h"
 #include "math.h"
 #include "openre.h"
 #include "rdt.h"
@@ -10,6 +11,7 @@
 #include "sce.h"
 #include <cassert>
 #include <cstring>
+#include <utility>
 
 using namespace openre::audio;
 using namespace openre::enemy;
@@ -283,6 +285,21 @@ namespace openre::scd
         uint8_t Value;
         uint8_t OnOff;
     };
+
+    struct ScdKageSet
+    {
+        uint8_t Opcode; // 0x60
+        uint8_t Type;   // WK_PLAYER / WK_SPLAYER / WK_ENEMY
+        int8_t EnemyNo; // enemy slot number when Type == WK_ENEMY
+        uint8_t R;      // shadow colour red
+        uint8_t G;      // shadow colour green
+        uint8_t B;      // shadow colour blue
+        int16_t HalfX;  // shadow half-size X
+        int16_t HalfZ;  // shadow half-size Z
+        int16_t OffX;   // shadow offset X
+        int16_t OffZ;   // shadow offset Z
+    };
+    static_assert(sizeof(ScdKageSet) == 14);
 
     struct ScdSceKeyCk
     {
@@ -1349,9 +1366,51 @@ namespace openre::scd
     }
 
     // 0x004E8890
+    // SCD opcode 0x60: configures an actor's shadow (colour, half size and
+    // offset). Type selects the target: 1 = player, 2 = partner, 3 = enemy
+    // (EnemyNo slot). When the blood censor is enabled and the target is a
+    // human enemy (id < 0x40), a red shadow colour is swapped to green.
+    // Returns SCD_RESULT_NEXT.
     static int scd_kage_set(SceTask* sce)
     {
-        return interop::call<int>(0x004E8890, sce);
+        auto opcode = reinterpret_cast<ScdKageSet*>(sce->data);
+        Kage* kage = nullptr;
+        bool isHumanEnemy = false;
+
+        switch (opcode->Type)
+        {
+        case WK_PLAYER: kage = gGameTable.player_work->pKage_work; break;
+        case WK_SPLAYER: kage = gGameTable.splayer_work->pKage_work; break;
+        case WK_ENEMY:
+        {
+            auto enemy = gGameTable.enemies[opcode->EnemyNo];
+            kage = enemy->pKage_work;
+            isHumanEnemy = enemy->id < 0x40;
+            break;
+        }
+        default:
+            // Not reachable in practice (Type is always 1-3); replicates the
+            // original which used the raw SceTask pointer with its low byte
+            // overwritten by Type.
+            kage = reinterpret_cast<Kage*>(reinterpret_cast<uintptr_t>(sce) & 0xFFFFFF00 | opcode->Type);
+            break;
+        }
+
+        uint32_t r = opcode->R;
+        uint32_t g = opcode->G;
+        uint32_t b = opcode->B;
+        if (gGameTable.blood_censor && isHumanEnemy && opcode->Type == WK_ENEMY && r < g && r < b)
+        {
+            // Swap red and green so shadows on human-type enemies aren't bloody red
+            std::swap(r, g);
+        }
+        kage_work_color_set(kage, r | (g << 8) | (b << 16));
+        kage->half_x = opcode->HalfX; // Half_x
+        kage->half_z = opcode->HalfZ; // Half_z
+        kage->off_x = opcode->OffX;   // Off_x
+        kage->off_z = opcode->OffZ;   // Off_z
+        sce->data += sizeof(ScdKageSet);
+        return SCD_RESULT_NEXT;
     }
 
     // 0x004E5120
