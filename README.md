@@ -33,4 +33,8 @@ Copy `out/openre.dll` and `dist/openre.exe` to your RE 2 directory and run `open
 ## Running
 
 Set `OPENRE_LOG_VERBOSITY` to `debug`, `warning`, `error`, or `info`.
+Console output is prefixed with a timestamp and level tag (e.g. `[17:27:41 INF]`)
+and the whole line is coloured: cyan for info, yellow for warning, red for error,
+grey for debug.
+Colours are disabled automatically when output is redirected to a file/pipe.
 Set `OPENRE_RE2_DATA` to the data directory containing `common`, `gallery`, `movie`, etc.

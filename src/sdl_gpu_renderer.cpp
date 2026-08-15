@@ -650,7 +650,7 @@ namespace
             if (alt != 0 && inRegistry(alt))
             {
                 if (throttle(*env.logTextureFallback, 300))
-                    logging::logInfo(
+                    logging::logDebug(
                         "[sdlgpu] prim type 0x{}: handle {} (dword_6449BC={}) not in registry, falling back to prim->texture {}",
                         hexStr(type), handle, (uint32_t)gGameTable.dword_6449BC, alt);
                 handle = alt;
@@ -673,7 +673,7 @@ namespace
         {
             // Temp / movie texture (SOFTWARE_GPU path): registered but empty.
             if (throttle(*env.logMovieTex, 300))
-                logging::logInfo("[sdlgpu] prim references temp/movie texture {} (var_00=0x{}) - skipping", handle, hexStr(tex->var_00));
+                logging::logDebug("[sdlgpu] prim references temp/movie texture {} (var_00=0x{}) - skipping", handle, hexStr(tex->var_00));
             return nullptr;
         }
 
@@ -1047,7 +1047,7 @@ namespace
         const uint32_t color = (line->color0 & 0xFF) | ((((line->color0 >> 8) & 0xFF) | (v8 << 8)) << 8);
 
         if (throttle(*env.logClut, 40))
-            logging::logInfo("[sdlgpu] tile type 0x{} color0=0x{} foldedColor=0x{}", hexStr((uint32_t)pPrim->type), hexStr(line->color0), hexStr(color));
+            logging::logDebug("[sdlgpu] tile type 0x{} color0=0x{} foldedColor=0x{}", hexStr((uint32_t)pPrim->type), hexStr(line->color0), hexStr(color));
 
         TlVertex v[4]{};
         v[0].sx = (float)((double)line->x0 * (double)env.marni->aspect_x);
@@ -1683,7 +1683,7 @@ namespace
             if (throttle(*env.logClut, 60))
             {
                 const auto* spr = (const PrimSprite*)prim;
-                logging::logInfo("[sdlgpu] spr type 0x{} tex {} texw {} texh {} uv({},{})-({},{})",
+                logging::logDebug("[sdlgpu] spr type 0x{} tex {} texw {} texh {} uv({},{})-({},{})",
                     hexStr(type), spr->texture, entry->width, entry->height,
                     (unsigned)spr->u0, (unsigned)spr->v0, (unsigned)spr->u1, (unsigned)spr->v1);
             }
@@ -1737,7 +1737,7 @@ namespace
                 }
             }
             if (throttle(*env.logNoDecoder))
-                logging::logInfo("[sdlgpu] type 0x{}: no decoder (original: LABEL_26 no-op) - skipping", hexStr(type));
+                logging::logDebug("[sdlgpu] type 0x{}: no decoder (original: LABEL_26 no-op) - skipping", hexStr(type));
             env.stats->skipped++;
             return;
         }
@@ -1760,7 +1760,7 @@ namespace
         case 70: decode70(env, prim, *entry); return;
         default:
             if (throttle(*env.logNoDecoder))
-                logging::logInfo("[sdlgpu] type 0x{}: no decoder (original: LABEL_26 no-op) - skipping", hexStr(type));
+                logging::logDebug("[sdlgpu] type 0x{}: no decoder (original: LABEL_26 no-op) - skipping", hexStr(type));
             env.stats->skipped++;
             return;
         }
@@ -2283,7 +2283,7 @@ namespace
                 // there is no draw.
                 applyTransMatrix(env.marni, prim);
                 if (throttle(transMatrixLogCounter, 1000))
-                    logging::logInfo("[sdlgpu] ot[{}]: trans_matrix prim type 0x{} - state applied (aspect {}x{} prj {} centre {}x{})",
+                    logging::logDebug("[sdlgpu] ot[{}]: trans_matrix prim type 0x{} - state applied (aspect {}x{} prj {} centre {}x{})",
                         otIndex, hexStr(type), env.marni->aspect_x, env.marni->aspect_y, env.marni->field_8C7EDC,
                         env.marni->field_8C7EC4, env.marni->field_8C7EC8);
                 continue;
@@ -2312,13 +2312,13 @@ namespace
             {
                 const bool drew = decodeTransObject(env, prim);
                 if (throttle(transObjectLogCounter, 600))
-                    logging::logInfo("[sdlgpu] ot[{}]: trans_object (3D character) type 0x{} - {}", otIndex, hexStr(type), drew ? "rendered" : "no draw");
+                    logging::logDebug("[sdlgpu] ot[{}]: trans_object (3D character) type 0x{} - {}", otIndex, hexStr(type), drew ? "rendered" : "no draw");
                 break;
             }
             case 256:
                 applyMatrixCopy256(env.marni, prim);
                 if (throttle(transMatrixLogCounter, 1000))
-                    logging::logInfo("[sdlgpu] ot[{}]: type 256 matrix copy - applied", otIndex);
+                    logging::logDebug("[sdlgpu] ot[{}]: type 256 matrix copy - applied", otIndex);
                 break;
             case 0x10000 | 44:
             case 0x10000 | 45:
@@ -2436,13 +2436,13 @@ namespace
 
     // Downloads the guest framebuffer and writes gpu_dump_XXXXX.bmp. Fires at
     // frame 30 and then every `interval` frames (OPENRE_SDLGPU_DUMP env var;
-    // 0 disables, default 300).
+    // 0 or unset disables; default 0).
     static void maybeDumpSceneTexture(SDL_GPUDevice* dev, SDL_GPUTexture* fb, int w, int h)
     {
         static uint64_t dumpCounter = 0;
         static const int interval = []() {
             const char* e = std::getenv("OPENRE_SDLGPU_DUMP");
-            return e ? std::atoi(e) : 300;
+            return e ? std::atoi(e) : 0;
         }();
         if (interval <= 0)
             return;
@@ -2489,7 +2489,7 @@ namespace
             char filename[64];
             std::snprintf(filename, sizeof(filename), "gpu_dump_%05llu.bmp", (unsigned long long)dumpCounter);
             writeBmp(filename, (const uint8_t*)data, w, h);
-            logging::logInfo("[sdlgpu] dumped guest framebuffer {}x{} to {}", w, h, filename);
+            logging::logDebug("[sdlgpu] dumped guest framebuffer {}x{} to {}", w, h, filename);
         }
         else
         {
@@ -3623,7 +3623,7 @@ void SdlGpuRenderer::draw()
     const int totalPrims = impl->stats.primsBg + impl->stats.primsObj + impl->stats.primsFg;
     if ((impl->drawCount % 300) == 1 || impl->frameCalls.empty())
     {
-        logging::logInfo(
+        logging::logDebug(
             "[sdlgpu] draw #{}: {} prims (bg {} / obj {} / fg {}) -> {} draw calls, {} vertices, {} lines, {} skipped",
             impl->drawCount, totalPrims, impl->stats.primsBg, impl->stats.primsObj, impl->stats.primsFg,
             impl->frameCalls.size(), impl->stats.drawn, impl->stats.lines, impl->stats.skipped);
@@ -3943,7 +3943,7 @@ int SdlGpuRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)
 
     uint16_t clut = p->clut;
     if (throttle(impl->logClutRaw, 200))
-        logging::logInfo("[sdlgpu] addSprt RAW clut {} (clutCount {}) page {}", clut, gGameTable.texture_pages[page].clutCount, page);
+        logging::logDebug("[sdlgpu] addSprt RAW clut {} (clutCount {}) page {}", clut, gGameTable.texture_pages[page].clutCount, page);
     if (clut >= gGameTable.texture_pages[page].clutCount)
         clut = 0;
 
@@ -4186,7 +4186,7 @@ void SdlGpuRenderer::addBgPrims(int16_t x_off, int16_t y_off)
 // 0x0043FB30
 void SdlGpuRenderer::addBg()
 {
-    logging::logInfo("[sdlgpu] addBg() bg_tex0={} bg_tex1={} at global_cx/cy {}/{}",
+    logging::logDebug("[sdlgpu] addBg() bg_tex0={} bg_tex1={} at global_cx/cy {}/{}",
         (uint32_t)gGameTable.bg_tex0, (uint32_t)gGameTable.bg_tex1, (uint32_t)gGameTable.global_cx, (uint32_t)gGameTable.global_cy);
     addBgPrims((int16_t)gGameTable.global_cx, (int16_t)gGameTable.global_cy);
     gGameTable.bgDrawn = 1;
@@ -4195,7 +4195,7 @@ void SdlGpuRenderer::addBg()
 // 0x0043FCB0
 void SdlGpuRenderer::addBg2(int16_t scroll_y)
 {
-    logging::logInfo("[sdlgpu] addBg2() scroll_y={} bgScrollTextures {}/{}", scroll_y, (uint32_t)gGameTable.bgScrollTextures[0], (uint32_t)gGameTable.bgScrollTextures[1]);
+    logging::logDebug("[sdlgpu] addBg2() scroll_y={} bgScrollTextures {}/{}", scroll_y, (uint32_t)gGameTable.bgScrollTextures[0], (uint32_t)gGameTable.bgScrollTextures[1]);
     addBgPrims(0, scroll_y);
 
     if (gGameTable.bgScrollTextures[0] != 0)
@@ -4567,7 +4567,7 @@ int SdlGpuRenderer::addLineF2(const LineF2* p, int z, int is_back)
 // handle (1..255, 0 on failure).
 int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
 {
-    logging::logInfo(
+    logging::logDebug(
         "[sdlgpu] loadTexture {}x{} depth={} palBpp={} palCnt={} psxFormat={} mode=0x{} pixels={}B palette={}B",
         image.width, image.height, image.depth, image.palBpp, image.palCnt, image.psxFormat, hexStr(mode),
         image.pixels.size(), image.palette.size());
@@ -4874,7 +4874,7 @@ void SdlGpuRenderer::configFlipFilter()
 // 0x00442CB0
 void SdlGpuRenderer::setGpuFlag()
 {
-    logging::logInfo("[sdlgpu] setGpuFlag()");
+    logging::logDebug("[sdlgpu] setGpuFlag()");
     marni::set_gpu_flag();
 }
 

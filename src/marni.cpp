@@ -793,7 +793,7 @@ namespace openre::marni
         {
             // No texture objects exist here; the SDL renderer owns the GPU
             // textures, so just hand the handle back to it.
-            logging::logInfo("[marni] unload_texture: handle={} -> g_renderer->unloadTexture", handle);
+            logging::logDebug("[marni] unload_texture: handle={} -> g_renderer->unloadTexture", handle);
             if (g_renderer)
                 g_renderer->unloadTexture(handle);
             texture.var_00 = 0;
@@ -1596,7 +1596,7 @@ namespace openre::marni
             auto* src = (const uint8_t*)pSrcSurface->pPalette;
             image.palette.assign(src, src + palBytes);
         }
-        logging::logInfo(
+        logging::logDebug(
             "[marni] create_texture_handle: {}x{} depth={} palCnt={} mode={:#x} -> g_renderer->loadTexture",
             image.width,
             image.height,
@@ -6069,7 +6069,7 @@ namespace openre::marni
         // MarniSurfaceX objects to release here; keep the renderer texture
         // alive (ResumeTextureUse only marks the slot active again) and mark
         // the slot suspended the same way the original does.
-        logging::logInfo("[marni] SuspendTextureUse no-op (handle={})", handle);
+        logging::logDebug("[marni] SuspendTextureUse no-op (handle={})", handle);
         texture.var_00 |= 0x2000;
         return 1;
     }
