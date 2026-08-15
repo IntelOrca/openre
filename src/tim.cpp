@@ -44,13 +44,8 @@ namespace openre::tim
         TimClut clut;
     };
 
-    struct TimObject : public MarniSurface
-    {
-        uint32_t var_3C;
-    };
-
     // 0x0042FB70
-    static int __stdcall timobject_in(TimObject* self, Tim* pTim)
+    int __stdcall timobject_in(TimObject* self, Tim* pTim)
     {
         const uint32_t* pTimData = (const uint32_t*)pTim;
 
@@ -149,6 +144,22 @@ namespace openre::tim
         self->bOpen = 1;
         self->var_2A = 1;
         return 1;
+    }
+
+    // 0x0042FE50
+    // TIMObject constructor. Calls MarniSurface2::Ctor, sets the TIMObject
+    // vtable, and if a filename is given loads the TIM from file.
+    void timobject_ctor(TimObject* self, char* filename)
+    {
+        interop::thiscall<void, void*, char*>(0x0042FE50, self, filename);
+    }
+
+    // 0x0042FEB0
+    // TIMObject destructor. Restores the TIMObject vtable then releases the
+    // surface (MarniSurface2::vRelease + Release).
+    void timobject_dtor(TimObject* self)
+    {
+        interop::thiscall<void, void*>(0x0042FEB0, self);
     }
 
     // 0x0042FDB0

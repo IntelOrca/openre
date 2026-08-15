@@ -14,6 +14,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "tim.h"
 
 #include <cstring>
 
@@ -202,11 +203,44 @@ namespace openre::door
     }
 
     // 0x00432A40
-    static void door_unload(void* pTim, void* pTmd)
+    // Loads the door graphics resources: builds a TIM texture handle from pTim
+    // and an object handle per TMD object from pTmd, then (re)allocates the door
+    // scaler work block. Called from door_init() after mapping_tmd(). Despite
+    // the original name, this is the resource loader (the unload counterpart is
+    // marni::unload_door_texture).
+    static void door_load_resources(tim::Tim* pTim, Md1* pTmd)
     {
-        using sig = void (*)(void*, void*);
-        auto p = (sig)0x00432A40;
-        p(pTim, pTmd);
+        // TIMObject (MarniSurface + var_3C, 0x40 bytes) and the MARNI_POLY_OBJECT
+        // (0x58 bytes) used as scratch for the TMD loaders.
+        tim::TimObject timSurface;
+        marni::MarniPolyObject polyObject;
+
+        tim::timobject_ctor(&timSurface, nullptr);
+        marni::tm2_object_ctor(&polyObject, nullptr, 0);
+
+        marni::unload_door_texture();
+
+        tim::timobject_in(&timSurface, pTim);
+        // 0x31 = door TIM texture mode (paletted, CLUT preserved).
+        gGameTable.pDoorVarC4 = marni::create_texture_handle(gGameTable.pMarni, &timSurface, 0x31);
+
+        // Load each TMD object and register it with Direct3D.
+        const int objectCount = (int32_t)pTmd->Data.NumEntries / 2;
+        for (int i = 0; i < objectCount; i++)
+        {
+            marni::tm2_object_in(&polyObject, (uint8_t*)pTmd, i, -1);
+            gGameTable.pDoorMdlh[i] = marni::create_object_handle(gGameTable.pMarni, &polyObject, 0);
+        }
+
+        // Door scaler work block: 12 doors x 224-byte scaler records (the same
+        // 224-byte stride used by door_disp0/door_disp1).
+        gGameTable.pDoorScalerBlock = operator_new(0xA80);
+        std::memset(gGameTable.pDoorScalerBlock, 0, 0xA80);
+        std::memset(gGameTable.pDoorWork, 0, sizeof(gGameTable.pDoorWork));
+        std::memset(gGameTable.pDoorVar94, 0, sizeof(gGameTable.pDoorVar94));
+
+        marni::tm2_object_dtor(&polyObject);
+        tim::timobject_dtor(&timSurface);
     }
 
     // 0x0044FEF0
@@ -239,7 +273,7 @@ namespace openre::door
             mapping_tmd(1, (Md1*)door->tmd_adr, 0, 0);
         else
             mapping_tmd(1, (Md1*)door->tmd_adr, 21, 31);
-        door_unload(gGameTable.door_tim, gGameTable.tmd);
+        door_load_resources((tim::Tim*)gGameTable.door_tim, (Md1*)gGameTable.tmd);
         gGameTable.dword_6893F0 = 0;
 
         door->tmd_adr = (TmdEntry*)((uintptr_t)door->tmd_adr + 12);

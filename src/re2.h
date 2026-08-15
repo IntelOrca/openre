@@ -1276,7 +1276,13 @@ struct GameTable
     uint8_t pad_669B08[24];             // 0x669B08
     void* hadid;                        // 0x669B20
     void* phad;                         // 0x669B24
-    uint8_t pad_669B28[456];            // 0x669B28
+    uint32_t pDoorWork[12];             // 0x669B28
+    uint32_t pDoorWorkEnd[12];          // 0x669B58
+    void* pDoorScalerBlock;             // 0x669B88
+    uint32_t pDoorMdlh[12];             // 0x669B8C
+    uint32_t pDoorVar94[12];            // 0x669BBC
+    uint32_t pDoorVarC4;                // 0x669BEC
+    uint8_t pad_669BF0[256];            // 0x669BF0
     void* audio_pMarniSnd;              // 0x669CF0
     uint32_t audio_BufferSBgm[2];       // 0x669CF4
     int32_t audio_SpeakerConfig;        // 0x669CFC

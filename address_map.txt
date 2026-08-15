@@ -992,6 +992,12 @@ declare     dword_669B00            s32                     0x00669B00
 declare     had                     void*                   0x00669B04
 declare     hadid                   void*                   0x00669B20
 declare     phad                    void*                   0x00669B24
+declare     pDoorWork               u32[12]                 0x00669B28
+declare     pDoorWorkEnd            u32[12]                 0x00669B58
+declare     pDoorScalerBlock        void*                   0x00669B88
+declare     pDoorMdlh               u32[12]                 0x00669B8C
+declare     pDoorVar94              u32[12]                 0x00669BBC
+declare     pDoorVarC4              u32                     0x00669BEC
 declare     audio_pMarniSnd          void*                  0x00669CF0
 declare     audio_BufferSBgm         u32[2]                 0x00669CF4
 declare     audio_SpeakerConfig      s32                    0x00669CFC

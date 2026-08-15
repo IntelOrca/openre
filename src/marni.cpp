@@ -1966,29 +1966,6 @@ namespace openre::marni
         vec[2] = v0 * mat[8] + v1 * mat[9] + v2 * mat[10];
     }
 
-    // MARNI_POLY_OBJECT: the polygon object used by both PolygonObject
-    // (the Marni::polygons array) and the local 0x58-byte TMD loader buffers.
-    // Dword fields match MarniPolygonObject::ctor/CreateWork layout.
-    struct MarniPolyObject
-    {
-        void* vTbl;           // +0x00
-        uint8_t* vertices;    // +0x04
-        uint8_t* normals;     // +0x08
-        uint8_t* primitives;  // +0x0C
-        uint32_t magic;       // +0x10
-        uint32_t pad_14;      // +0x14
-        uint32_t vertexCount; // +0x18
-        uint32_t pad_1C;      // +0x1C
-        uint32_t normalCount; // +0x20
-        uint32_t pad_24;      // +0x24
-        uint32_t primCount;   // +0x28
-        uint32_t pad_2C;      // +0x2C
-        uint32_t type;        // +0x30
-        uint32_t flags;       // +0x34
-        uint8_t pad_38[0x20]; // +0x38
-    };
-    static_assert(sizeof(MarniPolyObject) == 0x58);
-
     // 0x00416490
     static MarniPolyObject* polygon_object_ctor(MarniPolyObject* self)
     {
@@ -3095,7 +3072,7 @@ namespace openre::marni
     }
 
     // 0x00430260
-    static MarniPolyObject* tm2_object_ctor(MarniPolyObject* self, char* filename, int a3)
+    MarniPolyObject* tm2_object_ctor(MarniPolyObject* self, char* filename, int a3)
     {
         marni_poly_object_ctor_base(self, 0, 0);
         self->vTbl = (void*)0x517424;
@@ -3105,7 +3082,7 @@ namespace openre::marni
     }
 
     // 0x004302C0
-    static int tm2_object_dtor(MarniPolyObject* self)
+    int tm2_object_dtor(MarniPolyObject* self)
     {
         self->vTbl = (void*)0x517424;
         marni_poly_object_reset(self);
@@ -3146,7 +3123,7 @@ namespace openre::marni
     }
 
     // 0x0042FFB0
-    static int tm2_object_in(MarniPolyObject* self, uint8_t* lpMem, int a3, int a4)
+    int tm2_object_in(MarniPolyObject* self, uint8_t* lpMem, int a3, int a4)
     {
         marni_poly_object_reset(self);
 
@@ -3263,7 +3240,7 @@ namespace openre::marni
     }
 
     // 0x00404BB0
-    static uint32_t create_object_handle(Marni* self, void* a2, int a3)
+    uint32_t create_object_handle(Marni* self, void* a2, int a3)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -7250,40 +7227,34 @@ namespace openre::marni
     // 0x00432BB0
     void unload_door_texture()
     {
-        static auto* pDoorWork = (uint32_t*)0x669B28;        // door work pointer array
-        static auto* pDoorWorkEnd = (uint32_t*)0x669B58;     // door work object handles [12]
-        static auto* pDoorScalerBlock = (uint32_t*)0x669B88; // door scaler block pointer
-        static auto* pDoorMdlh = (uint32_t*)0x669B8C;        // Door_mdlh[12]
-        static auto* pDoorVar94 = (uint32_t*)0x669BBC;
-        static auto* pDoorVarC4 = (uint32_t*)0x669BEC; // door texture handle
-
-        if (*pDoorVarC4)
+        if (gGameTable.pDoorVarC4)
         {
-            marni::unloadTexture(*pDoorVarC4);
-            *pDoorVarC4 = 0;
+            marni::unloadTexture(gGameTable.pDoorVarC4);
+            gGameTable.pDoorVarC4 = 0;
         }
 
         for (int i = 0; i < 12; i++)
         {
-            if (pDoorMdlh[i])
+            if (gGameTable.pDoorMdlh[i])
             {
-                destroy_object(gGameTable.pMarni, pDoorMdlh[i]);
-                pDoorMdlh[i] = 0;
+                destroy_object(gGameTable.pMarni, gGameTable.pDoorMdlh[i]);
+                gGameTable.pDoorMdlh[i] = 0;
             }
-            if (pDoorWorkEnd[i])
+            if (gGameTable.pDoorWorkEnd[i])
             {
-                destroy_object(gGameTable.pMarni, pDoorWorkEnd[i]);
-                pDoorWorkEnd[i] = 0;
+                destroy_object(gGameTable.pMarni, gGameTable.pDoorWorkEnd[i]);
+                gGameTable.pDoorWorkEnd[i] = 0;
             }
         }
 
-        if (*pDoorScalerBlock)
+        if (gGameTable.pDoorScalerBlock)
         {
-            operator_delete((void*)*pDoorScalerBlock);
-            *pDoorScalerBlock = 0;
+            operator_delete(gGameTable.pDoorScalerBlock);
+            gGameTable.pDoorScalerBlock = nullptr;
         }
 
-        auto* v1 = pDoorWork;
+        auto* v1 = gGameTable.pDoorWork;
+        auto* pDoorWorkEnd = gGameTable.pDoorWorkEnd;
         while (v1 < pDoorWorkEnd)
         {
             if (*v1)
@@ -7294,18 +7265,16 @@ namespace openre::marni
             ++v1;
         }
 
-        memset(pDoorVar94, 0, 0x30);
+        memset(gGameTable.pDoorVar94, 0, sizeof(gGameTable.pDoorVar94));
     }
 
     // 0x00432C60
     void door_disp0(int doorId, int a1, int a2, int a3)
     {
-        static auto* pDoorScalerBlock = (uint32_t*)0x669B88;
-
         if (doorId >= 12)
             return;
 
-        auto* scaler = (PrimScaler*)((char*)*pDoorScalerBlock + 224 * doorId);
+        auto* scaler = (PrimScaler*)((char*)gGameTable.pDoorScalerBlock + 224 * doorId);
         const int32_t type = scaler->type;
         *(uint32_t*)&scaler[1].rate_x = 0x00808080;
         scaler->type = type & 0xFF8FFFFF;
@@ -7355,14 +7324,10 @@ namespace openre::marni
     // 0x00432CD0
     void door_disp1(int doorId)
     {
-        static auto* s_pDoorScalerBlock = (uint32_t*)0x669B88;
-        static auto* s_pDoorPrim = (uint32_t*)0x669B28;
-        static auto* s_pDoorPrimCount = (uint32_t*)0x669BBC;
-
         if (doorId >= 12)
             return;
 
-        auto* v29 = (char*)*s_pDoorScalerBlock + 224 * doorId;
+        auto* v29 = (char*)gGameTable.pDoorScalerBlock + 224 * doorId;
         uint32_t v13 = 0;
         arrange_object_contents(gGameTable.pMarni, *((uint32_t*)v29 + 19), (int*)&v13);
 
@@ -7371,21 +7336,21 @@ namespace openre::marni
             memcpy(v34, (const void*)(v13 + 16), sizeof(v34));
         const uint32_t v1 = v34[6];
 
-        if (s_pDoorPrim[doorId] == 0)
+        if (gGameTable.pDoorWork[doorId] == 0)
         {
             const uint32_t v2 = 48 * v34[6];
             auto* v3 = (uint32_t*)operator_new(48 * v34[6]);
-            s_pDoorPrim[doorId] = (uint32_t)v3;
-            s_pDoorPrimCount[doorId] = v1;
+            gGameTable.pDoorWork[doorId] = (uint32_t)v3;
+            gGameTable.pDoorVar94[doorId] = v1;
             memset(v3, 0, v2);
         }
 
-        auto* v4 = (uint8_t*)s_pDoorPrim[doorId];
+        auto* v4 = (uint8_t*)gGameTable.pDoorWork[doorId];
         int v5 = 0;
         uint32_t v14 = 0;
         if (v1 != 0)
         {
-            while (v5 < (int)s_pDoorPrimCount[doorId])
+            while (v5 < (int)gGameTable.pDoorVar94[doorId])
             {
                 PrimRecord rec;
                 modify_primitive((PolygonObject*)v13, v5, &rec);
@@ -7534,7 +7499,7 @@ namespace openre::marni
             }
             if (v5[3])
             {
-                interop::thiscall<void, void*>(0x004302C0, (void*)v5[3]); // stdiobuf dtor
+                tm2_object_dtor((MarniPolyObject*)v5[3]);
                 operator_delete((void*)v5[3]);
                 v5[3] = 0;
             }

@@ -46,6 +46,34 @@ namespace openre::marni
     void __stdcall syskeydown(Marni* self);
     void __stdcall movie_kill(Marni* self);
 
+    // MARNI_POLY_OBJECT: the polygon object used by both PolygonObject
+    // (the Marni::polygons array) and the local 0x58-byte TMD loader buffers.
+    // Dword fields match MarniPolygonObject::ctor/CreateWork layout.
+    struct MarniPolyObject
+    {
+        void* vTbl;           // +0x00
+        uint8_t* vertices;    // +0x04
+        uint8_t* normals;     // +0x08
+        uint8_t* primitives;  // +0x0C
+        uint32_t magic;       // +0x10
+        uint32_t pad_14;      // +0x14
+        uint32_t vertexCount; // +0x18
+        uint32_t pad_1C;      // +0x1C
+        uint32_t normalCount; // +0x20
+        uint32_t pad_24;      // +0x24
+        uint32_t primCount;   // +0x28
+        uint32_t pad_2C;      // +0x2C
+        uint32_t type;        // +0x30
+        uint32_t flags;       // +0x34
+        uint8_t pad_38[0x20]; // +0x38
+    };
+    static_assert(sizeof(MarniPolyObject) == 0x58);
+
+    MarniPolyObject* tm2_object_ctor(MarniPolyObject* self, char* filename, int a3);
+    int tm2_object_in(MarniPolyObject* self, uint8_t* lpMem, int a3, int a4);
+    int tm2_object_dtor(MarniPolyObject* self);
+    uint32_t create_object_handle(Marni* self, void* a2, int a3);
+
     MarniSurfaceY* surfacey_ctor(MarniSurfaceY* self);
     void __stdcall surfacey_dtor(MarniSurface2* self);
     void __stdcall surface2_ctor(MarniSurface2* self);
