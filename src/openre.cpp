@@ -31,7 +31,7 @@
 #include "system_window.h"
 #include "tim.h"
 #include "title.h"
-#include "window.h"
+#include "vk_codes.h"
 
 #include <cctype>
 #include <cstdarg>
@@ -54,24 +54,6 @@
 // We provide our own main(), so tell SDL not to supply/redefine one.
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
-
-// Minimal stand-ins for the Win32 VK_* codes used by handle_key(). The SDL
-// window module maps SDL keycodes to these VK codes on all platforms, so the
-// values (from winuser.h) must stay stable.
-constexpr int VK_PRIOR = 0x21;    // Page Up
-constexpr int VK_NEXT = 0x22;     // Page Down
-constexpr int VK_SNAPSHOT = 0x2C; // Print Screen
-constexpr int VK_F1 = 0x70;
-constexpr int VK_F2 = 0x71;
-constexpr int VK_F3 = 0x72;
-constexpr int VK_F4 = 0x73;
-constexpr int VK_F5 = 0x74;
-constexpr int VK_F6 = 0x75;
-constexpr int VK_F7 = 0x76;
-constexpr int VK_F8 = 0x77;
-constexpr int VK_F9 = 0x78;
-constexpr int VK_F10 = 0x79;
-constexpr int VK_F11 = 0x7A;
 
 // Portable in-place lowercase; replaces the MSVC-only _strlwr().
 static char* str_lwr(char* s)
@@ -2418,44 +2400,6 @@ namespace openre
         marni::out();
     }
 
-    // 0x00442800
-#ifdef _WIN32
-    static INT_PTR CALLBACK about_dialog(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        if (msg == WM_INITDIALOG)
-        {
-            SetDlgItemTextA(hDlg, 1017, "BIOHAZARD(R) 2 PC\nVersion: 1.1.0");
-            auto hParent = GetParent(hDlg);
-            if (hParent)
-            {
-                RECT rcParent, rcDlg;
-                GetWindowRect(hParent, &rcParent);
-                GetWindowRect(hDlg, &rcDlg);
-                MoveWindow(
-                    hDlg,
-                    (rcParent.left + rcParent.right) / 2 - (rcDlg.right - rcDlg.left) / 2,
-                    (rcParent.top + rcParent.bottom) / 2 - (rcDlg.bottom - rcDlg.top) / 2,
-                    rcDlg.right - rcDlg.left,
-                    rcDlg.bottom - rcDlg.top,
-                    TRUE);
-            }
-            return TRUE;
-        }
-
-        if (msg == WM_COMMAND && wParam && (uint32_t)wParam <= 2)
-        {
-            EndDialog(hDlg, -1);
-        }
-        return FALSE;
-    }
-#else
-    // Non-Windows stub: there are no Win32 dialogs, so do nothing.
-    [[maybe_unused]] static int about_dialog(void*, unsigned int, uintptr_t, intptr_t)
-    {
-        return 0;
-    }
-#endif
-
     // 0x00442750
     static void screenshot()
     {
@@ -2476,18 +2420,14 @@ namespace openre
             if (!gGameTable.byte_6805B2)
             {
                 gGameTable.byte_6805B2 = 1;
-#ifdef _WIN32
-                ShowCursor(FALSE);
-#endif
+                system::window::set_cursor_visible(false);
                 interop::call<int>(0x00433870, 0); // SsSetCoopLevel(0)
             }
         }
         else if (gGameTable.byte_6805B2 == 1)
         {
             gGameTable.byte_6805B2 = 0;
-#ifdef _WIN32
-            ShowCursor(TRUE);
-#endif
+            system::window::set_cursor_visible(true);
             interop::call<int>(0x00433870, 1); // SsSetCoopLevel(1)
         }
     }
@@ -2511,47 +2451,26 @@ namespace openre
         gGameTable.byte_689ABC = 1;
         gGameTable.vk_press |= 0x80;
 
-#ifdef _WIN32
-        auto hWnd = (HWND)system::window::get_hwnd();
-#endif
         switch (vk)
         {
         case VK_F11:
-        case VK_SNAPSHOT: screenshot();
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
-            break;
-        case VK_F1:
-#ifdef _WIN32
-            DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0);
-#endif
-            break;
+        case VK_SNAPSHOT: screenshot(); break;
+        case VK_F1: system::window::show_message_box(windowTitle, "BIOHAZARD(R) 2 PC\nVersion: 1.1.0"); break;
         case VK_F2:
             g_speed_multiplier -= 1;
             if (g_speed_multiplier < 1)
                 g_speed_multiplier = 1;
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
             break;
         case VK_F3:
             g_speed_multiplier += 1;
             if (g_speed_multiplier > 5)
                 g_speed_multiplier = 5;
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
             break;
-        case VK_F4: gGameTable.vk_press |= 1; // inventory
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
+        case VK_F4:
+            gGameTable.vk_press |= 1; // inventory
             break;
-        case VK_F5: gGameTable.vk_press |= 2; // options
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
+        case VK_F5:
+            gGameTable.vk_press |= 2; // options
             break;
         case VK_F6: debug::toggle(); break;
         case VK_PRIOR: debug::scroll_log(-1); break;
@@ -2571,15 +2490,8 @@ namespace openre
             break;
         case VK_F10:
             // The reference GPU backend was removed; F10 is a no-op.
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
             break;
-        default: input_wmkeydown(&gGameTable.input, vk);
-#ifdef _WIN32
-            SetFocus(hWnd);
-#endif
-            break;
+        default: input_wmkeydown(&gGameTable.input, vk); break;
         }
     }
 
@@ -2726,8 +2638,11 @@ namespace openre
     static int win_exit(uint32_t error)
     {
 #ifdef _WIN32
+        // Original-binary Shift-JIS error strings (only valid while the RE2
+        // binary is loaded in this process).
         static const char* aHighColor16bit = (const char*)0x00525098;
         static const char* aInNIN = (const char*)0x0052506C;
+#endif
 
         switch (error)
         {
@@ -2748,56 +2663,30 @@ namespace openre
         }
         case ERROR_INSERT_DISC:
         {
-            MessageBoxA(0, "Please insert BIOHAZARD(R) 2 PC DISC", windowTitle, MB_ICONEXCLAMATION);
+            system::window::show_message_box(windowTitle, "Please insert BIOHAZARD(R) 2 PC DISC");
             break;
         }
         case ERROR_17:
         {
-            MessageBoxA(0, aHighColor16bit, windowTitle, MB_ICONEXCLAMATION);
+#ifdef _WIN32
+            system::window::show_message_box(windowTitle, aHighColor16bit);
+#else
+            system::window::show_message_box(windowTitle, "Set the display to 16-bit color or higher.");
+#endif
             break;
         }
         case ERROR_19:
         {
-            MessageBoxA(0, aInNIN, windowTitle, MB_ICONEXCLAMATION);
-            break;
-        }
-        default:
-        {
-            MessageBoxA(0, "Fatal error.", windowTitle, MB_ICONEXCLAMATION);
-            break;
-        }
-        }
-
-        marni::g_renderer->configShutdown();
-
-        return error;
+#ifdef _WIN32
+            system::window::show_message_box(windowTitle, aInNIN);
 #else
-        // No Win32 message boxes on non-Windows builds; report to stderr instead.
-        switch (error)
-        {
-        case ERROR_0: [[fallthrough]];
-        case ERROR_1: [[fallthrough]];
-        case ERROR_2: [[fallthrough]];
-        case ERROR_11: [[fallthrough]];
-        case ERROR_18: [[fallthrough]];
-        case ERROR_255: break;
-
-        case ERROR_FAILED_TO_INITIALIZE_DIRECTX:
-        {
-            logging::logError(
-                "Failed to initialize the graphics backend (is_gpu_active={}, display mode count={})",
-                gGameTable.pMarni ? gGameTable.pMarni->is_gpu_active : 0,
-                gGameTable.pMarni ? marni::request_display_mode_count(gGameTable.pMarni) : 0);
-            break;
-        }
-        case ERROR_INSERT_DISC:
-        {
-            std::fprintf(stderr, "%s: Please insert BIOHAZARD(R) 2 PC DISC\n", windowTitle);
+            system::window::show_message_box(windowTitle, "Controller is not connected.");
+#endif
             break;
         }
         default:
         {
-            std::fprintf(stderr, "%s: Fatal error (%u).\n", windowTitle, error);
+            system::window::show_message_box(windowTitle, "Fatal error.");
             break;
         }
         }
@@ -2805,7 +2694,6 @@ namespace openre
         marni::g_renderer->configShutdown();
 
         return error;
-#endif
     }
 
     // 0x00441DC0
@@ -2836,25 +2724,18 @@ namespace openre
     // ── Helper functions ──────────────────────────────────────────────────
 
     // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
-#ifdef _WIN32
-    static bool quit_cleanup()
+    [[maybe_unused]] static bool quit_cleanup()
     {
         marni::g_renderer->shutdown();
         config_write();
         if (gGameTable.byte_680592 == 1)
         {
             gGameTable.byte_680592 = 0;
-            ShowCursor(true);
+            system::window::set_cursor_visible(true);
         }
-        SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
+        system::window::set_screensaver_enabled(gGameTable.byte_680592 != 0);
         return false;
     }
-#else
-    [[maybe_unused]] static bool quit_cleanup()
-    {
-        return false;
-    }
-#endif
 
     // Returns false when quit requested (caller should exit immediately)
 #ifdef _WIN32
@@ -3065,17 +2946,14 @@ namespace openre
         // Command-line start options: first positional argument is a save file,
         // -p sets the player id, -r the room to warp to and -s the scenario.
         cmdline_parse(lpCmdLine);
-        SystemParametersInfoA(SPI_GETSCREENSAVEACTIVE, FALSE, &gGameTable.byte_680590, 0);
-        if (gGameTable.byte_680590)
+        if (system::window::is_screensaver_enabled())
         {
-            SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, 0, FALSE, SPIF_SENDWININICHANGE);
+            gGameTable.byte_680590 = 1;
+            system::window::set_screensaver_enabled(false);
         }
 
         if (init_instance(hInstance, hPrevInstance))
         {
-            auto window = (HWND)gGameTable.hwnd;
-            ImmAssociateContext(window, NULL); // disable IME for the game window
-
             input_init(&gGameTable.input);
 
             marni::g_renderer->init();
@@ -3260,7 +3138,6 @@ void onAttach()
     marni_config_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
-    window::window_init_hooks();
     // The renderer must exist even in classic mode, where the marni_draw Add*
     // hooks are not installed but tim/enemy texture hooks still run and now
     // talk to the renderer.

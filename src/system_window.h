@@ -44,6 +44,33 @@ namespace openre::system::window
     // Win32 module instance, used by DialogBoxParamA (SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER).
     void* get_hinstance();
 
+    // Shows a modal message box with the given title/message (replaces the
+    // Win32 MessageBoxA dialogs). Returns true when shown.
+    bool show_message_box(const char* title, const char* message);
+
+    // Shows or hides the system cursor (replaces ShowCursor).
+    void set_cursor_visible(bool visible);
+
+    // Queries whether the OS screensaver is currently enabled, and enables or
+    // disables it (replaces SystemParametersInfoA SPI_GET/SETSCREENSAVEACTIVE).
+    bool is_screensaver_enabled();
+    void set_screensaver_enabled(bool enabled);
+
+    // Fills width/height with the desktop display resolution in logical pixels
+    // (replaces GetSystemMetrics(SM_CXSCREEN/SM_CYSCREEN)). Returns false when
+    // the display cannot be queried.
+    bool get_desktop_size(int& width, int& height);
+
+    // Fills the window rect (position + size) in screen coordinates, in the
+    // window's DPI coordinate space (replaces GetWindowRect). Returns false
+    // when the window is not available.
+    bool get_window_rect(int& left, int& top, int& right, int& bottom);
+
+    // Fills the window's client rect in screen coordinates (replaces
+    // GetClientRect + ClientToScreen). Returns false when the window is not
+    // available.
+    bool get_client_rect(int& left, int& top, int& right, int& bottom);
+
     // Polls the next window event; returns false when the queue is empty.
     bool poll_event(Event& event);
     // Blocks until at least one event is available (replaces WaitMessage()).

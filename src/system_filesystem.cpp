@@ -3,6 +3,8 @@
 #include "stream.h"
 #include <SDL3/SDL.h>
 #include <cstring>
+#include <filesystem>
+#include <system_error>
 
 namespace openre::system::fs
 {
@@ -237,6 +239,21 @@ namespace openre::system::fs
         if (resolved.empty())
             return false;
         return SDL_RemovePath(resolved.c_str());
+    }
+
+    std::string absolute(const char* path)
+    {
+        if (!path || !path[0])
+            return {};
+
+        std::error_code ec;
+        auto result = std::filesystem::absolute(path, ec);
+        if (ec)
+        {
+            logging::logError("[system::fs::absolute] failed for {}: {}", path, ec.message());
+            return {};
+        }
+        return result.string();
     }
 
     bool createDirectory(const char* path)

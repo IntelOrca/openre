@@ -37,6 +37,11 @@ namespace openre::system::fs
 
     FileInfo info(const char* path);
 
+    // Resolves `path` to an absolute path against the current working
+    // directory (replaces GetFullPathNameA / realpath). Returns an empty
+    // string on failure.
+    std::string absolute(const char* path);
+
     std::vector<uint8_t> readAllBytes(const char* path);
 
     std::unique_ptr<Stream> open(const char* path, FileMode mode);

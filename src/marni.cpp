@@ -18,14 +18,25 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
 namespace openre::marni
 {
+    // Message codes used by the SDL3 -> marni window-message bridge
+    // (process_messages). Values match the Win32 WM_* codes so the guest ABI
+    // (message is in the Marni vtbl) stays intact. Guarded so the real
+    // <windows.h> macros win on _WIN32.
+#ifndef WM_MOVE
+    constexpr uint32_t WM_MOVE = 0x0003;
+#endif
+#ifndef WM_SIZE
+    constexpr uint32_t WM_SIZE = 0x0005;
+#endif
+#ifndef WM_DESTROY
+    constexpr uint32_t WM_DESTROY = 0x0002;
+#endif
+#ifndef WM_SYSKEYDOWN
+    constexpr uint32_t WM_SYSKEYDOWN = 0x0104;
+#endif
+
     struct DrawInfo;
 
     static int error_routine(int errorCode);
@@ -61,9 +72,7 @@ namespace openre::marni
     static int __stdcall ot_clear(MarniOt* self);
     static int __stdcall ot_alloc(MarniOt* self, int depth, int a3);
     static void __stdcall ot_dtor(MarniOt* self);
-#ifdef _WIN32
-    static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-#endif
+    static int __stdcall resize(Marni* marni, uintptr_t wParam);
     static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
@@ -154,10 +163,8 @@ namespace openre::marni
         {
             surface_fill(&self->surface0, 0, 0, 0);
             flip(self);
-#ifdef _WIN32
-            auto dwStyle = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
-            SetWindowLongA((HWND)self->hWnd, GWL_STYLE, dwStyle & ~(WS_CAPTION | WS_SIZEBOX | WS_TABSTOP));
-#endif
+            // No GetWindowLongA/SetWindowLongA style toggling: SDL3 borderless
+            // fullscreen (set_fullscreen) already removes the window frame.
         }
         return movie_update_window(self->pMovie);
     }
@@ -184,11 +191,6 @@ namespace openre::marni
         movie_release(movie);
         if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
             return;
-
-#ifdef _WIN32
-        auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
-        SetWindowLongA((HWND)self->hWnd, GWL_STYLE, (dwValue & ~WS_SIZEBOX) | WS_MAXIMIZEBOX);
-#endif
     }
 
     // 0x00401F70
@@ -203,14 +205,6 @@ namespace openre::marni
 
         if (!(self->gpu_flag & GpuFlags::GPU_FULLSCREEN))
             return;
-
-#ifdef _WIN32
-        auto dwValue = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
-        SetWindowLongA(
-            (HWND)self->hWnd,
-            GWL_STYLE,
-            (dwValue & ~WS_POPUP) | (WS_TABSTOP | WS_GROUP | WS_SIZEBOX | WS_SYSMENU | WS_DLGFRAME | WS_BORDER));
-#endif
     }
 
     // 0x00401FD0
@@ -228,9 +222,14 @@ namespace openre::marni
             // Borderless fullscreen: the movie window covers the whole screen.
             // (The original offset it up by the frame/caption height to
             // compensate for the exclusive-fullscreen window frame.)
-#ifdef _WIN32
-            GetClientRect((HWND)self->hWnd, &rc);
-#endif
+            int left = 0, top = 0, right = 0, bottom = 0;
+            if (system::window::get_client_rect(left, top, right, bottom))
+            {
+                rc.left = left;
+                rc.top = top;
+                rc.right = right;
+                rc.bottom = bottom;
+            }
         }
         else if (self->resolutions[self->modes].width == 640)
         {
@@ -603,41 +602,33 @@ namespace openre::marni
 
     // Computes the letterboxed 4:3 rectangle (in screen coordinates) used to
     // present the render in borderless fullscreen. The rect is derived from the
-    // actual window rect (GetWindowRect) rather than SDL display bounds: the
-    // window client area lives in the process's DPI coordinate space, and
-    // GetWindowRect reports the window in exactly that space (SDL_GetDisplayBounds
-    // can report a different, physical-pixel DPI scale, which made the letterbox
-    // rect cover the whole window and look stretched).
+    // actual window rect (SDL window position/size) rather than SDL display
+    // bounds: the window client area lives in the process's DPI coordinate
+    // space, and the SDL window position/size report the window in exactly that
+    // space (SDL_GetDisplayBounds can report a different, physical-pixel DPI
+    // scale, which made the letterbox rect cover the whole window and look
+    // stretched).
     static void compute_fullscreen_window_rect(Marni* self)
     {
-#ifdef _WIN32
-        RECT window;
-        if (GetWindowRect((HWND)self->hWnd, &window) && (window.right - window.left) > 0 && (window.bottom - window.top) > 0)
+        int left = 0, top = 0, right = 0, bottom = 0;
+        if (system::window::get_window_rect(left, top, right, bottom) && (right - left) > 0 && (bottom - top) > 0)
         {
-            auto winW = window.right - window.left;
-            auto winH = window.bottom - window.top;
+            auto winW = right - left;
+            auto winH = bottom - top;
             double scale = std::min((double)winW / self->xsize, (double)winH / self->ysize);
             auto rectW = (int)(self->xsize * scale);
             auto rectH = (int)(self->ysize * scale);
             SetRect(
                 (LPRECT)&self->window_rect,
-                window.left + (winW - rectW) / 2,
-                window.top + (winH - rectH) / 2,
-                window.left + (winW + rectW) / 2,
-                window.top + (winH + rectH) / 2);
+                left + (winW - rectW) / 2,
+                top + (winH - rectH) / 2,
+                left + (winW + rectW) / 2,
+                top + (winH + rectH) / 2);
         }
         else
         {
             SetRect((LPRECT)&self->window_rect, 0, 0, self->xsize, self->ysize);
         }
-#else
-        // No Win32 window metrics off Windows; fall back to the full render
-        // area (the SDL window already covers the display).
-        self->window_rect.left = 0;
-        self->window_rect.top = 0;
-        self->window_rect.right = self->xsize;
-        self->window_rect.bottom = self->ysize;
-#endif
     }
 
     // Computes the letterboxed presentation rect (in screen coordinates) for a
@@ -647,30 +638,22 @@ namespace openre::marni
     // from the actual client area instead of the render size.
     static void compute_windowed_window_rect(HWND hWnd, int width, int height, LPRECT outRect)
     {
-#ifdef _WIN32
-        RECT client;
-        if (GetClientRect(hWnd, &client) && client.right > 0 && client.bottom > 0)
+        int left = 0, top = 0, right = 0, bottom = 0;
+        if (system::window::get_client_rect(left, top, right, bottom) && (right - left) > 0 && (bottom - top) > 0)
         {
-            double scale = std::min((double)client.right / width, (double)client.bottom / height);
+            auto clientW = right - left;
+            auto clientH = bottom - top;
+            double scale = std::min((double)clientW / width, (double)clientH / height);
             auto rectW = (int)(width * scale);
             auto rectH = (int)(height * scale);
-            POINT p0 = { (client.right - rectW) / 2, (client.bottom - rectH) / 2 };
-            POINT p1 = { p0.x + rectW, p0.y + rectH };
-            ClientToScreen(hWnd, &p0);
-            ClientToScreen(hWnd, &p1);
-            SetRect(outRect, p0.x, p0.y, p1.x, p1.y);
+            auto x0 = left + (clientW - rectW) / 2;
+            auto y0 = top + (clientH - rectH) / 2;
+            SetRect(outRect, x0, y0, x0 + rectW, y0 + rectH);
         }
         else
         {
             SetRect(outRect, 0, 0, width, height);
         }
-#else
-        (void)hWnd;
-        outRect->left = 0;
-        outRect->top = 0;
-        outRect->right = width;
-        outRect->bottom = height;
-#endif
     }
 
     // 0x00403F30
@@ -1035,19 +1018,12 @@ namespace openre::marni
         self->field_8C8300 = 3;
         self->field_8C7E90 = 0;
         self->field_8C82FC = 0;
-#ifdef _WIN32
-        self->desktop_w = GetSystemMetrics(SM_CXSCREEN);
-        self->desktop_h = GetSystemMetrics(SM_CYSCREEN);
-        auto dc = GetDC(NULL);
-        self->desktop_bpp = GetDeviceCaps(dc, BITSPIXEL) * GetDeviceCaps(dc, PLANES);
-        ReleaseDC(NULL, dc);
-#else
-        // No Win32 display metrics off Windows; assume a 32bpp desktop. The
-        // desktop size is unused outside this branch.
         self->desktop_w = 0;
         self->desktop_h = 0;
+        system::window::get_desktop_size(self->desktop_w, self->desktop_h);
+        // SDL3 has no bits-per-pixel concept; the guest only reads desktop_bpp
+        // to seed bpp, and 32bpp matches the SDL window surface.
         self->desktop_bpp = 32;
-#endif
         self->bpp = self->desktop_bpp;
         self->gpu_flag |= GpuFlags::SURFACE_NO_PALETTE;
         self->is_gpu_busy = 0;
@@ -1792,9 +1768,8 @@ namespace openre::marni
     {
         switch (msg)
         {
-#ifdef _WIN32
         case WM_MOVE: move(self); break;
-        case WM_SIZE: resize(self, (HWND)hWnd, msg, (WPARAM)wParam, (LPARAM)lParam); break;
+        case WM_SIZE: resize(self, (uintptr_t)wParam); break;
         case WM_DESTROY: destroy(self); break;
         case WM_SYSKEYDOWN:
             if ((self->gpu_flag & GpuFlags::GPU_FULLSCREEN) != 0)
@@ -1802,8 +1777,9 @@ namespace openre::marni
                 syskeydown(self);
             }
             break;
-#endif
         }
+        (void)hWnd;
+        (void)lParam;
         return 1;
     }
 
@@ -1842,8 +1818,7 @@ namespace openre::marni
     }
 
     // 0x004065C0
-#ifdef _WIN32
-    static int __stdcall resize(Marni* marni, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    static int __stdcall resize(Marni* marni, uintptr_t wParam)
     {
         if (!marni->is_gpu_active)
             return 1;
@@ -1852,7 +1827,6 @@ namespace openre::marni
         {
             marni->var_8C7EE0 = 1;
             sub_401F00(marni);
-            DefWindowProcA(hWnd, msg, 1, lParam);
             return 1;
         }
 
@@ -1867,7 +1841,6 @@ namespace openre::marni
 
             restore_surfaces(marni);
             marni->var_8C7EE0 = 0;
-            DefWindowProcA(hWnd, msg, wParam, lParam);
             surface_fill(&marni->surface2, 0, 0, 0);
             marni->var_8C8318 = 0;
             return 1;
@@ -1876,7 +1849,6 @@ namespace openre::marni
         if (marni->var_8C7EE0)
         {
             marni->var_8C7EE0 = 0;
-            DefWindowProcA(hWnd, msg, wParam, lParam);
             prepare_movie(marni);
             return 1;
         }
@@ -1892,12 +1864,10 @@ namespace openre::marni
             restore_surfaces(marni);
             marni->is_gpu_busy = 0;
             marni->gpu_flag |= GpuFlags::GPU_ENABLED;
-            DefWindowProcA(hWnd, msg, wParam, lParam);
             return 1;
         }
         return result;
     }
-#endif // _WIN32
 
     // 0x00406860
 
@@ -4703,9 +4673,8 @@ namespace openre::marni
         if (lpResRect)
             compute_windowed_window_rect(hWnd, width, height, lpResRect);
 
-#ifdef _WIN32
-        InvalidateRect(hWnd, nullptr, TRUE);
-#endif
+        // No InvalidateRect: SDL repaints continuously, so nothing needs an
+        // explicit invalidation after a display-mode change.
         return 1;
     }
 
@@ -8110,10 +8079,8 @@ namespace openre::marni
     {
         if (self->pMovie->flag && !movie_update(self->pMovie) && self->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
-#ifdef _WIN32
-            auto windowStyles = GetWindowLongA((HWND)self->hWnd, GWL_STYLE);
-            SetWindowLongA((HWND)self->hWnd, GWL_STYLE, windowStyles & 0x7F30FFFF | 0xCF0000);
-#endif
+            // No GetWindowLongA/SetWindowLongA style restore: SDL3 borderless
+            // fullscreen keeps the frame off the movie window.
         }
 
         return 1;

@@ -16,14 +16,12 @@
 #include "str.h"
 #include "system_filesystem.h"
 #include "title.h"
+#include "vk_codes.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 using namespace openre;
 using namespace openre::audio;
@@ -95,16 +93,6 @@ namespace openre::save
         "\x8f\x91\x82\xab\x8d\x9e\x82\xdd\x82\xc9\x8e\xb8\x94\x73\x82\xb5\x82\xdc\x82\xb5\x82\xbd", // 書き込みに失敗しました
         nullptr,
     };
-
-#ifndef _WIN32
-    // Portable substitutes for the Win32 virtual-key codes that get_menu_key()
-    // returns (menu_vk_codes in input.cpp) and mem_card's CARD_STATE_MENU
-    // switch matches.
-    constexpr int VK_PRIOR = 0x21; // PageUp
-    constexpr int VK_NEXT = 0x22;  // PageDown
-    constexpr int VK_END = 0x23;
-    constexpr int VK_HOME = 0x24;
-#endif
 
     // 0x004C6C40
     static void cardaccess_init()
@@ -1861,19 +1849,15 @@ namespace openre::save
 
         // Resolve the path to absolute so relative paths are interpreted
         // against the current directory rather than the savedata folder.
-        char absPath[MAX_PATH];
-#ifdef _WIN32
-        if (GetFullPathNameA(path, MAX_PATH, absPath, nullptr) == 0)
-#else
-        if (realpath(path, absPath) == nullptr)
-#endif
+        auto absPath = system::fs::absolute(path);
+        if (absPath.empty())
         {
             logging::logError("[cmdline] Failed to resolve save path: {}", path);
             return false;
         }
 
         gGameTable.p_card_work = gGameTable.card_work;
-        auto result = file_read_save(gGameTable.p_card_work + 500, absPath, 0x800);
+        auto result = file_read_save(gGameTable.p_card_work + 500, absPath.c_str(), 0x800);
         if (result != 0)
         {
             logging::logError("[cmdline] Failed to load save file: {}", absPath);

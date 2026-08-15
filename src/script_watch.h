@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -14,7 +15,8 @@ namespace openre::script
         deleted,
     };
 
-    // Watches a directory tree for changes on a background thread.
+    // Watches a directory tree for changes on a background thread by polling
+    // the filesystem (cross-platform, no OS-specific APIs).
     class FileWatcher
     {
     public:
@@ -31,8 +33,7 @@ namespace openre::script
         void watchDirectory();
 
         std::filesystem::path _path;
-        void* _directoryHandle{};
         std::thread _thread;
-        bool _finished{};
+        std::atomic<bool> _finished{};
     };
 }

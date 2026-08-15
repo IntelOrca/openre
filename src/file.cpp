@@ -12,10 +12,6 @@
 #include <cstring>
 #include <string>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 // Memory card save structures (forward-declared in file.h)
 // Must be packed to match the original binary's 1-byte alignment.
 #pragma pack(push, 1)
@@ -90,50 +86,10 @@ namespace openre::file
     {
         auto* discPath = reinterpret_cast<OldStdString*>(0x689F34);
 
-#ifdef _WIN32
-        uint32_t logicalDrives = GetLogicalDrives();
-#endif
-        int foundDrive = -1;
-#ifdef _WIN32
-        for (int i = 0; i < 0x20; i++)
-        {
-            if (((1u << i) & logicalDrives) == 0)
-                continue;
-
-            char fileName[128];
-            sprintf(fileName, "%c:\\disc.id", i + 'A');
-
-            auto data = system::fs::readAllBytes(fileName);
-            if (data.empty())
-                continue;
-
-            // The original read the file into a buffer and treated it as a
-            // NUL-terminated string, then stripped one trailing "\r\n" or "\n".
-            std::string content(reinterpret_cast<const char*>(data.data()), data.size());
-            auto nul = content.find('\0');
-            if (nul != std::string::npos)
-                content.resize(nul);
-            if (content.size() >= 2 && content[content.size() - 2] == '\r' && content[content.size() - 1] == '\n')
-                content.resize(content.size() - 2);
-            else if (content.size() >= 1 && content.back() == '\n')
-                content.pop_back();
-
-            if (content == "bio2.658b45ea117473d4.disc")
-            {
-                foundDrive = i;
-                break;
-            }
-        }
-#endif
-        // No Windows drive enumeration off-Windows: foundDrive stays -1 and the
-        // disc path is left empty (the reimplementation serves data from data://).
-
+        // The original enumerated the logical drives looking for disc.id. No
+        // drive scan is done here: game data always comes from data://, so the
+        // disc path is simply left empty.
         std::string root;
-        if (foundDrive >= 0)
-        {
-            root += (char)('A' + foundDrive);
-            root += ":\\";
-        }
 
         if (root != (discPath->data ? discPath->data : ""))
         {
