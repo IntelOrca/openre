@@ -36,4 +36,5 @@ namespace openre::scd
     void scd_event_init(SceTask* task, int evt);
     void scd_event_exec(int taskIndex, int evt);
     void scd_init();
+    int scd_execute_opcode(SceTask* task, uint8_t instruction);
 }

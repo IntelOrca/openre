@@ -102,16 +102,6 @@ namespace openre::door
         SCD_RESULT_NEXT_TICK,
     };
 
-    using ScdOpcodeImpl = int (*)(SceTask*);
-
-    // 0x0053AE10
-    static ScdOpcodeImpl* gDoorScdImplTable = (ScdOpcodeImpl*)0x53AE10;
-
-    static int door_scd_execute_opcode(SceTask* task, uint8_t instruction)
-    {
-        return gDoorScdImplTable[instruction](task);
-    }
-
     // 0x00450230
     static char door_scheduler_main()
     {
@@ -128,7 +118,7 @@ namespace openre::door
             while (true)
             {
                 auto opcode = *task->data;
-                result = door_scd_execute_opcode(task, opcode);
+                result = scd_execute_opcode(task, opcode);
                 if (gGameTable.ctcb->var_13 != 0)
                     return result;
                 if (result == SCD_RESULT_NEXT)
