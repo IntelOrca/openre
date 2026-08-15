@@ -528,9 +528,5 @@ namespace openre::door
         }
     }
 
-    void door_init_hooks()
-    {
-        interop::writeJmp(0x0044FEA0, &door_main);
-        interop::writeJmp(0x004C0840, &door_set);
-    }
+    void door_init_hooks() {}
 }

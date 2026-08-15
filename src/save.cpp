@@ -1884,7 +1884,6 @@ namespace openre::save
     void save_init_hooks()
     {
         interop::writeJmp(0x004C57E0, &mem_card);
-        interop::writeJmp(0x00432080, &rsrc_release);
         interop::writeJmp(0x00509860, &build_default_save_path);
     }
 }

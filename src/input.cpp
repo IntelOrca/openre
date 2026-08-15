@@ -1079,14 +1079,8 @@ namespace openre::input
 
     void input_init_hooks()
     {
-        writeJmp(0x00410450, &input_wmkeyup);
-        writeJmp(0x00410410, &input_wmkeydown);
-        writeJmp(0x00410400, &input_get_keyboard_bits);
         writeJmp(0x004100F0, &joy_get_pos_ex);
-        writeJmp(0x004102E0, &input_init);
-        writeJmp(0x00432670, &get_menu_key);
         writeJmp(0x004354D0, &get_config_key_state);
-        writeJmp(0x0043BB00, &sub_43BB00);
         writeJmp(0x0043B950, &init_input_hook);
         writeJmp(0x004D0F30, &pad_set);
     }

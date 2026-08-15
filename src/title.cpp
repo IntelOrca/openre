@@ -994,6 +994,5 @@ namespace openre::title
     void title_init_hooks()
     {
         interop::writeJmp(0x005035B0, &title);
-        interop::writeJmp(0x00506750, &title_game_init);
     }
 }

@@ -924,9 +924,7 @@ namespace openre::scd
 
     void scd_init_hooks()
     {
-        interop::writeJmp(0x004E39E0, &scd_init);
         interop::writeJmp(0x004E3F60, &scd_event_init);
-        interop::writeJmp(0x004E4310, &sce_scheduler_main);
 
         set_scd_hook(SCD_NOP, &scd_nop);
         set_scd_hook(SCD_EVT_NEXT, &scd_evt_next);

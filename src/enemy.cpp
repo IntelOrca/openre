@@ -1057,7 +1057,6 @@ namespace openre::enemy
 
     void enemy_init_hooks()
     {
-        interop::writeJmp(0x004B1DD0, em_move_tbl_set);
         interop::writeJmp(0x004C5230, bomb_parts_sort_gt);
         interop::writeJmp(0x004EDE30, &snd_se_enem);
         interop::writeJmp(0x00443F70, pl_load_texture);

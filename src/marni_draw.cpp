@@ -190,7 +190,6 @@ namespace openre::marni
 
     void init_draw_hooks()
     {
-        interop::writeJmp(0x00440250, &reset_geom);
         interop::writeJmp(0x00441170, &add_poly_f4);
         interop::writeJmp(0x00440950, &add_bg_scaled);
         interop::writeJmp(0x00440280, &add_sprt);

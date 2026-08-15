@@ -705,8 +705,6 @@ namespace openre::sce
 
     void sce_init_hooks()
     {
-        interop::writeJmp(0x004E40D0, &sce_scheduler_set);
-        interop::writeJmp(0x004E42D0, &sce_scheduler);
         set_sce_hook(SCE_AUTO, reinterpret_cast<SceImpl>(&sce_auto));
         set_sce_hook(SCE_DOOR, reinterpret_cast<SceImpl>(&sce_door));
         set_sce_hook(SCE_ITEM, reinterpret_cast<SceImpl>(&sce_item));

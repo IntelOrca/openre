@@ -1863,10 +1863,6 @@ namespace openre::player
         interop::writeJmp(0x004EDF40, &snd_se_walk);
         interop::writeJmp(0x00502190, &partner_switch);
         interop::writeJmp(0x00502660, &inventory_find_item);
-        interop::writeJmp(0x4D97B0, player_move);
-        interop::writeJmp(0x4D9D20, pl_move);
-        interop::writeJmp(0x4DC130, pl_mv_damage);
-        interop::writeJmp(0x4FC3CE, itembox_prev_slot);
 
         init_move_tables();
     }

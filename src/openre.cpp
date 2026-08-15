@@ -3108,16 +3108,10 @@ void onAttach()
     gClassicRebirthEnabled = (b == 0xE9);
 
     interop::writeJmp(0x004B7860, load_init_table_1);
-    interop::writeJmp(0x004DE650, load_init_table_2);
-    interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
     interop::writeJmp(0x0050C800, &sprintf_hook);
     interop::writeJmp(0x0050B930, &sub_50B930);
-    interop::writeJmp(0x00509CF0, ck_installkey);
-    interop::writeJmp(0x004C3C70, psx_main);
     interop::writeJmp(0x00441ED0, win_main);
-    interop::writeJmp(0x004315D0, save_menu_draw);
-    interop::writeJmp(0x00442920, draw_monitor_effect);
     interop::writeJmp(0x004427E0, &update_timer);
     interop::writeJmp(0x0050AA00, &operator_new);
     interop::writeJmp(0x0050AA10, &operator_delete);

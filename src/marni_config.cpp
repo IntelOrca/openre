@@ -23,7 +23,7 @@ namespace openre::marni
         // 0x0050B450
         // Opens or creates a config group. With INI backend this is a no-op.
         // Returns: 1 on success.
-        static uint32_t __stdcall MarniConfig_CreateKey(MarniConfig* self, uint32_t /*accessMode*/)
+        static uint32_t MarniConfig_CreateKey(MarniConfig* self, uint32_t /*accessMode*/)
         {
             self->hKey = 1;
             self->ex_flag = 1;
@@ -142,7 +142,6 @@ namespace openre::marni
 
     void marni_config_init_hooks()
     {
-        interop::hookThisCall(0x0050B450, &MarniConfig_CreateKey);
         interop::hookThisCall(0x0050B4B0, &MarniConfig_CloseKey);
         interop::hookThisCall(0x0050B500, &MarniConfig_GetString);
         interop::hookThisCall(0x0050B620, &MarniConfig_GetDword);

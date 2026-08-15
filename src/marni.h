@@ -28,25 +28,25 @@ namespace openre::marni
         constexpr uint32_t PER_PRIM_TEXTURE = 0x80000;
     }
 
-    Marni* __stdcall init(Marni* self, void* hWnd, int width, int height);
+    Marni* init(Marni* self, void* hWnd, int width, int height);
     long __stdcall message(Marni* self, void* hWnd, uint32_t msg, void* wParam, void* lParam);
     bool __stdcall change_resolution(Marni* self);
     bool __stdcall toggle_fullscreen(Marni* self);
     int __stdcall create_texture_handle(Marni* self, MarniSurface2* pSrcSurface, uint32_t mode);
     void __stdcall unload_texture(Marni* self, int handle);
-    int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z);
-    int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z);
+    int add_primitive_front(Marni* self, Prim* pPrim, int z);
+    int add_primitive_back(Marni* self, Prim* pPrim, int z);
     int __stdcall add_primitive_scaler(Marni* self, Prim* pPrim, int z);
-    void __stdcall draw(Marni* self);
-    int __stdcall clear(Marni* self);
-    void __stdcall clear_otags(Marni* self);
-    void __stdcall flip(Marni* self);
+    void draw(Marni* self);
+    int clear(Marni* self);
+    void clear_otags(Marni* self);
+    void flip(Marni* self);
     int __stdcall marni_movie_update(Marni* self);
-    int __stdcall request_display_mode_count(Marni* self);
+    int request_display_mode_count(Marni* self);
     void __stdcall syskeydown(Marni* self);
     void __stdcall movie_kill(Marni* self);
 
-    MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self);
+    MarniSurfaceY* surfacey_ctor(MarniSurfaceY* self);
     void __stdcall surfacey_dtor(MarniSurface2* self);
     void __stdcall surface2_ctor(MarniSurface2* self);
     void __stdcall surface2_release(MarniSurface2* self);

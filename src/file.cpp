@@ -794,24 +794,12 @@ namespace openre::file
 
     void file_init_hooks()
     {
-        interop::writeJmp(0x00431D80, &save_list_files);
-        interop::writeJmp(0x00432600, &remove_save);
-        interop::writeJmp(0x0043BBC0, &file_read_chunk);
-        interop::writeJmp(0x0043BC90, &file_read_chunk2);
         interop::writeJmp(0x0043C590, &load_adt);
         interop::writeJmp(0x0043C700, &load_adt_sub);
         interop::writeJmp(0x0043C890, &decompress_file_page);
-        interop::writeJmp(0x00435430, &save_open_fp);
-        interop::writeJmp(0x00442D50, &CreateSaveFolder);
-        interop::writeJmp(0x004DD360, &osp_read);
-        interop::writeJmp(0x00509020, &open_handle);
-        interop::writeJmp(0x00509040, &open_file);
-        interop::writeJmp(0x005092A0, &check_disk_id);
         interop::writeJmp(0x005094B0, &bufferize_file_0);
         interop::writeJmp(0x00509540, &read_partial_file_into_buffer);
         interop::writeJmp(0x005095D0, &file_exists);
         interop::writeJmp(0x00509630, &FileWriteScreen);
-        interop::writeJmp(0x00509780, &file_read_save);
-        interop::writeJmp(0x005097E0, &file_write_save);
     }
 }

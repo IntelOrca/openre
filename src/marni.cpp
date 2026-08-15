@@ -41,9 +41,9 @@ namespace openre::marni
 
     static int error_routine(int errorCode);
 
-    static int __stdcall create_device(Marni* self);
-    static int __stdcall enum_drivers(Marni* self);
-    static int __stdcall create_gpu(Marni* self);
+    static int create_device(Marni* self);
+    static int enum_drivers(Marni* self);
+    static int create_gpu(Marni* self);
     static int __stdcall surface2_vfill(MarniSurface2* self, LPRECT pSrcRect, uint32_t color, int mode);
     static int adjust_rect(RECT* clip, const RECT* src, RECT* out);
     static int __stdcall surfacex_vfill(MarniSurfaceX* self, LPRECT pRect, uint32_t color, int mode);
@@ -59,26 +59,26 @@ namespace openre::marni
     static int surface_get_current_color(MarniSurface2* self, int x, int y, uint32_t* color_out);
     static int surface_set_current_color(MarniSurface2* self, int x, int y, uint32_t color, int mode);
     int __stdcall surface2_blt(MarniSurface2* self, RECT* pDstRect, RECT* pSrcRect, MarniSurface2* pSrc, int a5, int a6);
-    static void __stdcall destroy(Marni* marni);
-    static int __stdcall do_draw_op(Marni* self, int index);
+    static void destroy(Marni* marni);
+    static int do_draw_op(Marni* self, int index);
     static void __stdcall do_render(Marni* self, MarniOt* pOt);
     static int __stdcall init_all(Marni* self);
-    static int __stdcall clear_buffers(Marni* self);
-    static void __stdcall move(Marni* marni);
+    static int clear_buffers(Marni* self);
+    static void move(Marni* marni);
     static void __stdcall polygon_object_dtor(PolygonObject* self);
     static MarniOt* __stdcall ot_ctor(MarniOt* self, size_t a2, int a3);
     static Prim* __stdcall ot_get_primitive(MarniOt* self);
-    static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z);
+    static int ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z);
     static int __stdcall ot_clear(MarniOt* self);
     static int __stdcall ot_alloc(MarniOt* self, int depth, int a3);
     static void __stdcall ot_dtor(MarniOt* self);
     static int __stdcall resize(Marni* marni, uintptr_t wParam);
-    static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index);
+    static uint16_t search_texture_object_0_from_1(Marni* self, int handle, int index);
     static void set_filtering(Marni* self, uint8_t a2);
     static void __stdcall sub_40E800(Marni* self, uint8_t a2);
     static int invalidate_window(HWND hWnd, int width, int height, int fullscreen, LPRECT lpResRect);
     static uint8_t __stdcall sub_416670(MarniOt* pOt);
-    static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index);
+    static MarniTextureNode* search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index);
     static void __stdcall texture_surface_release(Marni* self, int handle);
     static int tex_spr(
         MarniSurface2* dst, MarniSurface2* src, int dstLeft, int dstTop, int dstRight, int dstBottom, int srcU0, int srcV0,
@@ -90,12 +90,12 @@ namespace openre::marni
     static int __stdcall reload_texture(Marni* self, int texture);
     static bool __stdcall change_display_mode(Marni* self, int mode);
     static void __stdcall surface3_dtor(MarniSurface3* self);
-    static void __stdcall surfacex_dtor(MarniSurfaceX* self);
-    static MarniSurfaceX* __stdcall surfacex_ctor(MarniSurfaceX* self);
-    static int __stdcall get_z_buffer_caps(Marni* self);
+    static void surfacex_dtor(MarniSurfaceX* self);
+    static MarniSurfaceX* surfacex_ctor(MarniSurfaceX* self);
+    static int get_z_buffer_caps(Marni* self);
     static int __stdcall surface_pal_blt(MarniSurface2* self, MarniSurface2* pSrc, int paletteSrc, int paletteDst);
-    static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self);
-    static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
+    static int surfacex_create_texture_object(MarniSurfaceX* self);
+    static int surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc);
     static void __stdcall surfacex_vrelease(MarniSurfaceX* self);
     static void surfacex_create_surface(MarniSurfaceX* self);
     static int surface_get_alpha_bits(MarniSurfaceX* self);
@@ -176,7 +176,7 @@ namespace openre::marni
     }
 
     // 0x00401F00
-    static void __stdcall sub_401F00(Marni* self)
+    static void sub_401F00(Marni* self)
     {
         sub_414B30(self->pMovie);
     }
@@ -194,7 +194,7 @@ namespace openre::marni
     }
 
     // 0x00401F70
-    static void __stdcall update_movie(Marni* self)
+    static void update_movie(Marni* self)
     {
         auto movie = self->pMovie;
         if (movie->flag == 0)
@@ -268,7 +268,7 @@ namespace openre::marni
     // 0x004021B0
 
     // 0x004021C0
-    int __stdcall add_primitive_front(Marni* self, Prim* pPrim, int z)
+    int add_primitive_front(Marni* self, Prim* pPrim, int z)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -296,7 +296,7 @@ namespace openre::marni
     }
 
     // 0x00402240
-    int __stdcall add_primitive_back(Marni* self, Prim* pPrim, int z)
+    int add_primitive_back(Marni* self, Prim* pPrim, int z)
     {
         if (!self->is_gpu_active)
             return 0;
@@ -312,7 +312,7 @@ namespace openre::marni
     }
 
     // 0x00402290
-    void __stdcall clear_otags(Marni* self)
+    void clear_otags(Marni* self)
     {
         for (auto i = 0; i < 5; i++)
         {
@@ -322,7 +322,7 @@ namespace openre::marni
     }
 
     // 0x004022E0
-    static void __stdcall request_video_memory(Marni* self)
+    static void request_video_memory(Marni* self)
     {
         if (!self->is_gpu_active)
         {
@@ -450,7 +450,7 @@ namespace openre::marni
     }
 
     // 0x00402530
-    int __stdcall request_display_mode_count(Marni* self)
+    int request_display_mode_count(Marni* self)
     {
         if (self->is_gpu_active)
             return self->res_count;
@@ -462,7 +462,7 @@ namespace openre::marni
     // 0x00402560
 
     // 0x00402940
-    static int __stdcall restore_surfaces(Marni* self)
+    static int restore_surfaces(Marni* self)
     {
         return 1;
     }
@@ -470,10 +470,10 @@ namespace openre::marni
     static void __stdcall flip_blt(Marni* self, DWORD width, DWORD height) {}
 
     // 0x00402A80
-    void __stdcall flip(Marni* self) {}
+    void flip(Marni* self) {}
 
     // 0x00402BC0
-    void __stdcall draw(Marni* self) {}
+    void draw(Marni* self) {}
 
     // 0x00403060
     static bool __stdcall change_display_mode(Marni* self, int mode)
@@ -801,7 +801,7 @@ namespace openre::marni
     }
 
     // 0x00404D20
-    int __stdcall clear(Marni* self)
+    int clear(Marni* self)
     {
         if (!(self->gpu_flag & GpuFlags::GPU_ENABLED) || !self->is_gpu_active || self->var_8C7EE0
             || !(self->gpu_flag & GpuFlags::SOFTWARE_GPU) && (self->pDevice2 == nullptr || self->pViewport == nullptr))
@@ -828,7 +828,7 @@ namespace openre::marni
     }
 
     // 0x00404FA0
-    static int __stdcall clear_buffers(Marni* self)
+    static int clear_buffers(Marni* self)
     {
         // Deactivate the GPU and clear the "device created" flag.
         self->is_gpu_active = 0;
@@ -871,7 +871,7 @@ namespace openre::marni
     }
 
     // 0x004050C0
-    static void __stdcall dtor(Marni* self)
+    static void dtor(Marni* self)
     {
         if (self->pMovie != nullptr)
         {
@@ -924,7 +924,7 @@ namespace openre::marni
     // 0x00405310
 
     // 0x00405320
-    Marni* __stdcall init(Marni* self, void* hWnd, int width, int height)
+    Marni* init(Marni* self, void* hWnd, int width, int height)
     {
         cstd_vector_ctor(self->textures, sizeof(MarniTexture), 256, (void*)0x405DC0, (void*)0x405310);
         auto exception = 0;
@@ -1160,7 +1160,7 @@ namespace openre::marni
     // 0x00405dc0
 
     // 0x00405DD0
-    static int __stdcall get_z_buffer_caps(Marni* self)
+    static int get_z_buffer_caps(Marni* self)
     {
         (void)self;
         return 0;
@@ -1784,7 +1784,7 @@ namespace openre::marni
     }
 
     // 0x00406450
-    static void __stdcall move(Marni* marni)
+    static void move(Marni* marni)
     {
         if (marni->gpu_flag & GpuFlags::GPU_FULLSCREEN)
         {
@@ -1800,7 +1800,7 @@ namespace openre::marni
     }
 
     // 0x004064D0
-    static void __stdcall destroy(Marni* marni)
+    static void destroy(Marni* marni)
     {
         marni->gpu_flag &= ~GpuFlags::GPU_ENABLED;
 
@@ -1880,7 +1880,7 @@ namespace openre::marni
     }
 
     // 0x00406D90
-    static int __stdcall create_device(Marni* self)
+    static int create_device(Marni* self)
     {
         (void)self;
         return 1;
@@ -1889,14 +1889,14 @@ namespace openre::marni
     // 0x00407020
 
     // 0x00407290
-    static int __stdcall enum_drivers(Marni* self)
+    static int enum_drivers(Marni* self)
     {
         (void)self;
         return 1;
     }
 
     // 0x00407440
-    static int __stdcall create_gpu(Marni* self)
+    static int create_gpu(Marni* self)
     {
         (void)self;
         return 0;
@@ -4390,7 +4390,7 @@ namespace openre::marni
     static void draw_line_gpu(Marni* self, int x0, int y0, int x1, int y1, uint32_t color0, uint32_t color1, int type) {}
 
     // 0x0040C6E0
-    static void __stdcall draw_line_flat(Marni* self, PrimLine2* line)
+    static void draw_line_flat(Marni* self, PrimLine2* line)
     {
         auto type = 1;
         if (self->xsize != 640)
@@ -4432,7 +4432,7 @@ namespace openre::marni
     }
 
     // 0x0040C790
-    static void __stdcall draw_line_gourad(Marni* self, PrimLine2* line)
+    static void draw_line_gourad(Marni* self, PrimLine2* line)
     {
         auto type = 1;
         if (self->xsize != 640)
@@ -4624,7 +4624,7 @@ namespace openre::marni
     }
 
     // 0x0040EAF0
-    static int __stdcall do_draw_op(Marni* self, int index)
+    static int do_draw_op(Marni* self, int index)
     {
         return 0;
     }
@@ -4632,13 +4632,13 @@ namespace openre::marni
     // 0x0040ec90
 
     // 0x0040ECA0
-    static int __stdcall surfacex_create_texture_object(MarniSurfaceX* self)
+    static int surfacex_create_texture_object(MarniSurfaceX* self)
     {
         return 0;
     }
 
     // 0x0040ED20
-    static MarniSurfaceX* __stdcall surfacex_ctor(MarniSurfaceX* self)
+    static MarniSurfaceX* surfacex_ctor(MarniSurfaceX* self)
     {
         // MarniSurfaceX::Ctor — MarniSurfaceY::Ctor then override the vtbl with
         // MarniSurfaceX::vTbl (0x517358) and clear the texture fields.
@@ -4650,12 +4650,12 @@ namespace openre::marni
     }
 
     // 0x0040EDB0
-    static void __stdcall surfacex_dtor(MarniSurfaceX* self) {}
+    static void surfacex_dtor(MarniSurfaceX* self) {}
 
     // 0x0040EE00
 
     // 0x0040EE30
-    static int __stdcall surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc)
+    static int surfacex_load(MarniSurfaceX* self, MarniSurfaceX* pSrc)
     {
         return 0;
     }
@@ -4785,7 +4785,7 @@ namespace openre::marni
     static void surfacex_create_surface(MarniSurfaceX* self) {}
 
     // 0x0040FEF0
-    MarniSurfaceY* __stdcall surfacey_ctor(MarniSurfaceY* self)
+    MarniSurfaceY* surfacey_ctor(MarniSurfaceY* self)
     {
         // Mirror MarniSurface2::Ctor call: zero the base surface (0x30 bytes) and set its
         // vtbl, then override the vtbl with MarniSurfaceY::vTbl and zero the texture fields.
@@ -5883,7 +5883,7 @@ namespace openre::marni
     }
 
     // 0x00416500
-    static int __stdcall ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z)
+    static int ot_add_primitive_as_z(MarniOt* self, Prim* pPrim, int z)
     {
         if (self->is_valid)
         {
@@ -5941,7 +5941,7 @@ namespace openre::marni
     }
 
     // 0x004168F0
-    static MarniTextureNode* __stdcall search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index)
+    static MarniTextureNode* search_texture_object_0_from_1_in_condition(Marni* self, int handle, int index)
     {
         auto texture = self->textures[handle];
         if ((texture.var_00 & 0x2000) != 0)
@@ -5984,7 +5984,7 @@ namespace openre::marni
     }
 
     // 0x00416AF0
-    static uint16_t __stdcall search_texture_object_0_from_1(Marni* self, int handle, int index)
+    static uint16_t search_texture_object_0_from_1(Marni* self, int handle, int index)
     {
         if (handle > 256)
             return 0;
@@ -8137,52 +8137,18 @@ namespace openre::marni
     {
         interop::hookThisCall(0x00401E40, &prepare_movie);
         interop::hookThisCall(0x00401EF0, &kill_movie);
-        interop::hookThisCall(0x00401F00, &sub_401F00);
         interop::hookThisCall(0x00401F10, &syskeydown);
-        interop::hookThisCall(0x00401F70, &update_movie);
         interop::hookThisCall(0x00401FD0, &set_movie_resolution);
         interop::hookThisCall(0x00402160, &arrange_object_contents);
-        interop::hookThisCall(0x004021C0, &add_primitive_front);
         interop::hookThisCall(0x00402210, &add_primitive_scaler);
-        interop::hookThisCall(0x00402240, &add_primitive_back);
-        interop::hookThisCall(0x00402290, (void(__stdcall*)(Marni*)) & clear_otags);
-        interop::hookThisCall(0x004022E0, &request_video_memory);
-        interop::hookThisCall(0x00402530, &request_display_mode_count);
         interop::hookThisCall(0x004033F0, &reload_texture);
-        interop::hookThisCall(0x00402940, &restore_surfaces);
-        interop::hookThisCall(0x00402A80, (void(__stdcall*)(Marni*)) & flip);
-        interop::hookThisCall(0x00402BC0, (void(__stdcall*)(Marni*)) & draw);
-        interop::hookThisCall(0x00405DD0, &get_z_buffer_caps);
         interop::hookThisCall(0x00404CE0, &unload_texture);
-        interop::hookThisCall(0x00404D20, (int(__stdcall*)(Marni*)) & clear);
-        interop::hookThisCall(0x00404FA0, &clear_buffers);
-        interop::hookThisCall(0x004050C0, &dtor);
-        interop::hookThisCall(0x00405320, &init);
-        interop::hookThisCall(0x00406450, &move);
-        interop::hookThisCall(0x004064D0, &destroy);
-#ifdef _WIN32
-        interop::hookThisCall(0x00407340, &enum_drivers);
-        interop::hookThisCall(0x00407440, &create_gpu);
-        interop::hookThisCall(0x00406D90, &create_device);
-#endif
-        interop::hookThisCall(0x0040EAF0, &do_draw_op);
-        interop::hookThisCall(0x0040ECA0, &surfacex_create_texture_object);
-        interop::hookThisCall(0x0040EE30, &surfacex_load);
-        interop::hookThisCall(0x0040ED90, &surfacex_ctor);
-        interop::hookThisCall(0x0040EDB0, &surfacex_dtor);
         interop::hookThisCall(0x0040EE00, &surfacex_vrelease);
         interop::hookThisCall(0x0040F9C0, &surfacex_vpalunlock);
         interop::hookThisCall(0x0040F790, &surfacex_vlock);
-        interop::hookThisCall(0x0040FEF0, &surfacey_ctor);
         interop::hookThisCall(0x00405EC0, &create_texture_handle);
-        interop::hookThisCall(0x00416500, &ot_add_primitive_as_z);
-        interop::hookThisCall(0x004168F0, &search_texture_object_0_from_1_in_condition);
-        interop::hookThisCall(0x00416AF0, &search_texture_object_0_from_1);
         interop::hookThisCall(0x00416730, &suspend_texture_use);
-        interop::hookThisCall(0x0040C6E0, &draw_line_flat);
-        interop::hookThisCall(0x0040C790, &draw_line_gourad);
         interop::writeJmp(0x004DBFD0, &out_internal);
-        interop::writeJmp(0x00442CB0, (void (*)())&set_gpu_flag);
         interop::hookThisCall(0x00412BD0, &surface2_vfill);
         interop::hookThisCall(0x0040F380, &surfacex_vfill);
         interop::hookThisCall(0x00412D20, &MarniBits_FileOut);
@@ -8195,10 +8161,6 @@ namespace openre::marni
         interop::hookThisCall(0x00412580, &surface2_blt);
         interop::hookThisCall(0x00416D40, &flush_surfaces_marni);
         interop::hookThisCall(0x00430A60, &marni_poly_object_open);
-        interop::writeJmp(0x00432CD0, &door_disp1);
         interop::writeJmp(0x00443620, &mapping_tmd);
-#ifdef _WIN32
-        interop::writeJmp(0x00406A10, &error_routine);
-#endif
     }
 }

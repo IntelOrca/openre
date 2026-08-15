@@ -1913,9 +1913,7 @@ namespace openre::hud
         interop::writeJmp(0x004C4AD0, &hud_fade_status);
         interop::writeJmp(0x004C4AB0, &hud_fade_off);
         interop::writeJmp(0x004FC5B0, &exchange_item);
-        interop::writeJmp(0x00502590, &hud_check_item_mix);
         interop::writeJmp(0x005024D0, &set_inventory_item);
-        interop::writeJmp(0x00502500, &set_inventory_item_quantity);
         interop::writeJmp(0x004F8000, &hud_render_inventory);
         interop::writeJmp(0x00502620, &search_item);
         interop::writeJmp(0x00502690, &sort_inventory);

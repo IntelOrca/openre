@@ -3995,53 +3995,23 @@ namespace openre::audio
         interop::writeJmp(0x00433870, &ss_set_coop_level);
         interop::writeJmp(0x00433830, &ss_close);
         interop::writeJmp(0x004338F0, &ss_play);
-        interop::writeJmp(0x00433C40, &ss_stop_all);
         interop::writeJmp(0x00433DC0, &ss_shutdown);
         interop::writeJmp(0x00433F10, &ss_unload_group);
-        interop::writeJmp(0x00434140, &ss_unload_bgm);
-        interop::writeJmp(0x004341E0, &ss_stop_group);
         interop::writeJmp(0x004344A0, &ss_load_banks);
-        interop::writeJmp(0x004347B0, &ss_get_status);
         interop::writeJmp(0x004348F0, &ss_set_pan);
         interop::writeJmp(0x00434AB0, &ss_set_vol);
         interop::writeJmp(0x00434CF0, &ss_get_volume);
-        interop::writeJmp(0x00434EA0, &ss_load_sap);
-        interop::writeJmp(0x00435170, &ss_load_steps);
-        interop::writeJmp(0x00435300, &ss_load_bgm);
         interop::writeJmp(0x00435610, &ss_init_2);
-        interop::writeJmp(0x00435540, &ss_init_buffers);
-        interop::writeJmp(0x00436470, &ss_voice_load);
         // snd_sys_init2_impl: the hook targets the static implementation
         // (snd_sys_init2) via its handle, since the name snd_sys_init2 is the
         // public audio.h wrapper in this scope.
         interop::writeJmp(0x004EC250, snd_sys_init2_impl);
-        interop::writeJmp(0x004EC350, &snd_sys_init_sub);
-        // snd_sys_init_sub2_impl: the hook targets the static implementation
-        // via its handle, since the name snd_sys_init_sub2 is the public
-        // audio.h wrapper in this scope.
-        interop::writeJmp(0x004EC410, snd_sys_init_sub2_impl);
         // snd_load_core_impl: the hook targets the static implementation via
         // its handle, since the name snd_load_core is the public audio.h
         // wrapper in this scope.
         interop::writeJmp(0x004EC450, snd_load_core_impl);
         interop::writeJmp(0x004EC6D0, &snd_load_arms);
         interop::writeJmp(0x004EC7D0, snd_room_load_impl);
-        // snd_load_enemy_impl: the hook targets the static implementation via
-        // its handle, since the name snd_load_enemy is the public audio.h
-        // wrapper in this scope.
-        interop::writeJmp(0x004EC8A0, snd_load_enemy_impl);
-        // snd_bgm_set_impl: the hook targets the static implementation via
-        // its handle, since the name snd_bgm_set is the public audio.h
-        // wrapper in this scope.
-        interop::writeJmp(0x004EC9C0, snd_bgm_set_impl);
-        // snd_bgm_ck_impl: the hook targets the static implementation via its
-        // handle, since the name snd_bgm_ck is the public audio.h wrapper in
-        // this scope.
-        interop::writeJmp(0x004ECBE0, snd_bgm_ck_impl);
-        // snd_bgm_play_ck_impl: the hook targets the static implementation via
-        // its handle, since the name snd_bgm_play_ck is the public audio.h
-        // wrapper in this scope.
-        interop::writeJmp(0x004ECCE0, snd_bgm_play_ck_impl);
         interop::writeJmp(0x004ECDA0, snd_bgm_main);
         interop::writeJmp(0x004ED050, &snd_bgm_sub);
         interop::writeJmp(0x004ED260, &snd_bgm_fade_on);
@@ -4049,22 +4019,10 @@ namespace openre::audio
         interop::writeJmp(0x004ED920, bgm_set_entry);
         interop::writeJmp(0x004ED950, &snd_se_on_impl);
         interop::writeJmp(0x004EE350, &snd_se_call);
-        interop::writeJmp(0x004EE440, &snd_bgm_fade);
         interop::writeJmp(0x004EE780, &snd_se_3d);
         interop::writeJmp(0x004EEBD0, &snd_se_dir_ck);
         interop::writeJmp(0x004EEC30, &xa_play);
         interop::writeJmp(0x004EECD0, &xa_stop);
-        interop::writeJmp(0x004EED00, &xa_control);
-        interop::writeJmp(0x004EED10, &xa_control_stop);
-        interop::writeJmp(0x004EED30, &xa_control_init);
-        interop::writeJmp(0x004EED40, &xa_control_play);
-        interop::writeJmp(0x004EED80, &xa_control_end);
-        interop::writeJmp(0x004EEDD0, &xa_set_volume);
         interop::writeJmp(0x004EEDF0, &cd_system_control);
-        interop::writeJmp(0x004EEE00, &ss_seq_set_decrescendo);
-        interop::writeJmp(0x004EEE40, &sub_4eee40);
-        interop::writeJmp(0x004EEF30, &bgm_ck_room112);
-        interop::writeJmp(0x004EEF50, &bgm_ck_room115);
-        interop::writeJmp(0x004EEF70, &room_fs_ck);
     }
 }

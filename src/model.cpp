@@ -79,7 +79,7 @@ namespace openre
     // 0x004308B0
     // Loads a TMD file into the object. Returns 1 whether or not the file could
     // be opened (mirroring the original).
-    static int __stdcall tmdfile_create(TmdFile* self, const char* path)
+    static int tmdfile_create(TmdFile* self, const char* path)
     {
         tmdfile_reset(self);
 
@@ -134,7 +134,6 @@ namespace openre
 
     void model_init_hooks()
     {
-        interop::hookThisCall(0x004308B0, &tmdfile_create);
         interop::hookThisCall(0x004309B0, &tmdobject_create);
     }
 }

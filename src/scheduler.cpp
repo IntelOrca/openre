@@ -135,12 +135,8 @@ namespace openre
         interop::writeJmp(0x00508CE0, task_sleep);
         interop::writeJmp(0x00508D10, task_exit);
         interop::writeJmp(0x00508CC0, task_execute);
-        interop::writeJmp(0x00508D40, task_kill);
         interop::writeJmp(0x00508D60, task_chain);
         interop::writeJmp(0x00508D90, task_suspend);
         interop::writeJmp(0x00508DA0, task_signal);
-        interop::writeJmp(0x00508DB0, task_status);
-        interop::writeJmp(0x00508B60, scheduler_init);
-        interop::writeJmp(0x00508BC0, scheduler);
     }
 }
