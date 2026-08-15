@@ -769,7 +769,7 @@ namespace openre::audio
     }
 
     // 0x00433F10
-    static int ss_unload_group(int type)
+    int ss_unload_group(int type)
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;
@@ -1174,7 +1174,7 @@ namespace openre::audio
     }
 
     // 0x004344A0
-    static int ss_load_banks(int type, int id, int bank, int player)
+    int ss_load_banks(int type, int id, int bank, int player)
     {
         if (!gGameTable.audio_pMarniSnd)
             return 1;

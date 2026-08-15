@@ -1,6 +1,7 @@
 #include "audio.h"
 #include "camera.h"
 #include "entity.h"
+#include "file.h"
 #include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
@@ -94,10 +95,56 @@ namespace openre::door
         }
     }
 
-    // 0x00450230
-    static void door_scheduler_main()
+    enum
     {
-        interop::call(0x00450230);
+        SCD_RESULT_FALSE,
+        SCD_RESULT_NEXT,
+        SCD_RESULT_NEXT_TICK,
+    };
+
+    using ScdOpcodeImpl = int (*)(SceTask*);
+
+    // 0x0053AE10
+    static ScdOpcodeImpl* gDoorScdImplTable = (ScdOpcodeImpl*)0x53AE10;
+
+    static int door_scd_execute_opcode(SceTask* task, uint8_t instruction)
+    {
+        return gDoorScdImplTable[instruction](task);
+    }
+
+    // 0x00450230
+    static char door_scheduler_main()
+    {
+        gGameTable.sce_type = SCE_DOOR;
+        gGameTable.scd = gGameTable.byte_8C6888;
+
+        int result = SCD_RESULT_FALSE;
+        for (auto i = 10; i < 14; i++)
+        {
+            auto task = get_task(i);
+            if (task->status == SCD_STATUS_EMPTY)
+                continue;
+
+            while (true)
+            {
+                auto opcode = *task->data;
+                result = door_scd_execute_opcode(task, opcode);
+                if (gGameTable.ctcb->var_13 != 0)
+                    return result;
+                if (result == SCD_RESULT_NEXT)
+                    continue;
+                if (result == SCD_RESULT_NEXT_TICK)
+                    break;
+                auto eax = task->sub_ctr;
+                auto cl = task->ifel_ctr[eax];
+                if (cl & 0x80)
+                    break;
+                task->sp--;
+                task->data = *task->sp;
+                task->ifel_ctr[eax]--;
+            }
+        }
+        return result;
     }
 
     // 0x00451590
@@ -354,7 +401,7 @@ namespace openre::door
     // 0x00441870
     static void movie_set(int id)
     {
-        interop::call(0x00441870);
+        gGameTable.movie_idx = id;
     }
 
     // 0x004CB260
@@ -377,7 +424,90 @@ namespace openre::door
     // 0x004505C0
     static void door_load()
     {
-        interop::call(0x004505C0);
+        auto& ctcb = *gGameTable.ctcb;
+        if (ctcb.var_0C != 0)
+        {
+            if (ctcb.var_0C == 1)
+            {
+                set_flag(FlagGroup::Status, FG_STATUS_14, false);
+                ctcb.var_0C = 0;
+            }
+            return;
+        }
+
+        gGameTable.word_689408 = 0;
+
+        auto doorAotData = reinterpret_cast<SceAotDoorData*>(gGameTable.door_aot_data);
+        auto doorId = doorAotData->Texture;
+        gGameTable.door_id = doorId;
+
+        gGameTable.dword_6893F8 = reinterpret_cast<uint32_t>(&gGameTable.door_tmd_slots[doorId]);
+        gGameTable.dword_6893EC = (gGameTable.door_tmd_slots[doorId].file_size + 0x7FF) & 0xFFFFF800;
+
+        gGameTable.door_file_name[16] = static_cast<char>((doorId >> 4) + 0x30);
+        auto lowNibble = doorId & 0xF;
+        gGameTable.door_file_name[17] = static_cast<char>(lowNibble >= 0xA ? lowNibble + 0x57 : lowNibble + 0x30);
+
+        auto* buffer = reinterpret_cast<uint8_t*>(&gGameTable.tmd) - gGameTable.dword_6893EC;
+
+        auto ok = openre::file::read_file_into_buffer(gGameTable.door_file_name, buffer, 4) > 0;
+        if (!ok)
+        {
+            gGameTable.door_file_name[17] = '0';
+            ok = openre::file::read_file_into_buffer(gGameTable.door_file_name, buffer, 4) > 0;
+        }
+        if (!ok)
+        {
+            openre::file::file_error();
+            return;
+        }
+
+        gGameTable.pEdt_adr[0] = reinterpret_cast<int32_t>(gGameTable.byte_6DFC0C);
+        std::memcpy(gGameTable.byte_6DFC0C, reinterpret_cast<uint8_t*>(&gGameTable.tmd) - gGameTable.dword_6893EC, 0xC38);
+        gGameTable.dword_6934A0
+            = reinterpret_cast<int32_t>(gGameTable.byte_6DFC0C + *reinterpret_cast<int32_t*>(gGameTable.byte_6DFC0C + 0xC30));
+
+        if (static_cast<int8_t>(gGameTable.vab_id[0]) >= 0)
+        {
+            openre::audio::ss_unload_group(0); // ST_DOOR
+            gGameTable.ss_name_door[0] = 0;
+            gGameTable.vab_id[0] = 0xFF;
+        }
+        gGameTable.dword_6893FC = 0;
+
+        auto vabId = doorId;
+        switch (doorId)
+        {
+        case 2:
+        case 3:
+        case 5:
+        case 11:
+        case 13:
+        case 24: vabId = 0; break;
+        case 4:
+        case 9:
+        case 17: vabId = 1; break;
+        case 7:
+        case 8:
+        case 34:
+        case 47: vabId = 6; break;
+        case 26:
+        case 35: vabId = 21; break;
+        case 48: vabId = 27; break;
+        case 41: vabId = 36; break;
+        case 49: vabId = 38; break;
+        }
+
+        ctcb.var_0C = 1;
+        gGameTable.vab_id[0] = static_cast<uint8_t>(openre::audio::ss_load_banks(0 /* ST_DOOR */, vabId, 0, 0));
+
+        if (!check_flag(FlagGroup::System, FG_SYSTEM_15) && gGameTable.word_689408 == 0)
+        {
+            bg_set_mode(2, 0);
+            gGameTable.word_689408 = 1;
+        }
+
+        task_sleep(1);
     }
 
     // 0x004C0840

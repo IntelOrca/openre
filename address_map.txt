@@ -911,6 +911,12 @@ declare     handle                  u32
 declare     clutCount               u32
 declare     suspended               u32
 
+struct      DoorTmdSlot
+declare     file_size               u16
+declare     unk_02                  u16
+declare     unk_04                  u32
+declare     unk_08                  u32
+
 struct      GameTable
 declare     byte_524E07             u8                      0x00524E07
 declare     dword_524E08            u32                     0x00524E08
@@ -925,6 +931,8 @@ declare     graphics_ptr_data       u8                      0x00524EB9
 declare     mutex_name              char*                   0x00525138
 declare     door_ll                 Mat16                   0x00525F5C
 declare     door_lc                 Mat16                   0x00525F7C
+declare     door_file_name          char[36]                0x00525F9C
+declare     door_tmd_slots          DoorTmdSlot[55]         0x00525FC0
 declare     global_prj              s32                     0x00526268
 declare     math_const_table        s16[1224]               0x00526270
 declare     byte_5286F4             u8[8]                   0x005286F4
@@ -1061,9 +1069,14 @@ declare     global_rgb              u32                     0x006805BC
 declare     movie_idx               u32                     0x006805C0
 declare     dword_6805C4            u32                     0x006805C4
 declare     hMutex                  void*                   0x006805C8
+declare     dword_6893EC            u32                     0x006893EC
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
+declare     dword_6893F8            u32                     0x006893F8
+declare     dword_6893FC            u32                     0x006893FC
 declare     door                    DoorInfo*               0x00689400
+declare     door_id                 u32                     0x00689404
+declare     word_689408             u16                     0x00689408
 declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
@@ -1187,6 +1200,12 @@ declare     vab_id                  u8[16]                  0x00692FF0
 declare     ss_name_step            char[780]               0x00693040
 declare     ss_name_enemy           char[260]               0x00693360
 declare     bgm_vol                 u8                      0x00693471
+declare     pEdt_adr                s32[6]                  0x00693480
+declare     dword_6934A0            s32                     0x006934A0
+declare     dword_6934A4            s32                     0x006934A4
+declare     dword_6934A8            s32                     0x006934A8
+declare     dword_6934AC            s32                     0x006934AC
+declare     dword_6934B0            s32                     0x006934B0
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
 declare     seq_ctr                 s8[3]                   0x00693800
@@ -1230,6 +1249,7 @@ declare     psp_work                u32                     0x006998C4
 declare     psp_prim_0              u32                     0x006998C8
 declare     psp_prim_1              u32                     0x006998CC
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     byte_6DFC0C             u8[3328]                0x006DFC0C
 declare     bg_buffer               u8[32768]               0x008BD880
 declare     tmd                     TmdEntry*               0x008C6880
 declare     door_tim                void*                   0x008C6884
