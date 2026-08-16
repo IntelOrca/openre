@@ -124,10 +124,12 @@ declare     oya_parts               PartsW*
 declare     free                    u16[10]
 
 struct      Kage
-declare     var_04                  u16         0x04
-declare     var_06                  u16         0x06
-declare     var_1C                  u32         0x1C
-declare     var_44                  u32         0x44
+declare     off_x                   s16         0x00
+declare     off_z                   s16         0x02
+declare     half_x                  s16         0x04
+declare     half_z                  s16         0x06
+declare     prim0_rgb               u32         0x1C
+declare     prim1_rgb               u32         0x44
 
 struct      At
 declare     pos                     Vec32
@@ -468,12 +470,12 @@ declare     mapping                 u8[31]
 declare     keyboard_raw_state      u32                     0x24
 declare     keyboard_trg            u32                     0x28
 declare     keyboard_old            u32                     0x2C
-declare     var_1F8                 u32                     0x1F8
+declare     keyboard_ready          u32                     0x1F8
 declare     gamepad_raw_state       u32                     0x1FC
 declare     gamepad_trg             u32                     0x200
 declare     gamepad_old             u32                     0x204
-declare     var_3D0                 u32                     0x3D0
-declare     var_3B24                u32                     0x3B24
+declare     gamepad_present         u32                     0x3D0
+declare     joystick_count          u32                     0x3B24
 declare     keyboard                u32                     0x3B28
 
 struct      DemoPlayer
@@ -559,7 +561,7 @@ declare     color1                  u32
 struct      PrimSprite
 base        Prim
 declare     texture                 u32
-declare     var_0C                  u32
+declare     clut                    u32
 declare     x0                      s16
 declare     y0                      s16
 declare     x1                      s16
@@ -655,12 +657,12 @@ declare     is_vmem                 u32
 struct      MarniSurfaceX
 base        MarniSurface
 declare     texture_handle          u32
-declare     pDDtexture              void*
+declare     pTexture                void*
 
 struct      MarniSurfaceY
 base        MarniSurface
 declare     texture_handle          u32
-declare     pDDtexture              void*
+declare     pTexture                void*
 
 struct      MarniMovie
 declare     surf_pad                u8[0x6C]                0x00
@@ -700,7 +702,11 @@ declare     bottom                  s32
 
 struct      MarniTextureNode
 declare     next                    u16
+declare     texture_id              u16                     0x02
+declare     page                    u16                     0x04
 declare     surface                 MarniSurfaceX*          0x08
+declare     width                   s32                     0x0C
+declare     height                  s32                     0x10
 declare     var_14                  u32                     0x14
 
 struct      MarniTexture
@@ -762,12 +768,14 @@ declare     otag                    MarniOt[5]              0x008C7024
 declare     field_8C7088            u8[252]                 0x008C7088
 declare     field_8C7184            u8[252]                 0x008C7184
 declare     dwVidMemTotal           u32                     0x008C7280
+declare     field_8C7284            u32                     0x008C7284
+declare     zbuffer_depth           s32                     0x008C7288
 declare     field_8C728C            u32[256]                0x008C728C
 declare     polygons                PolygonObject**         0x008C7698
 declare     polygons_count          u32                     0x008C769C
 declare     var_8C76A0              Unknown8C76A0*[128]     0x008C76A0
 declare     window_rect             WindowRect              0x008C7CDC
-declare     pClipper                void*                   0x008C7CEC
+declare     pClip                   void*                   0x008C7CEC
 declare     lights                  MarniLight[6]           0x008C7CF0
 declare     field_8C7E10            u32                     0x008C7E10
 declare     field_8C7E14            u32                     0x008C7E14
@@ -804,8 +812,8 @@ declare     field_8C7E8C            u32                     0x008C7E8C
 declare     field_8C7E90            u32                     0x008C7E90
 declare     pMaterial               void*                   0x008C7E94
 declare     MaterialHandle          u32                     0x008C7E98
-declare     pDirect3D2              void*                   0x008C7E9C
-declare     pDirectDevice2          void*                   0x008C7EA0
+declare     p3D                     void*                   0x008C7E9C
+declare     pDevice2                void*                   0x008C7EA0
 declare     pViewport               void*                   0x008C7EA4
 declare     hWnd                    void*                   0x008C7EA8
 declare     render_w                s32                     0x008C7EAC
@@ -834,8 +842,8 @@ declare     ambient_b               u8                      0x008C831C
 declare     ambient_g               u8                      0x008C831D
 declare     ambient_r               u8                      0x008C831E
 declare     ambient_a               u8                      0x008C831F
-declare     pDirectDraw             void*                   0x008C8320
-declare     pDirectDraw2            void*                   0x008C8324
+declare     pDraw                   void*                   0x008C8320
+declare     pDraw2                  void*                   0x008C8324
 declare     pMovie                  MarniMovie*             0x008C8328
 declare     xsize                   s32                     0x008C832C
 declare     ysize                   s32                     0x008C8330
@@ -890,7 +898,7 @@ declare     device_name             OldStdString
 declare     display_mode            OldStdString
 declare     var_5C                  u8
 
-struct      D3DDeviceInfo
+struct      GpuDeviceInfo
 declare     lpDeviceName            char[30]
 declare     lpDeviceDescription     char[50]
 declare     desc                    u8[252]
@@ -902,13 +910,21 @@ declare     hwAccelerated2          u32
 
 struct      TexturePage
 declare     handle                  u32
-declare     var_04                  u32
-declare     var_08                  u32
+declare     clutCount               u32
+declare     suspended               u32
+
+struct      DoorTmdSlot
+declare     file_size               u16
+declare     unk_02                  u16
+declare     unk_04                  u32
+declare     unk_08                  u32
 
 struct      GameTable
 declare     byte_524E07             u8                      0x00524E07
 declare     dword_524E08            u32                     0x00524E08
 declare     dword_524E0C            u32                     0x00524E0C
+declare     off_524E1C              u32                     0x00524E1C
+declare     off_524E20              u32                     0x00524E20
 declare     cheat_cmds              char*[13]               0x00524E80
 declare     cheat0                  u8                      0x00524EB4
 declare     cheat1                  u8                      0x00524EB5
@@ -917,6 +933,8 @@ declare     graphics_ptr_data       u8                      0x00524EB9
 declare     mutex_name              char*                   0x00525138
 declare     door_ll                 Mat16                   0x00525F5C
 declare     door_lc                 Mat16                   0x00525F7C
+declare     door_file_name          char[36]                0x00525F9C
+declare     door_tmd_slots          DoorTmdSlot[55]         0x00525FC0
 declare     global_prj              s32                     0x00526268
 declare     math_const_table        s16[1224]               0x00526270
 declare     byte_5286F4             u8[8]                   0x005286F4
@@ -933,8 +951,8 @@ declare     misc_text_j             u8[728]                 0x0052F310
 declare     misc_ptr_j              u16[512]                0x0052F5E8
 declare     desc_txt_j              u8[4832]                0x0052F9E8
 declare     desc_ptr_j              u16[256]                0x00530CC8
-declare     word_5338D8             u16[32]                 0x005338D8
-declare     byte_533938             u8                      0x00533938
+declare     input_mapping_table      u16[32]                 0x005338D8
+declare     key_repeat_counter      u8                      0x00533938
 declare     byte_53A305             u8[63]                  0x0053A305
 declare     flag_groups             u32*[35]                0x0053B218
 declare     byte_53C5D8             BgmTableEntry[146]      0x0053C5D8
@@ -949,12 +967,12 @@ declare     map_info1               MapStageInfo[20]        0x0053EB98
 declare     byte_540780             u8[16]                  0x00540780
 declare     dword_543A14            void*                   0x00543A14
 declare     error                   u32                     0x00543A18
-declare     d3d_devices             D3DDeviceInfo[5]        0x00543A20
+declare     gpu_devices             GpuDeviceInfo[5]        0x00543A20
 declare     dword_54413C            s32                     0x0054413C
-declare     d3d_vertices_processed  u32                     0x00544140
-declare     d3d_triangles_drawn     u32                     0x00544144
+declare     vertices_processed      u32                     0x00544140
+declare     triangles_drawn         u32                     0x00544144
 declare     unk_544148              u8[1050736]             0x00544148
-declare     d3d_device_count        s32                     0x006449B8
+declare     device_count            s32                     0x006449B8
 declare     dword_6449BC            s32                     0x006449BC
 declare     FontH                   u32                     0x00662E58
 declare     Cards                   void*                   0x00662E5C
@@ -974,6 +992,12 @@ declare     dword_669B00            s32                     0x00669B00
 declare     had                     void*                   0x00669B04
 declare     hadid                   void*                   0x00669B20
 declare     phad                    void*                   0x00669B24
+declare     pDoorWork               u32[12]                 0x00669B28
+declare     pDoorWorkEnd            u32[12]                 0x00669B58
+declare     pDoorScalerBlock        void*                   0x00669B88
+declare     pDoorMdlh               u32[12]                 0x00669B8C
+declare     pDoorVar94              u32[12]                 0x00669BBC
+declare     pDoorVarC4              u32                     0x00669BEC
 declare     audio_pMarniSnd          void*                  0x00669CF0
 declare     audio_BufferSBgm         u32[2]                 0x00669CF4
 declare     audio_SpeakerConfig      s32                    0x00669CFC
@@ -988,7 +1012,7 @@ declare     audio_BufferVoice        u32[2]                 0x00669F38
 declare     MarniSnd_SoundDepth      u16                    0x00669F40
 declare     XA_idx                  s32                     0x00669F44
 declare     bgm_channels            BgmChannel[30]          0x00669F50
-declare     dword_66D394            u32                     0x0066D394
+declare     raw_input_state         u32                     0x0066D394
 declare     dword_671404            u32                     0x00671404
 declare     dword_671408            u32                     0x00671408
 declare     dword_67140C            u32                     0x0067140C
@@ -1001,9 +1025,14 @@ declare     dword_671424            u32[10]                 0x00671424
 declare     obj_tex_handle          u8[0x2A90]              0x00671620
 declare     dword_674DF0            u32                     0x00674DF0
 declare     dword_674DF4            u32                     0x00674DF4
+declare     bgScrollTextures        u32[2]                  0x00674E60
+declare     bg_tex0                 u32                     0x0067C728
+declare     bg_tex1                 u32                     0x0067C72C
+declare     bg_prims                PrimSprite[6]           0x0067C730
 declare     texture_pages           TexturePage[41]         0x0067C7D8
 declare     global_cx               u32                     0x0067C9C4
 declare     global_cy               u32                     0x0067C9C8
+declare     dword_67C9CC            u32                     0x0067C9CC
 declare     file_buffer             void*                   0x0067C9D0
 declare     pAllocator0             void*                   0x0067C9D4
 declare     pAllocator1             void*                   0x0067C9D8
@@ -1041,16 +1070,21 @@ declare     super_hard_switch       u8                      0x006805B0
 declare     hard_mode               u8                      0x006805B1
 declare     byte_6805B2             u8                      0x006805B2
 declare     censorship_off          u8                      0x006805B3
-declare     byte_6805B4             u8                      0x006805B4
+declare     bgDrawn                 u8                      0x006805B4
 declare     window_active           u8                      0x006805B5
 declare     pMarni                  Marni*                  0x006805B8
 declare     global_rgb              u32                     0x006805BC
 declare     movie_idx               u32                     0x006805C0
 declare     dword_6805C4            u32                     0x006805C4
 declare     hMutex                  void*                   0x006805C8
+declare     dword_6893EC            u32                     0x006893EC
 declare     dword_6893F0            u32                     0x006893F0
 declare     door_state              u32                     0x006893F4
+declare     dword_6893F8            u32                     0x006893F8
+declare     dword_6893FC            u32                     0x006893FC
 declare     door                    DoorInfo*               0x00689400
+declare     door_id                 u32                     0x00689404
+declare     word_689408             u16                     0x00689408
 declare     dword_689440            u32                     0x00689440
 declare     dword_689444            u32                     0x00689444
 declare     dword_689448            u32                     0x00689448
@@ -1078,7 +1112,7 @@ declare     card_name_index         s32                     0x00689AA4
 declare     byte_689AA8             u8                      0x00689AA8
 declare     card_write_result       s32                     0x00689AAC
 declare     byte_689ABC             u8                      0x00689ABC
-declare     dword_689B3C            u32                     0x00689B3C
+declare     fg_stop_latch           u32                     0x00689B3C
 declare     dword_689BDC            u32                     0x00689BDC
 declare     rdt_count               u32                     0x00689C10
 declare     rdt_top_ptr             void*                   0x00689C14
@@ -1170,10 +1204,16 @@ declare     word_691FBA             u16                     0x00691FBA
 declare     byte_692D64             u8                      0x00692D64
 declare     word_692FBE             u16                     0x00692FBE
 declare     word_692FC0             u16                     0x00692FC0
-declare     vab_id                  u8[16]                  0x00692FF5
+declare     vab_id                  u8[16]                  0x00692FF0
 declare     ss_name_step            char[780]               0x00693040
 declare     ss_name_enemy           char[260]               0x00693360
 declare     bgm_vol                 u8                      0x00693471
+declare     pEdt_adr                s32[6]                  0x00693480
+declare     dword_6934A0            s32                     0x006934A0
+declare     dword_6934A4            s32                     0x006934A4
+declare     dword_6934A8            s32                     0x006934A8
+declare     dword_6934AC            s32                     0x006934AC
+declare     dword_6934B0            s32                     0x006934B0
 declare     dword_6934B4            u8*                     0x006934B4
 declare     ss_name_bgm             char[260]               0x006934E0
 declare     seq_ctr                 s8[3]                   0x00693800
@@ -1217,6 +1257,7 @@ declare     psp_work                u32                     0x006998C4
 declare     psp_prim_0              u32                     0x006998C8
 declare     psp_prim_1              u32                     0x006998CC
 declare     byte_6D730C             u8[24592]               0x006D730C
+declare     byte_6DFC0C             u8[3328]                0x006DFC0C
 declare     bg_buffer               u8[32768]               0x008BD880
 declare     tmd                     TmdEntry*               0x008C6880
 declare     door_tim                void*                   0x008C6884
@@ -1261,13 +1302,13 @@ declare     byte_988528             u8*                     0x00988528
 declare     dword_9885A8            u32                     0x009885A8
 declare     dword_9885AC            u32                     0x009885AC
 declare     dword_9885D0            u32                     0x009885D0
-declare     dword_9885F4            u32                     0x009885F4
-declare     dword_9885F8            u32                     0x009885F8
-declare     word_9885FC             u16                     0x009885FC
-declare     dword_9885FE            u32                     0x009885FE
+declare     raw_state               u32                     0x009885F4
+declare     raw_edge                u32                     0x009885F8
+declare     raw_state_lo            u16                     0x009885FC
+declare     key_edge                u32                     0x009885FE
 declare     g_key                   u32                     0x00988604
 declare     key_trg                 u32                     0x00988608
-declare     dword_98860C            u32                     0x0098860C
+declare     key_copy                u32                     0x0098860C
 declare     dword_988610            u32                     0x00988610
 declare     rdt                     Rdt*                    0x0098861C
 declare     dword_988620            u32                     0x00988620
@@ -1322,7 +1363,7 @@ declare     pOm                     ObjectEntity[32]        0x0098A61C
 declare     obj_ptr                 ObjectEntity*           0x0098E51C
 declare     aot_count               u8                      0x0098E528
 declare     pickup_item             u8                      0x0098E529
-declare     word_98E52A             u16                     0x0098E52A
+declare     demo_frame              u16                     0x0098E52A
 declare     itembox_obj_index       u8                      0x0098E533
 declare     byte_98E541             u8                      0x0098E541
 declare     question_state          u8                      0x0098E542
@@ -1337,7 +1378,7 @@ declare     inventory_size          u8                      0x0098E9A4
 declare     byte_98E9A5             u8                      0x0098E9A5
 declare     byte_98E9A6             u8                      0x0098E9A6
 declare     byte_98E9A7             u8                      0x0098E9A7
-declare     byte_98E9AA             u8                      0x0098E9AA
+declare     input_mapping_idx       u8                      0x0098E9AA
 declare     byte_98E9AB             u8                      0x0098E9AB
 declare     word_98E9AC             s16                     0x0098E9AC
 declare     nExtremeLv              s16                     0x0098E9AE
@@ -1399,8 +1440,8 @@ declare     byte_98EF2D             u8                      0x0098EF2D
 declare     byte_98EF2E             u8                      0x0098EF2E
 declare     main                    u8*                     0x0098EF40
 declare     dword_98F070            u32                     0x0098F070
-declare     dword_98F074            u32                     0x0098F074
-declare     word_98F078             u16                     0x0098F078
+declare     key_repeat_mask         u32                     0x0098F074
+declare     key_repeat_timing       u16                     0x0098F078
 declare     byte_98F07A             u8                      0x0098F07A
 declare     byte_98F07B             u8                      0x0098F07B
 declare     fade_table              Fade[4]                 0x0098F07C
@@ -1412,7 +1453,7 @@ declare     byte_98F1B7             u8                      0x0098F1B7
 declare     byte_98F1B8             u8                      0x0098F1B8
 declare     byte_98F1B9             u8                      0x0098F1B9
 declare     pause                   u8                      0x0098F1BA
-declare     byte_98F1BB             u8                      0x0098F1BB
+declare     demo_ended              u8                      0x0098F1BB
 declare     roomptr                 s32[16]                 0x0098F1E0
 declare     byte_98F98F             u8[4]                   0x0098F98F
 declare     dword_991F70            u32                     0x00991F70
@@ -1431,9 +1472,9 @@ declare     lc_matrix               Mat16                   0x0099CE60
 declare     rc_matrix               Mat16                   0x0099CE80
 declare     doors                   DoorEntity*[9]          0x0099CEA0
 declare     dword_99CEC4            u32                     0x0099CEC4
-declare     dword_99CF64            u32                     0x0099CF64
+declare     keyboard_state          u32                     0x0099CF64
 declare     dword_99CF6C            u32                     0x0099CF6C
-declare     dword_99CF70            u32                     0x0099CF70
+declare     gamepad_state           u32                     0x0099CF70
 declare     adt_in_pos              u32                     0x0099DAA0
 declare     adt_buffer_in           void*                   0x0099DAA4
 declare     adt_out_ptr             u8*                     0x0099DAA8

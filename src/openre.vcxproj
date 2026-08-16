@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -36,7 +36,7 @@
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Configuration)\</IntDir>
     <IncludePath>$(ProjectDir)..\lib\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(ProjectDir)..\lib\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)..\lib\lib;$(ProjectDir)..\lib\lib\x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -50,7 +50,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>ddraw.lib;dxguid.lib;winmm.lib;Imm32.lib;dsound.lib;msacm32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>lua54.lib;ws2_32.lib;winmm.lib;Imm32.lib;SDL3.lib;mfplat.lib;mfuuid.lib;strmiids.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -73,6 +73,8 @@
   <ItemGroup>
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="cmdline.cpp" />
+    <ClCompile Include="debug.cpp" />
     <ClCompile Include="door.cpp" />
     <ClCompile Include="em_dog.cpp" />
     <ClCompile Include="em_spider.cpp" />
@@ -85,30 +87,48 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="interop.cpp" />
     <ClCompile Include="itembox.cpp" />
+    <ClCompile Include="kage.cpp" />
     <ClCompile Include="logger.cpp" />
+    <ClCompile Include="marni_draw.cpp" />
+    <ClCompile Include="marni_renderer.cpp" />
     <ClCompile Include="marni_config.cpp" />
     <ClCompile Include="marni.cpp" />
     <ClCompile Include="marni_movie.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="model.cpp" />
+    <ClCompile Include="msadpcm.cpp" />
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="room.cpp" />
     <ClCompile Include="save.cpp" />
+    <ClCompile Include="sdl_gpu_renderer.cpp" />
     <ClCompile Include="scd.cpp" />
     <ClCompile Include="sce.cpp" />
+    <ClCompile Include="script.cpp" />
+    <ClCompile Include="script_bindings.cpp" />
+    <ClCompile Include="script_manager.cpp" />
+    <ClCompile Include="script_network.cpp" />
+    <ClCompile Include="script_vm.cpp" />
+    <ClCompile Include="script_watch.cpp" />
     <ClCompile Include="stream.cpp" />
     <ClCompile Include="str.cpp" />
+    <ClCompile Include="system_audio.cpp" />
+    <ClCompile Include="system_config.cpp" />
+    <ClCompile Include="system_filesystem.cpp" />
+    <ClCompile Include="system_gpu.cpp" />
+    <ClCompile Include="system_input.cpp" />
+    <ClCompile Include="system_window.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
-    <ClCompile Include="window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
+    <ClInclude Include="cmdline.h" />
     <ClInclude Include="data.hpp" />
+    <ClInclude Include="debug.h" />
     <ClInclude Include="door.h" />
     <ClInclude Include="enemy.h" />
     <ClInclude Include="entity.h" />
@@ -120,11 +140,18 @@
     <ClInclude Include="interop.hpp" />
     <ClInclude Include="item.h" />
     <ClInclude Include="itembox.h" />
+    <ClInclude Include="kage.h" />
     <ClInclude Include="logger.h" />
+    <ClInclude Include="marni_config.h" />
+    <ClInclude Include="marni_draw.h" />
+    <ClInclude Include="marni_renderer.h" />
+    <ClInclude Include="sdl_gpu_renderer.h" />
     <ClInclude Include="marni.h" />
     <ClInclude Include="marni_movie.h" />
+    <ClInclude Include="win_compat.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="model.h" />
+    <ClInclude Include="msadpcm.h" />
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
@@ -132,16 +159,33 @@
     <ClInclude Include="room.h" />
     <ClInclude Include="scd.h" />
     <ClInclude Include="sce.h" />
+    <ClInclude Include="script.h" />
+    <ClInclude Include="script_bindings.h" />
+    <ClInclude Include="script_manager.h" />
+    <ClInclude Include="script_network.h" />
+    <ClInclude Include="script_vm.h" />
+    <ClInclude Include="script_watch.h" />
     <ClInclude Include="stream.h" />
     <ClInclude Include="str.h" />
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="save.h" />
+    <ClInclude Include="system_audio.h" />
+    <ClInclude Include="system_config.h" />
+    <ClInclude Include="system_filesystem.h" />
+    <ClInclude Include="system_gpu.h" />
+    <ClInclude Include="system_input.h" />
+    <ClInclude Include="system_window.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
-    <ClInclude Include="window.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyLauncher" AfterTargets="Build">
     <Copy SourceFiles="$(SolutionDir)dist\openre.exe" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
- </Project>
+  <Target Name="CopySDL3" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)..\lib\bin\x86\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyLua54" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)..\lib\bin\lua54.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

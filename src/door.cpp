@@ -1,9 +1,11 @@
 #include "audio.h"
 #include "camera.h"
 #include "entity.h"
+#include "file.h"
 #include "hud.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "math.h"
 #include "model.h"
 #include "openre.h"
@@ -12,6 +14,7 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "tim.h"
 
 #include <cstring>
 
@@ -93,10 +96,46 @@ namespace openre::door
         }
     }
 
-    // 0x00450230
-    static void door_scheduler_main()
+    enum
     {
-        interop::call(0x00450230);
+        SCD_RESULT_FALSE,
+        SCD_RESULT_NEXT,
+        SCD_RESULT_NEXT_TICK,
+    };
+
+    // 0x00450230
+    static char door_scheduler_main()
+    {
+        gGameTable.sce_type = SCE_DOOR;
+        gGameTable.scd = gGameTable.byte_8C6888;
+
+        int result = SCD_RESULT_FALSE;
+        for (auto i = 10; i < 14; i++)
+        {
+            auto task = get_task(i);
+            if (task->status == SCD_STATUS_EMPTY)
+                continue;
+
+            while (true)
+            {
+                auto opcode = *task->data;
+                result = scd_execute_opcode(task, opcode);
+                if (gGameTable.ctcb->var_13 != 0)
+                    return result;
+                if (result == SCD_RESULT_NEXT)
+                    continue;
+                if (result == SCD_RESULT_NEXT_TICK)
+                    break;
+                auto eax = task->sub_ctr;
+                auto cl = task->ifel_ctr[eax];
+                if (cl & 0x80)
+                    break;
+                task->sp--;
+                task->data = *task->sp;
+                task->ifel_ctr[eax]--;
+            }
+        }
+        return result;
     }
 
     // 0x00451590
@@ -164,11 +203,44 @@ namespace openre::door
     }
 
     // 0x00432A40
-    static void door_unload(void* pTim, void* pTmd)
+    // Loads the door graphics resources: builds a TIM texture handle from pTim
+    // and an object handle per TMD object from pTmd, then (re)allocates the door
+    // scaler work block. Called from door_init() after mapping_tmd(). Despite
+    // the original name, this is the resource loader (the unload counterpart is
+    // marni::unload_door_texture).
+    static void door_load_resources(tim::Tim* pTim, Md1* pTmd)
     {
-        using sig = void (*)(void*, void*);
-        auto p = (sig)0x00432A40;
-        p(pTim, pTmd);
+        // TIMObject (MarniSurface + var_3C, 0x40 bytes) and the MARNI_POLY_OBJECT
+        // (0x58 bytes) used as scratch for the TMD loaders.
+        tim::TimObject timSurface;
+        marni::MarniPolyObject polyObject;
+
+        tim::timobject_ctor(&timSurface, nullptr);
+        marni::tm2_object_ctor(&polyObject, nullptr, 0);
+
+        marni::unload_door_texture();
+
+        tim::timobject_in(&timSurface, pTim);
+        // 0x31 = door TIM texture mode (paletted, CLUT preserved).
+        gGameTable.pDoorVarC4 = marni::create_texture_handle(gGameTable.pMarni, &timSurface, 0x31);
+
+        // Load each TMD object and register it with Direct3D.
+        const int objectCount = (int32_t)pTmd->Data.NumEntries / 2;
+        for (int i = 0; i < objectCount; i++)
+        {
+            marni::tm2_object_in(&polyObject, (uint8_t*)pTmd, i, -1);
+            gGameTable.pDoorMdlh[i] = marni::create_object_handle(gGameTable.pMarni, &polyObject, 0);
+        }
+
+        // Door scaler work block: 12 doors x 224-byte scaler records (the same
+        // 224-byte stride used by door_disp0/door_disp1).
+        gGameTable.pDoorScalerBlock = operator_new(0xA80);
+        std::memset(gGameTable.pDoorScalerBlock, 0, 0xA80);
+        std::memset(gGameTable.pDoorWork, 0, sizeof(gGameTable.pDoorWork));
+        std::memset(gGameTable.pDoorVar94, 0, sizeof(gGameTable.pDoorVar94));
+
+        marni::tm2_object_dtor(&polyObject);
+        tim::timobject_dtor(&timSurface);
     }
 
     // 0x0044FEF0
@@ -201,7 +273,7 @@ namespace openre::door
             mapping_tmd(1, (Md1*)door->tmd_adr, 0, 0);
         else
             mapping_tmd(1, (Md1*)door->tmd_adr, 21, 31);
-        door_unload(gGameTable.door_tim, gGameTable.tmd);
+        door_load_resources((tim::Tim*)gGameTable.door_tim, (Md1*)gGameTable.tmd);
         gGameTable.dword_6893F0 = 0;
 
         door->tmd_adr = (TmdEntry*)((uintptr_t)door->tmd_adr + 12);
@@ -269,7 +341,7 @@ namespace openre::door
                     mess_print(32, 200, &str_please_wait[_word_525F5A], 0);
             }
             gGameTable.door->ctr2++;
-            if ((gGameTable.dword_9885F8 & 0x8D0) != 0)
+            if ((gGameTable.raw_edge & 0x8D0) != 0)
                 t->status = SCD_STATUS_EMPTY;
             task_sleep(1);
         }
@@ -353,7 +425,7 @@ namespace openre::door
     // 0x00441870
     static void movie_set(int id)
     {
-        interop::call(0x00441870);
+        gGameTable.movie_idx = id;
     }
 
     // 0x004CB260
@@ -366,7 +438,7 @@ namespace openre::door
             if (_doorTransitionMvs[gGameTable.door_trans_mv] == nullptr)
             {
                 gGameTable.byte_680598 = 0;
-                marni::unload_texture_page(18);
+                marni::unloadTexturePage(18);
                 movie_set(1);
                 task_exit();
             }
@@ -376,7 +448,90 @@ namespace openre::door
     // 0x004505C0
     static void door_load()
     {
-        interop::call(0x004505C0);
+        auto& ctcb = *gGameTable.ctcb;
+        if (ctcb.var_0C != 0)
+        {
+            if (ctcb.var_0C == 1)
+            {
+                set_flag(FlagGroup::Status, FG_STATUS_14, false);
+                ctcb.var_0C = 0;
+            }
+            return;
+        }
+
+        gGameTable.word_689408 = 0;
+
+        auto doorAotData = reinterpret_cast<SceAotDoorData*>(gGameTable.door_aot_data);
+        auto doorId = doorAotData->Texture;
+        gGameTable.door_id = doorId;
+
+        gGameTable.dword_6893F8 = reinterpret_cast<uint32_t>(&gGameTable.door_tmd_slots[doorId]);
+        gGameTable.dword_6893EC = (gGameTable.door_tmd_slots[doorId].file_size + 0x7FF) & 0xFFFFF800;
+
+        gGameTable.door_file_name[16] = static_cast<char>((doorId >> 4) + 0x30);
+        auto lowNibble = doorId & 0xF;
+        gGameTable.door_file_name[17] = static_cast<char>(lowNibble >= 0xA ? lowNibble + 0x57 : lowNibble + 0x30);
+
+        auto* buffer = reinterpret_cast<uint8_t*>(&gGameTable.tmd) - gGameTable.dword_6893EC;
+
+        auto ok = openre::file::read_file_into_buffer(gGameTable.door_file_name, buffer, 4) > 0;
+        if (!ok)
+        {
+            gGameTable.door_file_name[17] = '0';
+            ok = openre::file::read_file_into_buffer(gGameTable.door_file_name, buffer, 4) > 0;
+        }
+        if (!ok)
+        {
+            openre::file::file_error();
+            return;
+        }
+
+        gGameTable.pEdt_adr[0] = reinterpret_cast<int32_t>(gGameTable.byte_6DFC0C);
+        std::memcpy(gGameTable.byte_6DFC0C, reinterpret_cast<uint8_t*>(&gGameTable.tmd) - gGameTable.dword_6893EC, 0xC38);
+        gGameTable.dword_6934A0
+            = reinterpret_cast<int32_t>(gGameTable.byte_6DFC0C + *reinterpret_cast<int32_t*>(gGameTable.byte_6DFC0C + 0xC30));
+
+        if (static_cast<int8_t>(gGameTable.vab_id[0]) >= 0)
+        {
+            openre::audio::ss_unload_group(0); // ST_DOOR
+            gGameTable.ss_name_door[0] = 0;
+            gGameTable.vab_id[0] = 0xFF;
+        }
+        gGameTable.dword_6893FC = 0;
+
+        auto vabId = doorId;
+        switch (doorId)
+        {
+        case 2:
+        case 3:
+        case 5:
+        case 11:
+        case 13:
+        case 24: vabId = 0; break;
+        case 4:
+        case 9:
+        case 17: vabId = 1; break;
+        case 7:
+        case 8:
+        case 34:
+        case 47: vabId = 6; break;
+        case 26:
+        case 35: vabId = 21; break;
+        case 48: vabId = 27; break;
+        case 41: vabId = 36; break;
+        case 49: vabId = 38; break;
+        }
+
+        ctcb.var_0C = 1;
+        gGameTable.vab_id[0] = static_cast<uint8_t>(openre::audio::ss_load_banks(0 /* ST_DOOR */, vabId, 0, 0));
+
+        if (!check_flag(FlagGroup::System, FG_SYSTEM_15) && gGameTable.word_689408 == 0)
+        {
+            bg_set_mode(2, 0);
+            gGameTable.word_689408 = 1;
+        }
+
+        task_sleep(1);
     }
 
     // 0x004C0840
@@ -527,9 +682,5 @@ namespace openre::door
         }
     }
 
-    void door_init_hooks()
-    {
-        interop::writeJmp(0x0044FEA0, &door_main);
-        interop::writeJmp(0x004C0840, &door_set);
-    }
+    void door_init_hooks() {}
 }

@@ -8,7 +8,8 @@ jobs:
     - name: Install dependencies
       run: |
           sudo apt update
-          sudo apt install -y g++-mingw-w64
+          sudo apt install -y g++-mingw-w64 unzip
+          bash getdeps.sh
     - name: Build
       run: |
           cmake -B out
@@ -16,10 +17,33 @@ jobs:
     - name: Package
       run: |
           cp out/openre.dll dist
+          cp lib/bin/lua54.dll dist
           cp LICENSE README.md dist
           chmod 664 dist/openre.dll
+          chmod 664 dist/lua54.dll
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: openre
         path: dist/**/*
+
+  native:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+          sudo apt update
+          sudo apt install -y g++-multilib make unzip
+          bash getdeps.sh
+          bash getdeps_native.sh
+    - name: Build native Linux executable
+      run: |
+          cmake -B out-native \
+            -DOPENRE_NATIVE_LINUX=ON \
+            -DOPENRE_SDL3_LIBRARY=/tmp/openre-native-deps/sdl3-build/libSDL3.so \
+            -DLUA_LIBRARY=/tmp/openre-native-deps/lua-5.4.2/src/liblua.a
+          cmake --build out-native
+    - name: Smoke test native Linux executable
+      run: |
+          LD_LIBRARY_PATH=/tmp/openre-native-deps/sdl3-build SDL_VIDEODRIVER=offscreen ./out-native/openre

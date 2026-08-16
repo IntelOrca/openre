@@ -6,19 +6,22 @@
 #include "input.h"
 #include "interop.hpp"
 #include "item.h"
+#include "logger.h"
 #include "marni.h"
+#include "marni_draw.h"
 #include "openre.h"
 #include "player.h"
 #include "re2.h"
 #include "scheduler.h"
 #include "str.h"
+#include "system_filesystem.h"
 #include "title.h"
+#include "vk_codes.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
-#include <ddraw.h>
-#include <windows.h>
 
 using namespace openre;
 using namespace openre::audio;
@@ -199,9 +202,6 @@ namespace openre::save
 
     // Save/load screen strings (Shift-JIS).
     static const char* aSave = (const char*)0x52E210;       // セーブ
-    static const char* aLeaveSave = (const char*)0x52E218;  // セーブ画面から
-    static const char* aLeaveLoad = (const char*)0x52E230;  // ロード画面から
-    static const char* aFolder = (const char*)0x52E248;     // フォルダ
     static const char* aNo = (const char*)0x52E254;         // いいえ
     static const char* aYes = (const char*)0x52E25C;        // はい
     static const char* aDidNotSave = (const char*)0x52E264; // データをセーブしていません
@@ -329,13 +329,11 @@ namespace openre::save
 
     // Forward declarations used by print_save_list.
     static int SavePrint(int x, int y, const char* str, int color, int len);
-    static int save_path_len();
     static const char* strip_save_extension(char* str);
 
     // 0x004319A0
-    // Draws the save/load slot list on the memory card screen: the save folder
-    // path, the "new save" entry (the typed name), each card's file name, the
-    // "[name]" bracket entries for empty slots and the final exit entry.
+    // Draws the save/load slot list on the memory card screen: the "new save"
+    // entry (the typed name), each card's file name and the final exit entry.
     // The horizontal scroll needed for each line is passed to SavePrint as its
     // len parameter; the largest scroll is stored back through *pScrollMax.
     static int print_save_list(
@@ -345,7 +343,6 @@ namespace openre::save
 
         // [0] = standard resolution, [1] = 480p.
         int visibleChars[2] = { 22, 20 }; // visible line width in half-width chars (x2 = byte width)
-        int folderY[2] = { 30, 60 };      // y of the save folder line
         int listY[2] = { 50, 100 };       // y of the first list entry
         char str[264];
 
@@ -353,20 +350,7 @@ namespace openre::save
         // shared scratch global dword_662E64 so the card write code can reuse it.
         gGameTable.pad_662E64[0] = (uint8_t)(2 * visibleChars[gGameTable.is_480p]);
 
-        // Horizontal scroll for the save folder line: byte length of the path
-        // minus the visible width, clamped to >= 0 and to the caller's limit.
-        int8_t folderScroll = (int8_t)(save_path_len() - gGameTable.pad_662E64[0]);
-        if (folderScroll < 0)
-        {
-            folderScroll = 0;
-            save_path_len(); // dead re-call, present in the original binary
-        }
-        if ((int32_t)*pScrollMax < (int8_t)folderScroll)
-            folderScroll = (int8_t)*pScrollMax;
-
-        int8_t maxScroll = folderScroll;
-        SavePrint(0, folderY[gGameTable.is_480p], GetSaveFolder(), 0, folderScroll);
-
+        int8_t maxScroll = 0;
         int row = 0;
         if (gGameTable.dword_986394 > 0)
         {
@@ -375,35 +359,15 @@ namespace openre::save
             {
                 if (mode || (base + row))
                 {
-                    // A real card slot, a "[name]" bracket slot, or the final
-                    // exit entry.
+                    // A real card slot, or the final exit entry.
                     int index = base + row;
                     if (index >= gGameTable.cnt0 - mode + 1)
                     {
-                        // Past the saved cards: "[name]" bracket or the exit entry.
-                        int exitIndex = gGameTable.cnt1 - mode + gGameTable.cnt0 + 1;
-                        if (index >= exitIndex)
+                        // The final entry is the exit entry.
+                        if (index == gGameTable.cnt0 - mode + 1)
                         {
-                            if (index == exitIndex)
-                            {
-                                SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, aExit, 0, 0);
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            // "[name]" bracket for a slot without save data.
-                            int nameIndex = row + mode - gGameTable.cnt0 + base - 1;
-                            wsprintfA(str, "[%s]", (const char*)(names + nameIndex + 260 * nameIndex));
-
-                            int8_t len = (int8_t)((int)strlen(str) - (int)gGameTable.pad_662E64[0]);
-                            if (len < 0)
-                                len = 0;
-                            if ((int32_t)*pScrollMax < (int8_t)len)
-                                len = (int8_t)*pScrollMax;
-                            if (maxScroll < len)
-                                maxScroll = len;
-                            SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, str, 4, len);
+                            SavePrint(0, listY[gGameTable.is_480p] + row * gGameTable.byte_6634F8, aExit, 0, 0);
+                            break;
                         }
                     }
                     else
@@ -490,9 +454,8 @@ namespace openre::save
     // drawn depends on the current card state (rno).
     static void card_mess_disp(int rno, int mode, uint32_t cursor, int errCode)
     {
-        int y[2] = { 208, 416 };     // "how to save" / "did not save" prompt y
-        int infoY[2] = { 217, 434 }; // "folder" / "leave" message y
-        int titleY[2] = { 10, 20 };  // "save" / "load" title y
+        int y[2] = { 208, 416 };    // "how to save" / "did not save" prompt y
+        int titleY[2] = { 10, 20 }; // "save" / "load" title y
         int yes_x[2] = { 100, 200 };
         int no_x[2] = { 184, 368 };
         int yesno_x[2] = { 86, 170 };
@@ -539,7 +502,7 @@ namespace openre::save
             pPrim.psxRect.y = (int16_t)(15 * (int)cursor + 49);
             pPrim.psxRect.w = 288;
             pPrim.psxRect.h = 14;
-            marni::add_tile(&pPrim, 1, 0);
+            marni::add_tile((const marni::Tile*)&pPrim, 1, 0);
         };
 
         // Prints the save list and title without the cursor tile.
@@ -606,14 +569,6 @@ namespace openre::save
                 mess_print(v14, 216, (const uint8_t*)str, (short)((16 * v9) | 2));
                 mess_print(mess_width + v14, 216, (const uint8_t*)str1, 2);
             }
-            if (idx >= gGameTable.cnt0 - mode + 1 && (idx + mode) != 0 && idx < gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
-            {
-                SavePrint(0, infoY[gGameTable.is_480p], aFolder, 0, 0);
-            }
-            if ((idx + mode) != 0 && idx == gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
-            {
-                SavePrint(0, infoY[gGameTable.is_480p], mode ? aLeaveLoad : aLeaveSave, 0, 0);
-            }
             drawMenu();
             break;
         }
@@ -672,14 +627,6 @@ namespace openre::save
             mess_print(v21, 216, (const uint8_t*)str, (short)((16 * v17) | 2));
             mess_print(v20 + v21, 216, (const uint8_t*)str1, 2);
 
-            if (idx >= gGameTable.cnt0 - mode + 1 && (idx + mode) != 0 && idx < gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
-            {
-                SavePrint(0, infoY[gGameTable.is_480p], aFolder, 0, 0);
-            }
-            if ((idx + mode) != 0 && idx == gGameTable.cnt1 - mode + gGameTable.cnt0 + 1)
-            {
-                SavePrint(0, infoY[gGameTable.is_480p], mode ? aLeaveLoad : aLeaveSave, 0, 0);
-            }
             printList();
             break;
         }
@@ -741,90 +688,8 @@ namespace openre::save
         if (!gGameTable.FontIndex)
             return 1;
 
-        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
-        HDC hdc;
-        if (pSurface->GetDC(&hdc) != DD_OK)
-            return 1;
-
-        auto oldFont = SelectObject(hdc, gGameTable.hFont);
-        if (!oldFont)
-            return 0;
-        auto oldMode = SetBkMode(hdc, TRANSPARENT);
-
-        for (int i = 0; i < gGameTable.FontIndex; i++)
-        {
-            auto* str = &gGameTable.String[261 * i];
-            if (!*str)
-                continue;
-
-            auto x = gGameTable.FontXY[2 * i];
-            auto y = gGameTable.FontXY[2 * i + 1];
-
-            if (x != 0)
-            {
-                // Centered text with shadow (offset by +1 pixel)
-                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowColor = RGB(shadowR, shadowG, shadowB);
-
-                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
-                    return 0;
-                TextOutA(hdc, gGameTable.is_480p + x + 1, y, str, (int)strlen(str));
-
-                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
-                    return 0;
-                if (!TextOutA(hdc, x, y, str, (int)strlen(str)))
-                    return 0;
-            }
-            else
-            {
-                // Left-aligned text with clipping rectangle and shadow
-                SIZE psizl;
-                GetTextExtentPoint32A(hdc, str, (int)strlen(str), &psizl);
-                auto cx = psizl.cx;
-
-                RECT rect;
-                int v6;
-                if (gGameTable.is_480p)
-                {
-                    if (cx > 576)
-                        cx = 576;
-                    rect.left = 32;
-                    rect.right = 608;
-                    v6 = (576 - cx) / 2 + 32;
-                    rect.bottom = y + gGameTable.byte_6634F8;
-                }
-                else
-                {
-                    if (cx > 288)
-                        cx = 288;
-                    rect.left = 16;
-                    rect.right = 304;
-                    v6 = (288 - cx) / 2 + 16;
-                    rect.bottom = y + gGameTable.byte_6634F8;
-                }
-                rect.top = y;
-
-                auto shadowR = (std::max)(GetRValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowG = (std::max)(GetGValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowB = (std::max)(GetBValue(gGameTable.FontColor[i]) - 64, 0);
-                auto shadowColor = RGB(shadowR, shadowG, shadowB);
-
-                if (SetTextColor(hdc, shadowColor) == CLR_INVALID)
-                    return 0;
-                ExtTextOutA(hdc, gGameTable.is_480p + v6 + 1, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr);
-
-                if (SetTextColor(hdc, gGameTable.FontColor[i]) == CLR_INVALID)
-                    return 0;
-                if (!ExtTextOutA(hdc, v6, y, ETO_CLIPPED, &rect, str, (int)strlen(str), nullptr))
-                    return 0;
-            }
-        }
-
-        SelectObject(hdc, oldFont);
-        SetBkMode(hdc, oldMode);
-        pSurface->ReleaseDC(hdc);
+        // No GPU surface or no GDI on non-Windows platforms: text rendering is
+        // skipped. Keep the queue intact (cleared by the next SavePrint).
         return 1;
     }
 
@@ -904,13 +769,13 @@ namespace openre::save
     // defined further down.
     static OldStdString* save_path_string();
 
-    // 0x00509930
-    // Returns the byte length of the global save path std::string (0x689F44).
-    static int save_path_len()
+    // Portable lowercase-in-place (the MSVC CRT's _strlwr equivalent, which
+    // mutates its buffer in place and returns it).
+    static char* str_to_lower(char* str)
     {
-        // Thunk: mov ecx, offset ss_save_path_string; jmp std::string::size,
-        // where std::string::size (0x50BD00) is strlen(this->data).
-        return (int)strlen(save_path_string()->data);
+        for (char* p = str; *p != '\0'; ++p)
+            *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+        return str;
     }
 
     // 0x00432860
@@ -929,7 +794,7 @@ namespace openre::save
         len = strlen(buf);
         if (len >= strlen(aBiohazard2))
         {
-            _strlwr(buf);
+            str_to_lower(buf);
             strstr(buf, aBiohazard2); // return value discarded in the original binary
             if (strcmp(aBiohazard2, &buf[len - 11]) == 0)
             {
@@ -944,7 +809,7 @@ namespace openre::save
         const char* result = 0;
         if (len >= strlen(aResident2))
         {
-            _strlwr(buf);
+            str_to_lower(buf);
             strstr(buf, aResident2); // return value discarded in the original binary
             result = (const char*)strcmp(aResident2, &buf[len - 10]);
             if (result == 0)
@@ -962,36 +827,14 @@ namespace openre::save
         static const char* aExit = (const char*)0x5220A4;
         static const char* aCreateNew = (const char*)0x5220B8;
 
-        int y0[2] = { 30, 60 };
         int y1[2] = { 50, 100 };
         int y2[2] = { 288, 576 };
         char String[264];
 
-        auto* pSurface = (LPDIRECTDRAWSURFACE7)gGameTable.pMarni->surface0.pDDsurface;
-        HDC hdc;
-        pSurface->GetDC(&hdc);
-        auto oldFont = SelectObject(hdc, gGameTable.hFont);
-
-        auto folderLen = save_path_len();
-        auto saveFolder = GetSaveFolder();
-        SIZE psizl;
-        GetTextExtentPoint32A(hdc, saveFolder, folderLen, &psizl);
-
+        int psizl_cx = 0;
         auto is_480p = gGameTable.is_480p;
-        int8_t scroll;
-        int y2_val = y2[is_480p];
-        if (psizl.cx <= y2_val)
-            scroll = 0;
-        else
-            scroll = (int8_t)((psizl.cx - y2_val) / (gGameTable.FontH / 2));
-
-        int scroll_pos = *(int32_t*)a8;
-        if (scroll_pos < scroll)
-            scroll = (int8_t)scroll_pos;
-
-        int v12 = scroll;
-        int v37 = scroll;
-        SavePrint(0, y0[is_480p], saveFolder, 0, scroll);
+        int v12 = 0;
+        int v37 = 0;
 
         if (gGameTable.dword_986394 > 0)
         {
@@ -1004,32 +847,11 @@ namespace openre::save
                     int v16 = v14 + v15;
                     if (v16 >= gGameTable.cnt0 - a7 + 1)
                     {
-                        int v27 = gGameTable.cnt1 - a7 + gGameTable.cnt0 + 1;
-                        if (v16 >= v27)
+                        // The final entry is the exit entry.
+                        if (v16 == gGameTable.cnt0 - a7 + 1)
                         {
-                            if (v16 == v27)
-                            {
-                                SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, aExit, 0, 0);
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            int v28 = v14 + a7 - gGameTable.cnt0 + v15 - 1;
-                            wsprintfA(String, "[%s]", (const char*)(a5 + 261 * v28));
-                            GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
-                            int8_t v30;
-                            int v29 = y2[is_480p];
-                            if (psizl.cx <= v29)
-                                v30 = 0;
-                            else
-                                v30 = (int8_t)((psizl.cx - v29) / (gGameTable.FontH / 2));
-                            if (*(int32_t*)a8 < v30)
-                                v30 = (int8_t)*(int32_t*)a8;
-                            if (v37 < v30)
-                                v37 = v30;
-                            SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, String, 4, v30);
-                            v12 = v37;
+                            SavePrint(0, y1[is_480p] + v14 * gGameTable.byte_6634F8, aExit, 0, 0);
+                            break;
                         }
                     }
                     else
@@ -1038,13 +860,13 @@ namespace openre::save
                         int v18 = a4 + 276 * v17;
                         strcpy(String, (char*)(v18 - 276));
                         strip_save_extension(String);
-                        GetTextExtentPoint32A(hdc, String, (int)strlen(String), &psizl);
+                        psizl_cx = 0;
                         int8_t v23;
                         int v22 = y2[is_480p];
-                        if (psizl.cx <= v22)
+                        if (psizl_cx <= v22)
                             v23 = 0;
                         else
-                            v23 = (int8_t)((psizl.cx - v22) / (gGameTable.FontH / 2));
+                            v23 = (int8_t)((psizl_cx - v22) / (gGameTable.FontH / 2));
                         if (*(int32_t*)a8 < v23)
                             v23 = (int8_t)*(int32_t*)a8;
                         int v24 = v23;
@@ -1073,8 +895,6 @@ namespace openre::save
             } while (v14 < (int)gGameTable.dword_986394);
         }
 
-        SelectObject(hdc, oldFont);
-        pSurface->ReleaseDC(hdc);
         *(int32_t*)a8 = v12;
         auto result = gGameTable.dword_669B00 != v12;
         gGameTable.dword_669B00 = v12;
@@ -1109,9 +929,10 @@ namespace openre::save
 
     // 0x00431D10
     // Resolves which menu entry the card cursor is on within the save/load list.
-    // The return value selects the caller's action: 0 = new save, 1 = select an
-    // existing card, 4 = cancel, 99 = invalid position. On 1, *select receives
-    // the card index.
+    // The list always contains only the "new save" entry, the existing card
+    // slots and the final exit entry (no folder entries). The return value
+    // selects the caller's action: 0 = new save, 1 = select an existing card,
+    // 4 = exit, 99 = invalid position. On 1, *select receives the card index.
     static int card_menu_action(int scroll, int* select, char mode)
     {
         int index = gGameTable.card_cursor + scroll;
@@ -1121,11 +942,13 @@ namespace openre::save
             *select = -1;
             return 0;
         }
-        if (index >= gGameTable.cnt0 - mode + 1)
+        if (index == gGameTable.cnt0 - mode + 1)
         {
-            // Cursor is on the last entry (cancel) or beyond it.
-            return gGameTable.cnt1 - mode + gGameTable.cnt0 + 1 != index ? 99 : 4;
+            // Cursor is on the final exit entry.
+            return 4;
         }
+        if (index > gGameTable.cnt0 - mode + 1)
+            return 99;
         // Cursor is on one of the existing card slots.
         *select = gGameTable.card_cursor + mode + scroll - 1;
         return 1;
@@ -1136,47 +959,6 @@ namespace openre::save
     static OldStdString* save_path_string()
     {
         return reinterpret_cast<OldStdString*>(0x689F44);
-    }
-
-    // 0x00509860
-    // Builds a save path from the current module file name when no save path is set.
-    static int build_default_save_path()
-    {
-        char filename[264];
-        OldStdString slice;
-
-        // Use the directory of the running executable as the default save folder.
-        GetModuleFileNameA(nullptr, filename, 0x105);
-        str::string_copy(save_path_string(), filename);
-
-        // Truncate to the directory portion (including the trailing backslash).
-        int lastSlash = str::string_find_last(save_path_string(), "\\");
-        str::string_slice(save_path_string(), &slice, lastSlash + 1);
-        str::string_assign(save_path_string(), &slice);
-        str::string_dtor(&slice);
-
-        // Ensure the path ends with a backslash.
-        int result = str::string_sjis_len(save_path_string()) - 1;
-        if (str::string_find_last(save_path_string(), "\\") != result)
-            return (int)str::string_append(save_path_string(), "\\");
-        return result;
-    }
-
-    // 0x00509940
-    // Copies the given save path into the global save-path string, ensuring it is
-    // non-empty and ends with a backslash (appending one if the last Shift-JIS
-    // character is not a backslash). Falls back to the module path when empty.
-    static int set_save_folder(char* savePath)
-    {
-        str::string_copy(save_path_string(), savePath);
-        if (str::string_sjis_len(save_path_string()) == 0)
-            return build_default_save_path();
-
-        int lastSlash = str::string_find_last(save_path_string(), "\\");
-        int lastChar = str::string_sjis_len(save_path_string()) - 1;
-        if (lastSlash != lastChar)
-            return (int)str::string_append(save_path_string(), "\\");
-        return lastChar;
     }
 
     // 0x00509B20
@@ -1236,66 +1018,6 @@ namespace openre::save
         }
     }
 
-    // 0x005099A0
-    // Changes the current save folder. If `name` is ".." the folder moves up one
-    // directory level; otherwise a subfolder named `name` is entered. The resulting
-    // path is stored as the global save folder via set_save_folder.
-    static void change_save_folder(char* name)
-    {
-        OldStdString nameStr; // std::string built from the card name
-        OldStdString path;    // working folder path
-        OldStdString tmp;     // temporary substring
-
-        str::string_ctor_from_cstr(&nameStr, name);
-
-        if (str::string_eq_cstr(&nameStr, ".."))
-        {
-            // Move up one directory level.
-            str::string_ctor_from_cstr(&path, GetSaveFolder());
-
-            // tmp = the last character of the current folder.
-            str::string_right(&path, &tmp, 1);
-            bool hasTrailingSlash = str::string_eq_cstr(&tmp, "\\");
-            str::string_dtor(&tmp);
-
-            if (hasTrailingSlash)
-            {
-                // Drop the trailing backslash.
-                str::string_slice(&path, &tmp, str::string_sjis_len(&path) - 1);
-                str::string_assign(&path, &tmp);
-                str::string_dtor(&tmp);
-            }
-
-            // Truncate at the last backslash to reach the parent directory.
-            int sep = str::string_find_last(&path, "\\");
-            if (sep >= 0)
-            {
-                str::string_slice(&path, &tmp, sep);
-                str::string_assign(&path, &tmp);
-                str::string_dtor(&tmp);
-            }
-        }
-        else
-        {
-            // Enter a subfolder named after the card.
-            str::string_ctor_from_cstr(&path, GetSaveFolder());
-
-            str::string_right(&path, &tmp, 1);
-            bool missingTrailingSlash = str::string_ne_cstr(&tmp, "\\");
-            str::string_dtor(&tmp);
-
-            if (missingTrailingSlash)
-                str::string_append(&path, "\\");
-
-            str::string_append(&path, name);
-        }
-
-        str::string_append(&path, "\\");
-        set_save_folder((char*)str::string_get_data(&path));
-        str::string_dtor(&path);
-        str::string_dtor(&nameStr);
-    }
-
     // 0x00432110
     // Builds the memory card save file name (without the .BIOHAZARD2 extension)
     // into str. The name is composed of Shift-JIS parts as:
@@ -1328,14 +1050,14 @@ namespace openre::save
             for (int cardIndex = 0; cardIndex < gGameTable.cnt0; cardIndex++)
             {
                 if (dupCount == 0)
-                    return wsprintfA(str, candidate); // unreachable: dupCount only increments
+                    return (int)strlen(strcpy(str, candidate)); // unreachable: dupCount only increments
 
                 strcpy(cardName, (const char*)gGameTable.Cards + 276 * cardIndex);
                 if (char* dot = strrchr(cardName, '.'))
                     *dot = '\0';
                 if (strcmp(cardName, candidate) == 0)
                 {
-                    wsprintfA(candidate, "%s_%d", base, ++dupCount);
+                    sprintf(candidate, "%s_%d", base, ++dupCount);
                     duplicate = true;
                     break;
                 }
@@ -1378,7 +1100,7 @@ namespace openre::save
             for (int i = 0; i < gGameTable.cnt0; i++)
             {
                 if (!suffix)
-                    return wsprintfA(str, candidate); // unreachable: suffix only increments
+                    return (int)strlen(strcpy(str, candidate)); // unreachable: suffix only increments
                 strcpy(cardName, (const char*)gGameTable.Cards + i * 276);
                 char* dot = strrchr(cardName, '.');
                 if (dot)
@@ -1387,7 +1109,7 @@ namespace openre::save
                 {
                     if (cardCursor + cardSelect - 1 != i)
                     {
-                        wsprintfA(candidate, "%s_%d", name, ++suffix);
+                        sprintf(candidate, "%s_%d", name, ++suffix);
                         restart = true;
                     }
                     break;
@@ -1460,7 +1182,7 @@ namespace openre::save
         uint8_t result = gGameTable.byte_98F1B6;
         gGameTable.pad_98E9A8[1] = gGameTable.bgm_vol; // byte_98E9A9
         gGameTable.byte_98E9A5 = gGameTable.byte_9888D9;
-        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
         return result;
     }
 
@@ -1484,7 +1206,7 @@ namespace openre::save
         gGameTable.sfx_vol = gGameTable.pad_98E9A8[0];
         gGameTable.bgm_vol = gGameTable.pad_98E9A8[1];
         gGameTable.byte_9888D9 = result;
-        gGameTable.byte_98F1B6 = gGameTable.byte_98E9AA;
+        gGameTable.byte_98F1B6 = gGameTable.input_mapping_idx;
         return result;
     }
 
@@ -1657,7 +1379,15 @@ namespace openre::save
             auto saveFolder = GetSaveFolder();
             auto plId = (uint8_t)SaveGetPlID(saveFolder, &gGameTable.cnt0, &gGameTable.cnt1);
             if (plId == 0xFF)
-                return;
+            {
+                // The save folder does not exist. Fall through to an empty
+                // list rather than returning early: returning without a
+                // task_sleep here makes mem_card exit the task, and since
+                // FG_SYSTEM_21 was already cleared the title thinks a load
+                // succeeded and starts the game with no save data loaded.
+                gGameTable.cnt0 = 0;
+                gGameTable.cnt1 = 0;
+            }
             save_list_files(GetSaveFolder(), gGameTable.cnt0, &gGameTable.Cards, gGameTable.cnt1, &gGameTable.Names);
             gGameTable.dword_986394 = 10;
             auto remaining = gGameTable.cnt0 - cardMode;
@@ -1698,7 +1428,7 @@ namespace openre::save
                 messErr = 1;
                 break;
             default:
-                if ((gGameTable.word_9885FC & 0x4000) != 0)
+                if ((gGameTable.raw_state_lo & 0x4000) != 0)
                 {
                     if (++gGameTable.card_cursor >= gGameTable.dword_986394)
                     {
@@ -1718,7 +1448,7 @@ namespace openre::save
                     gGameTable.card_mess_timer = 3;
                     snd_se_on(0x4040000);
                 }
-                else if ((gGameTable.word_9885FC & 0x1000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x1000) != 0)
                 {
                     gGameTable.card_mess_timer = 2;
                     if (--gGameTable.card_cursor < 0)
@@ -1734,12 +1464,12 @@ namespace openre::save
                     snd_se_on(0x4040000);
                     gGameTable.card_mess_timer = 3;
                 }
-                else if ((gGameTable.word_9885FC & 0x2000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x2000) != 0)
                 {
                     gGameTable.card_fade += 8;
                     messErr = 1;
                 }
-                else if ((gGameTable.word_9885FC & 0x8000) != 0)
+                else if ((gGameTable.raw_state_lo & 0x8000) != 0)
                 {
                     gGameTable.card_fade -= 8;
                     if (gGameTable.card_fade < 0)
@@ -1748,7 +1478,7 @@ namespace openre::save
                 }
                 else
                 {
-                    if ((gGameTable.key_trg & 0x1000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+                    if ((gGameTable.key_trg & 0x1000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
                     {
                         switch (card_menu_action(gGameTable.card_scroll, &gGameTable.card_select, cardMode))
                         {
@@ -1762,20 +1492,6 @@ namespace openre::save
                             cardState = cardMode != 1 ? CARD_STATE_SAVE_OPTIONS : CARD_STATE_LOAD;
                             snd_se_on(0x4060000);
                             gGameTable.p_card_save = (uint8_t*)gGameTable.Cards + 276 * gGameTable.card_select;
-                            break;
-                        case 2:
-                            change_save_folder((char*)gGameTable.Names + 261 * gGameTable.card_select);
-                            cardState = CARD_STATE_ENUMERATE;
-                            gGameTable.card_scroll = 0;
-                            gGameTable.card_cursor = 0;
-                            snd_se_on(0x4060000);
-                            break;
-                        case 3:
-                            set_save_folder((char*)gGameTable.pMem + 8 * gGameTable.card_select);
-                            cardState = CARD_STATE_ENUMERATE;
-                            gGameTable.card_scroll = 0;
-                            gGameTable.card_cursor = 0;
-                            snd_se_on(0x4060000);
                             break;
                         case 4:
                             snd_se_on(0x4050000);
@@ -1839,19 +1555,19 @@ namespace openre::save
             break;
         }
         case CARD_STATE_SAVE_OPTIONS:
-            if ((gGameTable.dword_9885FE & 0x8000) != 0)
+            if ((gGameTable.key_edge & 0x8000) != 0)
             {
                 if (--gGameTable.card_sub_cursor < 0)
                     gGameTable.card_sub_cursor = 2;
                 snd_se_on(0x4040000);
             }
-            else if ((gGameTable.dword_9885FE & 0x2000) != 0)
+            else if ((gGameTable.key_edge & 0x2000) != 0)
             {
                 if (++gGameTable.card_sub_cursor >= 3)
                     gGameTable.card_sub_cursor = 0;
                 snd_se_on(0x4040000);
             }
-            else if ((gGameTable.key_trg & 0x1000) == 0 && (gGameTable.dword_9885F8 & 0x800) == 0)
+            else if ((gGameTable.key_trg & 0x1000) == 0 && (gGameTable.raw_edge & 0x800) == 0)
             {
                 if ((gGameTable.key_trg & 0x2000) != 0)
                 {
@@ -1916,7 +1632,7 @@ namespace openre::save
             {
                 char ext[260];
                 strcpy(ext, dot);
-                _strlwr(ext);
+                str_to_lower(ext);
                 if (strcmp(ext, ".biohazard2") != 0)
                     strcat(gGameTable.save_path, ".BIOHAZARD2");
             }
@@ -1952,7 +1668,7 @@ namespace openre::save
             break;
         case CARD_STATE_WAIT_OVERWRITE:
         case CARD_STATE_WAIT_NEW:
-            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
             {
                 gGameTable.card_mess_timer = 0;
                 cardState = CARD_STATE_EXIT;
@@ -1994,7 +1710,7 @@ namespace openre::save
             }
             break;
         case CARD_STATE_CONFIRM_EXIT:
-            if ((gGameTable.dword_9885FE & 0xA000) != 0)
+            if ((gGameTable.key_edge & 0xA000) != 0)
             {
                 gGameTable.card_sub_cursor ^= 1;
                 snd_se_on(0x4040000);
@@ -2021,7 +1737,7 @@ namespace openre::save
             exitCardAccess();
             return;
         case CARD_STATE_ERROR:
-            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.dword_9885F8 & 0x800) != 0)
+            if ((gGameTable.key_trg & 0x3000) != 0 || (gGameTable.raw_edge & 0x800) != 0)
             {
                 snd_se_on(0x4040000);
                 cardState = CARD_STATE_MENU;
@@ -2083,20 +1799,91 @@ namespace openre::save
         }
     }
 
+    // 0x00509860
+    // Builds the default save path into the OG save-path scratch string at
+    // 0x689F44 and returns the index of its last character. The original
+    // resolved the running module's directory via GetModuleFileNameA; here we
+    // use the resolved save:// physical path instead so the original save
+    // code observes the same folder as GetSaveFolder().
+    static int build_default_save_path()
+    {
+        std::string folder = system::fs::info("save://").physicalPath;
+        if (folder.empty())
+            folder = "savedata\\";
+        if (folder.back() != '\\')
+            folder += '\\';
+
+        str::string_copy(save_path_string(), folder.c_str());
+        return str::string_sjis_len(save_path_string()) - 1;
+    }
+
     // 0x00509840
-    // Returns the current save folder path. On first use the path is built from
-    // the module file name (the directory of the running executable, with a
-    // trailing backslash) and cached in the OG save-path string at 0x689F44.
+    // Returns the save folder. The load/save menu always operates on the proper
+    // save folder (the physical path of the save:// root), so this never changes.
+    // The path is resolved once and kept in sync with the OG save-path string at
+    // 0x689F44 so the original save code sees the same folder.
     char* GetSaveFolder()
     {
-        if (str::string_sjis_len(save_path_string()) == 0)
-            build_default_save_path();
+        static const std::string saveFolder = []() {
+            std::string folder = system::fs::info("save://").physicalPath;
+            if (folder.empty())
+                folder = "savedata\\";
+            if (folder.back() != '\\')
+                folder += '\\';
+            return folder;
+        }();
+
+        if (str::string_ne_cstr(save_path_string(), saveFolder.c_str()))
+            str::string_copy(save_path_string(), saveFolder.c_str());
         return save_path_string()->data;
+    }
+
+    // Loads a save file specified on the command line before entering gameplay.
+    // Mirrors the CARD_STATE_LOAD recipe: read the 0x800-byte save image, copy the
+    // first 0x798 bytes into the global table, then restore the saved state.
+    // Returns false (and leaves the game state untouched) when the file is unreadable.
+    bool cmdline_load_save(const char* path)
+    {
+        if (!path || !path[0])
+            return false;
+
+        // Resolve the path to absolute so relative paths are interpreted
+        // against the current directory rather than the savedata folder.
+        auto absPath = system::fs::absolute(path);
+        if (absPath.empty())
+        {
+            logging::logError("[cmdline] Failed to resolve save path: {}", path);
+            return false;
+        }
+
+        gGameTable.p_card_work = gGameTable.card_work;
+        auto result = file_read_save(gGameTable.p_card_work + 500, absPath.c_str(), 0x800);
+        if (result != 0)
+        {
+            logging::logError("[cmdline] Failed to load save file: {}", absPath);
+            return false;
+        }
+        std::memcpy(&gGameTable.table_start, gGameTable.p_card_work + 500, 0x798);
+        load_pop();
+        if (gGameTable.byte_98EF2E != 0)
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE, true);
+            gGameTable.fg_status = gGameTable.dword_98E9B0 | 0x4000;
+        }
+        else
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE, false);
+            gGameTable.fg_status = gGameTable.dword_98E9B0 & ~0x4000u;
+        }
+        gGameTable.dword_989EC4 = gGameTable.dword_98EF20;
+        gGameTable.dword_989EC8 = gGameTable.dword_98EF24;
+        gGameTable.dword_989ECC = gGameTable.dword_98EF28;
+        return true;
     }
 
     void save_init_hooks()
     {
         interop::writeJmp(0x004C57E0, &mem_card);
-        interop::writeJmp(0x00432080, &rsrc_release);
+        interop::writeJmp(0x00509860, &build_default_save_path);
     }
 }

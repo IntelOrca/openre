@@ -22,5 +22,8 @@ namespace openre::save
     // 0x00509840
     char* GetSaveFolder();
 
+    // Loads a save file specified on the command line before entering gameplay.
+    bool cmdline_load_save(const char* path);
+
     void save_init_hooks();
 }

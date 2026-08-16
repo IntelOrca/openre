@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cmdline.h"
 #include "interop.hpp"
 #include "re2.h"
 #include <cstdint>
@@ -192,6 +193,7 @@ namespace openre
     static const char* gStageSymbols = "123456789abcdefg";
 
     uint8_t get_player_num();
+
     void mess_print(int x, int y, const uint8_t* str, short a4);
     uint8_t rnd();
     uint8_t rnd_area();
@@ -208,14 +210,22 @@ namespace openre
     void set_flag(FlagGroup group, uint32_t index, bool value);
     void set_stage();
     void stage_init_item();
+    void load_init_table_3();
     int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
-    void update_timer();
+    uint32_t update_timer();
     uint32_t check_room_no(uint32_t stage, uint32_t room);
     void* operator_new(const size_t size);
     void operator_delete(void* memoryBlock);
     bool cutscene_active();
     void vsync();
+
+    // 0x00441780
+    void movie_kill();
+
+    // Handles a keyboard event delivered by the SDL window module.
+    // vk is a Win32 VK code, repeat is the key auto-repeat flag.
+    void handle_key(int vk, bool repeat);
 
     // 0x004BF810
     void game_loop();

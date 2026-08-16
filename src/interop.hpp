@@ -6,6 +6,17 @@
 #include <stdexcept>
 #include <vector>
 
+// The x86 calling-convention keywords (__stdcall, __thiscall) are provided by
+// the toolchain on Windows (MSVC and MinGW alike). On non-Windows platforms
+// they do not exist - even on 32-bit x86 Linux - so define them away to keep
+// the declarations compilable. Native Linux does not use these conventions
+// anyway (the default cdecl applies).
+#if !defined(_WIN32)
+#define __stdcall
+#define __thiscall
+#define __cdecl
+#endif
+
 #if defined(__i386__)
 #define assert_struct_size(x, y) static_assert(sizeof(x) == (y), "Improper struct size")
 #else

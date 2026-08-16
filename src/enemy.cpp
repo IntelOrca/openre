@@ -2,11 +2,14 @@
 #include "file.h"
 #include "interop.hpp"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "model.h"
 #include "openre.h"
 #include "rdt.h"
+#include "tim.h"
 #include <array>
 #include <cstring>
+#include <vector>
 
 using namespace openre::file;
 using namespace openre::rdt;
@@ -118,6 +121,14 @@ namespace openre::enemy
                                      360,  374,  387,  399,  410,  420,  429,  437,  444,  450,  455,  459,  462,  464,  465,
                                      180,  354,  522,  684,  840,  990,  1134, 1272, 1404, 1530, 1650, 1764, 1872, 1974, 2070,
                                      2160, 2244, 2322, 2394, 2460, 2520, 2574, 2622, 2664, 2700, 2730, 2754, 2772, 2784, 2790 };
+
+    // Marni work-table for the player textures: base 0x00680898, 40 bytes (10 dwords) per entry.
+    static int32_t& gPlTextureMode = *((int32_t*)0x00525178);
+    static int32_t* gPlTpageHandle = (int32_t*)0x006808A0;
+    static int32_t* gPlClutHandle = (int32_t*)0x006808A4;
+    static uint32_t* gPlTextureHandle = (uint32_t*)0x006808A8;
+    static uint32_t* gPlTextureHandle1 = (uint32_t*)0x006808AC;
+    static uint32_t* gPlTextureHandle2 = (uint32_t*)0x006808B0;
 
     // 0x004B1DD0
     void em_move_tbl_set()
@@ -241,10 +252,163 @@ namespace openre::enemy
         return interop::call<void, int>(0x00442F50, id);
     }
 
+    // Deep-copies a rectangular region out of `src` (including a sub-range of
+    // the palette) into a compact Image. Mirrors the surface slicing the
+    // original did via set_address_0 / set_pal_address on a shared marni
+    // surface, followed by imageFromSurface.
+    static marni::Image sliceImage(const marni::Image& src, int x0, int width, int palStart, int palCnt)
+    {
+        marni::Image out;
+        out.width = width;
+        out.height = src.height;
+        out.depth = src.depth;
+        out.palBpp = src.palBpp;
+        out.palCnt = src.palBpp > 0 ? palCnt : 0;
+        out.psxFormat = src.psxFormat;
+
+        const int srcRowBytes = src.depth == 4 ? src.width / 2 : src.width * (src.depth / 8);
+        const int outRowBytes = src.depth == 4 ? width / 2 : width * (src.depth / 8);
+        const int srcOffset = src.depth == 4 ? x0 / 2 : x0 * (src.depth / 8);
+
+        out.pixels.resize((size_t)outRowBytes * src.height);
+        const auto* srcPixels = src.pixels.data();
+        for (int y = 0; y < src.height; ++y)
+        {
+            std::memcpy(
+                out.pixels.data() + (size_t)y * outRowBytes,
+                srcPixels + (size_t)y * srcRowBytes + srcOffset,
+                (size_t)outRowBytes);
+        }
+
+        if (out.palBpp > 0)
+        {
+            const int entriesPerPal = src.depth == 4 ? 16 : 256;
+            const size_t palBytesPerPal = (size_t)entriesPerPal * (src.palBpp / 8);
+            const auto* srcPal = src.palette.data();
+            out.palette.assign(
+                srcPal + (size_t)palStart * palBytesPerPal, srcPal + (size_t)(palStart + palCnt) * palBytesPerPal);
+        }
+        return out;
+    }
+
+    // 16-bit expands a paletted Image through palette 0, matching the software
+    // 8-bit (graphics_ptr_data == 2) path of the original which blitted the
+    // indexed TIM into a 16bpp work surface. The blit's 555 expand/re-pack
+    // round trip is lossless, so each output pixel is just the (remapped)
+    // palette entry; the transparent 0x8000 colour is substituted with 0x8001
+    // first so it survives as a red 1x1 dot instead of collapsing to black.
+    static marni::Image expandPalettedTo16bpp(const marni::Image& src)
+    {
+        marni::Image out;
+        out.width = src.width;
+        out.height = src.height;
+        out.depth = 16;
+        out.palBpp = 0;
+        out.palCnt = 0;
+        out.psxFormat = true;
+        out.pixels.resize((size_t)2 * src.width * src.height);
+
+        if (src.depth == 16)
+        {
+            // Non-paletted 16bpp is already in the final format; a paletted
+            // 16bpp texture never reaches the soft8 path in practice.
+            out.pixels = src.pixels;
+            return out;
+        }
+
+        const int palCount = 1 << src.depth; // entries per palette (16 for 4bpp, 256 for 8bpp)
+        std::vector<uint16_t> remapped;
+        remapped.resize(src.palette.size() / 2);
+        std::memcpy(remapped.data(), src.palette.data(), src.palette.size());
+        for (int palette = 0; palette < src.palCnt; ++palette)
+        {
+            for (int i = 1; i < palCount; ++i)
+            {
+                if (remapped[(size_t)palette * palCount + i] == 0x8000)
+                    remapped[(size_t)palette * palCount + i] = 0x8001;
+            }
+        }
+
+        auto* dst = (uint16_t*)out.pixels.data();
+        if (src.depth == 4)
+        {
+            // var_2A = 1: even columns hold the low nibble.
+            for (int y = 0; y < src.height; ++y)
+            {
+                for (int x = 0; x < src.width; x += 2)
+                {
+                    uint8_t byte = src.pixels[(size_t)y * (src.width / 2) + x / 2];
+                    dst[(size_t)y * src.width + x] = remapped[byte & 0xF];
+                    dst[(size_t)y * src.width + x + 1] = remapped[byte >> 4];
+                }
+            }
+        }
+        else
+        {
+            for (int y = 0; y < src.height; ++y)
+            {
+                for (int x = 0; x < src.width; ++x)
+                {
+                    dst[(size_t)y * src.width + x] = remapped[src.pixels[(size_t)y * src.width + x]];
+                }
+            }
+        }
+        return out;
+    }
+
     // 0x00443F70
     static void pl_load_texture(int workNo, void* pTim, int tpage, int clut, int id)
     {
-        return interop::call<void, int, void*, int, int, int>(0x00443F70, workNo, pTim, tpage, clut, id);
+        if (gPlTextureHandle[10 * workNo])
+        {
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle[10 * workNo]);
+            gPlTextureHandle[10 * workNo] = 0;
+        }
+        if (gPlTextureHandle1[10 * workNo])
+        {
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle1[10 * workNo]);
+            gPlTextureHandle1[10 * workNo] = 0;
+        }
+        if (gPlTextureHandle2[10 * workNo])
+        {
+            marni::g_renderer->unloadTexture((int)gPlTextureHandle2[10 * workNo]);
+            gPlTextureHandle2[10 * workNo] = 0;
+        }
+
+        gPlTpageHandle[10 * workNo] = tpage;
+        gPlClutHandle[10 * workNo] = clut;
+        gPlTextureMode = (-(gGameTable.graphics_ptr_data != 2) & 0x20) + 17;
+
+        marni::Image image;
+        if (!tim::decodeTim((const uint8_t*)pTim, image))
+            return;
+
+        if (gGameTable.graphics_ptr_data == 2)
+            image = expandPalettedTo16bpp(image);
+
+        if (image.width > 256)
+        {
+            // Textures wider than 256px are split into 256px-wide textures; the
+            // right hand part moves its CLUT base so its UVs keep addressing the
+            // correct palette entries (offset by 1 for id 54, 2 otherwise).
+            const int palStart = id == 54 ? 1 : 2;
+            const int palCnt = id == 54 ? image.palCnt - 1 : image.palCnt - 2;
+            gPlTextureHandle1[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(
+                sliceImage(image, 256, image.width - 256, palStart, palCnt), gPlTextureMode);
+
+            if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
+            {
+                gPlTextureHandle2[10 * workNo]
+                    = (uint32_t)marni::g_renderer->loadTexture(sliceImage(image, 128, 256, 1, 2), gPlTextureMode);
+            }
+
+            marni::Image left = sliceImage(image, 0, 256, 0, image.palCnt);
+            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(left), gPlTextureMode);
+        }
+        else
+        {
+            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(image), gPlTextureMode);
+        }
     }
 
     static int get_customised_emd_id(int id)
@@ -484,10 +648,96 @@ namespace openre::enemy
         return interop::call<void, Entity*, int>(0x004B3990, entity, d);
     }
 
+    // ---- Standalone globals + thunks used by snd_se_enem (0x004EDE30) ----
+    static int32_t* pEdt_adr = (int32_t*)0x693480;     // 6 ints; entry [3] is the enemy EDH entry table
+    static int32_t* dword_6934AC = (int32_t*)0x6934AC; // decoded enemy sample data ptr
+    static uint8_t* byte_6941D0 = (uint8_t*)0x6941D0;  // room reverb level cache
+    static int16_t* vol_3d_l = (int16_t*)0x693C44;
+    static int16_t* vol_3d_r = (int16_t*)0x693C46;
+    static int16_t* vol_3d_pan = (int16_t*)0x689DE4;
+
+    // 0x004EE780
+    static int snd_se_3d(const Vec32* pos, int a2)
+    {
+        using sig = int (*)(const Vec32*, int);
+        auto p = (sig)0x004EE780;
+        return p(pos, a2);
+    }
+
+    // 0x004EE770
+    static uint8_t sub_4ee770(int a, int b)
+    {
+        // The original is a 3-byte stub: `xor al, al; ret`. It only clears
+        // AL; the upper 24 bits of EAX are left as garbage, so the result must
+        // be read as an 8-bit value. snd_se_enem's original `test al, al; jnz`
+        // does exactly that; an int return type would surface the garbage
+        // upper bits and spuriously suppress every enemy sound.
+        using sig = uint8_t (*)(int, int);
+        auto p = (sig)0x004EE770;
+        return p(a, b);
+    }
+
+    // 0x00434AB0 (hooked to openre::audio::ss_set_vol)
+    static void ss_set_vol_enemy(int type, int index, int vol)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x00434AB0;
+        p(type, index, vol);
+    }
+
+    // 0x004348F0 (hooked to openre::audio::ss_set_pan)
+    static void ss_set_pan_enemy(int type, int index, int pan)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004348F0;
+        p(type, index, pan);
+    }
+
+    // 0x004338F0 (hooked to openre::audio::ss_play)
+    static void ss_play_enemy(int type, int id, int dwFlags)
+    {
+        using sig = void (*)(int, int, int);
+        auto p = (sig)0x004338F0;
+        p(type, id, dwFlags);
+    }
+
     // 0x004EDE30
     void snd_se_enem(uint8_t id, EnemyEntity* enemy)
     {
-        interop::call<void, uint8_t, void*>(0x004EDE30, id, enemy);
+        if (!gGameTable.enable_dsound)
+            return;
+
+        uint8_t a1 = id;
+        if (enemy->be_flg & 0x2000)
+            a1 += 16;
+
+        int32_t v2 = pEdt_adr[3];
+        if (!v2)
+            return;
+
+        // vab_id[3] is uint8_t; the original compares the byte against 0xFF (-1).
+        if (*(int32_t*)(v2 + 4 * a1) == -1 || gGameTable.vab_id[3] == 0xFF)
+            return;
+
+        uint8_t* v3 = (uint8_t*)(v2 + 4 * a1 + 2);
+        if (!sub_4ee770(*(uint8_t*)(v2 + 4 * a1 + 3) & 0x1F, *v3 & 0xF))
+        {
+            uint8_t* v4 = (uint8_t*)(*dword_6934AC + 32 * (16 * (*(uint8_t*)(v2 + 4 * a1 + 1) & 0x7F) + (*v3 >> 4) + 0x41));
+            if (*byte_6941D0)
+                v4[1] |= *byte_6941D0;
+            else
+                v4[1] &= ~4u;
+
+            snd_se_3d(&enemy->m.pos, 1);
+
+            if (gGameTable.sfx_vol)
+            {
+                int v5 = ((uint16_t)*vol_3d_r <= (uint16_t)*vol_3d_l) ? (uint16_t)*vol_3d_l : (uint16_t)*vol_3d_r;
+                ss_set_vol_enemy(3, a1, v5);
+                ss_set_pan_enemy(3, a1, *vol_3d_pan);
+                ss_play_enemy(3, a1, 0);
+            }
+        }
     }
 
     // part of 0x004E77D0
@@ -807,7 +1057,8 @@ namespace openre::enemy
 
     void enemy_init_hooks()
     {
-        interop::writeJmp(0x004B1DD0, em_move_tbl_set);
         interop::writeJmp(0x004C5230, bomb_parts_sort_gt);
+        interop::writeJmp(0x004EDE30, &snd_se_enem);
+        interop::writeJmp(0x00443F70, pl_load_texture);
     }
 }

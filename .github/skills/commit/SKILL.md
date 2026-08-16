@@ -3,6 +3,8 @@ name: commit
 description: 'Commits the current changes. Run this whenever the user asks to commit the current changes.'
 ---
 
+Before committing, ensure format.bat has been run.
+
 ## Commit message example format
 ```
 Implement draw_line_flat/gourad

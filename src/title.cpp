@@ -6,11 +6,15 @@
 #include "file.h"
 #include "hud.h"
 #include "interop.hpp"
+#include "logger.h"
 #include "marni.h"
+#include "marni_renderer.h"
 #include "openre.h"
 #include "player.h"
+#include "rdt.h"
 #include "re2.h"
 #include "room.h"
+#include "save.h"
 #include "scd.h"
 #include "scheduler.h"
 
@@ -23,6 +27,7 @@ using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::player;
 using namespace openre::room;
+using namespace openre::save;
 using namespace openre::scd;
 
 namespace openre::title
@@ -130,13 +135,13 @@ namespace openre::title
     // 0x004450C0
     static void sub_4450C0(int a0)
     {
-        interop::call<void, int>(0x004450C0, a0);
+        marni::unload_register_surfaces(a0);
     }
 
     // 0x0043DF40
     static void sub_43DF40()
     {
-        interop::call(0x0043DF40);
+        marni::release_object_textures();
     }
 
     // 0x0050B910
@@ -171,7 +176,7 @@ namespace openre::title
         {
         case 0:
         {
-            marni::result_unload_textures();
+            marni::g_renderer->unloadAllTextures();
             sub_4450C0(1);
             sub_43DF40();
             snd_sys_init2();
@@ -228,7 +233,7 @@ namespace openre::title
                     gGameTable.byte_689F24 = 0;
                 }
                 title_bg_reload();
-                if (gGameTable.byte_98F1BB == 2)
+                if (gGameTable.demo_ended == 2)
                 {
                     set_flag(FlagGroup::System, FG_SYSTEM_30, false);
                 }
@@ -294,11 +299,11 @@ namespace openre::title
     // 0x00503A30
     static void title_main_game()
     {
-        marni::unload_texture_page(18);
-        marni::unload_texture_page(19);
-        marni::unload_texture_page(20);
-        marni::unload_texture_page(21);
-        marni::unload_texture_page(22);
+        marni::unloadTexturePage(18);
+        marni::unloadTexturePage(19);
+        marni::unloadTexturePage(20);
+        marni::unloadTexturePage(21);
+        marni::unloadTexturePage(22);
         task_chain(game_loop);
     }
 
@@ -366,8 +371,8 @@ namespace openre::title
     // 0x004D1150
     static void pad_rep_set(uint32_t arg0, uint16_t arg1)
     {
-        gGameTable.dword_98F074 = arg0;
-        gGameTable.word_98F078 = arg1;
+        gGameTable.key_repeat_mask = arg0;
+        gGameTable.key_repeat_timing = arg1;
     }
 
     // 0x00440480
@@ -428,8 +433,67 @@ namespace openre::title
         else
         {
             pad_rep_set(0x5000, 522);
-            gGameTable.title_mv_state = TITLE_STATE_CAPCOM_LOGO;
             moji_set_work();
+            if (cmdline_start_requested())
+            {
+                // A save file and/or -p/-r room warp was given on the command
+                // line: load it and jump straight into gameplay, skipping the
+                // Capcom logo, disclaimer, video and title menu.
+                logging::logDebug(
+                    "[cmdline] title divert: save={} player={} stage={} room={}",
+                    cmdline_save_requested(),
+                    cmdline_player(),
+                    cmdline_stage(),
+                    cmdline_room());
+                bool loaded = false;
+                if (cmdline_save_requested())
+                {
+                    loaded = cmdline_load_save(cmdline_save_path());
+                }
+                if (loaded)
+                {
+                    // Player/scenario flags are restored by load_pop(); fall
+                    // through to the start divert below.
+                }
+                else if (cmdline_stage() >= 0)
+                {
+                    // Player/scenario flags must be set before game_loop so
+                    // title_game_init picks the right sound bank and the room
+                    // path uses the correct Pl0/Pl1 digit. The scenario comes
+                    // from -s when given, otherwise it is derived from the
+                    // player (PLD_LEON_1/PLD_CLAIRE_1 are the B variants).
+                    const auto player = cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0;
+                    const auto scenario = cmdline_scenario() >= 0 ? cmdline_scenario()
+                                                                  : ((player == PLD_LEON_1 || player == PLD_CLAIRE_1) ? 1 : 0);
+                    set_flag(FlagGroup::Status, FG_STATUS_PLAYER, (player & 1) != 0);
+                    set_flag(FlagGroup::Status, FG_STATUS_SCENARIO, scenario != 0);
+                }
+                else
+                {
+                    // Save failed to load and no room warp was requested:
+                    // fall back to the normal title flow.
+                    gGameTable.title_mv_state = TITLE_STATE_CAPCOM_LOGO;
+                    if (gGameTable.byte_989E90 != 0)
+                    {
+                        gGameTable.title_mv_state = TITLE_STATE_7;
+                        snd_load_core(0x10u, 0);
+                        snd_room_load();
+                        title_bg_load();
+                    }
+                    ctcb.var_08 = 1;
+                }
+                if (loaded || cmdline_stage() >= 0)
+                {
+                    // The boot disclaimer task is still waiting for input; dismiss it
+                    // so it does not linger over the game.
+                    gGameTable.byte_98F1B9 = 0;
+                    task_kill(1);
+                    cmdline_mark_start();
+                    task_chain(game_loop);
+                    return;
+                }
+            }
+            gGameTable.title_mv_state = TITLE_STATE_CAPCOM_LOGO;
             if (gGameTable.byte_989E90 != 0)
             {
                 gGameTable.title_mv_state = TITLE_STATE_7;
@@ -520,6 +584,67 @@ namespace openre::title
         interop::call(0x004EA320);
     }
 
+    // Sets up a room warp requested from the command line (-p/-r). Mirrors the
+    // demo branch of title_game_init but sources the values from the command
+    // line instead of the demo file. FG_SYSTEM_DEMO is deliberately NOT set so
+    // input playback, demo timeout and BGM suppression stay inactive.
+    static void title_game_warp_init()
+    {
+        const auto stage = cmdline_stage() >= 0 ? cmdline_stage() : 0;
+        const auto room = cmdline_room() >= 0 ? cmdline_room() : 0;
+        const auto player = cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0;
+        logging::logDebug("[cmdline] warp init stage={} room={} player={}", stage, room, player);
+
+        gGameTable.current_stage = stage;
+        gGameTable.current_room = room;
+        gGameTable.pl.id = static_cast<uint8_t>(player > PLD_SHERRY ? PLD_SHERRY : player);
+
+        // Spawn position and cut come from the room table (rdt.cpp); unknown
+        // rooms fall back to the world origin with cut 0.
+        int16_t x = 0;
+        int16_t y = 0;
+        int16_t z = 0;
+        int16_t cdir = 2048;
+        uint8_t cut = 0;
+        if (const auto* spawn = rdt::rdt_get_spawn_point(stage, room))
+        {
+            x = spawn->x;
+            y = spawn->y;
+            z = spawn->z;
+            cdir = spawn->cdir;
+            cut = spawn->cut;
+        }
+        gGameTable.current_cut = cut;
+
+        gGameTable.pl.m.pos.x = x;
+        gGameTable.pl.m.pos.y = y;
+        gGameTable.pl.m.pos.z = z;
+        gGameTable.pl.cdir.y = cdir;
+        // Floor is derived from the spawn height the same way the demo branch does.
+        const auto mul = static_cast<int64_t>(0x6E5D4C3B) * y;
+        const auto hi32 = static_cast<int32_t>(mul >> 32);
+        const auto diff = hi32 - y;
+        gGameTable.pl.nFloor = static_cast<uint8_t>((diff >> 10) + ((diff >> 31) & 1));
+
+        gGameTable.pl.ground = y;
+        gGameTable.pl.old_pos.x = x;
+        gGameTable.pl.old_pos.z = z;
+        gGameTable.pl.sca_old_x = x; // mirrors the new game branches
+        gGameTable.pl.sca_old_z = z;
+
+        set_flag(FlagGroup::System, FG_SYSTEM_EASY, false);
+        set_flag(FlagGroup::Status, FG_STATUS_EASY, false);
+        // Give the same inventory as a new game (8 slots: handgun, knife, ...
+        // plus the character's special item).
+        stage_init_item();
+        gGameTable.word_98E9B6 = 200;
+        gGameTable.pl.life = 200;
+        gGameTable.byte_99270E = gGameTable.input_mapping_idx;
+        gGameTable.input_mapping_idx = 0;
+        gGameTable.demo_ended = 0;
+        gGameTable.dword_99CF6C = 0;
+    }
+
     // 0x00506750
     void title_game_init()
     {
@@ -529,9 +654,10 @@ namespace openre::title
         case 1: goto LABEL_53;
         case 2:
         {
-            // Skip prologue if playing extreme battle, 4th survivor or demo
-            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) || check_flag(FlagGroup::System, FG_SYSTEM_DEMO)
-                || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
+            // Skip prologue when starting from the command line or when playing
+            // extreme battle, 4th survivor or demo
+            if (cmdline_start_active() || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE)
+                || check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
             {
                 goto LABEL_5;
             }
@@ -547,7 +673,12 @@ namespace openre::title
 
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
-                if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                if (cmdline_start_active() && !cmdline_save_requested())
+                {
+                    // Command line room warp (-p / -r)
+                    title_game_warp_init();
+                }
+                else if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
                 {
                     auto& pdemo = gGameTable.pdemo;
 
@@ -573,11 +704,11 @@ namespace openre::title
                     set_flag(FlagGroup::Status, FG_STATUS_EASY, false);
                     gGameTable.inventory_size = 8;
                     std::memcpy(gGameTable.inventory, &pdemo.inventory, 44);
-                    gGameTable.byte_99270E = gGameTable.byte_98E9AA;
-                    gGameTable.byte_98E9AA = pdemo.key_idx;
+                    gGameTable.byte_99270E = gGameTable.input_mapping_idx;
+                    gGameTable.input_mapping_idx = pdemo.key_idx;
                     gGameTable.word_98E9B6 = 200;
                     gGameTable.pl.life = 200;
-                    gGameTable.byte_98F1BB = 0;
+                    gGameTable.demo_ended = 0;
                     gGameTable.dword_99CF6C = 0;
                 }
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_4))
@@ -602,7 +733,7 @@ namespace openre::title
                     gGameTable.pl.life = 200;
                     gGameTable.poison_status = 0;
                     gGameTable.poison_timer = 0;
-                    gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+                    gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
                     stage_init_item();
                     gGameTable.dword_689F20 = 1;
                     bg_set_mode(2, 0);
@@ -638,6 +769,7 @@ namespace openre::title
                 }
 
                 gGameTable.last_cut = 255;
+                cmdline_consume_start();
                 goto LABEL_32;
             }
 
@@ -733,7 +865,7 @@ namespace openre::title
                 gGameTable.pl.ground = gGameTable.pl.m.pos.y;
                 gGameTable.poison_status = 0;
                 gGameTable.poison_timer = 0;
-                gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+                gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
                 stage_init_item();
                 gGameTable.byte_98EF2C = gGameTable.hard_mode;
                 gGameTable.byte_98EF2D = gGameTable.censorship_off;
@@ -862,6 +994,5 @@ namespace openre::title
     void title_init_hooks()
     {
         interop::writeJmp(0x005035B0, &title);
-        interop::writeJmp(0x00506750, &title_game_init);
     }
 }

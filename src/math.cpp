@@ -1,7 +1,9 @@
 #include "math.h"
 #include "interop.hpp"
 #include "openre.h"
-#include <intrin.h>
+
+#include <cmath>
+#include <cstring>
 
 namespace openre::math
 {
@@ -428,6 +430,55 @@ namespace openre::math
         memcpy(&gGameTable.ll_matrix, &m, sizeof(Mat16));
     }
 
+    // Mirrors the rounding of the Win32 MulDiv API: the product is computed
+    // with full precision, rounded half away from zero, then divided.
+    static int32_t muldiv(int32_t n, int32_t d, int32_t m)
+    {
+        int sign = 1;
+        if (n < 0)
+        {
+            n = -n;
+            sign = -sign;
+        }
+        if (d < 0)
+        {
+            d = -d;
+            sign = -sign;
+        }
+
+        // m is always positive (4096) at every call site here
+        int64_t result = (static_cast<int64_t>(n) * d + m / 2) / m;
+        return static_cast<int32_t>(result * sign);
+    }
+
+    // 0x004515C0
+    // Interpolates two 32-bit vectors: a5 = a1*(p0/4096) + a2*(p1/4096)
+    static int load_average12(const Vec32* a1, const Vec32* a2, int16_t p0, int16_t p1, Vec32* a5)
+    {
+        int v6 = muldiv(a1->x, p0, 4096);
+        a5->x = muldiv(a2->x, p1, 4096) + v6;
+        int p0a = muldiv(a1->y, p0, 4096);
+        a5->y = muldiv(a2->y, p1, 4096) + p0a;
+        int v7 = muldiv(a1->z, p0, 4096);
+        int result = muldiv(a2->z, p1, 4096);
+        a5->z = result + v7;
+        return result;
+    }
+
+    // 0x00451660
+    // Interpolates two 16-bit vectors: a5 = a1*(a3/4096) + a2*(a4/4096)
+    static int load_average_short12(const Vec16* a1, const Vec16* a2, int16_t a3, int16_t a4, Vec16* a5)
+    {
+        int v6 = muldiv(a1->x, a3, 4096);
+        a5->x = static_cast<int16_t>(muldiv(a2->x, a4, 4096) + v6);
+        int a3a = muldiv(a1->y, a3, 4096);
+        a5->y = static_cast<int16_t>(muldiv(a2->y, a4, 4096) + a3a);
+        int v5 = muldiv(a1->z, a3, 4096);
+        int result = muldiv(a2->z, a4, 4096);
+        a5->z = static_cast<int16_t>(result + v5);
+        return result;
+    }
+
     // 0x00451780
     unsigned int square_root_0(int a0)
     {
@@ -438,8 +489,16 @@ namespace openre::math
         if (a0 < 0)
             a0 = -a0;
 
+        // _BitScanReverse: index of the highest set bit.
         unsigned long v2;
+#if defined(_MSC_VER)
         _BitScanReverse(&v2, static_cast<unsigned long>(a0));
+#else
+        v2 = 0;
+        unsigned long value = static_cast<unsigned long>(a0);
+        while (value >>= 1)
+            v2++;
+#endif
         int v3 = static_cast<int>(31 - v2) & 0xFE;
 
         int v4;
@@ -473,5 +532,7 @@ namespace openre::math
         interop::writeJmp(0x00451490, &transpose_matrix);
         interop::writeJmp(0x00451450, &set_color_matrix);
         interop::writeJmp(0x00451430, &set_light_matrix);
+        interop::writeJmp(0x004515C0, &load_average12);
+        interop::writeJmp(0x00451660, &load_average_short12);
     }
 }

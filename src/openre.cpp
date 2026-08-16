@@ -1,6 +1,7 @@
 #include "openre.h"
 #include "audio.h"
 #include "camera.h"
+#include "debug.h"
 #include "door.h"
 #include "enemy.h"
 #include "entity.h"
@@ -14,7 +15,10 @@
 #include "logger.h"
 #include "marni.h"
 #include "marni_config.h"
+#include "marni_draw.h"
+#include "marni_renderer.h"
 #include "math.h"
+#include "model.h"
 #include "player.h"
 #include "rdt.h"
 #include "re2.h"
@@ -22,16 +26,47 @@
 #include "scd.h"
 #include "sce.h"
 #include "scheduler.h"
+#include "script.h"
+#include "system_gpu.h"
+#include "system_window.h"
 #include "tim.h"
 #include "title.h"
-#include "window.h"
-#include <ddraw.h>
+#include "vk_codes.h"
 
+#include <cctype>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <cwchar>
+
+#ifdef _WIN32
 #include <windows.h>
+#endif
+
+#if defined(DEBUG) && defined(_MSC_VER)
+#include <crtdbg.h>
+#include <rtcapi.h>
+#endif
+
+#ifndef _WIN32
+// SDL3 is used by the portable main() entry point at the bottom of this file.
+// We provide our own main(), so tell SDL not to supply/redefine one.
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL.h>
+
+// Portable in-place lowercase; replaces the MSVC-only _strlwr().
+static char* str_lwr(char* s)
+{
+    for (char* p = s; *p; ++p)
+        *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+    return s;
+}
+#endif
 
 using namespace openre;
 using namespace openre::audio;
+using namespace openre::debug;
 using namespace openre::door;
 using namespace openre::enemy;
 using namespace openre::file;
@@ -97,12 +132,15 @@ namespace openre
     }
 
     // 0x004427E0
-    void update_timer()
+    // GetLastTime - refreshes the global timers from the high resolution tick
+    // counter and returns the current tick value (replaces timeGetTime()).
+    uint32_t update_timer()
     {
-        auto time = timeGetTime();
+        auto time = system::window::get_ticks();
         gGameTable.timer_current = time;
         gGameTable.timer_last = time;
         gGameTable.timer_10 = time * 10;
+        return time;
     }
 
     // 0x004FAF80
@@ -149,6 +187,49 @@ namespace openre
             return 0xFF;
 
         return rnd() % v;
+    }
+
+    // 0x0050B930
+    // Time-seeded LCG used by the Capcom logo / title screens. The first call
+    // seeds the state from the high resolution tick counter (bit-reversed),
+    // subsequent calls advance the LCG. Replaces timeGetTime().
+    static uint32_t sub_50B930()
+    {
+        static uint8_t& rng_seed_flag = *reinterpret_cast<uint8_t*>(0x540CE8);
+        static uint32_t& rng_state = *reinterpret_cast<uint32_t*>(0x689FB0);
+
+        uint32_t result;
+        if (rng_seed_flag)
+        {
+            auto time = system::window::get_ticks();
+
+            uint32_t v1 = 0;
+            for (int i = 0; i < 32; ++i)
+                v1 |= ((time >> i) & 1) << (31 - i);
+
+            result = 5 * v1 + 425147303;
+            rng_seed_flag = 0;
+            rng_state = result;
+        }
+        else
+        {
+            result = 5 * rng_state + 425147303;
+            rng_state = result;
+        }
+        return result;
+    }
+
+    // 0x0050C800
+    // CRT sprintf. The OG implementation routes through __flsbuf -> __write ->
+    // WriteFile (an OS call we want dead), so redirect all OG callers to our own
+    // vsprintf. cdecl varargs; returns the number of characters written.
+    static int __cdecl sprintf_hook(char* buffer, const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        int result = vsprintf(buffer, format, args);
+        va_end(args);
+        return result;
     }
 
     // 0x00502DB0
@@ -830,13 +911,13 @@ namespace openre
     // 0x0050AA00
     void* operator_new(const size_t size)
     {
-        return interop::call<void*, size_t>(0x0050AA00, size);
+        return malloc(size);
     }
 
     // 0x0050AA10
     void operator_delete(void* memoryBlock)
     {
-        interop::call<void*>(0x0050AA10, memoryBlock);
+        free(memoryBlock);
     }
 
     // 0x004E97C0
@@ -1113,7 +1194,7 @@ namespace openre
         gGameTable.fade_table[2].kido = -1;
         gGameTable.fade_table[3].kido = -1;
         gGameTable.last_cut = -1;
-        gGameTable.byte_98E9AA = gGameTable.byte_98F1B6;
+        gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
         gGameTable.dword_9885AC = 0xFFFF0000;
         gGameTable.dword_9885D0 = 0xFFFF0000;
     }
@@ -1129,6 +1210,7 @@ namespace openre
         {
             gGameTable.input.mapping[i] = input_mapping[i];
         }
+        input::load_bindings();
     }
 
     // 0x004C3F10
@@ -1473,7 +1555,7 @@ namespace openre
 
     static bool is_demo_timeout()
     {
-        return check_flag(FlagGroup::System, FG_SYSTEM_DEMO) && gGameTable.word_98E52A > gGameTable.pdemo.frames;
+        return check_flag(FlagGroup::System, FG_SYSTEM_DEMO) && gGameTable.demo_frame > gGameTable.pdemo.frames;
     }
 
     static bool game_check_status_trigger()
@@ -1485,12 +1567,12 @@ namespace openre
         {
             return false;
         }
-        if ((gGameTable.dword_9885FE & 0x100) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
+        if ((gGameTable.key_edge & 0x100) && !check_flag(FlagGroup::Status, FG_STATUS_SCREEN))
         {
             set_flag(FlagGroup::System, FG_SYSTEM_4, true);
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
-        if ((gGameTable.dword_9885FE & 0x800) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
+        if ((gGameTable.key_edge & 0x800) && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE))
         {
             set_flag(FlagGroup::Status, FG_STATUS_SCREEN, true);
         }
@@ -1605,7 +1687,7 @@ namespace openre
             gGameTable.vk_press = vk_press;
             if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
             {
-                gGameTable.dword_9885FE |= 0x800;
+                gGameTable.key_edge |= 0x800;
             }
         }
         if (vk_press & 2)
@@ -1614,7 +1696,7 @@ namespace openre
             gGameTable.vk_press = vk_press;
             if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
             {
-                gGameTable.dword_9885FE |= 0x100;
+                gGameTable.key_edge |= 0x100;
             }
         }
         if ((vk_press & 0x40) && !(vk_press & 4))
@@ -1626,7 +1708,7 @@ namespace openre
         if (vk_press & 4)
         {
             gGameTable.vk_press = vk_press & ~4u;
-            gGameTable.word_9885FC = 0;
+            gGameTable.raw_state_lo = 0;
             bg_set_mode(2, 0);
             task_kill(0);
             task_kill(1);
@@ -1701,9 +1783,9 @@ namespace openre
             }
             if (gGameTable.byte_991F80 == 0 && is_demo_timeout())
             {
-                gGameTable.byte_98E9AA = gGameTable.byte_99270E;
+                gGameTable.input_mapping_idx = gGameTable.byte_99270E;
                 gGameTable.fg_stop |= 0xFF000000;
-                if (gGameTable.byte_98F1BB)
+                if (gGameTable.demo_ended)
                 {
                     hud_fade_set(512, 2048, 7, 1);
                 }
@@ -1977,9 +2059,9 @@ namespace openre
                 marni::out();
             LABEL_80:
                 bg_set_mode(2, 0);
-                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || gGameTable.byte_98F1BB)
+                if (!check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || gGameTable.demo_ended)
                 {
-                    gGameTable.byte_98F1BB = 1;
+                    gGameTable.demo_ended = 1;
                     init_global();
                     task_chain(title::title);
                     ctcb.var_08 = 0;
@@ -2122,7 +2204,7 @@ namespace openre
             if (gGameTable.pause)
             {
                 movie_set(1);
-                if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+                if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
                 {
                     marni::out();
                     gGameTable.pause = 0;
@@ -2132,14 +2214,14 @@ namespace openre
                 return;
             }
 
-            if (gGameTable.dword_9885F8 & 2 || gGameTable.vk_press & 0x20)
+            if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
             {
                 gGameTable.pause = 1;
                 update_timer();
                 gGameTable.dword_689800 = set_game_seconds(1);
                 auto v0 = 16 * gGameTable.byte_9888D8;
                 gGameTable.byte_52D8E7[v0] = 2;
-                marni::add_tile(&gGameTable.curtain2[v0], 5, 0);
+                marni::add_tile((const marni::Tile*)&gGameTable.curtain2[v0], 5, 0);
                 // marni::prim14
                 interop::call<void, int, int, int, int, int>(0x004C8603, 135, 107, 0, 0x4000, gGameTable.pause);
                 marni::out();
@@ -2163,7 +2245,7 @@ namespace openre
             auto& tile = gGameTable.fade_table->tiles[tileIdx];
             tile.code = 2;
             tile.tag = gGameTable.fade_table->hrate & 3;
-            marni::add_tile(&tile, 0, 0);
+            marni::add_tile((const marni::Tile*)&tile, 0, 0);
 
             if (--gGameTable.fade_table->kido < 0)
             {
@@ -2210,7 +2292,7 @@ namespace openre
     }
 
     // 0x00505B20
-    static void load_init_table_3()
+    void load_init_table_3()
     {
         gGameTable.mem_top = (void*)0x008FF8A0;
         load_init_table((void*)0x008BD880, gGameTable.byte_989E7E);
@@ -2224,15 +2306,10 @@ namespace openre
         return true;
     }
 
-    // 0x00433830
-    static void ssclose()
-    {
-        interop::call(0x00433830);
-    }
-
     // 0x00431000
     void font_create()
     {
+#ifdef _WIN32
         if (gGameTable.hFont)
             DeleteObject((HFONT)gGameTable.hFont);
         if (gGameTable.is_480p)
@@ -2275,16 +2352,24 @@ namespace openre
             gGameTable.byte_6634F8 = 15;
             gGameTable.FontH = 12;
         }
+#else
+        // GDI fonts are Windows-only; leave gGameTable.hFont null.
+        (void)fontFaceName;
+#endif
     }
 
     // 0x004310A0
     static void font_delete()
     {
+#ifdef _WIN32
         DeleteObject(gGameTable.hFont);
+#else
+        // Nothing to delete: font_create() left hFont null.
+#endif
     }
 
     // 0x00441780
-    static void movie_kill()
+    void movie_kill()
     {
         if (gGameTable.movie_playing)
         {
@@ -2315,36 +2400,6 @@ namespace openre
         marni::out();
     }
 
-    // 0x00442800
-    static INT_PTR CALLBACK about_dialog(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        if (msg == WM_INITDIALOG)
-        {
-            SetDlgItemTextA(hDlg, 1017, "BIOHAZARD(R) 2 PC\nVersion: 1.1.0");
-            auto hParent = GetParent(hDlg);
-            if (hParent)
-            {
-                RECT rcParent, rcDlg;
-                GetWindowRect(hParent, &rcParent);
-                GetWindowRect(hDlg, &rcDlg);
-                MoveWindow(
-                    hDlg,
-                    (rcParent.left + rcParent.right) / 2 - (rcDlg.right - rcDlg.left) / 2,
-                    (rcParent.top + rcParent.bottom) / 2 - (rcDlg.bottom - rcDlg.top) / 2,
-                    rcDlg.right - rcDlg.left,
-                    rcDlg.bottom - rcDlg.top,
-                    TRUE);
-            }
-            return TRUE;
-        }
-
-        if (msg == WM_COMMAND && wParam && (uint32_t)wParam <= 2)
-        {
-            EndDialog(hDlg, -1);
-        }
-        return FALSE;
-    }
-
     // 0x00442750
     static void screenshot()
     {
@@ -2365,123 +2420,83 @@ namespace openre
             if (!gGameTable.byte_6805B2)
             {
                 gGameTable.byte_6805B2 = 1;
-                ShowCursor(FALSE);
+                system::window::set_cursor_visible(false);
                 interop::call<int>(0x00433870, 0); // SsSetCoopLevel(0)
             }
         }
         else if (gGameTable.byte_6805B2 == 1)
         {
             gGameTable.byte_6805B2 = 0;
-            ShowCursor(TRUE);
+            system::window::set_cursor_visible(true);
             interop::call<int>(0x00433870, 1); // SsSetCoopLevel(1)
         }
     }
 
-    // 0x00441A00
-    LRESULT CALLBACK WndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+    // Common work after the display mode has changed (F8 / ALT+ENTER).
+    static void after_resolution_change()
     {
-        auto marni = gGameTable.pMarni;
-        if (marni != nullptr)
+        gGameTable.byte_680591 = 120;
+        cursor_op();
+        gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+        font_create();
+    }
+
+    // Handles a keyboard event delivered by the SDL window module.
+    // vk is a Win32 VK code, repeat is the key auto-repeat flag.
+    void handle_key(int vk, bool repeat)
+    {
+        if (repeat) // last key state?
+            return;
+
+        gGameTable.byte_689ABC = 1;
+        gGameTable.vk_press |= 0x80;
+
+        switch (vk)
         {
-            auto result = marni::message(marni, hWnd, Msg, (void*)wParam, (void*)lParam);
-            if (result == 0)
-            {
-                return 0;
-            }
-        }
-        gGameTable.vk_press &= 0x1F;
-        switch (Msg)
-        {
-        case WM_CREATE: input_init(&gGameTable.input); break;
-        case WM_DESTROY:
-            gGameTable.hwnd = nullptr;
-            rsrc_release();
-            ssclose();
-            font_delete();
-            PostQuitMessage(0);
-            return 0;
-        case WM_ACTIVATE: wnd_activate(); break;
-        case WM_ACTIVATEAPP:
-            if (wParam)
-                wnd_activate();
-#ifndef DEBUG
-            else
-                wnd_deactivate();
-#endif
+        case VK_F11:
+        case VK_SNAPSHOT: screenshot(); break;
+        case VK_F1: system::window::show_message_box(windowTitle, "BIOHAZARD(R) 2 PC\nVersion: 1.1.0"); break;
+        case VK_F2:
+            g_speed_multiplier -= 1;
+            if (g_speed_multiplier < 1)
+                g_speed_multiplier = 1;
             break;
-        case WM_KILLFOCUS:
-#ifndef DEBUG
-            input_pause(&gGameTable.input);
-#endif
+        case VK_F3:
+            g_speed_multiplier += 1;
+            if (g_speed_multiplier > 5)
+                g_speed_multiplier = 5;
             break;
-        case WM_CLOSE: marni::kill(); return DefWindowProc(hWnd, Msg, wParam, lParam);
-        case WM_KEYUP: input_wmkeyup(&gGameTable.input, wParam); break;
-        case WM_KEYDOWN:
-            if (lParam & 0x40000000) // last key state?
-                break;
-            gGameTable.byte_689ABC = 1;
-            gGameTable.vk_press |= 0x80;
-            switch (wParam)
+        case VK_F4:
+            gGameTable.vk_press |= 1; // inventory
+            break;
+        case VK_F5:
+            gGameTable.vk_press |= 2; // options
+            break;
+        case VK_F6: debug::toggle(); break;
+        case VK_PRIOR: debug::scroll_log(-1); break;
+        case VK_NEXT: debug::scroll_log(1); break;
+        case VK_F7: marni::g_renderer->configFlipFilter(); break;
+        case VK_F8:
+            if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
             {
-            case VK_F11:
-            case VK_SNAPSHOT:
-                screenshot();
-                SetFocus(hWnd);
-                break;
-            case VK_F1: DialogBoxParamA((HINSTANCE)gGameTable.hInstance, (LPCSTR)0xA6, hWnd, about_dialog, 0); break;
-            case VK_F2:
-                g_speed_multiplier -= 1;
-                if (g_speed_multiplier < 1)
-                    g_speed_multiplier = 1;
-                SetFocus(hWnd);
-                break;
-            case VK_F3:
-                g_speed_multiplier += 1;
-                if (g_speed_multiplier > 5)
-                    g_speed_multiplier = 5;
-                SetFocus(hWnd);
-                break;
-            case VK_F4:
-                gGameTable.vk_press |= 1; // inventory
-                SetFocus(hWnd);
-                break;
-            case VK_F5:
-                gGameTable.vk_press |= 2; // options
-                SetFocus(hWnd);
-                break;
-            case VK_F7: marni::config_flip_filter(&gGameTable.marni_config); break;
-            case VK_F8:
-                if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
-                {
-                    if (marni::change_resolution(gGameTable.pMarni))
-                    {
-                        gGameTable.byte_680591 = 120;
-                        cursor_op();
-                        gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
-                        font_create();
-                    }
-                    else
-                    {
-                        marni::out("???", "winmain.cpp");
-                    }
-                }
-                break;
-            case VK_F9:
-                gGameTable.vk_press |= 0x40; // exit to menu
-                break;
-            default:
-                input_wmkeydown(&gGameTable.input, wParam);
-                SetFocus(hWnd);
-                break;
+                if (marni::g_renderer->changeResolution())
+                    after_resolution_change();
+                else
+                    marni::out("???", "winmain.cpp");
             }
             break;
-        default: return DefWindowProc(hWnd, Msg, wParam, lParam);
+        case VK_F9:
+            gGameTable.vk_press |= 0x40; // exit to menu
+            break;
+        case VK_F10:
+            // The reference GPU backend was removed; F10 is a no-op.
+            break;
+        default: input_wmkeydown(&gGameTable.input, vk); break;
         }
-        return 0;
     }
 
     // 0x00441910
-    static int cheat_line_cmd0(LPSTR lpCmdLine, int a1)
+    static int cheat_line_cmd0(char* lpCmdLine, int a1)
     {
         auto* v2 = strchr(lpCmdLine, '/');
         if (!v2)
@@ -2490,7 +2505,11 @@ namespace openre
             if (!v2)
                 return -1;
         }
+#ifdef _WIN32
         auto* v3 = _strlwr(v2);
+#else
+        auto* v3 = str_lwr(v2);
+#endif
         auto* v4 = strstr(v3, gGameTable.cheat_cmds[a1]);
         if (!v4)
             return -1;
@@ -2505,12 +2524,16 @@ namespace openre
     }
 
     // 0x00441890
-    static int cheat_line_cmd1(LPSTR lpCmdLine, int a1, int a2)
+    static int cheat_line_cmd1(char* lpCmdLine, int a1, int a2)
     {
         auto* v3 = strchr(lpCmdLine, '/');
         if (v3 || (v3 = strchr(lpCmdLine, '-')) != nullptr)
         {
+#ifdef _WIN32
             auto* v4 = _strlwr(v3);
+#else
+            auto* v4 = str_lwr(v3);
+#endif
             auto v5 = a1;
             if (a1 < 13)
             {
@@ -2529,14 +2552,14 @@ namespace openre
     // 0x0050AA60
     static void config_read()
     {
-        marni::config_read_all(&gGameTable.marni_config);
-        marni::config_flush_all(&gGameTable.marni_config);
+        marni::g_renderer->configReadAll();
+        marni::g_renderer->configFlushAll();
     }
 
     // 0x0050AA80
     void config_write()
     {
-        marni::config_flush_all(&gGameTable.marni_config);
+        marni::g_renderer->configFlushAll();
     }
 
     // 0x00441880
@@ -2546,9 +2569,46 @@ namespace openre
     }
 
     // 0x00442920
-    static void draw_monitor_effect(int a0)
+    // Draws the "monitor" scanline effect: the framebuffer is copied back onto
+    // itself in 7 horizontal bands, each band row shifted left by xtbl[band]
+    // (scaled) pixels. The surface is locked for the whole effect.
+    static int draw_monitor_effect(int posY)
     {
-        interop::call(0x00442920);
+        auto* marni = gGameTable.pMarni;
+
+        int xtbl[7] = { 2, 3, 4, 4, 4, 3, 2 };
+
+        interop::thiscall<int, MarniSurface2*, int, int>((uintptr_t)marni->surface0.vtbl->lock_fn, &marni->surface0, 0, 0);
+
+        int v1 = 0;
+        int v14 = 0;
+        do
+        {
+            int v3 = marni->xsize / 320;
+            int v4 = marni->ysize / 240;
+            if (v4 > 0)
+            {
+                int v5 = xtbl[v1];
+                int v6 = v4 * (posY + v1);
+                int h = v4;
+                do
+                {
+                    int xSize = marni->xsize;
+                    size_t v12 = (size_t)((xSize - v5) * marni->bpp * v3 / 8);
+                    char* v11 = marni::surface_calc_address(&marni->surface0, v3 * v5, v6);
+                    char* v9 = marni::surface_calc_address(&marni->surface0, 0, v6);
+                    memcpy(v9, v11, v12);
+                    ++v6;
+                    --h;
+                } while (h);
+                v1 = v14;
+            }
+            v14 = ++v1;
+        } while (v1 < 7);
+
+        interop::thiscall<int, MarniSurface2*>((uintptr_t)marni->surface0.vtbl->unlock_fn, &marni->surface0);
+
+        return 1;
     }
 
     // 0x004DD3B0
@@ -2569,12 +2629,6 @@ namespace openre
         interop::call(0x004CAF90);
     }
 
-    // 0x00440250
-    static void reset_geom()
-    {
-        interop::call(0x00440250);
-    }
-
     // 0x00442A50
     static void reset_screen()
     {
@@ -2583,8 +2637,12 @@ namespace openre
 
     static int win_exit(uint32_t error)
     {
+#ifdef _WIN32
+        // Original-binary Shift-JIS error strings (only valid while the RE2
+        // binary is loaded in this process).
         static const char* aHighColor16bit = (const char*)0x00525098;
         static const char* aInNIN = (const char*)0x0052506C;
+#endif
 
         switch (error)
         {
@@ -2597,142 +2655,181 @@ namespace openre
 
         case ERROR_FAILED_TO_INITIALIZE_DIRECTX:
         {
-            MessageBoxA(0, "Failed to initialize DIRECTX(R).", windowTitle, MB_ICONEXCLAMATION);
+            logging::logError(
+                "Failed to initialize the graphics backend (is_gpu_active={}, display mode count={})",
+                gGameTable.pMarni ? gGameTable.pMarni->is_gpu_active : 0,
+                gGameTable.pMarni ? marni::request_display_mode_count(gGameTable.pMarni) : 0);
             break;
         }
         case ERROR_INSERT_DISC:
         {
-            MessageBoxA(0, "Please insert BIOHAZARD(R) 2 PC DISC", windowTitle, MB_ICONEXCLAMATION);
+            system::window::show_message_box(windowTitle, "Please insert BIOHAZARD(R) 2 PC DISC");
             break;
         }
         case ERROR_17:
         {
-            MessageBoxA(0, aHighColor16bit, windowTitle, MB_ICONEXCLAMATION);
+#ifdef _WIN32
+            system::window::show_message_box(windowTitle, aHighColor16bit);
+#else
+            system::window::show_message_box(windowTitle, "Set the display to 16-bit color or higher.");
+#endif
             break;
         }
         case ERROR_19:
         {
-            MessageBoxA(0, aInNIN, windowTitle, MB_ICONEXCLAMATION);
+#ifdef _WIN32
+            system::window::show_message_box(windowTitle, aInNIN);
+#else
+            system::window::show_message_box(windowTitle, "Controller is not connected.");
+#endif
             break;
         }
         default:
         {
-            MessageBoxA(0, "Fatal error.", windowTitle, MB_ICONEXCLAMATION);
+            system::window::show_message_box(windowTitle, "Fatal error.");
             break;
         }
         }
 
-        marni::config_shutdown();
-        if (gGameTable.hMutex)
-        {
-            CloseHandle((HANDLE)gGameTable.hMutex);
-        }
+        marni::g_renderer->configShutdown();
 
         return error;
     }
 
     // 0x00441DC0
+#ifdef _WIN32
     static bool init_instance(HINSTANCE hInstance, HINSTANCE hPrevInstance)
     {
-        gGameTable.hInstance = hInstance;
-        if (!hPrevInstance)
+        if (!system::window::init())
         {
-            WNDCLASSA wndClass = {};
-            wndClass.lpfnWndProc = WndProc;
-            wndClass.cbClsExtra = 0;
-            wndClass.cbWndExtra = 0;
-            wndClass.hInstance = hInstance;
-            wndClass.hIcon = LoadIconA(hInstance, (LPCSTR)0xA3);
-            wndClass.hCursor = LoadCursorA(0, (LPCSTR)0x7F00);
-            wndClass.hbrBackground = (HBRUSH)GetStockObject(4);
-            wndClass.lpszMenuName = 0;
-            wndClass.lpszClassName = windowTitle;
-            RegisterClassA(&wndClass);
+            return false;
         }
 
-        DWORD windowStyleFlags = WS_CLIPCHILDREN | WS_BORDER | WS_DLGFRAME | WS_SYSMENU | WS_MINIMIZEBOX;
-
-        RECT windowRect;
-        windowRect.left = 0;
-        windowRect.right = 640;
-        windowRect.top = 0;
-        windowRect.bottom = 480;
-        AdjustWindowRect(&windowRect, windowStyleFlags, 0);
-
-        gGameTable.hwnd = (void*)CreateWindowExA(
-            0,
-            windowTitle,
-            windowTitle,
-            windowStyleFlags,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            windowRect.right - windowRect.left,
-            windowRect.bottom - windowRect.top,
-            NULL,
-            NULL,
-            hInstance,
-            NULL);
-
-        auto window = (HWND)gGameTable.hwnd;
-
-        ShowWindow(window, SW_NORMAL);
-        SetForegroundWindow(window);
-        UpdateWindow(window);
-
+        gGameTable.hInstance = system::window::get_hinstance();
+        gGameTable.hwnd = system::window::get_hwnd();
+        gGameTable.window_active = 1; // SDL may not deliver a focus event if another window owns focus
         return true;
     }
+#else
+    // Non-Windows stub: window creation is driven by win_main, which cannot
+    // run without the original binary.
+    [[maybe_unused]] static bool init_instance(void*, void*)
+    {
+        return false;
+    }
+#endif
 
     static void loopthing() {}
 
     // ── Helper functions ──────────────────────────────────────────────────
 
-    // Returns false when WM_QUIT received (caller should exit immediately)
+    // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
+    [[maybe_unused]] static bool quit_cleanup()
+    {
+        marni::g_renderer->shutdown();
+        config_write();
+        if (gGameTable.byte_680592 == 1)
+        {
+            gGameTable.byte_680592 = 0;
+            system::window::set_cursor_visible(true);
+        }
+        system::window::set_screensaver_enabled(gGameTable.byte_680592 != 0);
+        return false;
+    }
+
+    // Returns false when quit requested (caller should exit immediately)
+#ifdef _WIN32
     static bool process_messages()
     {
-        MSG msg;
-        while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+        system::window::Event ev;
+        while (system::window::poll_event(ev))
         {
-            if (msg.message == WM_QUIT)
+            auto marni = gGameTable.pMarni;
+            gGameTable.vk_press &= 0x1F;
+            switch (ev.type)
             {
-                timeEndPeriod(1);
-                marni::kill();
-                config_write();
-                if (gGameTable.byte_680592 == 1)
+            case system::window::EventType::Quit: return quit_cleanup();
+            case system::window::EventType::CloseRequested:
+                marni::g_renderer->shutdown();
+                gGameTable.hwnd = nullptr;
+                rsrc_release();
+                audio::ss_close();
+                font_delete();
+                return quit_cleanup();
+            case system::window::EventType::KeyDown:
+                if (!ev.repeat && ev.vk == VK_RETURN && ev.alt)
                 {
-                    gGameTable.byte_680592 = 0;
-                    ShowCursor(true);
+                    // ALT+ENTER toggles between windowed and fullscreen, keeping
+                    // the last window position/size.
+                    if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
+                    {
+                        if (marni::g_renderer->toggleFullscreen())
+                            after_resolution_change();
+                    }
                 }
-                SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, gGameTable.byte_680592, 0, 2);
-                return false;
+                else
+                {
+                    handle_key(ev.vk, ev.repeat);
+                }
+                break;
+            case system::window::EventType::KeyUp: input_wmkeyup(&gGameTable.input, ev.vk); break;
+            case system::window::EventType::FocusGained: wnd_activate(); break;
+            case system::window::EventType::FocusLost:
+#ifndef DEBUG
+                wnd_deactivate();
+                input_pause(&gGameTable.input);
+#endif
+                break;
+            case system::window::EventType::Moved:
+            case system::window::EventType::Resized:
+                if (marni != nullptr)
+                {
+                    marni::message(
+                        marni,
+                        system::window::get_hwnd(),
+                        ev.type == system::window::EventType::Moved ? WM_MOVE : WM_SIZE,
+                        (void*)0,
+                        (void*)MAKELPARAM(ev.data1, ev.data2));
+                }
+                break;
+            default: break;
             }
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
         }
         return true;
     }
+#else
+    // Non-Windows stub: the event loop belongs to the win_main entry point.
+    [[maybe_unused]] static bool process_messages()
+    {
+        return true;
+    }
+#endif
 
     // Returns true if a special state (movie / reset) consumed this frame
     static bool handle_special_states()
     {
         if (gGameTable.movie_r0)
         {
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
-            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+            marni::begin();
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, false);
             movie();
-            marni::clear(gGameTable.pMarni);
-            marni::marni_movie_update(gGameTable.pMarni);
+            marni::clear();
+            marni::g_renderer->movieUpdate();
+            // The movie is composited into the guest framebuffer during
+            // present() (no child video window anymore), so presenting must
+            // keep running while the movie plays. The original loop called
+            // Draw + Flip after MovieUpdate; flip() skips the scene blit and
+            // presents the movie overlay.
+            marni::flip();
             return true;
         }
         if (gGameTable.reset_r0)
         {
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+            marni::begin();
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
             reset_screen();
-            marni::clear(gGameTable.pMarni);
-            marni::draw(gGameTable.pMarni);
-            marni::flip(gGameTable.pMarni);
+            marni::clear();
+            marni::end();
             return true;
         }
         return false;
@@ -2750,10 +2847,9 @@ namespace openre
             // Each psx_main() call must start with a clean ordering table
             // and reset geometry state — psx_main populates draw commands
             // via marni::add_tile/swap_cbuff and leaves state behind.
-            marni::clear_otags(gGameTable.pMarni);
-            reset_geom();
-            gGameTable.byte_6805B4 = 0;
-            gGameTable.pMarni->gpu_flag &= ~marni::GpuFlags::GPU_3;
+            marni::begin();
+            gGameTable.bgDrawn = 0;
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, false);
 
             save_reset();
             if (gGameTable.byte_680597 & 1)
@@ -2770,6 +2866,9 @@ namespace openre
             gGameTable.frame_current = 0;
             ++gGameTable.game_seconds;
         }
+
+        // Lua script hooks (menus + gameplay)
+        openre::script::tick();
     }
 
     static void render_frame()
@@ -2784,71 +2883,56 @@ namespace openre
             return;
         }
 
-        if (!gGameTable.byte_6805B4 && !gGameTable.byte_680598)
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
+        if (!gGameTable.bgDrawn && !gGameTable.byte_680598)
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
 
         // 0x004BF760: gallery function
         if ((uint32_t)gGameTable.tasks[1].fn == 0x004BF760)
         {
             gGameTable.byte_680593 = gGameTable.byte_680592;
             gGameTable.byte_680592 |= 1;
-            marni::set_gpu_flag();
+            marni::g_renderer->setGpuFlag();
             gGameTable.byte_680592 = gGameTable.byte_680593;
         }
         else
         {
-            marni::set_gpu_flag();
+            marni::g_renderer->setGpuFlag();
             gGameTable.scaler.type = 15872;
-            if (gGameTable.pMarni->xsize == 640)
-            {
-                gGameTable.scaler.rate_x = 2.0f;
-                gGameTable.scaler.rate_y = 2.0f;
-            }
-            else
-            {
-                gGameTable.scaler.rate_x = 1.0f;
-                gGameTable.scaler.rate_y = 1.0f;
-            }
+            gGameTable.scaler.rate_x = (float)gGameTable.pMarni->xsize / gGameTable.pMarni->render_w;
+            gGameTable.scaler.rate_y = (float)gGameTable.pMarni->ysize / gGameTable.pMarni->render_h;
             gGameTable.scaler.prj = gGameTable.global_prj;
             gGameTable.scaler.rgb0 = gGameTable.global_rgb;
             gGameTable.scaler.c_x = gGameTable.global_cx + 160;
             gGameTable.scaler.c_y = gGameTable.global_cy + 120;
-            marni::add_primitive_scaler(gGameTable.pMarni, &gGameTable.scaler, 4095);
+            marni::add_scaler(&gGameTable.scaler, 4095);
         }
 
-        marni::clear(gGameTable.pMarni);
-        marni::draw(gGameTable.pMarni);
+        marni::clear();
+        marni::draw();
 
         if (gGameTable.can_draw)
         {
             draw_monitor_effect(gGameTable.can_draw);
-            marni::clear_otags(gGameTable.pMarni);
+            marni::clear_otags();
             psp_trans();
             om_trans();
             moji_trans_main();
-            marni::draw(gGameTable.pMarni);
+            marni::draw();
             gGameTable.can_draw = 0;
         }
 
+        debug::draw();
         save_print_flush();
-        marni::font_trans(&gGameTable.marni_font, &gGameTable.pMarni->surface0);
-        marni::flip(gGameTable.pMarni);
+        marni::g_renderer->fontTrans();
+        marni::flip();
     }
 
     // ── WinMain ──────────────────────────────────────────────────────────
 
     // 0x00441ED0
+#ifdef _WIN32
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
-        const char* mutexName = "bio2.658b45ea117473d4.game";
-
-        gGameTable.hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, mutexName);
-        if (gGameTable.hMutex)
-        {
-            return win_exit(ERROR_18);
-        }
-        gGameTable.hMutex = CreateMutexA(0, 0, mutexName);
-
         marni::out();
         config_read();
 
@@ -2858,42 +2942,53 @@ namespace openre
         {
             gGameTable.ushinabe = 1;
         }
-        SystemParametersInfoA(SPI_GETSCREENSAVEACTIVE, FALSE, &gGameTable.byte_680590, 0);
-        if (gGameTable.byte_680590)
+
+        // Command-line start options: first positional argument is a save file,
+        // -p sets the player id, -r the room to warp to and -s the scenario.
+        cmdline_parse(lpCmdLine);
+        if (system::window::is_screensaver_enabled())
         {
-            SystemParametersInfoA(SPI_SETSCREENSAVEACTIVE, 0, FALSE, SPIF_SENDWININICHANGE);
+            gGameTable.byte_680590 = 1;
+            system::window::set_screensaver_enabled(false);
         }
 
         if (init_instance(hInstance, hPrevInstance))
         {
-            auto window = (HWND)gGameTable.hwnd;
-            ImmAssociateContext(window, NULL);
+            input_init(&gGameTable.input);
 
-            auto marniPtr = (Marni*)operator_new(sizeof(Marni));
-            gGameTable.pMarni = marni::init(marniPtr, window, 320, 240);
-            if (!gGameTable.pMarni->is_gpu_active || !marni::request_display_mode_count(gGameTable.pMarni))
+            marni::g_renderer->init();
+            if (!gGameTable.pMarni->is_gpu_active || !marni::g_renderer->requestDisplayModeCount())
             {
+                logging::logError(
+                    "Renderer init failed: is_gpu_active={} display_mode_count={} gpu_initialized={}",
+                    gGameTable.pMarni->is_gpu_active,
+                    marni::g_renderer->requestDisplayModeCount(),
+                    system::gpu::is_initialized());
                 win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);
-                DestroyWindow(window);
-                window = 0;
+                system::window::destroy();
+                return 0;
             }
 
             cursor_op();
-            gGameTable.pMarni->gpu_flag |= marni::GpuFlags::GPU_3;
-            marni::set_gpu_flag();
-            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_13)
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
+            marni::g_renderer->setGpuFlag();
+            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::SOFTWARE_GPU)
             {
                 gGameTable.graphics_ptr_data = 1;
             }
             else
             {
-                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::GPU_3) ? 0 : 2;
+                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::CLEAR_TARGET) ? 0 : 2;
             }
             update_timer();
 
+            // Create the GDI font used by the save/debug text renderer up front
+            // (normally only created on resolution change / card access).
+            gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+            font_create();
+
             // Increase timer resolution for accurate Sleep(1)
             constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
-            timeBeginPeriod(1);
 
             uint32_t lastFrameTime = gGameTable.timer_last;
 
@@ -2906,19 +3001,19 @@ namespace openre
                 // 2. Window inactive → sleep until next message
                 if (!gGameTable.window_active)
                 {
-                    WaitMessage();
+                    system::window::wait_event();
                     continue;
                 }
 
                 // 3. Frame rate throttle
-                auto now = timeGetTime();
+                auto now = system::window::get_ticks();
                 auto budget = frameRateTable[gGameTable.vsync_rate / 2];
                 auto elapsed = 10 * (now - lastFrameTime);
 
                 if (elapsed < budget)
                 {
                     if (budget - elapsed >= 30) // >= 3ms margin
-                        Sleep(1);
+                        system::window::delay(1);
                     continue;
                 }
 
@@ -2943,10 +3038,68 @@ namespace openre
 
         return 0;
     }
+#else
+    // Non-Windows stub: the real game loop cannot run without the original
+    // RE2 Windows binary.
+    [[maybe_unused]] int win_main(void*, void*, char*, int)
+    {
+        return 0;
+    }
+#endif
 }
 
+#if defined(DEBUG) && defined(_MSC_VER)
+/// Redirects RTC failures (e.g. "Run-Time Check Failure #0" stack corruption)
+/// to stderr and terminates instead of showing the default error dialog.
+static int __cdecl
+rtc_error_handler(int errorType, const wchar_t* file, int line, const wchar_t* moduleName, const wchar_t* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    wchar_t buffer[1024];
+    vswprintf_s(buffer, format, args);
+    va_end(args);
+
+    std::fwprintf(
+        stderr,
+        L"RTC failure (%d) in %ls (%ls:%d): %ls\n",
+        errorType,
+        moduleName ? moduleName : L"?",
+        file ? file : L"?",
+        line,
+        buffer);
+    std::fflush(stderr);
+
+    // Exit immediately; the stack may be corrupted so running destructors is unsafe.
+    _exit(1);
+}
+
+static void init_rtc_error_handlers()
+{
+    // The CRT instance is statically linked into this DLL (/MTd), so the RTC
+    // handler must be installed from within the DLL itself.
+    _RTC_SetErrorFuncW(rtc_error_handler);
+
+    // Belt-and-suspenders: also redirect generic CRT error/assert reports to
+    // stderr instead of showing a dialog.
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+}
+#elif defined(DEBUG)
+// MSVC RTC/CRT hooks are not available outside the MSVC CRT; keep the
+// onAttach call site compiling with a no-op.
+[[maybe_unused]] static void init_rtc_error_handlers() {}
+#endif
+
+#ifdef _WIN32
 void onAttach()
 {
+#ifdef DEBUG
+    init_rtc_error_handlers();
+#endif
+
     logging::initConsoleLogger(logging::LogVerbosity::info);
     logging::logInfo("OpenRE v{} Initializing...", OPENRE_VERSION);
 
@@ -2955,14 +3108,13 @@ void onAttach()
     gClassicRebirthEnabled = (b == 0xE9);
 
     interop::writeJmp(0x004B7860, load_init_table_1);
-    interop::writeJmp(0x004DE650, load_init_table_2);
-    interop::writeJmp(0x00505B20, load_init_table_3);
     interop::writeJmp(0x004B2A90, rnd);
-    interop::writeJmp(0x00509CF0, ck_installkey);
-    interop::writeJmp(0x00441A00, WndProc);
-    interop::writeJmp(0x004C3C70, psx_main);
+    interop::writeJmp(0x0050C800, &sprintf_hook);
+    interop::writeJmp(0x0050B930, &sub_50B930);
     interop::writeJmp(0x00441ED0, win_main);
-    interop::writeJmp(0x004315D0, save_menu_draw);
+    interop::writeJmp(0x004427E0, &update_timer);
+    interop::writeJmp(0x0050AA00, &operator_new);
+    interop::writeJmp(0x0050AA10, &operator_delete);
 
     scheduler_init_hooks();
     title_init_hooks();
@@ -2976,17 +3128,28 @@ void onAttach()
     enemy_init_hooks();
     file_init_hooks();
     save_init_hooks();
+    model_init_hooks();
     marni_config_init_hooks();
     math_init_hooks();
     tim::tim_init_hooks();
-    window::window_init_hooks();
+    // The renderer must exist even in classic mode, where the marni_draw Add*
+    // hooks are not installed but tim/enemy texture hooks still run and now
+    // talk to the renderer.
+    marni::initRenderer();
     if (!gClassicRebirthEnabled)
     {
         input_init_hooks();
         marni::init_hooks();
+        marni::init_draw_hooks();
     }
+    openre::script::init();
 }
+#else
+// Non-Windows stub: hook installation requires the original RE2 binary.
+[[maybe_unused]] void onAttach() {}
+#endif
 
+#ifdef _WIN32
 extern "C" {
 __declspec(dllexport) BOOL /* WINAPI */
 openre_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
@@ -3015,8 +3178,23 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
     case DLL_PROCESS_DETACH:
         // Perform any necessary cleanup.
+        openre::script::shutdown();
+        system::window::destroy();
         break;
     }
     return TRUE; // Successful DLL_PROCESS_ATTACH.
 }
 }
+#endif
+
+#ifndef _WIN32
+// Portable entry point for a future native build. The real game logic
+// requires the original RE2 Windows binary, so this is only scaffolding.
+int main()
+{
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+        return 1;
+    SDL_Quit();
+    return 0;
+}
+#endif

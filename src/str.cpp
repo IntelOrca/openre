@@ -3,7 +3,12 @@
 #include "interop.hpp"
 #include "re2.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <cstring>
+#include <string>
 
 namespace openre::str
 {
@@ -35,6 +40,14 @@ namespace openre::str
     OldStdString* string_assign(OldStdString* self, const OldStdString* other)
     {
         return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50C400, self, other);
+    }
+
+    // 0x0050BBD0
+    // Reinitializes the destination (zeroes it) before copying, so it is safe
+    // to use on a string that has not been constructed yet.
+    OldStdString* string_op_assign(OldStdString* self, const OldStdString* other)
+    {
+        return interop::thiscall<OldStdString*, void*, const OldStdString*>(0x50BBD0, self, other);
     }
 
     OldStdString* string_assign(OldStdString* self, const std::string& s)
@@ -120,5 +133,60 @@ namespace openre::str
         int len = string_sjis_len(&temp);
         string_dtor(&temp);
         return len;
+    }
+
+    std::string sjis_to_utf8(const std::string& s)
+    {
+#ifdef _WIN32
+        if (s.empty())
+            return {};
+
+        auto wideLength = MultiByteToWideChar(932, 0, s.c_str(), (int)s.size(), nullptr, 0);
+        if (wideLength <= 0)
+            return s;
+
+        std::wstring wide(wideLength, L'\0');
+        MultiByteToWideChar(932, 0, s.c_str(), (int)s.size(), wide.data(), wideLength);
+
+        auto utf8Length = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideLength, nullptr, 0, nullptr, nullptr);
+        if (utf8Length <= 0)
+            return s;
+
+        std::string utf8(utf8Length, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), wideLength, utf8.data(), utf8Length, nullptr, nullptr);
+        return utf8;
+#else
+        // No SJIS code page is available off Windows. The callers use this
+        // conversion for file names only, and Linux file names are arbitrary
+        // byte sequences, so passing the bytes through unchanged is lossless
+        // (utf8_to_sjis(sjis_to_utf8(s)) == s for every byte string).
+        return s;
+#endif
+    }
+
+    std::string utf8_to_sjis(const std::string& s)
+    {
+#ifdef _WIN32
+        if (s.empty())
+            return {};
+
+        auto wideLength = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+        if (wideLength <= 0)
+            return s;
+
+        std::wstring wide(wideLength, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), wide.data(), wideLength);
+
+        auto sjisLength = WideCharToMultiByte(932, 0, wide.c_str(), wideLength, nullptr, 0, nullptr, nullptr);
+        if (sjisLength <= 0)
+            return s;
+
+        std::string sjis(sjisLength, '\0');
+        WideCharToMultiByte(932, 0, wide.c_str(), wideLength, sjis.data(), sjisLength, nullptr, nullptr);
+        return sjis;
+#else
+        // Passthrough counterpart of sjis_to_utf8(); see above.
+        return s;
+#endif
     }
 }

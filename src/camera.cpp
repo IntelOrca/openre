@@ -112,6 +112,5 @@ namespace openre::camera
         interop::writeJmp(0x004E5020, &sub_4E5020);
         interop::writeJmp(0x004C4E60, &cut_change);
         interop::writeJmp(0x004C4E90, &cut_search);
-        interop::writeJmp(0x004C4DE0, &cut_check);
     }
 };

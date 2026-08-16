@@ -21,5 +21,8 @@ namespace openre::audio
     void snd_bgm_play_ck();
     void snd_load_enemy();
 
+    int ss_close();
+    int ss_unload_group(int type);
+    int ss_load_banks(int type, int id, int bank, int player);
     void bgm_init_hooks();
 }
