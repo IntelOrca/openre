@@ -67,8 +67,12 @@ namespace openre
 
     // Splits the command line into tokens, preserving quoted arguments such as
     // paths with spaces.
-    static void cmdline_tokenize(const char* line, std::vector<std::string>& tokens)
+    std::vector<std::string> cmdline_tokenize(const char* line)
     {
+        std::vector<std::string> tokens;
+        if (!line)
+            return tokens;
+
         const char* p = line;
         while (*p)
         {
@@ -84,6 +88,7 @@ namespace openre
             tokens.emplace_back(start, end);
             p = *end ? end + 1 : end;
         }
+        return tokens;
     }
 
     // Parses a -p value: a decimal player id or a name alias.
@@ -158,25 +163,25 @@ namespace openre
         return false;
     }
 
-    void cmdline_parse(const char* lpCmdLine)
+    void cmdline_parse(const char** args, int argc, CmdlineOptions& out)
     {
-        if (!lpCmdLine)
-            return;
-
-        std::vector<std::string> tokens;
-        cmdline_tokenize(lpCmdLine, tokens);
-
-        for (size_t i = 0; i < tokens.size(); i++)
+        // Parse arguments, skipping argv[0] (the program name).
+        CmdlineOptions parsed;
+        for (int i = 1; i < argc; i++)
         {
-            const auto& token = tokens[i];
+            const char* arg = args[i] ? args[i] : "";
+            if (*arg == '\0')
+                continue;
+
+            const std::string token = arg;
             const bool isSwitch = token.size() >= 2 && (token[0] == '-' || token[0] == '/');
             if (!isSwitch)
             {
                 // First positional argument is the save file.
-                if (!sCmdline.saveRequested)
+                if (!parsed.saveRequested)
                 {
-                    sCmdline.savePath = token;
-                    sCmdline.saveRequested = true;
+                    parsed.savePath = token;
+                    parsed.saveRequested = true;
                 }
                 continue;
             }
@@ -189,9 +194,9 @@ namespace openre
             {
                 value = token.substr(2);
             }
-            else if (i + 1 < tokens.size())
+            else if (i + 1 < argc)
             {
-                value = tokens[++i];
+                value = args[++i] ? args[i] : "";
             }
             else
             {
@@ -202,24 +207,27 @@ namespace openre
             {
                 int player;
                 if (cmdline_parse_player(value, player))
-                    sCmdline.player = player;
+                    parsed.player = player;
             }
             else if (opt == 'r')
             {
                 int stage, room;
                 if (cmdline_parse_room(value, stage, room))
                 {
-                    sCmdline.stage = stage;
-                    sCmdline.room = room;
+                    parsed.stage = stage;
+                    parsed.room = room;
                 }
             }
             else if (opt == 's')
             {
                 int scenario;
                 if (cmdline_parse_scenario(value, scenario))
-                    sCmdline.scenario = scenario;
+                    parsed.scenario = scenario;
             }
         }
+
+        sCmdline = parsed;
+        out = sCmdline;
 
         if (sCmdline.startRequested())
         {

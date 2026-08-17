@@ -230,6 +230,35 @@ namespace openre
     // 0x004BF810
     void game_loop();
 
+    // ── App shell / ECS bridge ────────────────────────────────────────────
+
+    class AppContext;
+
+    namespace ecs
+    {
+        class Scene;
+    }
+
+    /// Returns the active ECS scene or null before the app has booted it.
+    ecs::Scene* current_scene();
+
+    /// Sets the active ECS scene (called once from the app shell on boot).
+    void set_current_scene(ecs::Scene& scene);
+
+    // Game-loop stage functions, shared with the ECS systems.
+    void psx_main();
+    bool handle_special_states();
+    void update_game();
+    void render_frame();
+
+    // Window lifecycle helpers used by the system_window app-system.
+    void font_delete();
+    void wnd_activate();
+    void wnd_deactivate();
+    void cursor_op();
+    void after_resolution_change();
+    int win_exit(uint32_t error);
+
     void* work_alloc(size_t len);
     template<typename T> static T* work_alloc()
     {

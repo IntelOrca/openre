@@ -1,5 +1,11 @@
 #include "system_input.h"
+
+#include "app.h"
+#include "input.h"
 #include "logger.h"
+#include "marni_renderer.h"
+#include "openre.h"
+#include "systems.h"
 #include "vk_codes.h"
 
 #include <SDL3/SDL.h>
@@ -364,5 +370,56 @@ namespace openre::system::input
             state.pov = 0xFFFFFFFF;
         }
         return true;
+    }
+}
+
+namespace openre
+{
+    namespace
+    {
+        bool s_inputInitialised = false;
+
+        void input_boot()
+        {
+            if (s_inputInitialised)
+                return;
+            s_inputInitialised = true;
+            input::input_init(&gGameTable.input);
+        }
+    }
+
+    void system_input(AppContext& app)
+    {
+        if (app.closing())
+            return;
+
+        input_boot();
+
+        // Dispatch keyboard events queued by the window system.
+        for (const auto& ev : app.keyEvents)
+        {
+            switch (ev.type)
+            {
+            case system::window::EventType::KeyDown:
+                if (!ev.repeat && ev.vk == VK_RETURN && ev.alt)
+                {
+                    // ALT+ENTER toggles between windowed and fullscreen, keeping
+                    // the last window position/size.
+                    if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
+                    {
+                        if (marni::g_renderer->toggleFullscreen())
+                            after_resolution_change();
+                    }
+                }
+                else
+                {
+                    handle_key(ev.vk, ev.repeat);
+                }
+                break;
+            case system::window::EventType::KeyUp: input::input_wmkeyup(&gGameTable.input, ev.vk); break;
+            default: break;
+            }
+        }
+        app.keyEvents.clear();
     }
 }

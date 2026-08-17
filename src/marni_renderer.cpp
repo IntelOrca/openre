@@ -85,6 +85,16 @@ namespace openre::marni
         inner->setGpuFlag(flag, value);
     }
 
+    void LoggingRenderer::setPresentRect(int x, int y, int w, int h)
+    {
+        inner->setPresentRect(x, y, w, h);
+    }
+
+    void LoggingRenderer::resetPresentRect()
+    {
+        inner->resetPresentRect();
+    }
+
     int LoggingRenderer::addSprt(const Sprt* p, uint32_t page, int z, int add_back)
     {
         int result = inner->addSprt(p, page, z, add_back);

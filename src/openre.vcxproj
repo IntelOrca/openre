@@ -71,11 +71,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="app.cpp" />
     <ClCompile Include="audio.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="debug.cpp" />
     <ClCompile Include="door.cpp" />
+    <ClCompile Include="ecs_math.cpp" />
+    <ClCompile Include="ecs_scene.cpp" />
+    <ClCompile Include="ecs_systems.cpp" />
     <ClCompile Include="em_dog.cpp" />
     <ClCompile Include="em_spider.cpp" />
     <ClCompile Include="enemy.cpp" />
@@ -124,12 +128,18 @@
     <ClCompile Include="title.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="app.h" />
     <ClInclude Include="audio.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="cmdline.h" />
     <ClInclude Include="data.hpp" />
     <ClInclude Include="debug.h" />
     <ClInclude Include="door.h" />
+    <ClInclude Include="ecs.h" />
+    <ClInclude Include="ecs_components.h" />
+    <ClInclude Include="ecs_math.h" />
+    <ClInclude Include="ecs_scene.h" />
+    <ClInclude Include="ecs_systems.h" />
     <ClInclude Include="enemy.h" />
     <ClInclude Include="entity.h" />
     <ClInclude Include="error.h" />
@@ -175,6 +185,7 @@
     <ClInclude Include="system_gpu.h" />
     <ClInclude Include="system_input.h" />
     <ClInclude Include="system_window.h" />
+    <ClInclude Include="systems.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
   </ItemGroup>

@@ -80,6 +80,20 @@ namespace openre::marni
         virtual void end() = 0;
 
         /**
+         * Restricts the next flip() to render the guest framebuffer within
+         * [x, y, x+w, y+h] (window pixels, origin top-left). The framebuffer
+         * is letterboxed into the rect, aspect-preserved. A non-positive
+         * width or height makes flip() present black (nothing is drawn).
+         */
+        virtual void setPresentRect(int x, int y, int w, int h) = 0;
+
+        /**
+         * Clears the present rect restriction so the next flip() again fills
+         * the whole window.
+         */
+        virtual void resetPresentRect() = 0;
+
+        /**
          * Sets or clears a single flag bit in the renderer's GPU state
          * (pMarni->gpu_flag).
          *
@@ -452,6 +466,8 @@ namespace openre::marni
         void flip() override;
         void end() override;
         void setGpuFlag(uint32_t flag, bool value) override;
+        void setPresentRect(int x, int y, int w, int h) override;
+        void resetPresentRect() override;
         int addSprt(const Sprt* p, uint32_t page, int z, int add_back) override;
         void addPolyFt4(const PolyFt4* p, int page, int z, int add_back) override;
         int addMask(const Sprt* p, int page, int z) override;

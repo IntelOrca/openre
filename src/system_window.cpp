@@ -1,6 +1,18 @@
 #include "system_window.h"
+
+#include "app.h"
+#include "audio.h"
+#include "error.h"
+#include "input.h"
 #include "logger.h"
+#include "marni.h"
+#include "marni_draw.h"
+#include "marni_renderer.h"
+#include "openre.h"
+#include "save.h"
 #include "system_config.h"
+#include "system_gpu.h"
+#include "systems.h"
 #include "vk_codes.h"
 
 #include <cstdlib>
@@ -270,5 +282,153 @@ namespace openre::system::window
     void delay(uint32_t ms)
     {
         SDL_Delay(ms);
+    }
+}
+
+namespace openre
+{
+    namespace
+    {
+        // Window bootstrap runs once on the first call; shutting down once on
+        // the closing pass.
+        bool s_windowInitialised = false;
+        bool s_windowShutdown = false;
+
+        void window_boot(AppContext& app)
+        {
+            if (s_windowInitialised)
+                return;
+
+            if (!system::window::init())
+            {
+                s_windowInitialised = true;
+                app.requestClose(1);
+                return;
+            }
+
+            gGameTable.hInstance = system::window::get_hinstance();
+            gGameTable.hwnd = system::window::get_hwnd();
+            // SDL may not deliver a focus event if another window owns focus.
+            gGameTable.window_active = 1;
+
+            marni::g_renderer->init();
+            if (!gGameTable.pMarni->is_gpu_active || !marni::g_renderer->requestDisplayModeCount())
+            {
+                logging::logError(
+                    "Renderer init failed: is_gpu_active={} display_mode_count={} gpu_initialized={}",
+                    gGameTable.pMarni->is_gpu_active,
+                    marni::g_renderer->requestDisplayModeCount(),
+                    system::gpu::is_initialized());
+                win_exit(error::ERROR_FAILED_TO_INITIALIZE_DIRECTX);
+                s_windowInitialised = true;
+                app.requestClose(1);
+                return;
+            }
+
+            cursor_op();
+            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
+            marni::g_renderer->setGpuFlag();
+            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::SOFTWARE_GPU)
+            {
+                gGameTable.graphics_ptr_data = 1;
+            }
+            else
+            {
+                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::CLEAR_TARGET) ? 0 : 2;
+            }
+            update_timer();
+            // Anchor the frame-pacing baseline so the first LegacyGameSystem
+            // pump starts from the timers configured at boot, matching the OG
+            // win_main's lastFrameTime initialisation.
+            system_set_frame_time_baseline(gGameTable.timer_last);
+
+            // Create the GDI font used by the save/debug text renderer up front
+            // (normally only created on resolution change / card access).
+            gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
+            font_create();
+
+            s_windowInitialised = true;
+        }
+    }
+
+    void system_window(AppContext& app)
+    {
+        if (app.closing())
+        {
+            if (s_windowInitialised && !s_windowShutdown)
+            {
+                s_windowShutdown = true;
+                marni::g_renderer->shutdown();
+                config_write();
+                if (gGameTable.byte_680592 == 1)
+                {
+                    gGameTable.byte_680592 = 0;
+                    system::window::set_cursor_visible(true);
+                }
+                system::window::set_screensaver_enabled(gGameTable.byte_680592 != 0);
+            }
+            system::window::destroy();
+            return;
+        }
+
+        window_boot(app);
+        if (!s_windowInitialised)
+        {
+            app.requestClose(1);
+            return;
+        }
+
+        // Event pump.
+        system::window::Event ev;
+        while (system::window::poll_event(ev))
+        {
+            auto marni = gGameTable.pMarni;
+            gGameTable.vk_press &= 0x1F;
+            switch (ev.type)
+            {
+            case system::window::EventType::Quit: app.requestClose(); return;
+            case system::window::EventType::CloseRequested:
+                marni::g_renderer->shutdown();
+                gGameTable.hwnd = nullptr;
+                save::rsrc_release();
+                audio::ss_close();
+                font_delete();
+                app.requestClose();
+                return;
+            case system::window::EventType::FocusGained: wnd_activate(); break;
+            case system::window::EventType::FocusLost:
+#ifndef DEBUG
+                wnd_deactivate();
+                input::input_pause(&gGameTable.input);
+#endif
+                break;
+            case system::window::EventType::Moved:
+            case system::window::EventType::Resized:
+                // Forward to the OG message handler so MARNI's resize logic
+                // (render target rebuild) keeps working.
+                if (marni != nullptr)
+                {
+                    marni::message(
+                        marni,
+                        system::window::get_hwnd(),
+                        ev.type == system::window::EventType::Moved ? WM_MOVE : WM_SIZE,
+                        (void*)0,
+                        (void*)MAKELPARAM(ev.data1, ev.data2));
+                }
+                break;
+            case system::window::EventType::KeyDown:
+            case system::window::EventType::KeyUp:
+                // Key events are dispatched by the input system.
+                app.keyEvents.push_back(ev);
+                break;
+            default: break;
+            }
+        }
+
+        // Window inactive → sleep until the next event instead of spinning.
+        if (!gGameTable.window_active)
+        {
+            system::window::wait_event();
+        }
     }
 }

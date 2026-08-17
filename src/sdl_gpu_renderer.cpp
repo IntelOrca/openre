@@ -2735,6 +2735,17 @@ struct SdlGpuRenderer::Impl
     SDL_GPUBuffer* presentVertexBuffer = nullptr;
     SDL_GPUTransferBuffer* presentTransfer = nullptr;
 
+    // Present-rect restriction: when set (w>0 && h>0) flip() letterboxes the
+    // guest framebuffer into [x, y, x+w, y+h] (window pixels, top-left origin)
+    // instead of the whole window. resetPresentRect() restores the full-window
+    // default. When explicitly set with w<=0 || h<=0 the quad is skipped so
+    // the swapchain stays black (the load op clears it).
+    bool presentRectSet = false;
+    int presentRectX = 0;
+    int presentRectY = 0;
+    int presentRectW = 0;
+    int presentRectH = 0;
+
     // Movie overlay: the movie player captures decoded DirectShow frames
     // (top-down RGB24) and forwards them via system::gpu::set_movie_frame;
     // flip() uploads each new frame into movieTexture and composites it into
@@ -3822,19 +3833,41 @@ void SdlGpuRenderer::flip()
     if (system::gpu::movie_frame_valid())
         impl->uploadAndCompositeMovie(dev, cmd, fb, fbW, fbH);
 
-    // Letterbox the guest framebuffer into the swapchain (aspect preserved,
+    // Present rect: when set (w>0 && h>0) letterbox the guest framebuffer
+    // into [x, y, x+w, y+h] (window pixels, top-left origin) instead of the
+    // whole window. resetPresentRect() restores the full-window default. When
+    // explicitly set with w<=0 || h<=0 the quad is skipped so the swapchain
+    // stays black (the load op below clears it) - e.g. disabled game states.
+    const bool presentRectSet = impl->presentRectSet;
+    const bool skipQuad = presentRectSet && (impl->presentRectW <= 0 || impl->presentRectH <= 0);
+    int rectX = 0;
+    int rectY = 0;
+    int rectW = (int)winW;
+    int rectH = (int)winH;
+    if (presentRectSet && !skipQuad)
+    {
+        rectX = std::clamp(impl->presentRectX, 0, (int)winW);
+        rectY = std::clamp(impl->presentRectY, 0, (int)winH);
+        rectW = std::clamp(impl->presentRectW, 0, (int)winW - rectX);
+        rectH = std::clamp(impl->presentRectH, 0, (int)winH - rectY);
+    }
+
+    // Letterbox the guest framebuffer into the present rect (aspect preserved,
     // black bars).
-    const float scale = std::min((float)winW / (float)fbW, (float)winH / (float)fbH);
+    const float scale = std::min((float)rectW / (float)fbW, (float)rectH / (float)fbH);
     const float outW = (float)fbW * scale;
     const float outH = (float)fbH * scale;
-    const float x0 = ((float)winW - outW) * 0.5f;
-    const float y0 = ((float)winH - outH) * 0.5f;
+    const float x0 = (float)rectX + ((float)rectW - outW) * 0.5f;
+    const float y0 = (float)rectY + ((float)rectH - outH) * 0.5f;
 
     TlVertex verts[4]{};
-    verts[0].sx = x0; verts[0].sy = y0; verts[0].tu = 0.0f; verts[0].tv = 0.0f;
-    verts[1].sx = x0 + outW; verts[1].sy = y0; verts[1].tu = 1.0f; verts[1].tv = 0.0f;
-    verts[2].sx = x0; verts[2].sy = y0 + outH; verts[2].tu = 0.0f; verts[2].tv = 1.0f;
-    verts[3].sx = x0 + outW; verts[3].sy = y0 + outH; verts[3].tu = 1.0f; verts[3].tv = 1.0f;
+    if (!skipQuad)
+    {
+        verts[0].sx = x0; verts[0].sy = y0; verts[0].tu = 0.0f; verts[0].tv = 0.0f;
+        verts[1].sx = x0 + outW; verts[1].sy = y0; verts[1].tu = 1.0f; verts[1].tv = 0.0f;
+        verts[2].sx = x0; verts[2].sy = y0 + outH; verts[2].tu = 0.0f; verts[2].tv = 1.0f;
+        verts[3].sx = x0 + outW; verts[3].sy = y0 + outH; verts[3].tu = 1.0f; verts[3].tv = 1.0f;
+    }
     for (auto& vert : verts)
     {
         vert.sz = 0.5f;
@@ -3909,7 +3942,30 @@ void SdlGpuRenderer::flip()
     SDL_SubmitGPUCommandBuffer(cmd);
     submitDiag(dev, "flip-present");
 
-    logging::logDebug("[sdlgpu] flip(): presented {}x{} framebuffer into {}x{} window", fbW, fbH, winW, winH);
+    if (skipQuad)
+        logging::logDebug("[sdlgpu] flip(): presented nothing (present rect disabled/skipped)");
+    else
+        logging::logDebug("[sdlgpu] flip(): presented {}x{} framebuffer into {}x{} rect at {},{}", fbW, fbH, rectW, rectH, rectX, rectY);
+}
+
+void SdlGpuRenderer::setPresentRect(int x, int y, int w, int h)
+{
+    impl->presentRectSet = true;
+    impl->presentRectX = x;
+    impl->presentRectY = y;
+    impl->presentRectW = w;
+    impl->presentRectH = h;
+    logging::logDebug("[sdlgpu] setPresentRect({}, {}, {}, {})", x, y, w, h);
+}
+
+void SdlGpuRenderer::resetPresentRect()
+{
+    impl->presentRectSet = false;
+    impl->presentRectX = 0;
+    impl->presentRectY = 0;
+    impl->presentRectW = 0;
+    impl->presentRectH = 0;
+    logging::logDebug("[sdlgpu] resetPresentRect()");
 }
 
 void SdlGpuRenderer::end()

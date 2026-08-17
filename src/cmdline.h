@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace openre
 {
@@ -32,8 +33,14 @@ namespace openre
         }
     };
 
-    // Parses lpCmdLine into the global options; called from win_main.
-    void cmdline_parse(const char* lpCmdLine);
+    // Splits a command line into tokens, preserving quoted arguments such as
+    // paths with spaces. A null line yields an empty token list.
+    std::vector<std::string> cmdline_tokenize(const char* line);
+
+    // Parses command-line arguments (argv[0] is skipped as the program name)
+    // into `out`. Also synchronises the module-level options used by the
+    // cmdline_* accessors.
+    void cmdline_parse(const char** args, int argc, CmdlineOptions& out);
 
     // Accessors for the parsed options.
     const CmdlineOptions& cmdline_options();

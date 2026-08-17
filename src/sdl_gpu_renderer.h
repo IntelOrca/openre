@@ -42,6 +42,8 @@ namespace openre::marni
         void flip() override;
         void end() override;
         void setGpuFlag(uint32_t flag, bool value) override;
+        void setPresentRect(int x, int y, int w, int h) override;
+        void resetPresentRect() override;
 
         int addSprt(const Sprt* p, uint32_t page, int z, int add_back) override;
         void addPolyFt4(const PolyFt4* p, int page, int z, int add_back) override;

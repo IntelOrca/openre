@@ -1,4 +1,5 @@
 #include "openre.h"
+#include "app.h"
 #include "audio.h"
 #include "camera.h"
 #include "debug.h"
@@ -29,6 +30,7 @@
 #include "script.h"
 #include "system_gpu.h"
 #include "system_window.h"
+#include "systems.h"
 #include "tim.h"
 #include "title.h"
 #include "vk_codes.h"
@@ -54,14 +56,6 @@
 // We provide our own main(), so tell SDL not to supply/redefine one.
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL.h>
-
-// Portable in-place lowercase; replaces the MSVC-only _strlwr().
-static char* str_lwr(char* s)
-{
-    for (char* p = s; *p; ++p)
-        *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
-    return s;
-}
 #endif
 
 using namespace openre;
@@ -2169,7 +2163,7 @@ namespace openre
     }
 
     // 0x004C3C70
-    static void psx_main()
+    void psx_main()
     {
         if (!gGameTable.systemInitialized)
         {
@@ -2359,7 +2353,7 @@ namespace openre
     }
 
     // 0x004310A0
-    static void font_delete()
+    void font_delete()
     {
 #ifdef _WIN32
         DeleteObject(gGameTable.hFont);
@@ -2380,7 +2374,7 @@ namespace openre
     }
 
     // 0x00441DA0
-    static void wnd_activate()
+    void wnd_activate()
     {
         gGameTable.window_active = 1;
         set_game_seconds(gGameTable.dword_6805C4);
@@ -2388,7 +2382,7 @@ namespace openre
     }
 
     // 0x00441D60
-    static void wnd_deactivate()
+    void wnd_deactivate()
     {
         gGameTable.window_active = 0;
         if (gGameTable.movie_r0 >= 2)
@@ -2407,7 +2401,7 @@ namespace openre
     }
 
     // 0x00442C60
-    static void cursor_op()
+    void cursor_op()
     {
         auto marni = gGameTable.pMarni;
         if (marni == nullptr)
@@ -2433,7 +2427,7 @@ namespace openre
     }
 
     // Common work after the display mode has changed (F8 / ALT+ENTER).
-    static void after_resolution_change()
+    void after_resolution_change()
     {
         gGameTable.byte_680591 = 120;
         cursor_op();
@@ -2495,77 +2489,16 @@ namespace openre
         }
     }
 
-    // 0x00441910
-    static int cheat_line_cmd0(char* lpCmdLine, int a1)
+    // 0x00441880
+    static void make_font()
     {
-        auto* v2 = strchr(lpCmdLine, '/');
-        if (!v2)
-        {
-            v2 = strchr(lpCmdLine, '-');
-            if (!v2)
-                return -1;
-        }
-#ifdef _WIN32
-        auto* v3 = _strlwr(v2);
-#else
-        auto* v3 = str_lwr(v2);
-#endif
-        auto* v4 = strstr(v3, gGameTable.cheat_cmds[a1]);
-        if (!v4)
-            return -1;
-        auto* v5 = &v4[strlen(gGameTable.cheat_cmds[a1])];
-        auto result = *v5 - '0';
-        if (result > 9)
-            return -1;
-        auto v7 = v5[1] - '0';
-        if (v7 <= 9)
-            return v7 + 10 * result;
-        return result;
-    }
-
-    // 0x00441890
-    static int cheat_line_cmd1(char* lpCmdLine, int a1, int a2)
-    {
-        auto* v3 = strchr(lpCmdLine, '/');
-        if (v3 || (v3 = strchr(lpCmdLine, '-')) != nullptr)
-        {
-#ifdef _WIN32
-            auto* v4 = _strlwr(v3);
-#else
-            auto* v4 = str_lwr(v3);
-#endif
-            auto v5 = a1;
-            if (a1 < 13)
-            {
-                while (v5 < a1 + a2)
-                {
-                    if (strstr(v4, gGameTable.cheat_cmds[v5]))
-                        return v5 - a1;
-                    if (++v5 >= 13)
-                        return -1;
-                }
-            }
-        }
-        return -1;
-    }
-
-    // 0x0050AA60
-    static void config_read()
-    {
-        marni::g_renderer->configReadAll();
-        marni::g_renderer->configFlushAll();
+        interop::call(0x00441880);
     }
 
     // 0x0050AA80
     void config_write()
     {
         marni::g_renderer->configFlushAll();
-    }
-
-    // 0x00441880
-    static void make_font()
-    {
-        interop::call(0x00441880);
     }
 
     // 0x00442920
@@ -2635,7 +2568,7 @@ namespace openre
         interop::call(0x00442A50);
     }
 
-    static int win_exit(uint32_t error)
+    int win_exit(uint32_t error)
     {
 #ifdef _WIN32
         // Original-binary Shift-JIS error strings (only valid while the RE2
@@ -2696,117 +2629,8 @@ namespace openre
         return error;
     }
 
-    // 0x00441DC0
-#ifdef _WIN32
-    static bool init_instance(HINSTANCE hInstance, HINSTANCE hPrevInstance)
-    {
-        if (!system::window::init())
-        {
-            return false;
-        }
-
-        gGameTable.hInstance = system::window::get_hinstance();
-        gGameTable.hwnd = system::window::get_hwnd();
-        gGameTable.window_active = 1; // SDL may not deliver a focus event if another window owns focus
-        return true;
-    }
-#else
-    // Non-Windows stub: window creation is driven by win_main, which cannot
-    // run without the original binary.
-    [[maybe_unused]] static bool init_instance(void*, void*)
-    {
-        return false;
-    }
-#endif
-
-    static void loopthing() {}
-
-    // ── Helper functions ──────────────────────────────────────────────────
-
-    // Runs the equivalent of the old WM_QUIT cleanup and signals exit.
-    [[maybe_unused]] static bool quit_cleanup()
-    {
-        marni::g_renderer->shutdown();
-        config_write();
-        if (gGameTable.byte_680592 == 1)
-        {
-            gGameTable.byte_680592 = 0;
-            system::window::set_cursor_visible(true);
-        }
-        system::window::set_screensaver_enabled(gGameTable.byte_680592 != 0);
-        return false;
-    }
-
-    // Returns false when quit requested (caller should exit immediately)
-#ifdef _WIN32
-    static bool process_messages()
-    {
-        system::window::Event ev;
-        while (system::window::poll_event(ev))
-        {
-            auto marni = gGameTable.pMarni;
-            gGameTable.vk_press &= 0x1F;
-            switch (ev.type)
-            {
-            case system::window::EventType::Quit: return quit_cleanup();
-            case system::window::EventType::CloseRequested:
-                marni::g_renderer->shutdown();
-                gGameTable.hwnd = nullptr;
-                rsrc_release();
-                audio::ss_close();
-                font_delete();
-                return quit_cleanup();
-            case system::window::EventType::KeyDown:
-                if (!ev.repeat && ev.vk == VK_RETURN && ev.alt)
-                {
-                    // ALT+ENTER toggles between windowed and fullscreen, keeping
-                    // the last window position/size.
-                    if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
-                    {
-                        if (marni::g_renderer->toggleFullscreen())
-                            after_resolution_change();
-                    }
-                }
-                else
-                {
-                    handle_key(ev.vk, ev.repeat);
-                }
-                break;
-            case system::window::EventType::KeyUp: input_wmkeyup(&gGameTable.input, ev.vk); break;
-            case system::window::EventType::FocusGained: wnd_activate(); break;
-            case system::window::EventType::FocusLost:
-#ifndef DEBUG
-                wnd_deactivate();
-                input_pause(&gGameTable.input);
-#endif
-                break;
-            case system::window::EventType::Moved:
-            case system::window::EventType::Resized:
-                if (marni != nullptr)
-                {
-                    marni::message(
-                        marni,
-                        system::window::get_hwnd(),
-                        ev.type == system::window::EventType::Moved ? WM_MOVE : WM_SIZE,
-                        (void*)0,
-                        (void*)MAKELPARAM(ev.data1, ev.data2));
-                }
-                break;
-            default: break;
-            }
-        }
-        return true;
-    }
-#else
-    // Non-Windows stub: the event loop belongs to the win_main entry point.
-    [[maybe_unused]] static bool process_messages()
-    {
-        return true;
-    }
-#endif
-
     // Returns true if a special state (movie / reset) consumed this frame
-    static bool handle_special_states()
+    bool handle_special_states()
     {
         if (gGameTable.movie_r0)
         {
@@ -2835,7 +2659,7 @@ namespace openre
         return false;
     }
 
-    static void update_game()
+    void update_game()
     {
         // Sync catch-up flag from OG (System_trans may set timer_r2 during fades)
         gGameTable.timer_r2 = 0;
@@ -2871,7 +2695,7 @@ namespace openre
         openre::script::tick();
     }
 
-    static void render_frame()
+    void render_frame()
     {
         make_font();
         if (!gGameTable.pMarni)
@@ -2933,110 +2757,16 @@ namespace openre
 #ifdef _WIN32
     int win_main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
     {
-        marni::out();
-        config_read();
-
-        gGameTable.cheat0 = cheat_line_cmd0(lpCmdLine, 9);
-        gGameTable.cheat1 = cheat_line_cmd1(lpCmdLine, 11, 1);
-        if (cheat_line_cmd1(lpCmdLine, 12, 1) != -1)
-        {
-            gGameTable.ushinabe = 1;
-        }
-
-        // Command-line start options: first positional argument is a save file,
-        // -p sets the player id, -r the room to warp to and -s the scenario.
-        cmdline_parse(lpCmdLine);
-        if (system::window::is_screensaver_enabled())
-        {
-            gGameTable.byte_680590 = 1;
-            system::window::set_screensaver_enabled(false);
-        }
-
-        if (init_instance(hInstance, hPrevInstance))
-        {
-            input_init(&gGameTable.input);
-
-            marni::g_renderer->init();
-            if (!gGameTable.pMarni->is_gpu_active || !marni::g_renderer->requestDisplayModeCount())
-            {
-                logging::logError(
-                    "Renderer init failed: is_gpu_active={} display_mode_count={} gpu_initialized={}",
-                    gGameTable.pMarni->is_gpu_active,
-                    marni::g_renderer->requestDisplayModeCount(),
-                    system::gpu::is_initialized());
-                win_exit(ERROR_FAILED_TO_INITIALIZE_DIRECTX);
-                system::window::destroy();
-                return 0;
-            }
-
-            cursor_op();
-            marni::set_gpu_flag(marni::GpuFlags::CLEAR_TARGET, true);
-            marni::g_renderer->setGpuFlag();
-            if (gGameTable.pMarni->gpu_flag & marni::GpuFlags::SOFTWARE_GPU)
-            {
-                gGameTable.graphics_ptr_data = 1;
-            }
-            else
-            {
-                gGameTable.graphics_ptr_data = (gGameTable.pMarni->gpu_flag & marni::GpuFlags::CLEAR_TARGET) ? 0 : 2;
-            }
-            update_timer();
-
-            // Create the GDI font used by the save/debug text renderer up front
-            // (normally only created on resolution change / card access).
-            gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
-            font_create();
-
-            // Increase timer resolution for accurate Sleep(1)
-            constexpr uint32_t frameRateTable[4] = { 166, 333, 666, 166 };
-
-            uint32_t lastFrameTime = gGameTable.timer_last;
-
-            while (true)
-            {
-                // 1. Process messages (quit → return)
-                if (!process_messages())
-                    return 0;
-
-                // 2. Window inactive → sleep until next message
-                if (!gGameTable.window_active)
-                {
-                    system::window::wait_event();
-                    continue;
-                }
-
-                // 3. Frame rate throttle
-                auto now = system::window::get_ticks();
-                auto budget = frameRateTable[gGameTable.vsync_rate / 2];
-                auto elapsed = 10 * (now - lastFrameTime);
-
-                if (elapsed < budget)
-                {
-                    if (budget - elapsed >= 30) // >= 3ms margin
-                        system::window::delay(1);
-                    continue;
-                }
-
-                // 4. Special states (movie / reset)
-                if (handle_special_states())
-                    continue;
-
-                // 5. Update game logic
-                update_game();
-
-                // 6. Render
-                render_frame();
-
-                // Keep OG-visible timer fields updated for other hooks
-                gGameTable.timer_last = now;
-                gGameTable.timer_current = now;
-                gGameTable.timer_10 = 10 * now;
-
-                lastFrameTime = now;
-            }
-        }
-
-        return 0;
+        // Tokenize the raw command line and hand control over to the app shell
+        // (appMain), which owns config loading, cheat scans, the startup scene
+        // and the system loop.
+        auto args = cmdline_tokenize(lpCmdLine);
+        std::vector<const char*> argv;
+        argv.reserve(args.size() + 1);
+        argv.push_back("openre"); // argv[0]
+        for (auto& arg : args)
+            argv.push_back(arg.c_str());
+        return appMain(argv.data(), static_cast<int>(argv.size()));
     }
 #else
     // Non-Windows stub: the real game loop cannot run without the original
