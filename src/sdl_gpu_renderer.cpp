@@ -2635,6 +2635,14 @@ namespace
             }
             const auto* pal = (const uint16_t*)img.palette.data() + (size_t)clut * entriesPerPal;
 
+            // Track whether the palette contains any usable colour at all. The
+            // kage shadow texture (mode 0x21) has every entry cleared to
+            // 0x0000 by Kage_set, so the usual "zero entry is transparent"
+            // rule would decode the whole texture as empty. Like the D3D
+            // color-key path, only index 0 is the transparent key there; any
+            // other index is opaque so the pixel indices define the shadow
+            // shape and the vertex colour supplies the alpha/opacity.
+            bool hasPalColor = false;
             uint8_t lut[256 * 4];
             for (int i = 0; i < entriesPerPal; i++)
             {
@@ -2644,7 +2652,19 @@ namespace
                 lut[i * 4 + 0] = (uint8_t)((e & 0x1F) << 3);
                 lut[i * 4 + 1] = (uint8_t)(((e >> 5) & 0x1F) << 3);
                 lut[i * 4 + 2] = (uint8_t)(((e >> 10) & 0x1F) << 3);
-                lut[i * 4 + 3] = ((e & 0x7FFF) == 0) ? 0x00 : 0xFF;
+                if ((e & 0x7FFF) == 0)
+                    lut[i * 4 + 3] = 0x00;
+                else
+                {
+                    lut[i * 4 + 3] = 0xFF;
+                    hasPalColor = i != 0;
+                }
+            }
+            if (!hasPalColor)
+            {
+                // All-zero palette: honour the D3D colour key (index 0) only.
+                for (int i = 1; i < entriesPerPal; i++)
+                    lut[i * 4 + 3] = 0xFF;
             }
 
             if (img.depth == 4)
