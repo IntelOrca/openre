@@ -143,12 +143,6 @@ namespace openre
         return time;
     }
 
-    // 0x004FAF80
-    uint32_t check_room_no(uint32_t stage, uint32_t room)
-    {
-        return interop::call<uint32_t, uint32_t, uint32_t>(0x004FAF80, stage, room);
-    }
-
     // 0x00509CE0
     bool cutscene_active()
     {

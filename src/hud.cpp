@@ -8,6 +8,7 @@
 #include "marni.h"
 #include "openre.h"
 #include "player.h"
+#include "room.h"
 #include "sce.h"
 #include "scheduler.h"
 #include "tim.h"
@@ -1727,8 +1728,8 @@ namespace openre::hud
         {
         case HUD_MENU0_MAP_LOAD_MAP_TEXTURE:
         {
-            gGameTable.byte_691F7A = check_room_no(gGameTable.current_stage, gGameTable.current_room);
-            auto fileNo = mapInfo[gGameTable.byte_691F7A].file_no;
+            gGameTable.current_map_area = room::get_map_area_index(gGameTable.current_stage, gGameTable.current_room);
+            auto fileNo = mapInfo[gGameTable.current_map_area].file_no;
             gGameTable.common_file_map_a[15] = fileNo / 10 + 48;
             gGameTable.common_file_map_a[16] = fileNo % 10 + 48;
             uint32_t* mapTimBuffer = (uint32_t*)file_alloc(0x199E0);
@@ -1803,27 +1804,27 @@ namespace openre::hud
                 gGameTable.dword_691F88 -= 2;
             }
 
-            auto oldByte_691F7A = gGameTable.byte_691F7A;
+            auto oldMapArea = gGameTable.current_map_area;
 
-            if ((int32_t)gGameTable.fg_system < 0 && gGameTable.byte_691F7A > 1)
+            if ((int32_t)gGameTable.fg_system < 0 && gGameTable.current_map_area > 1)
             {
-                if (gGameTable.raw_state_lo & KEY_TYPE_4096 && map_up_floor[gGameTable.byte_691F7A] > 1)
+                if (gGameTable.raw_state_lo & KEY_TYPE_4096 && map_up_floor[gGameTable.current_map_area] > 1)
                 {
-                    if (bitarray_get(&gGameTable.dword_98EC00, map_up_floor[gGameTable.byte_691F7A]))
+                    if (bitarray_get(&gGameTable.fg_map_area, map_up_floor[gGameTable.current_map_area]))
                     {
-                        gGameTable.byte_691F7A = map_up_floor[gGameTable.byte_691F7A];
+                        gGameTable.current_map_area = map_up_floor[gGameTable.current_map_area];
                     }
                 }
 
-                if (gGameTable.raw_state_lo & KEY_TYPE_16384 && map_down_floor[gGameTable.byte_691F7A] > 1)
+                if (gGameTable.raw_state_lo & KEY_TYPE_16384 && map_down_floor[gGameTable.current_map_area] > 1)
                 {
-                    if (bitarray_get(&gGameTable.dword_98EC00, map_down_floor[gGameTable.byte_691F7A]))
+                    if (bitarray_get(&gGameTable.fg_map_area, map_down_floor[gGameTable.current_map_area]))
                     {
-                        gGameTable.byte_691F7A = map_down_floor[gGameTable.byte_691F7A];
+                        gGameTable.current_map_area = map_down_floor[gGameTable.current_map_area];
                     }
                 }
 
-                if (oldByte_691F7A != gGameTable.byte_691F7A)
+                if (oldMapArea != gGameTable.current_map_area)
                 {
                     gGameTable.itembox_state = HUD_MENU0_MAP_LOAD_MAP_NEXT_FLOOR_TEXTURE;
                     snd_se_on(0x4040000);
@@ -1844,7 +1845,7 @@ namespace openre::hud
         }
         case HUD_MENU0_MAP_LOAD_MAP_NEXT_FLOOR_TEXTURE:
         {
-            auto fileNo = mapInfo[gGameTable.byte_691F7A].file_no;
+            auto fileNo = mapInfo[gGameTable.current_map_area].file_no;
             gGameTable.common_file_map_a[15] = fileNo / 10 + 48;
             gGameTable.common_file_map_a[16] = fileNo % 10 + 48;
             auto mapTimBuffer = (uint32_t*)file_alloc(0x199E0);

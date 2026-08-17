@@ -15,6 +15,7 @@
 #include "scheduler.h"
 
 #include <cstring>
+#include <iterator>
 
 using namespace openre::audio;
 using namespace openre::camera;
@@ -34,24 +35,6 @@ namespace openre::room
     {
         auto* flags = reinterpret_cast<uint32_t*>(&gGameTable.pad_68059C);
         flags[index + (bit >> 5)] |= 0x80000000 >> (bit & 0x1F);
-    }
-
-    // 0x004450C0
-    static void sub_4450C0(int a0)
-    {
-        marni::unload_register_surfaces(a0);
-    }
-
-    // 0x0043DF40
-    static int sub_43DF40()
-    {
-        return marni::release_object_textures();
-    }
-
-    // 0x00502190
-    static void st_chenge_pl(int a0)
-    {
-        interop::call<void, int>(0x00502190, a0);
     }
 
     // 0x004DD0C0
@@ -78,16 +61,162 @@ namespace openre::room
         gGameTable.mem_top = reinterpret_cast<void*>(psp_prim_1 + 32 * count);
     }
 
+    // 0x004FAF80
+    // Returns the map-area index for the given stage/room, used to select the
+    // map texture file and the fg_map_area flag bit.
+    uint32_t get_map_area_index(uint32_t stage, uint32_t room)
+    {
+        // nFloor is loaded once at entry (mov cl, pPl.pad_40 + 0xC6) and reused.
+        const uint8_t nFloor = gGameTable.pl.nFloor;
+        switch (stage)
+        {
+        case 0:
+            if (room == 17 || room == 23)
+                return 4;
+            if (room == 18)
+                return (nFloor == 3) ? 4 : 3;
+            if (room <= 3)
+                return 0;
+            if (room <= 7)
+                return 1;
+            if (room <= 0x15)
+                return 3;
+            if (room == 22)
+                return (nFloor == 4) ? 3 : 2;
+            return 0;
+        case 1:
+            if (room == 27)
+                return 3;
+            // sbb eax,eax / and al,0FDh / add eax,5: room < 0x11 -> 2, else -> 5
+            return (room < 0x11) ? 2 : 5;
+        case 2:
+            if (room <= 1 || room == 8)
+                return 5;
+            return 6;
+        case 3:
+            if (room == 0 || room == 1 || room == 3)
+                return (nFloor >= 4) ? 7 : 8;
+            if (room == 2 || room == 9 || room == 0xB)
+                return 7;
+            return 8;
+        case 4:
+        {
+            if (room <= 2 || room == 8)
+                return 9;
+            // ecx = fg_status & 0x40000000 loaded once and reused (0x4FB080/0x4FB0B9)
+            const bool scenario = check_flag(FlagGroup::Status, FG_STATUS_SCENARIO);
+            if (scenario && room == 3)
+                return 11 - (check_flag(FlagGroup::Common, 0x62) ? 1 : 0);
+            if (room == 5)
+            {
+                if (scenario)
+                {
+                    if (check_flag(FlagGroup::Common, 0xBE))
+                        return 13;
+                }
+                else if (check_flag(FlagGroup::Common, 0xBE))
+                {
+                    return 16;
+                }
+                if (check_flag(FlagGroup::Common, 0x63))
+                    return 12;
+                return 10;
+            }
+            if (room <= 5)
+                return 10;
+            return (room == 9) ? 12 : 11;
+        }
+        case 5:
+            if (room == 1)
+                return (gGameTable.last_cut != 0x602) ? 16 : 13;
+            if (room == 3)
+                return (nFloor < 3) ? 14 : 13;
+            if (room == 0xE)
+                return (gGameTable.byte_692FAC == 1) ? 17 : 16;
+            if (room <= 4)
+                return 13;
+            if (room == 5)
+                return 15;
+            if (room > 0x11)
+                return 17;
+            return 16;
+        case 6: return 18 + (check_flag(FlagGroup::Common, 0x89) ? 1 : 0);
+        default: return 0;
+        }
+    }
+
     // 0x005023D0
+    // Marks the current room as visited on the in-game map. The first flag is
+    // bit [stageBase + room] of fg_map; the second is the floor bit used by the
+    // map's up/down-floor navigation. Returns a pointer in the original, which
+    // is ignored by all callers.
     static void st_room_set()
     {
-        interop::call(0x005023D0);
+        // First fg_map bit index for each stage (cumulative room counts). The
+        // original defaults the base to 0 for stages outside 1..6, and the
+        // fg_map flag is always set.
+        static constexpr uint8_t kMapFlagBase[7] = { 0, 30, 58, 72, 89, 99, 123 };
+        const auto stage = gGameTable.current_stage;
+        const auto base = (stage < std::size(kMapFlagBase)) ? kMapFlagBase[stage] : 0;
+        bitarray_set(gGameTable.fg_map, base + gGameTable.current_room);
+        bitarray_set(&gGameTable.fg_map_area, get_map_area_index(gGameTable.current_stage, gGameTable.current_room));
+    }
+
+    // ESP work slot pool (96 slots of 0x7C bytes each). Only the 'used'
+    // flag at +0x18 is meaningful here; the rest of the slot is opaque.
+    constexpr int ESP_ROOM_SLOT_START = 8;
+    constexpr int ESP_ROOM_SLOT_COUNT = 8;
+
+    // 0x004B8100
+    // Stub for the original ESP id allocation function (not yet decompiled).
+    // Assigns the effect ids in idList to the work slots starting at startSlot,
+    // using the layout described by offsetTable/base.
+    static void esp_data_set0(void* idList, void* offsetTable, void* base, int startSlot)
+    {
+        interop::call<void, void*, void*, void*, int>(0x004B8100, idList, offsetTable, base, startSlot);
+    }
+
+    // 0x004B8170
+    // Stub for the original ESP data link function (not yet decompiled).
+    // Links the room's model texture list (tim) and effect type table (type).
+    static void esp_data_set1(void* tim, void* type)
+    {
+        interop::call<void, void*, void*>(0x004B8170, tim, type);
     }
 
     // 0x004B8080
+    // Resets the room ESP (effect) system: clears the 'used' flag of every ESP
+    // work slot, releases the room-held effect slots (8..15, stopping at the
+    // first free slot), then links the room's ESP effect table if it has one.
     static void esp_init_r()
     {
-        interop::call(0x004B8080);
+        // Clear the 'used' flag of every ESP work slot.
+        for (auto& slot : gGameTable.esp_work)
+        {
+            slot.used = 0;
+        }
+
+        // Release the room-held ESP slots (8..15), breaking on the first
+        // unused slot.
+        for (uint32_t i = ESP_ROOM_SLOT_START; i < ESP_ROOM_SLOT_START + ESP_ROOM_SLOT_COUNT; i++)
+        {
+            const auto id = gGameTable.esp_id[i];
+            if (id == 0xFF)
+            {
+                break;
+            }
+            gGameTable.esp_id[i] = 0xFF;
+            gGameTable.p_espdt[id] = -1;
+            gGameTable.p_espmv[id] = -1;
+        }
+
+        // Link the room's ESP effect table if it has any effects.
+        auto* espIds = rdt_get_offset<void*>(RdtOffsetKind::ESP_IDS);
+        if (espIds != nullptr && *reinterpret_cast<int32_t*>(espIds) != -1)
+        {
+            esp_data_set0(espIds, rdt_get_offset<void*>(RdtOffsetKind::ESP_EFF_TABLE), espIds, ESP_ROOM_SLOT_START);
+            esp_data_set1(rdt_get_offset<void*>(RdtOffsetKind::MODEL_TEXTURES), rdt_get_offset<void*>(RdtOffsetKind::EFF));
+        }
     }
 
     static void memset32(void* dest, uint32_t value, size_t count)
@@ -360,13 +489,13 @@ namespace openre::room
                 {
                     return;
                 }
-                sub_4450C0(0);
+                marni::unload_register_surfaces(0);
                 gGameTable.dword_98862C = &gGameTable.enemies;
                 gGameTable.enemy_count = 0;
                 memset32(&gGameTable.splayer_work, 0x0098E544, 33);
                 gGameTable.enemy_init_entries[0].enabled = 0;
                 gGameTable.enemy_init_entries[1].enabled = 0;
-                sub_43DF40();
+                marni::release_object_textures();
 
                 gGameTable.obj_ptr = gGameTable.pOm;
                 gGameTable.rdt_count = 32;
@@ -399,7 +528,7 @@ namespace openre::room
                 }
                 gGameTable.dword_689C1C = gGameTable.p_em->id;
                 gGameTable.p_em->id = static_cast<uint8_t>(gGameTable.next_pld);
-                st_chenge_pl(gGameTable.next_pld);
+                partner_switch(static_cast<uint8_t>(gGameTable.next_pld));
                 player_set(gGameTable.p_em);
 
                 if (!ctcb.var_13)

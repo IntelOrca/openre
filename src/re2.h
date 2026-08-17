@@ -1165,6 +1165,14 @@ struct DoorTmdSlot
 };
 static_assert(sizeof(DoorTmdSlot) == 0x0C);
 
+struct EspWork
+{
+    uint8_t data[24];                   // 0x0000
+    int16_t used;                       // 0x0018
+    uint8_t rest[98];                   // 0x001A
+};
+static_assert(sizeof(EspWork) == 0x7C);
+
 struct GameTable
 {
     uint8_t pad_0000[5393927];          // 0x0000
@@ -1522,7 +1530,7 @@ struct GameTable
     uint8_t pad_691F75[1];              // 0x691F75
     uint8_t byte_691F76;                // 0x691F76
     uint8_t pad_691F77[3];              // 0x691F77
-    uint8_t byte_691F7A;                // 0x691F7A
+    uint8_t current_map_area;           // 0x691F7A
     uint8_t byte_691F7B;                // 0x691F7B
     uint8_t byte_691F7C;                // 0x691F7C
     uint8_t byte_691F7D;                // 0x691F7D
@@ -1553,7 +1561,9 @@ struct GameTable
     uint16_t word_691FBA;               // 0x691FBA
     uint8_t pad_691FBC[3496];           // 0x691FBC
     uint8_t byte_692D64;                // 0x692D64
-    uint8_t pad_692D65[601];            // 0x692D65
+    uint8_t pad_692D65[583];            // 0x692D65
+    uint8_t byte_692FAC;                // 0x692FAC
+    uint8_t pad_692FAD[17];             // 0x692FAD
     uint16_t word_692FBE;               // 0x692FBE
     uint16_t word_692FC0;               // 0x692FC0
     uint8_t pad_692FC2[46];             // 0x692FC2
@@ -1851,7 +1861,7 @@ struct GameTable
     uint32_t fg_item[7];                // 0x98EBB4
     uint32_t dword_98EBD0;              // 0x98EBD0
     uint8_t pad_98EBD4[44];             // 0x98EBD4
-    uint32_t dword_98EC00;              // 0x98EC00
+    uint32_t fg_map_area;               // 0x98EC00
     uint32_t fg_map[5];                 // 0x98EC04
     uint8_t pad_98EC18[8];              // 0x98EC18
     uint32_t pri_be_flg[64];            // 0x98EC20
@@ -1910,11 +1920,17 @@ struct GameTable
     DemoPlayer pdemo;                   // 0x991FC8
     uint8_t byte_99270E;                // 0x99270E
     uint8_t byte_99270F;                // 0x99270F
-    uint8_t pad_992710[1232];           // 0x992710
+    uint8_t pad_992710[176];            // 0x992710
+    uint8_t esp_id[32];                 // 0x9927C0
+    int32_t p_espdt[64];                // 0x9927E0
+    int32_t p_espmv[64];                // 0x9928E0
+    uint8_t pad_9929E0[512];            // 0x9929E0
     uint8_t byte_992BE0[92];            // 0x992BE0
     uint8_t pad_992C3C[4];              // 0x992C3C
     uint8_t byte_992C40[92];            // 0x992C40
-    uint8_t pad_992C9C[41380];          // 0x992C9C
+    uint8_t pad_992C9C[4];              // 0x992C9C
+    EspWork esp_work[96];               // 0x992CA0
+    uint8_t pad_995B20[29472];          // 0x995B20
     Mat16 ll_matrix;                    // 0x99CE40
     Mat16 lc_matrix;                    // 0x99CE60
     Mat16 rc_matrix;                    // 0x99CE80

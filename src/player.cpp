@@ -64,7 +64,7 @@ namespace openre::player
         { ITEM_TYPE_NONE, 0, 0 },
         { ITEM_TYPE_NONE, 0, 0 },
         { ITEM_TYPE_NONE, 0, 0 },
-        { ITEM_TYPE_PHOTO_ADA, 1, 0 },
+        { ITEM_TYPE_PHOTO_ADA, 15, 0 },
     };
 
     static const InventoryDef _initialInventorySherry[FULL_INVENTORY_SIZE] = {
@@ -189,7 +189,11 @@ namespace openre::player
     }
 
     // 0x00502190
-    static void partner_switch(PldType pldType)
+    // Switches the playable character. When switching to Ada or Sherry the
+    // current inventory is stashed in gSavedInventory and the character's
+    // starting inventory is loaded; when switching back the stash is restored
+    // (the special slot is re-created from the original item instead).
+    void partner_switch(PldType pldType)
     {
         auto inventory = gGameTable.inventory;
         if (pldType == PLD_ADA || pldType == PLD_SHERRY)
@@ -214,7 +218,9 @@ namespace openre::player
             gGameTable.inventory_size = 8;
             for (auto i = 0; i < FULL_INVENTORY_SIZE; i++)
             {
-                gSavedInventory[i] = inventory[i];
+                gSavedInventory[i].Type = inventory[i].Type;
+                gSavedInventory[i].Quantity = inventory[i].Quantity;
+                gSavedInventory[i].Part = inventory[i].Part;
                 inventory[i].Type = srcInventory[i].Type;
                 inventory[i].Quantity = srcInventory[i].Quantity;
                 inventory[i].Part = srcInventory[i].Part;
@@ -227,7 +233,9 @@ namespace openre::player
                 // TODO just unstash the special slot as well
                 for (auto i = 0; i < FULL_INVENTORY_SIZE - 1; i++)
                 {
-                    inventory[i] = gSavedInventory[i];
+                    inventory[i].Type = gSavedInventory[i].Type;
+                    inventory[i].Quantity = gSavedInventory[i].Quantity;
+                    inventory[i].Part = gSavedInventory[i].Part;
                 }
 
                 gGameTable.inventory_size = gSavedInventorySize;

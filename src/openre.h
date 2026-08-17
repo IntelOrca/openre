@@ -214,7 +214,6 @@ namespace openre
     int set_game_seconds(int a0);
     void show_message(int a0, int a1, int a2, int a3);
     uint32_t update_timer();
-    uint32_t check_room_no(uint32_t stage, uint32_t room);
     void* operator_new(const size_t size);
     void operator_delete(void* memoryBlock);
     bool cutscene_active();
