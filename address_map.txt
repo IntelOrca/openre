@@ -1474,6 +1474,8 @@ declare     byte_99270F             u8                      0x0099270F
 declare     esp_id                  u8[32]                  0x009927C0
 declare     p_espdt                 s32[64]                 0x009927E0
 declare     p_espmv                 s32[64]                 0x009928E0
+declare     esp_anim_data           u8[480]                 0x009929E0
+declare     esp_tim_ptrs            void*[8]                0x00992BC0
 declare     byte_992BE0             u8[0x5C]                0x00992BE0
 declare     byte_992C40             u8[0x5C]                0x00992C40
 declare     esp_work                EspWork[96]             0x00992CA0

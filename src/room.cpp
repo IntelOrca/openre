@@ -16,6 +16,7 @@
 
 #include <cstring>
 #include <iterator>
+#include <memory>
 
 using namespace openre::audio;
 using namespace openre::camera;
@@ -167,21 +168,239 @@ namespace openre::room
     constexpr int ESP_ROOM_SLOT_START = 8;
     constexpr int ESP_ROOM_SLOT_COUNT = 8;
 
-    // 0x004B8100
-    // Stub for the original ESP id allocation function (not yet decompiled).
-    // Assigns the effect ids in idList to the work slots starting at startSlot,
-    // using the layout described by offsetTable/base.
-    static void esp_data_set0(void* idList, void* offsetTable, void* base, int startSlot)
+    // ESP effect loader globals. espdat page-count lookup tables (constant
+    // data from the binary's .data segment). Each byte packs two nibbles:
+    // high nibble = pages for even rooms, low nibble = pages for odd rooms.
+    // Indexed as [16 * stage + room / 2].
+    static constexpr uint8_t kEspdatPageCounts0[112] = {
+        0x32, 0x31, 0x31, 0x11, 0x53, 0x32, 0x00, 0x01, 0x21, 0x21, 0x11, 0x01, 0x11, 0x13, 0x13, 0x00, 0x12, 0x10, 0x22,
+        0x12, 0x01, 0x11, 0x22, 0x21, 0x12, 0x11, 0x01, 0x10, 0x01, 0x10, 0x00, 0x00, 0x00, 0x21, 0x22, 0x10, 0x01, 0x21,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x21, 0x02, 0x03, 0x12, 0x20, 0x11, 0x10, 0x20,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x11, 0x11, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x11, 0x11, 0x10, 0x01, 0x32, 0x11, 0x11, 0x20, 0x11, 0x11, 0x21, 0x00, 0x00,
+        0x00, 0x00, 0x11, 0x11, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    static constexpr uint8_t kEspdatPageCounts1[112] = {
+        0x00, 0x00, 0x01, 0x11, 0x11, 0x21, 0x11, 0x11, 0x10, 0x11, 0x11, 0x01, 0x00, 0x00, 0x00, 0x00, 0x11, 0x11, 0x11,
+        0x11, 0x11, 0x11, 0x11, 0x12, 0x11, 0x11, 0x11, 0x10, 0x01, 0x11, 0x00, 0x00, 0x12, 0x21, 0x20, 0x01, 0x11, 0x11,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x21, 0x12, 0x03, 0x12, 0x20, 0x00, 0x10, 0x20,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x11, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x11, 0x11, 0x10, 0x11, 0x31, 0x11, 0x11, 0x10, 0x11, 0x11, 0x10, 0x00, 0x00,
+        0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+
+    static const char* kEspdatFile1 = "common\\bin\\espdat1.bin";
+    static const char* kEspdatFile2 = "common\\bin\\espdat2.bin";
+
+    // Returns the high 16 bits of a packed 32-bit value. The TIM descriptor
+    // extracted by esp_tim_info packs the clut/bitmap sizes into the high
+    // words of the pointer fields, which is how the original reads them.
+    static uint32_t hiword(const void* value)
     {
-        interop::call<void, void*, void*, void*, int>(0x004B8100, idList, offsetTable, base, startSlot);
+        return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(value) >> 16);
+    }
+
+    // 0x004415E0
+    // Extracts the TIM header fields (image and palette pointers) into a
+    // MARNI_SURFACE2 used as a scratch structure. Returns 0 when the buffer
+    // is not a TIM; the caller only uses the surfaced pointer values.
+    static int esp_tim_info(uint32_t* timPtr, MarniSurface2* surface)
+    {
+        return interop::call<int, uint32_t*, MarniSurface2*>(0x004415E0, timPtr, surface);
+    }
+
+    // 0x00509540
+    // Reads `size` bytes at `pos` from the given file into `buffer` (opens a
+    // handle, seeks, then reads). Returns the number of bytes read on success
+    // or 0 on failure.
+    static int bg_cache_roomptr(const char* filename, void* buffer, int pos, uint32_t size, int mode)
+    {
+        return interop::call<int, const char*, void*, int, uint32_t, int>(0x00509540, filename, buffer, pos, size, mode);
+    }
+
+    // 0x004B8100
+    // Registers the room's ESP effects: copies up to ESP_ROOM_SLOT_COUNT effect
+    // ids from idList into the room-held esp_id slots starting at startSlot,
+    // stopping at the 0xFF sentinel, then links each effect's data and move
+    // tables. The offsets are read from the end of offsetTable backwards (the
+    // table's last entry belongs to the first effect id), so each data pointer
+    // is base + offset. p_espdt[id] points at the effect data; p_espmv[id]
+    // points at its frame/move data, which sits 2 * count + 2 + hiword dwords
+    // past the data start, where count/hiword are the low/high words of the
+    // effect header dword at the data pointer.
+    static void esp_data_set0(uint8_t* idList, uint32_t* offsetTable, uintptr_t base, int startSlot)
+    {
+        for (uint32_t i = 0; i < ESP_ROOM_SLOT_COUNT; i++)
+        {
+            const uint8_t id = idList[i];
+            gGameTable.esp_id[startSlot + i] = id;
+            if (id == 0xFF)
+            {
+                break;
+            }
+
+            auto* const data = reinterpret_cast<uint32_t*>(base + *offsetTable--);
+            gGameTable.p_espdt[id] = reinterpret_cast<int32_t>(data);
+
+            const auto header = data[0];
+            gGameTable.p_espmv[id] = reinterpret_cast<int32_t>(&data[2 * (header & 0xFFFF) + 2 + (header >> 16)]);
+        }
+    }
+
+    // Loads the current room's effect texture pages from the espdat bin file
+    // into `buffer`. Texture counts come from the per-stage nibble tables
+    // indexed by stage/room; fg_system bit 0x1000000 selects the mirror
+    // (B-scenario) table and offsets the file position by 7 stages. Returns
+    // false when any file read fails.
+    static bool esp_load_room_pages(uint8_t* buffer, int mode)
+    {
+        const char* path = (mode == 1) ? kEspdatFile1 : kEspdatFile2;
+
+        const auto room = gGameTable.current_room;
+        const auto stage = gGameTable.current_stage;
+        const auto tableIndex = 16 * stage + room / 2;
+        auto fileStage = stage;
+        int entry;
+        if ((gGameTable.fg_system & 0x1000000) != 0)
+        {
+            fileStage += 7;
+            entry = kEspdatPageCounts1[tableIndex];
+        }
+        else
+        {
+            entry = kEspdatPageCounts0[tableIndex];
+        }
+        const auto pos = 32 * (room + 32 * fileStage);
+        const auto count = ((room & 1) != 0) ? (entry & 0x0F) : (entry >> 4);
+
+        // Fetch the room's list of espdat file offsets (one dword per page).
+        uint32_t pageOffsets[ESP_ROOM_SLOT_COUNT] = {};
+        if (!bg_cache_roomptr(path, pageOffsets, pos, 0x20, 4))
+        {
+            return false;
+        }
+
+        auto* dstPtr = gGameTable.esp_anim_data;
+        for (int page = 0; page < count; page++)
+        {
+            if (!load_adt_sub(path, buffer, pageOffsets[page], 4))
+            {
+                return false;
+            }
+            if (mode == 2)
+            {
+                // The 8-bit mode keeps a copy of the effect animation header
+                // stored at a fixed offset inside each loaded page.
+                std::memcpy(dstPtr, buffer + 0x20014, 0x5C);
+                dstPtr += 0x60;
+            }
+            tim_buffer_to_surface(reinterpret_cast<int*>(buffer), page, 0);
+        }
+        return true;
+    }
+
+    // 0x004B8353
+    // Links the 8 room-held ESP effect slots to their texture pages. With
+    // Graphicsprdata the pages are assigned directly (mode 0, each effect
+    // takes the next page) or via the TIM header sizes (modes 1/2, effects
+    // wrap to a fresh page when the shared 256-entry clut would overflow).
+    // Each effect's animation data is patched with the running clut offset,
+    // bitmap offset, and page number.
+    static void esp_link_slots()
+    {
+        int paletteOffset = 0;    // running clut offset (added to each animation)
+        int32_t bitmapOffset = 0; // running bitmap offset (stored as 16-bit)
+        uint8_t page = 0;         // current texture page
+
+        for (int i = 0; i < ESP_ROOM_SLOT_COUNT; i++)
+        {
+            const auto slotId = gGameTable.esp_id[i + ESP_ROOM_SLOT_START];
+            if (slotId == 0xFF)
+            {
+                return;
+            }
+            auto* const data = reinterpret_cast<uint8_t*>(gGameTable.p_espdt[slotId]);
+
+            const auto mode = static_cast<int8_t>(gGameTable.graphics_ptr_data);
+            if (mode == 0)
+            {
+                // Direct assignment: every effect uses the next page.
+                tim_buffer_to_surface(reinterpret_cast<int*>(gGameTable.esp_tim_ptrs[i]), page, 0);
+                data[6] = page;
+                *reinterpret_cast<uint16_t*>(data + 4) = 0;
+                ++page;
+                continue;
+            }
+            if (mode != 1 && mode != 2)
+            {
+                // Unknown graphics mode leaves the slot untouched.
+                continue;
+            }
+
+            MarniSurface2 timInfo = {};
+            esp_tim_info(static_cast<uint32_t*>(gGameTable.esp_tim_ptrs[i]), &timInfo);
+            const auto paletteSize = static_cast<int>(hiword(timInfo.pPalette));
+            const auto bitmapSize = static_cast<int>(hiword(timInfo.pBitmap));
+            if (paletteOffset + paletteSize > 0x100)
+            {
+                // The clut would overflow its 256-entry limit; wrap to a new
+                // texture page.
+                paletteOffset = 0;
+                bitmapOffset = 0;
+                ++page;
+            }
+
+            const auto slotCount = *reinterpret_cast<uint16_t*>(data);
+            *reinterpret_cast<uint16_t*>(data + 4) = static_cast<uint16_t>(bitmapOffset);
+            data[6] = page;
+
+            // Patch each animation's clut offset; they are stored at a 4-byte
+            // stride past the effect's animation headers.
+            const auto animCount = *reinterpret_cast<uint16_t*>(data + 2);
+            auto* blendPtr = data + 8 * slotCount + 9;
+            for (int k = 0; k < animCount; k++)
+            {
+                *blendPtr = static_cast<uint8_t>(*blendPtr + static_cast<uint8_t>(paletteOffset));
+                blendPtr += 4;
+            }
+            paletteOffset += paletteSize;
+            bitmapOffset += bitmapSize;
+        }
     }
 
     // 0x004B8170
-    // Stub for the original ESP data link function (not yet decompiled).
-    // Links the room's model texture list (tim) and effect type table (type).
+    // Loads the room's ESP (effect) texture data. Converts the 8 model
+    // texture offsets into absolute effect TIM pointers, unloads the shared
+    // texture pages, uploads the per-room effect pages from the espdat bin
+    // file, then links every effect to its texture page.
     static void esp_data_set1(void* tim, void* type)
     {
-        interop::call<void, void*, void*>(0x004B8170, tim, type);
+        // The model-texture offsets are stored backwards in the RDT, so walk
+        // the list from the end, rebasing each offset onto the ESP data block.
+        for (int i = 0; i < ESP_ROOM_SLOT_COUNT; i++)
+        {
+            tim = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(tim) - 4);
+            const auto offset = *reinterpret_cast<uint32_t*>(tim);
+            gGameTable.esp_tim_ptrs[i] = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(type) + offset);
+        }
+
+        for (int page = 0; page < ESP_ROOM_SLOT_COUNT; page++)
+        {
+            marni::unload_texture_page(page);
+        }
+
+        auto buffer = std::make_unique<uint8_t[]>(0x21000);
+
+        // Only the 16-bit (1) and 8-bit (2) graphics modes upload their pages
+        // from the espdat bin; other modes link the effects directly.
+        const auto mode = static_cast<int8_t>(gGameTable.graphics_ptr_data);
+        if ((mode == 1 || mode == 2) && !esp_load_room_pages(buffer.get(), mode))
+        {
+            file_error();
+            return;
+        }
+
+        esp_link_slots();
     }
 
     // 0x004B8080
@@ -211,10 +430,14 @@ namespace openre::room
         }
 
         // Link the room's ESP effect table if it has any effects.
-        auto* espIds = rdt_get_offset<void*>(RdtOffsetKind::ESP_IDS);
+        auto* espIds = rdt_get_offset<uint8_t>(RdtOffsetKind::ESP_IDS);
         if (espIds != nullptr && *reinterpret_cast<int32_t*>(espIds) != -1)
         {
-            esp_data_set0(espIds, rdt_get_offset<void*>(RdtOffsetKind::ESP_EFF_TABLE), espIds, ESP_ROOM_SLOT_START);
+            esp_data_set0(
+                espIds,
+                rdt_get_offset<uint32_t>(RdtOffsetKind::ESP_EFF_TABLE),
+                reinterpret_cast<uintptr_t>(espIds),
+                ESP_ROOM_SLOT_START);
             esp_data_set1(rdt_get_offset<void*>(RdtOffsetKind::MODEL_TEXTURES), rdt_get_offset<void*>(RdtOffsetKind::EFF));
         }
     }

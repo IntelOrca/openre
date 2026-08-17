@@ -1924,7 +1924,8 @@ struct GameTable
     uint8_t esp_id[32];                 // 0x9927C0
     int32_t p_espdt[64];                // 0x9927E0
     int32_t p_espmv[64];                // 0x9928E0
-    uint8_t pad_9929E0[512];            // 0x9929E0
+    uint8_t esp_anim_data[480];         // 0x9929E0
+    void* esp_tim_ptrs[8];              // 0x992BC0
     uint8_t byte_992BE0[92];            // 0x992BE0
     uint8_t pad_992C3C[4];              // 0x992C3C
     uint8_t byte_992C40[92];            // 0x992C40
