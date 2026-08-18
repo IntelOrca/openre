@@ -1,10 +1,16 @@
 #include "script_bindings.h"
+#include "app.h"
+#include "ecs_scene.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
+#include "render2d.h"
+#include "resmgr.h"
 #include "sce.h"
 #include "script_network.h"
 #include "script_vm.h"
+#include "texture_loader.h"
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -19,6 +25,9 @@ namespace openre::script
     namespace
     {
         constexpr const char* METATABLE_ENTITY = "meta_entity";
+        constexpr const char* METATABLE_SCENE_ENTITY = "meta_scene_entity";
+        constexpr const char* METATABLE_SCENE_COMPONENT = "meta_scene_component";
+        constexpr const char* METATABLE_TEXTURE = "meta_texture";
 
         namespace LogLevel
         {
@@ -400,6 +409,304 @@ namespace openre::script
             return 1;
         }
 
+        // ── scene.* / gfx.* ────────────────────────────────────────────────
+        // The scene-tree API. Entities and components are light userdata
+        // handles into the current ECS scene; textures are userdata wrapping a
+        // ResourceCookie that the resource manager releases on __gc.
+
+        namespace ComponentKind
+        {
+            constexpr int32_t transform = 1;
+            constexpr int32_t sprite = 2;
+        }
+
+        struct SceneEntityHandle
+        {
+            ecs::Entity entity;
+        };
+
+        struct SceneComponentHandle
+        {
+            ecs::Entity entity;
+            int32_t kind;
+        };
+
+        struct TextureHandle
+        {
+            ResourceCookie cookie;
+        };
+
+        int sceneCreateEntity(lua_State* L)
+        {
+            auto* scene = current_scene();
+            if (scene == nullptr)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto entity = scene->createEntity(scene->root());
+            auto* handle = static_cast<SceneEntityHandle*>(lua_newuserdata(L, sizeof(SceneEntityHandle)));
+            handle->entity = entity;
+            luaL_getmetatable(L, METATABLE_SCENE_ENTITY);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        int sceneAddComponent(lua_State* L)
+        {
+            auto* handle = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* name = luaL_checkstring(L, 2);
+            auto* scene = current_scene();
+            if (scene == nullptr)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            if (!scene->isValid(handle->entity))
+            {
+                return luaL_error(L, "scene.addComponent: entity is no longer valid");
+            }
+
+            int32_t kind = 0;
+            if (strcmp(name, "core.sprite") == 0)
+            {
+                if (scene->tryGetComponent<ecs::SpriteComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::SpriteComponent>(handle->entity);
+                }
+                kind = ComponentKind::sprite;
+            }
+            else if (strcmp(name, "core.transform") == 0)
+            {
+                kind = ComponentKind::transform; // implicit on every entity
+            }
+            else
+            {
+                return luaL_error(L, "scene.addComponent: unknown component '%s'", name);
+            }
+
+            auto* comp = static_cast<SceneComponentHandle*>(lua_newuserdata(L, sizeof(SceneComponentHandle)));
+            comp->entity = handle->entity;
+            comp->kind = kind;
+            luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        int sceneSetField(lua_State* L)
+        {
+            auto* comp = static_cast<SceneComponentHandle*>(luaL_testudata(L, 1, METATABLE_SCENE_COMPONENT));
+            auto* ent
+                = comp != nullptr ? nullptr : static_cast<SceneEntityHandle*>(luaL_testudata(L, 1, METATABLE_SCENE_ENTITY));
+            if (comp == nullptr && ent == nullptr)
+            {
+                return luaL_error(L, "scene.setField: expected an entity or component");
+            }
+
+            auto* name = luaL_checkstring(L, 2);
+            auto* scene = current_scene();
+            if (scene == nullptr)
+            {
+                return luaL_error(L, "scene.setField: no active scene");
+            }
+
+            const ecs::Entity entity = comp != nullptr ? comp->entity : ent->entity;
+            if (ent != nullptr || comp->kind == ComponentKind::transform)
+            {
+                auto& transform = scene->getComponent<ecs::TransformComponent>(entity);
+                if (strcmp(name, "x") == 0)
+                    transform.position.x = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "y") == 0)
+                    transform.position.y = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "z") == 0)
+                    transform.position.z = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown transform field '%s'", name);
+                return 0;
+            }
+
+            if (comp->kind == ComponentKind::sprite)
+            {
+                auto* sprite = scene->tryGetComponent<ecs::SpriteComponent>(entity);
+                if (sprite == nullptr)
+                {
+                    return luaL_error(L, "scene.setField: entity has no sprite component");
+                }
+
+                if (strcmp(name, "size.width") == 0)
+                    sprite->size.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "size.height") == 0)
+                    sprite->size.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "src.x") == 0)
+                    sprite->src.x = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "src.y") == 0)
+                    sprite->src.y = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "src.width") == 0)
+                    sprite->src.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "src.height") == 0)
+                    sprite->src.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "texture") == 0)
+                {
+                    if (lua_isnoneornil(L, 3))
+                    {
+                        sprite->texture = 0;
+                    }
+                    else
+                    {
+                        auto* tex = static_cast<TextureHandle*>(luaL_testudata(L, 3, METATABLE_TEXTURE));
+                        if (tex == nullptr)
+                        {
+                            return luaL_error(L, "scene.setField: texture must be a gfx.loadTexture value");
+                        }
+                        sprite->texture = tex->cookie;
+                    }
+                }
+                else if (strcmp(name, "flags") == 0)
+                {
+                    const auto value = luaL_checkinteger(L, 3);
+                    if (value < 0 || value > static_cast<lua_Integer>(UINT32_MAX))
+                    {
+                        return luaL_error(L, "scene.setField: flags out of range");
+                    }
+                    sprite->flags = static_cast<uint32_t>(value);
+                }
+                else
+                    return luaL_error(L, "scene.setField: unknown sprite field '%s'", name);
+                return 0;
+            }
+
+            return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
+        }
+
+        int sceneGetField(lua_State* L)
+        {
+            auto* comp = static_cast<SceneComponentHandle*>(luaL_testudata(L, 1, METATABLE_SCENE_COMPONENT));
+            auto* ent
+                = comp != nullptr ? nullptr : static_cast<SceneEntityHandle*>(luaL_testudata(L, 1, METATABLE_SCENE_ENTITY));
+            if (comp == nullptr && ent == nullptr)
+            {
+                return luaL_error(L, "scene.getField: expected an entity or component");
+            }
+
+            auto* name = luaL_checkstring(L, 2);
+            auto* scene = current_scene();
+            if (scene == nullptr)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            const ecs::Entity entity = comp != nullptr ? comp->entity : ent->entity;
+
+            if (ent != nullptr || comp->kind == ComponentKind::transform)
+            {
+                const auto& transform = scene->getComponent<ecs::TransformComponent>(entity);
+                if (strcmp(name, "x") == 0)
+                    lua_pushnumber(L, transform.position.x);
+                else if (strcmp(name, "y") == 0)
+                    lua_pushnumber(L, transform.position.y);
+                else if (strcmp(name, "z") == 0)
+                    lua_pushnumber(L, transform.position.z);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::sprite)
+            {
+                auto* sprite = scene->tryGetComponent<ecs::SpriteComponent>(entity);
+                if (sprite == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "size.width") == 0)
+                    lua_pushnumber(L, sprite->size.width);
+                else if (strcmp(name, "size.height") == 0)
+                    lua_pushnumber(L, sprite->size.height);
+                else if (strcmp(name, "src.x") == 0)
+                    lua_pushnumber(L, sprite->src.x);
+                else if (strcmp(name, "src.y") == 0)
+                    lua_pushnumber(L, sprite->src.y);
+                else if (strcmp(name, "src.width") == 0)
+                    lua_pushnumber(L, sprite->src.width);
+                else if (strcmp(name, "src.height") == 0)
+                    lua_pushnumber(L, sprite->src.height);
+                else if (strcmp(name, "texture") == 0)
+                    lua_pushinteger(L, sprite->texture);
+                else if (strcmp(name, "flags") == 0)
+                    lua_pushinteger(L, sprite->flags);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            lua_pushnil(L);
+            return 1;
+        }
+
+        int sceneExit(lua_State* L)
+        {
+            app_request_close();
+            return 0;
+        }
+
+        int gfxLoadTexture(lua_State* L)
+        {
+            auto* path = luaL_checkstring(L, 1);
+            auto width = static_cast<int>(luaL_optinteger(L, 2, 0));
+            auto height = static_cast<int>(luaL_optinteger(L, 3, 0));
+
+            auto cookie = loadTextureResource(path, width, height);
+            if (cookie == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+
+            auto* tex = static_cast<TextureHandle*>(lua_newuserdata(L, sizeof(TextureHandle)));
+            tex->cookie = cookie;
+            luaL_getmetatable(L, METATABLE_TEXTURE);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        int textureRelease(lua_State* L)
+        {
+            auto* tex = static_cast<TextureHandle*>(luaL_checkudata(L, 1, METATABLE_TEXTURE));
+            if (tex->cookie != 0)
+            {
+                ResourceManager::get().release(tex->cookie);
+                tex->cookie = 0;
+            }
+            return 0;
+        }
+
+        int gfxScreenWidth(lua_State* L)
+        {
+            lua_pushinteger(L, render2d::SpriteRenderer::get().screenWidth());
+            return 1;
+        }
+
+        int gfxScreenHeight(lua_State* L)
+        {
+            lua_pushinteger(L, render2d::SpriteRenderer::get().screenHeight());
+            return 1;
+        }
+
+        int gfxFade(lua_State* L)
+        {
+            render2d::FadeState state;
+            state.active = true;
+            state.r = static_cast<uint8_t>(luaL_checkinteger(L, 1));
+            state.g = static_cast<uint8_t>(luaL_checkinteger(L, 2));
+            state.b = static_cast<uint8_t>(luaL_checkinteger(L, 3));
+            state.a = static_cast<uint8_t>(luaL_checkinteger(L, 4));
+            render2d::SpriteRenderer::get().setFade(state);
+            return 0;
+        }
+
 #ifdef DEBUG
         int apiEval(lua_State* L)
         {
@@ -501,6 +808,35 @@ namespace openre::script
         setGlobal(L, "EntityKind.enemy", EntityKind::enemy);
         setGlobal(L, "EntityKind.object", EntityKind::object);
         setGlobal(L, "EntityKind.door", EntityKind::door);
+
+        // SpriteComponent flag bits, composable with bitwise OR (`|`).
+        setGlobal(L, "SpriteFlags.repeatX", static_cast<int32_t>(ecs::SpriteFlags::RepeatX));
+        setGlobal(L, "SpriteFlags.repeatY", static_cast<int32_t>(ecs::SpriteFlags::RepeatY));
+        setGlobal(L, "SpriteFlags.stretchX", static_cast<int32_t>(ecs::SpriteFlags::StretchX));
+        setGlobal(L, "SpriteFlags.stretchY", static_cast<int32_t>(ecs::SpriteFlags::StretchY));
+
+        // scene.* - ECS scene-tree API (component names are namespaced:
+        // core.* for built-ins, app.* reserved for future Lua components).
+        setGlobal(L, "scene.createEntity", sceneCreateEntity);
+        setGlobal(L, "scene.addComponent", sceneAddComponent);
+        setGlobal(L, "scene.setField", sceneSetField);
+        setGlobal(L, "scene.getField", sceneGetField);
+        setGlobal(L, "scene.exit", sceneExit);
+
+        // gfx.* - 2D engine rendering (textures, window size, fades).
+        setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
+        setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
+        setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
+        setGlobal(L, "gfx.fade", gfxFade);
+
+        luaL_newmetatable(L, METATABLE_SCENE_ENTITY);
+        lua_pop(L, 1);
+        luaL_newmetatable(L, METATABLE_SCENE_COMPONENT);
+        lua_pop(L, 1);
+        luaL_newmetatable(L, METATABLE_TEXTURE);
+        lua_pushcfunction(L, textureRelease);
+        lua_setfield(L, -2, "__gc");
+        lua_pop(L, 1);
 
         luaL_newmetatable(L, METATABLE_ENTITY);
         lua_pushcfunction(L, entity_get);

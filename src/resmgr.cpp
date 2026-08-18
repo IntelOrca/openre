@@ -1,0 +1,174 @@
+#include "resmgr.h"
+
+#include "logger.h"
+#include "render2d.h"
+
+#include <string>
+#include <utility>
+
+namespace openre
+{
+    ResourceManager& ResourceManager::get()
+    {
+        // Intentionally leaked (process-lifetime singleton). Function-local
+        // statics are destroyed in an unspecified order at process exit, but
+        // the Lua VM's __gc finalizers may still call into the resource
+        // manager during lua_close(). Keeping the instance alive avoids using
+        // an already-destroyed object in that "late release" path.
+        static ResourceManager* instance = new ResourceManager();
+        return *instance;
+    }
+
+    TextureResource::~TextureResource()
+    {
+        if (textureHandle != 0)
+            render2d::SpriteRenderer::get().unloadTexture(textureHandle);
+    }
+
+    ResourceHandle
+    ResourceManager::addImpl(std::string_view path, std::unique_ptr<Resource> resource, std::type_index typeIndex)
+    {
+        auto existingHandle = find(path, typeIndex);
+        if (existingHandle != 0)
+        {
+            logging::logWarning("[resmgr] resource already loaded for path '{}'", std::string(path));
+        }
+        else
+        {
+            logging::logInfo(
+                "[resmgr] load {} handle = {}, path = '{}'",
+                resource->getName(),
+                this->resources.size() + 1,
+                std::string(path));
+        }
+
+        auto& resourceEntry = this->resources.emplace_back();
+        resourceEntry.handle = static_cast<ResourceHandle>(this->resources.size());
+        resourceEntry.path = std::string(path);
+        resourceEntry.resource = std::move(resource);
+        resourceEntry.typeIndex = typeIndex;
+        return resourceEntry.handle;
+    }
+
+    ResourceCookie ResourceManager::addRef(ResourceHandle handle)
+    {
+        if (handle == 0)
+            return 0;
+
+        ResourceCookie cookie;
+        if (!this->spareCookies.empty())
+        {
+            cookie = this->spareCookies.back();
+            this->spareCookies.pop_back();
+            this->cookies[cookie - 1] = handle;
+        }
+        else
+        {
+            this->cookies.push_back(handle);
+            cookie = static_cast<ResourceCookie>(this->cookies.size());
+        }
+
+        auto& resourceEntry = this->resources[handle - 1];
+        resourceEntry.count++;
+        logging::logDebug(
+            "[resmgr] ref {}, cookie = {}, path = '{}'", resourceEntry.resource->getName(), cookie, resourceEntry.path);
+        return cookie;
+    }
+
+    ResourceCookie ResourceManager::addRefImpl(std::string_view path, std::type_index typeIndex)
+    {
+        return addRef(find(path, typeIndex));
+    }
+
+    ResourceCookie ResourceManager::dupRef(ResourceCookie cookie)
+    {
+        if (cookie == 0)
+            return 0;
+        return addRef(this->cookies[cookie - 1]);
+    }
+
+    void ResourceManager::release(ResourceCookie cookie)
+    {
+        if (cookie == 0 || cookie > this->cookies.size())
+            return;
+
+        auto& dst = this->cookies[cookie - 1];
+        if (dst == 0)
+            return;
+
+        auto& resourceEntry = this->resources[dst - 1];
+        logging::logDebug(
+            "[resmgr] unref {}, cookie = {}, path = '{}'", resourceEntry.resource->getName(), cookie, resourceEntry.path);
+
+        if (resourceEntry.count <= 1)
+        {
+            logging::logInfo(
+                "[resmgr] unload {} handle = {}, path = '{}'",
+                resourceEntry.resource->getName(),
+                resourceEntry.handle,
+                resourceEntry.path);
+            resourceEntry = {};
+        }
+        else
+        {
+            resourceEntry.count--;
+        }
+
+        dst = 0;
+        this->spareCookies.push_back(cookie);
+    }
+
+    void ResourceManager::releaseAll()
+    {
+        for (size_t i = 0; i < this->cookies.size(); i++)
+        {
+            const auto handle = this->cookies[i];
+            if (handle == 0 || handle > this->resources.size())
+                continue;
+
+            auto& entry = this->resources[handle - 1];
+            if (entry.resource && entry.count <= 1)
+            {
+                logging::logInfo(
+                    "[resmgr] unload {} handle = {}, path = '{}'", entry.resource->getName(), entry.handle, entry.path);
+            }
+            this->cookies[i] = 0;
+        }
+
+        // resources.clear() destroys any remaining TextureResource here, while
+        // the renderer (and GPU) are still alive.
+        this->resources.clear();
+        this->cookies.clear();
+        this->spareCookies.clear();
+    }
+
+    ResourceHandle ResourceManager::getFirst(std::type_index typeIndex) const
+    {
+        for (const auto& entry : this->resources)
+        {
+            if (entry.typeIndex && *entry.typeIndex == typeIndex)
+                return entry.handle;
+        }
+        return 0;
+    }
+
+    ResourceHandle ResourceManager::getNext(ResourceHandle handle) const
+    {
+        for (auto i = handle; i < this->resources.size(); i++)
+        {
+            if (this->resources[i].handle > handle)
+                return this->resources[i].handle;
+        }
+        return 0;
+    }
+
+    ResourceHandle ResourceManager::find(std::string_view path, std::type_index typeIndex) const
+    {
+        for (const auto& entry : this->resources)
+        {
+            if (entry.typeIndex && *entry.typeIndex == typeIndex && entry.path == path)
+                return entry.handle;
+        }
+        return 0;
+    }
+}

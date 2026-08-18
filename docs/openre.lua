@@ -48,6 +48,14 @@ EntityKind = {
     door = 5,
 }
 
+---@enum SpriteFlags
+SpriteFlags = {
+    repeatX = 1 << 0,
+    repeatY = 1 << 1,
+    stretchX = 1 << 2,
+    stretchY = 1 << 3,
+}
+
 --[[ Flag groups ]]
 
 -- FlagGroup is not exposed as a runtime table; pass these numeric values as
@@ -222,5 +230,101 @@ function TcpSocket:flush() end
 
 --- Close the socket.
 function TcpSocket:dispose() end
+
+--[[ Scene entities & components (module mode) ]]
+
+---@class SceneEntity
+--- Opaque handle to an entity in the current ECS scene. Created with
+--- `scene.createEntity`. Pass to `scene.addComponent`, `scene.setField`
+--- and `scene.getField`.
+local SceneEntity = {}
+
+---@class SceneComponent
+--- Opaque handle to a component on an entity. Created with
+--- `scene.addComponent`. Used as the handle for `scene.setField` /
+--- `scene.getField`.
+local SceneComponent = {}
+
+---@class Texture
+--- Opaque handle to a loaded GPU texture. Created with `gfx.loadTexture`.
+--- The underlying resource is reference counted and released by the garbage
+--- collector when this value is no longer referenced; nil-ing the Lua
+--- reference is enough to free the GPU texture.
+local Texture = {}
+
+--[[ The scene namespace (module mode) ]]
+
+---@class scene
+local scene = {}
+
+--- Create a new entity under the scene root. Returns nil when no scene is
+--- active (for example inside the legacy game).
+---@return SceneEntity|nil
+function scene.createEntity() end
+
+--- Add a component to an entity and return a component handle. Built-in
+--- components are namespaced `core.*`; `app.*` names are reserved for future
+--- Lua-defined components. `core.transform` is implicit on every entity.
+---@param entity SceneEntity
+---@param name string e.g. "core.sprite" or "core.transform"
+---@return SceneComponent|nil
+function scene.addComponent(entity, name) end
+
+--- Write a field on an entity or component. When the handle is an entity, or
+--- for a transform component, the fields are `x`, `y`, `z` (world position in
+--- window pixels). Sprite fields mirror the layout of the underlying C++
+--- struct: `size.width`, `size.height` (destination size in window pixels),
+--- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
+--- pixels; 0-sized means "full texture"), `texture` (a Texture or nil), and
+--- `flags` (a bitmask of SpriteFlags values combined with `|`).
+---@param handle SceneEntity|SceneComponent
+---@param name string
+---@param value any
+function scene.setField(handle, name, value) end
+
+--- Read a field on an entity or component. Returns nil for unknown fields.
+--- Fields use the same names as scene.setField. The `texture` field is
+--- returned as the numeric ResourceCookie, not a Texture object; `flags` is
+--- returned as the numeric bitmask.
+---@param handle SceneEntity|SceneComponent
+---@param name string
+---@return any
+function scene.getField(handle, name) end
+
+--- Request the application to exit.
+function scene.exit() end
+
+--[[ The gfx namespace (module mode) ]]
+
+---@class gfx
+local gfx = {}
+
+--- Load a texture resource and return a Texture handle, or nil on failure.
+--- The path is probed relative to the game module directory first, then
+--- falls back to the original game data (`data://`). `.adt` and `.tim`
+--- extensions are appended automatically when not present. Width and height
+--- are hints for ADT files missing an intrinsic size.
+---@param path string e.g. "common/data/gw2"
+---@param width? integer
+---@param height? integer
+---@return Texture|nil
+function gfx.loadTexture(path, width, height) end
+
+--- Current window width in pixels.
+---@return integer
+function gfx.screenWidth() end
+
+--- Current window height in pixels.
+---@return integer
+function gfx.screenHeight() end
+
+--- Set a full-window fade overlay for the current frame. A new call replaces
+--- the previous one; the overlay is cleared automatically at the end of the
+--- frame.
+---@param r integer 0-255
+---@param g integer 0-255
+---@param b integer 0-255
+---@param a integer 0-255 alpha
+function gfx.fade(r, g, b, a) end
 
 return re

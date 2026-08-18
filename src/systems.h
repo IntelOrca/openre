@@ -13,6 +13,7 @@ namespace openre
     void system_input(AppContext& app);
 
     // ECS systems (implemented in ecs_systems.cpp).
+    void ModuleSystem(AppContext& app);
     void LegacyGameSystem(AppContext& app);
     void RenderSystem(AppContext& app);
 

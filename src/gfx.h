@@ -12,6 +12,13 @@ namespace openre::graphics
     std::vector<uint8_t> decodeAdt(const std::vector<uint8_t>& input);
     std::vector<uint8_t> decodeAdt(Stream& input);
 
+    /**
+     * Reorganizes a 256x256 + 128*64 + 128*64 RGB555 ADT buffer to a 320x240
+     * RGB555 buffer (row-major marni surface layout). Used when loading an ADT
+     * as a standalone full-screen image rather than as a texture page.
+     */
+    std::vector<uint8_t> reorgAdt(const std::vector<uint8_t>& input);
+
     inline uint32_t rgb555to8888(uint16_t c16)
     {
         // Black is transparent

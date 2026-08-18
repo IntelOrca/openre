@@ -44,6 +44,11 @@ namespace openre::system::fs
 
     std::vector<uint8_t> readAllBytes(const char* path);
 
+    // Resolves a `scheme://` path (data://, save://, user://) to an absolute
+    // physical path, or returns the path unchanged when it is already
+    // absolute. Returns an empty string for unknown schemes.
+    std::string resolve(const char* path);
+
     std::unique_ptr<Stream> open(const char* path, FileMode mode);
     int writeAllBytes(const char* path, const void* data, size_t len);
     bool remove(const char* path);

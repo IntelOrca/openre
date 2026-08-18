@@ -3,7 +3,6 @@ lib
 out/
 vcpkg_installed
 .vcpkg
-games/
 mods/
 
 ## Ignore Visual Studio temporary files, build results, and

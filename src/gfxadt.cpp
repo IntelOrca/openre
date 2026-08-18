@@ -384,7 +384,7 @@ namespace openre::graphics
     /**
      * Reorganizes a 256x256 + 128*64 + 128*64 RGB555 buffer to a 320x240 RGB555 buffer.
      */
-    static std::vector<uint8_t> reorgAdt(const std::vector<uint8_t>& input)
+    std::vector<uint8_t> reorgAdt(const std::vector<uint8_t>& input)
     {
         std::vector<uint8_t> output(320 * 240 * 2);
         auto src = input.data();

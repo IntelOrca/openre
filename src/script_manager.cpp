@@ -14,6 +14,11 @@ namespace openre::script
 {
     namespace
     {
+        // Reserved script key that the loaded game module is registered under
+        // (namespaces are not valid basenames, so this cannot collide with
+        // OPENRE_SCRIPTS files).
+        constexpr const char* GAME_MODULE_KEY = "module.game";
+
         bool isLuaFile(const fs::path& path)
         {
             std::string extension = path.extension().string();
@@ -199,6 +204,19 @@ namespace openre::script
         auto vm = createLuaVm(basename, _searchPaths);
         vm->run(path);
         _scripts[basename] = std::move(vm);
+    }
+
+    void ScriptManager::loadGameModule(const fs::path& dir)
+    {
+        // Modules are loaded exactly once at boot (no hot reload for the game
+        // module itself yet).
+        if (_gameModuleLoaded)
+            return;
+        _gameModuleLoaded = true;
+
+        auto vm = createLuaVm("game", { dir });
+        vm->run(dir / "main.lua");
+        _scripts[GAME_MODULE_KEY] = std::move(vm);
     }
 
     void ScriptManager::unloadScript(const std::string& basename)

@@ -42,4 +42,8 @@ namespace openre
     };
 
     int appMain(const char** args, int argc);
+
+    // Requests the running app shell to close (exit code 0). Safe to call
+    // from anywhere; a no-op once the shell is already closing.
+    void app_request_close();
 }

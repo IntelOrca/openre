@@ -71,7 +71,7 @@ namespace openre::system::fs
 
     // --- resolve (internal) / readAllBytes ---
 
-    static std::string resolvePath(const char* path)
+    static std::string resolvePathInternal(const char* path)
     {
         // Handle data:// prefix — game data files
         if (std::strncmp(path, "data://", 7) == 0)
@@ -135,6 +135,12 @@ namespace openre::system::fs
         return {};
     }
 
+    // Public wrapper so other subsystems can resolve data:// paths.
+    std::string resolve(const char* path)
+    {
+        return resolvePathInternal(path);
+    }
+
     std::vector<uint8_t> readAllBytes(const char* path)
     {
         auto stream = open(path, FileMode::read);
@@ -182,7 +188,7 @@ namespace openre::system::fs
         default: return nullptr;
         }
 
-        auto resolvedPath = resolvePath(path);
+        auto resolvedPath = resolvePathInternal(path);
         logging::logInfo("[OPEN {}] {}", modeLabel, resolvedPath.c_str());
         auto sdlStream = SDL_IOFromFile(resolvedPath.c_str(), modeStr);
         if (!sdlStream)
@@ -212,7 +218,7 @@ namespace openre::system::fs
     FileInfo info(const char* path)
     {
         FileInfo result;
-        auto resolvedPath = resolvePath(path);
+        auto resolvedPath = resolvePathInternal(path);
         if (resolvedPath.empty())
             return result;
 
@@ -235,7 +241,7 @@ namespace openre::system::fs
 
     bool remove(const char* path)
     {
-        auto resolved = resolvePath(path);
+        auto resolved = resolvePathInternal(path);
         if (resolved.empty())
             return false;
         return SDL_RemovePath(resolved.c_str());
@@ -258,7 +264,7 @@ namespace openre::system::fs
 
     bool createDirectory(const char* path)
     {
-        auto resolved = resolvePath(path);
+        auto resolved = resolvePathInternal(path);
         if (resolved.empty())
             return false;
         return SDL_CreateDirectory(resolved.c_str());
@@ -266,7 +272,7 @@ namespace openre::system::fs
 
     std::vector<std::string> getDirectoryContents(const char* path, const char* pattern)
     {
-        auto resolved = resolvePath(path);
+        auto resolved = resolvePathInternal(path);
         if (resolved.empty())
             return {};
 

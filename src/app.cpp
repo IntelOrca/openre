@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include "ecs_systems.h"
+#include "game_module.h"
 #include "logger.h"
 #include "marni.h"
 #include "marni_renderer.h"
@@ -8,8 +9,11 @@
 #include "system_window.h"
 #include "systems.h"
 
+#include <SDL3/SDL.h>
+
 #include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -26,12 +30,64 @@ static char* str_lwr(char* s)
 namespace openre
 {
     // App shell systems, run in this order every frame.
+    // ModuleSystem drives the loaded game module when OPENRE_GAME is set;
+    // otherwise it is a no-op and LegacyGameSystem drives the original game.
     const SystemFn gAppSystems[] = {
-        system_window,
-        system_input,
-        LegacyGameSystem,
-        RenderSystem,
+        system_window, system_input, ModuleSystem, LegacyGameSystem, RenderSystem,
     };
+
+    // The resolved game module directory (set once at boot below).
+    namespace
+    {
+        std::filesystem::path s_gameModuleDir;
+        AppContext* s_currentApp = nullptr;
+    }
+
+    std::filesystem::path resolve_game_module_dir()
+    {
+        const char* game = std::getenv("OPENRE_GAME");
+        if (game == nullptr || game[0] == '\0')
+            return {};
+
+        std::filesystem::path candidates[] = {
+            std::filesystem::current_path() / "games" / game,
+            std::filesystem::path(SDL_GetBasePath()) / "games" / game,
+        };
+        for (const auto& dir : candidates)
+        {
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(dir / "main.lua", ec))
+            {
+                return dir;
+            }
+        }
+
+        logging::logWarning("[app] OPENRE_GAME='{}' set but no games/{}/main.lua found (tried cwd and exe base)", game, game);
+        return {};
+    }
+
+    const std::filesystem::path& game_module_dir()
+    {
+        return s_gameModuleDir;
+    }
+
+    bool game_module_active()
+    {
+        return !s_gameModuleDir.empty();
+    }
+
+    void set_game_module_dir(std::filesystem::path dir)
+    {
+        s_gameModuleDir = std::move(dir);
+    }
+
+    void app_request_close()
+    {
+        if (s_currentApp != nullptr)
+        {
+            s_currentApp->requestClose();
+        }
+    }
 
     void AppContext::requestClose(int exitCode)
     {
@@ -132,10 +188,23 @@ namespace openre
             gGameTable.ushinabe = 1;
         }
 
+        // The app shell context, kept alive for the whole run so global
+        // requesters (e.g. Lua scene.exit) can reach it.
         AppContext app;
+        s_currentApp = &app;
+
         cmdline_parse(args, argc, app.cmdline);
 
-        // Boot the scene tree: hidden root + one LegacyGame child.
+        // Resolve the game module (OPENRE_GAME) so the boot-scene and the
+        // module-driven systems know whether to skip the legacy game.
+        set_game_module_dir(resolve_game_module_dir());
+        if (game_module_active())
+        {
+            logging::logInfo("[app] game module active: {}", game_module_dir().string());
+        }
+
+        // Boot the scene tree: hidden root + LegacyGame child (skipped when a
+        // game module is active - the module builds its own entities).
         ecs::system_boot_scene(app.scene);
         s_currentScene = &app.scene;
 

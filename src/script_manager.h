@@ -26,6 +26,11 @@ namespace openre::script
         // Called once per frame from the game loop.
         void tick();
 
+        // Loads a game module directory (games/<name>) - runs main.lua in a
+        // dedicated Lua VM registered so tick() drives it. No-op if already
+        // loaded.
+        void loadGameModule(const std::filesystem::path& dir);
+
     private:
         ScriptManager() = default;
 
@@ -37,6 +42,7 @@ namespace openre::script
         void unloadScript(const std::string& basename);
 
         bool _loaded{};
+        bool _gameModuleLoaded{};
         std::vector<std::filesystem::path> _searchPaths;
         std::vector<std::unique_ptr<FileWatcher>> _watchers;
         // Key: script basename without extension.
