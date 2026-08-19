@@ -817,13 +817,9 @@ namespace openre::script
         (void)vm;
     }
 
-    void networkInit()
-    {
-    }
+    void networkInit() {}
 
-    void networkShutdown()
-    {
-    }
+    void networkShutdown() {}
 }
 
 #endif // _WIN32

@@ -17,7 +17,7 @@
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4731) // frame pointer register 'ebp' modified by inline assembly code
-#endif // _MSC_VER
+#endif                          // _MSC_VER
 
 // The inline assembly below is 32-bit x86 only.
 #if defined(__i386__) || defined(_M_IX86)

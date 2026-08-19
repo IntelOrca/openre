@@ -85,6 +85,7 @@
     <ClCompile Include="enemy.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
+    <ClCompile Include="font.cpp" />
     <ClCompile Include="gfxadt.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
@@ -127,6 +128,7 @@
     <ClCompile Include="system_window.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="texture_loader.cpp" />
+    <ClCompile Include="text_layout.cpp" />
     <ClCompile Include="tim.cpp" />
     <ClCompile Include="title.cpp" />
   </ItemGroup>
@@ -149,6 +151,7 @@
     <ClInclude Include="file.h" />
     <ClInclude Include="game_module.h" />
     <ClInclude Include="gfx.h" />
+    <ClInclude Include="font.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="interop.hpp" />
@@ -193,6 +196,7 @@
     <ClInclude Include="system_window.h" />
     <ClInclude Include="systems.h" />
     <ClInclude Include="texture_loader.h" />
+    <ClInclude Include="text_layout.h" />
     <ClInclude Include="tim.h" />
     <ClInclude Include="title.h" />
   </ItemGroup>

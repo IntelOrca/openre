@@ -10,6 +10,7 @@
 #include "script.h"
 #include "system_config.h"
 #include "system_window.h"
+#include "text_layout.h"
 
 #include <cstdint>
 #include <vector>
@@ -167,6 +168,29 @@ namespace openre
         app.frameActive = true;
     }
 
+    // Materialises TextComponents into per-glyph child SpriteComponents. Runs
+    // before the render pass each frame. Only rebuilds when the text inputs
+    // (string/flags/font/bounds) change, so an unchanged frame is cheap.
+    void TextLayoutSystem(AppContext& app)
+    {
+        if (app.closing() || !app.running())
+            return;
+        if (!game_module_active())
+            return;
+        if (!app.frameActive)
+            return;
+
+        app.scene.each<ecs::TextComponent>([&](ecs::Entity entity, ecs::TextComponent& text) {
+            std::string fingerprint;
+            text::fingerprint(text, fingerprint);
+            if (fingerprint == text.layoutFingerprint && !text.needsLayout)
+                return;
+            text::layoutEntity(app.scene, entity, text);
+            text.layoutFingerprint = fingerprint;
+            text.needsLayout = false;
+        });
+    }
+
     void RenderSystem(AppContext& app)
     {
         if (app.closing())
@@ -211,6 +235,10 @@ namespace openre
                 d.src = { sprite.src.x, sprite.src.y, sprite.src.width, sprite.src.height };
                 d.dst = { x, y, sprite.size.width, sprite.size.height };
                 d.flags = sprite.flags;
+                d.r = sprite.color.r;
+                d.g = sprite.color.g;
+                d.b = sprite.color.b;
+                d.a = sprite.color.a;
                 draws.push_back(d);
             });
 

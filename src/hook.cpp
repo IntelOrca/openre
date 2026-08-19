@@ -8,8 +8,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
-#include <sys/mman.h>
 #include <cstdlib>
+#include <sys/mman.h>
 #endif // _WIN32
 
 #include "interop.hpp"

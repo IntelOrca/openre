@@ -15,6 +15,7 @@ namespace openre
     // ECS systems (implemented in ecs_systems.cpp).
     void ModuleSystem(AppContext& app);
     void LegacyGameSystem(AppContext& app);
+    void TextLayoutSystem(AppContext& app);
     void RenderSystem(AppContext& app);
 
     // Sets the frame-pacing baseline used by the LegacyGameSystem throttle.

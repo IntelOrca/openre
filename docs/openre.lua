@@ -56,6 +56,16 @@ SpriteFlags = {
     stretchY = 1 << 3,
 }
 
+---@enum TextFlags
+TextFlags = {
+    xLeft   = 0 << 0,
+    xCenter = 1 << 0,
+    xRight  = 2 << 0,
+    yTop    = 0 << 2,
+    yMiddle = 1 << 2,
+    yBottom = 2 << 2,
+}
+
 --[[ Flag groups ]]
 
 -- FlagGroup is not exposed as a runtime table; pass these numeric values as
@@ -252,6 +262,11 @@ local SceneComponent = {}
 --- reference is enough to free the GPU texture.
 local Texture = {}
 
+---@class Font
+--- Opaque handle to a loaded RE2 font (font0.tim / font1.tim). Created with
+--- `gfx.loadFont`. Reference counted and released by the garbage collector.
+local Font = {}
+
 --[[ The scene namespace (module mode) ]]
 
 ---@class scene
@@ -265,8 +280,10 @@ function scene.createEntity() end
 --- Add a component to an entity and return a component handle. Built-in
 --- components are namespaced `core.*`; `app.*` names are reserved for future
 --- Lua-defined components. `core.transform` is implicit on every entity.
+--- `core.text` accepts the font (a `gfx.loadFont` value) as the component's
+--- initial value, or set it later with `scene.setField(handle, 'font', f)`.
 ---@param entity SceneEntity
----@param name string e.g. "core.sprite" or "core.transform"
+---@param name string e.g. "core.sprite", "core.text" or "core.transform"
 ---@return SceneComponent|nil
 function scene.addComponent(entity, name) end
 
@@ -276,15 +293,18 @@ function scene.addComponent(entity, name) end
 --- struct: `size.width`, `size.height` (destination size in window pixels),
 --- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
 --- pixels; 0-sized means "full texture"), `texture` (a Texture or nil), and
---- `flags` (a bitmask of SpriteFlags values combined with `|`).
+--- `flags` (a bitmask of SpriteFlags values combined with `|`). Text fields:
+--- `text` (UTF-8 string; supports `<span color="#ff0">` markup), `font` (a
+--- Font or nil), `size.width` / `size.height` (bounds the text is aligned
+--- within), and `flags` (a bitmask of TextFlags values combined with `|`).
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
 function scene.setField(handle, name, value) end
 
 --- Read a field on an entity or component. Returns nil for unknown fields.
---- Fields use the same names as scene.setField. The `texture` field is
---- returned as the numeric ResourceCookie, not a Texture object; `flags` is
+--- Fields use the same names as scene.setField. The `texture` / `font` fields
+--- are returned as the numeric ResourceCookie, not an object; `flags` is
 --- returned as the numeric bitmask.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
@@ -309,6 +329,18 @@ local gfx = {}
 ---@param height? integer
 ---@return Texture|nil
 function gfx.loadTexture(path, width, height) end
+
+--- Load an RE2 font (font0.tim / font1.tim) and return a Font handle, or nil
+--- on failure. The same path probing as gfx.loadTexture applies. The font
+--- atlas's index-0 colour is treated as transparent so glyphs render with a
+--- clear background. Use it with a `core.text` component's `font` field.
+---
+--- A `:variant` suffix selects a virtual sub-font of the same atlas. Only
+--- `:small` is supported for now - the compact ASCII set (0x20-0x7F) in an
+--- 8px-cell grid (32 per row) on font0, e.g. `gfx.loadFont("common/data/font0:small")`.
+---@param path string e.g. "common/data/font0"
+---@return Font|nil
+function gfx.loadFont(path) end
 
 --- Current window width in pixels.
 ---@return integer

@@ -5,6 +5,7 @@
 #include "resmgr.h"
 
 #include <cstdint>
+#include <string>
 
 namespace openre::ecs
 {
@@ -51,6 +52,8 @@ namespace openre::ecs
         StretchY = 1 << 3,
     };
 
+    /// An RGBA colour in the 0-255 range. (ecs::Color is defined in ecs.h.)
+
     /// A 2D image drawn into the window by the scene-tree render path.
     ///
     /// The entity's world transform position is the top-left corner and
@@ -58,13 +61,67 @@ namespace openre::ecs
     /// is a ResourceCookie into the engine ResourceManager; `src` selects the
     /// region of the texture to draw (0-sized src means the full texture).
     /// `flags` controls whether each axis tiles (`Repeat*`) or scales the
-    /// source to the destination (`Stretch*`).
+    /// source to the destination (`Stretch*`). `color` tints the sprite
+    /// (defaults to opaque white).
     struct SpriteComponent
     {
         Size2f size;
         ResourceCookie texture = 0;
         Rect2f src;
         uint32_t flags = static_cast<uint32_t>(SpriteFlags::StretchX) | static_cast<uint32_t>(SpriteFlags::StretchY);
+        Color color{ 255, 255, 255, 255 };
+    };
+
+    /// Horizontal alignment of a TextComponent within its size bounds.
+    enum class TextAlignX : uint32_t
+    {
+        Left = 0,
+        Center = 1,
+        Right = 2,
+    };
+
+    /// Vertical alignment of a TextComponent within its size bounds.
+    enum class TextAlignY : uint32_t
+    {
+        Top = 0,
+        Middle = 1,
+        Bottom = 2,
+    };
+
+    /// Alignment bits for a TextComponent (2 bits X, 2 bits Y, composable
+    /// with bitwise OR). Stored in the low nibble of the TextComponent flags.
+    enum class TextFlags : uint32_t
+    {
+        XLeft = static_cast<uint32_t>(TextAlignX::Left) << 0,
+        XCenter = static_cast<uint32_t>(TextAlignX::Center) << 0,
+        XRight = static_cast<uint32_t>(TextAlignX::Right) << 0,
+        XMask = 0b11u << 0,
+        YTop = static_cast<uint32_t>(TextAlignY::Top) << 2,
+        YMiddle = static_cast<uint32_t>(TextAlignY::Middle) << 2,
+        YBottom = static_cast<uint32_t>(TextAlignY::Bottom) << 2,
+        YMask = 0b11u << 2,
+    };
+
+    /// Declarative text: which string to draw, in what bounds, with what
+    /// alignment and font. A TextLayoutSystem materialises the glyphs as
+    /// child SpriteComponents (one per character) beneath this entity, and
+    /// relayouts only when the fingerprinted inputs change.
+    struct TextComponent
+    {
+        std::string text;        // UTF-8; supports <span color="#rrggbb"> markup
+        Size2f size;             // bounds within which the text is aligned
+        uint32_t flags = 0;      // TextFlags alignment bits
+        ResourceCookie font = 0; // FontResource cookie from gfx.loadFont
+
+        // Mirror of the inputs used for relayout detection (filled by the
+        // TextLayoutSystem; not set directly).
+        std::string layoutFingerprint;
+        bool needsLayout = true;
+
+        // Owns the glyph child entities produced by the last layout. The
+        // layout system creates/clears this container only, leaving any
+        // other user-attached children of the text entity untouched.
+        Entity layoutContainer = NullEntity;
     };
 
     /// Marks the entity as the "legacy game": the game driven by the original

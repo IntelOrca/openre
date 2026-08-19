@@ -36,13 +36,13 @@ namespace openre
         };
 
         // Reads the first candidate (module dir, then data://) that exists,
-        // probing "", ".adt" and ".tim" extensions. Returns the bytes and the
-        // detected type (adt when the file was found with the .adt probe etc).
+        // probing "", ".tim" and ".adt" extensions (raw TIM preferred, matching
+        // font.cpp). Returns the bytes and the detected type.
         bool findAndRead(
             std::string_view logicalPath, const std::filesystem::path& moduleDir, std::vector<uint8_t>& outBytes,
             TextureType& outType, std::string& outLabel)
         {
-            const std::vector<std::string> extensions = { "", ".adt", ".tim" };
+            const std::vector<std::string> extensions = { "", ".tim", ".adt" };
 
             // 1. Module directory first.
             if (!moduleDir.empty())

@@ -1,6 +1,7 @@
 #include "script_bindings.h"
 #include "app.h"
 #include "ecs_scene.h"
+#include "font.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
@@ -28,6 +29,7 @@ namespace openre::script
         constexpr const char* METATABLE_SCENE_ENTITY = "meta_scene_entity";
         constexpr const char* METATABLE_SCENE_COMPONENT = "meta_scene_component";
         constexpr const char* METATABLE_TEXTURE = "meta_texture";
+        constexpr const char* METATABLE_FONT = "meta_font";
 
         namespace LogLevel
         {
@@ -418,6 +420,7 @@ namespace openre::script
         {
             constexpr int32_t transform = 1;
             constexpr int32_t sprite = 2;
+            constexpr int32_t text = 3;
         }
 
         struct SceneEntityHandle
@@ -432,6 +435,11 @@ namespace openre::script
         };
 
         struct TextureHandle
+        {
+            ResourceCookie cookie;
+        };
+
+        struct FontHandle
         {
             ResourceCookie cookie;
         };
@@ -480,6 +488,15 @@ namespace openre::script
             else if (strcmp(name, "core.transform") == 0)
             {
                 kind = ComponentKind::transform; // implicit on every entity
+            }
+            else if (strcmp(name, "core.text") == 0)
+            {
+                // Optional font cookie (a gfx.loadFont value) as a 3rd arg.
+                if (scene->tryGetComponent<ecs::TextComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::TextComponent>(handle->entity);
+                }
+                kind = ComponentKind::text;
             }
             else
             {
@@ -576,6 +593,51 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::text)
+            {
+                auto* text = scene->tryGetComponent<ecs::TextComponent>(entity);
+                if (text == nullptr)
+                {
+                    return luaL_error(L, "scene.setField: entity has no text component");
+                }
+                if (strcmp(name, "text") == 0)
+                {
+                    text->text = luaL_checkstring(L, 3);
+                }
+                else if (strcmp(name, "size.width") == 0)
+                    text->size.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "size.height") == 0)
+                    text->size.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "flags") == 0)
+                {
+                    const auto value = luaL_checkinteger(L, 3);
+                    if (value < 0 || value > static_cast<lua_Integer>(UINT32_MAX))
+                    {
+                        return luaL_error(L, "scene.setField: flags out of range");
+                    }
+                    text->flags = static_cast<uint32_t>(value);
+                }
+                else if (strcmp(name, "font") == 0)
+                {
+                    if (lua_isnoneornil(L, 3))
+                    {
+                        text->font = 0;
+                    }
+                    else
+                    {
+                        auto* font = static_cast<FontHandle*>(luaL_testudata(L, 3, METATABLE_FONT));
+                        if (font == nullptr)
+                        {
+                            return luaL_error(L, "scene.setField: font must be a gfx.loadFont value");
+                        }
+                        text->font = font->cookie;
+                    }
+                }
+                else
+                    return luaL_error(L, "scene.setField: unknown text field '%s'", name);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -642,6 +704,29 @@ namespace openre::script
                 return 1;
             }
 
+            if (comp->kind == ComponentKind::text)
+            {
+                auto* text = scene->tryGetComponent<ecs::TextComponent>(entity);
+                if (text == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "text") == 0)
+                    lua_pushlstring(L, text->text.data(), text->text.size());
+                else if (strcmp(name, "size.width") == 0)
+                    lua_pushnumber(L, text->size.width);
+                else if (strcmp(name, "size.height") == 0)
+                    lua_pushnumber(L, text->size.height);
+                else if (strcmp(name, "flags") == 0)
+                    lua_pushinteger(L, text->flags);
+                else if (strcmp(name, "font") == 0)
+                    lua_pushinteger(L, text->font);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
             lua_pushnil(L);
             return 1;
         }
@@ -670,6 +755,33 @@ namespace openre::script
             luaL_getmetatable(L, METATABLE_TEXTURE);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        int gfxLoadFont(lua_State* L)
+        {
+            auto* path = luaL_checkstring(L, 1);
+            auto cookie = loadFontResource(path);
+            if (cookie == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            auto* font = static_cast<FontHandle*>(lua_newuserdata(L, sizeof(FontHandle)));
+            font->cookie = cookie;
+            luaL_getmetatable(L, METATABLE_FONT);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        int fontRelease(lua_State* L)
+        {
+            auto* font = static_cast<FontHandle*>(luaL_checkudata(L, 1, METATABLE_FONT));
+            if (font->cookie != 0)
+            {
+                ResourceManager::get().release(font->cookie);
+                font->cookie = 0;
+            }
+            return 0;
         }
 
         int textureRelease(lua_State* L)
@@ -815,6 +927,14 @@ namespace openre::script
         setGlobal(L, "SpriteFlags.stretchX", static_cast<int32_t>(ecs::SpriteFlags::StretchX));
         setGlobal(L, "SpriteFlags.stretchY", static_cast<int32_t>(ecs::SpriteFlags::StretchY));
 
+        // TextComponent alignment flags, composable with bitwise OR (`|`).
+        setGlobal(L, "TextFlags.xLeft", static_cast<int32_t>(ecs::TextFlags::XLeft));
+        setGlobal(L, "TextFlags.xCenter", static_cast<int32_t>(ecs::TextFlags::XCenter));
+        setGlobal(L, "TextFlags.xRight", static_cast<int32_t>(ecs::TextFlags::XRight));
+        setGlobal(L, "TextFlags.yTop", static_cast<int32_t>(ecs::TextFlags::YTop));
+        setGlobal(L, "TextFlags.yMiddle", static_cast<int32_t>(ecs::TextFlags::YMiddle));
+        setGlobal(L, "TextFlags.yBottom", static_cast<int32_t>(ecs::TextFlags::YBottom));
+
         // scene.* - ECS scene-tree API (component names are namespaced:
         // core.* for built-ins, app.* reserved for future Lua components).
         setGlobal(L, "scene.createEntity", sceneCreateEntity);
@@ -823,8 +943,9 @@ namespace openre::script
         setGlobal(L, "scene.getField", sceneGetField);
         setGlobal(L, "scene.exit", sceneExit);
 
-        // gfx.* - 2D engine rendering (textures, window size, fades).
+        // gfx.* - 2D engine rendering (textures, fonts, window size, fades).
         setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
+        setGlobal(L, "gfx.loadFont", gfxLoadFont);
         setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
         setGlobal(L, "gfx.fade", gfxFade);
@@ -835,6 +956,10 @@ namespace openre::script
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_TEXTURE);
         lua_pushcfunction(L, textureRelease);
+        lua_setfield(L, -2, "__gc");
+        lua_pop(L, 1);
+        luaL_newmetatable(L, METATABLE_FONT);
+        lua_pushcfunction(L, fontRelease);
         lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 
