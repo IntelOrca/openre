@@ -3,6 +3,7 @@
 #include "openre.h"
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace openre::input
@@ -123,4 +124,14 @@ namespace openre::input
     void load_bindings();
     // Writes the current command bindings back to the [input] INI section.
     void save_bindings();
+
+    // Runtime command-state accessors for UI / script consumers.
+    // 20-bit mask of commands active this frame (bit N == command N).
+    [[nodiscard]] uint32_t command_state();
+    // 20-bit mask of commands that rose (edge) this frame, i.e. were not
+    // active last frame but are active now.
+    [[nodiscard]] uint32_t command_edge();
+    // Maps an INI command name ("up", "accept", "menu", ...) to its Command,
+    // or COMMAND_COUNT when the name is unknown.
+    [[nodiscard]] Command command_from_name(std::string_view name);
 };

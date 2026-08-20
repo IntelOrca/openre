@@ -4,6 +4,7 @@
 #include "ecs_scene.h"
 #include "ecs_systems.h"
 #include "font.h"
+#include "input.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
@@ -1178,6 +1179,33 @@ namespace openre::script
             return 1;
         }
 
+        // input.down(name) / input.pressed(name) - read the runtime command
+        // state so game scripts can drive menus / title screens from the same
+        // bindings as gameplay. `name` is an INI command name ("up", "accept",
+        // "menu", ...) or a numeric Command index. `down` reports the command
+        // active this frame; `pressed` reports a rising edge (just pressed).
+        int inputCommandState(lua_State* L, uint32_t mask)
+        {
+            int cmd;
+            if (lua_type(L, 1) == LUA_TSTRING)
+                cmd = static_cast<int>(openre::input::command_from_name(lua_tostring(L, 1)));
+            else
+                cmd = static_cast<int>(luaL_checknumber(L, 1));
+            bool active = cmd >= 0 && cmd < openre::input::COMMAND_COUNT && (mask & (1u << cmd)) != 0;
+            lua_pushboolean(L, active);
+            return 1;
+        }
+
+        int inputCommandDown(lua_State* L)
+        {
+            return inputCommandState(L, openre::input::command_state());
+        }
+
+        int inputCommandPressed(lua_State* L)
+        {
+            return inputCommandState(L, openre::input::command_edge());
+        }
+
         // core.playMovie(path) - plays a movie, blocking until it finishes or
         // any input skips it. The video entity is created automatically to fill
         // the window; rendering is driven here because this call runs inside a
@@ -1414,6 +1442,10 @@ namespace openre::script
 
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
+
+        // input.* - runtime command state for menu / title-screen navigation.
+        setGlobal(L, "input.down", inputCommandDown);
+        setGlobal(L, "input.pressed", inputCommandPressed);
 
         luaL_newmetatable(L, METATABLE_SCENE_ENTITY);
         lua_pop(L, 1);

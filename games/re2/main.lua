@@ -1,7 +1,7 @@
 require('script/scheduler')
 require('script/util')
 
-local Menu = require('script/menu')
+local Title = require('script/menu')
 
 local splash = {}
 
@@ -43,6 +43,5 @@ scheduler
     :exec(function()
         hideSplash()
         core.playMovie("pl0\\zmovie\\title_l.bin")
-        Menu:new()
+        Title:new()
     end)
-    :fadeIn(60)

@@ -438,4 +438,22 @@ function gfx.listResources() end
 ---@return { width: integer, height: integer, data: string }|nil
 function gfx.getResourceImage(cookie) end
 
+--[[ input — runtime command state ]]
+
+---@class input
+input = {}
+
+--- Whether a game command is currently held this frame.
+---@param name string|integer INI command name ("up", "accept", "menu", "cancel",
+---  "left", "right", "down", ...) or a numeric Command index.
+---@return boolean
+function input.down(name) end
+
+--- Whether a game command rose (edge) this frame — i.e. it was not held last
+--- frame but is held now. Use this for one-shot menu actions (select, navigate,
+--- confirm) so a held key does not repeat every frame.
+---@param name string|integer INI command name or numeric Command index.
+---@return boolean
+function input.pressed(name) end
+
 return re

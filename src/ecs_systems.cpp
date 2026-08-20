@@ -3,6 +3,7 @@
 #include "app.h"
 #include "ecs_components.h"
 #include "game_module.h"
+#include "input.h"
 #include "marni_renderer.h"
 #include "openre.h"
 #include "render2d.h"
@@ -149,6 +150,10 @@ namespace openre
         if (!s_moduleLoaded)
         {
             s_moduleLoaded = true;
+            // The legacy psx_main() boot calls load_bindings(); module mode
+            // skips that boot, so populate the command bindings here or no
+            // command (and thus no input) is ever detected for scripts.
+            openre::input::load_bindings();
             script::loadGameModule(game_module_dir());
         }
 
@@ -164,6 +169,10 @@ namespace openre
                 system::window::delay(1);
             return;
         }
+
+        // Refresh command state before scripts read it (the legacy game loop
+        // calls pad_set; module mode has no legacy loop, so do it here).
+        openre::input::pad_set();
 
         // Tick every loaded Lua script (the module VM included).
         openre::script::tick();

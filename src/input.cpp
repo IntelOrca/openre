@@ -254,6 +254,7 @@ namespace openre::input
 
         CommandBindings s_commandBindings;
         uint32_t s_commandState = 0;
+        uint32_t s_commandEdge = 0;
         bool s_rebindLockout = false;
 
         // SDL instance ID of the pad behind each legacy joystick slot, so a
@@ -920,6 +921,7 @@ namespace openre::input
         uint32_t rawTrigger = 0;  // edge value for raw_edge
         uint32_t feEdge = 0;      // edge value for key_edge (low word)
         uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target, quick_turn)
+        uint32_t cmdEdge = 0;     // rising edge of the merged command state
 
         if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
         {
@@ -958,7 +960,7 @@ namespace openre::input
             uint32_t cmdState = transform_keyboard(s_commandBindings);
             cmdState |= transform_gamepad(s_commandBindings);
             cmdState |= transform_mouse(s_commandBindings);
-            uint32_t cmdEdge = rising_edge(cmdState, s_commandState);
+            cmdEdge = rising_edge(cmdState, s_commandState);
             s_commandState = cmdState;
 
             for (int cmd = 0; cmd < COMMAND_COUNT; cmd++)
@@ -978,6 +980,9 @@ namespace openre::input
             }
             gGameTable.g_key = newKey;
         }
+
+        // Publish the merged command state for UI / script consumers.
+        s_commandEdge = cmdEdge;
 
         // Stop flag handling: if input is blocked, only allow directional keys
         if (gGameTable.fg_stop & 0x1000000)
@@ -1083,5 +1088,25 @@ namespace openre::input
         writeJmp(0x004354D0, &get_config_key_state);
         writeJmp(0x0043B950, &init_input_hook);
         writeJmp(0x004D0F30, &pad_set);
+    }
+
+    uint32_t command_state()
+    {
+        return s_commandState;
+    }
+
+    uint32_t command_edge()
+    {
+        return s_commandEdge;
+    }
+
+    Command command_from_name(std::string_view name)
+    {
+        for (int i = 0; i < COMMAND_COUNT; i++)
+        {
+            if (name == kCommandIniNames[i])
+                return static_cast<Command>(i);
+        }
+        return COMMAND_COUNT;
     }
 };

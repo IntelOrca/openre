@@ -1,12 +1,35 @@
--- menu.lua — a self-contained RE2-style title menu built on the ECS scene
--- tree. No input bindings exist yet, so the highlighted menu item auto-cycles
--- to demonstrate the menu structure; wiring real navigation can slot in later.
+-- menu.lua — RE2-style title screen (logo + PRESS START -> menu) built on the
+-- ECS scene tree. Navigation uses the runtime input command state
+-- (input.down / input.pressed) with the menu commands (up/down/left/right,
+-- accept, cancel).
 --
--- Layout is described in fractions of the current window size (gfx.screenWidth
--- / gfx.screenHeight) so the menu scales to any window the game is launched in.
+-- States:
+--   PRESS_START  logo + blinking PRESS START. accept/menu -> MENU. After a
+--                timeout the screen fades out and the demo plays (stub).
+--   MENU         logo slid up, menu list with a cursor. up/down/left/right move
+--                the cursor; accept selects (placeholder); cancel -> PRESS_START.
+--   DEMO         fade out to black, run the demo stub, then fade back in to the
+--                PRESS START screen.
 
--- The main-menu entries shown once the title is up. Actions are placeholders
--- for now; when input arrives each item can carry a cb() to run.
+-- The sandboxed VM removes setmetatable, so each Title instance carries its
+-- methods directly instead of sharing them through a class metatable.
+local Title = {}
+local titleMethods = {}
+
+local STATE_PRESS_START = 0
+local STATE_MENU = 1
+local STATE_DEMO = 2
+
+-- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
+local DEMO_TIMEOUT = 60 * 15
+
+-- Colours, kept consistent with the original RE2 title / sdl2 branch look.
+local COLOR_GOLD = "#ffd700" -- selected item / highlighted prompt
+local COLOR_GREY = "#bbbbbb" -- unselected menu item
+local COLOR_DIM  = "#888888" -- PRESS START when not lit
+
+-- Main-menu entries shown once the title is up. Actions are placeholders for
+-- now; each can later carry a callback.
 local MENU_ITEMS = {
     'LOAD GAME',
     'ORIGINAL MODE',
@@ -15,53 +38,153 @@ local MENU_ITEMS = {
     'OPTION',
 }
 
--- How many ticks the highlight rests on one item before advancing.
-local CYCLE_TICKS = 45
+local function setLineColor(component, color, text)
+    scene.setField(component, 'text', '<span color="' .. color .. '">' .. text .. '</span>')
+end
 
--- The sandboxed VM removes setmetatable, so each Menu instance carries its
--- methods directly instead of sharing them through a class metatable.
-local menuMethods = {}
-Menu = {}
+local function refreshItem(self, index)
+    local text = '<span color="'
+        .. (index == self.selected and COLOR_GOLD or COLOR_GREY)
+        .. '">' .. MENU_ITEMS[index] .. '</span>'
+    scene.setField(self.itemComponents[index], 'text', text)
+end
+
+local function moveCursor(self, delta)
+    local n = #MENU_ITEMS
+    self.selected = ((self.selected - 1 + delta) % n) + 1
+    for i = 1, n do
+        refreshItem(self, i)
+    end
+    -- Place the cursor beside the selected item.
+    local y = self.menuTop + (self.selected - 1) * self.menuStep + self.menuLineHeight * 0.5
+    scene.setField(self.cursorEntity, 'y', y)
+end
+
+local function enterMenu(self)
+    self.state = STATE_MENU
+    self.logoTargetY = self.menuLogoY
+    scene.setField(self.pressStart, 'text', '')
+    for i = 1, #MENU_ITEMS do
+        refreshItem(self, i)
+    end
+    scene.setField(self.cursorComponent, 'text', '<span color="' .. COLOR_GOLD .. '">▶</span>')
+    moveCursor(self, 0)
+end
+
+local function enterPressStart(self)
+    self.state = STATE_PRESS_START
+    self.ticks = 0
+    self.logoTargetY = self.pressLogoY
+    for i = 1, #MENU_ITEMS do
+        scene.setField(self.itemComponents[i], 'text', '')
+    end
+    scene.setField(self.cursorComponent, 'text', '')
+    setLineColor(self.pressStart, COLOR_GOLD, 'PRESS START')
+end
+
+local function enterDemo(self)
+    self.state = STATE_DEMO
+    self.demoPhase = 0
+    self.demoTimer = 0
+    -- Hide everything during the fade.
+    scene.setField(self.pressStart, 'text', '')
+    for i = 1, #MENU_ITEMS do
+        scene.setField(self.itemComponents[i], 'text', '')
+    end
+    scene.setField(self.cursorComponent, 'text', '')
+end
+
+local function updateDemo(self)
+    self.demoTimer = self.demoTimer + 1
+    if self.demoPhase == 0 then
+        -- Fade out to black.
+        local t = math.min(self.demoTimer, 60)
+        gfx.fade(0, 0, 0, math.floor((t / 60) * 255))
+        if self.demoTimer >= 60 then
+            self.demoPhase = 1
+            self.demoTimer = 0
+            self:playDemo() -- stub
+        end
+    elseif self.demoPhase == 1 then
+        -- Demo playback stub: hold a moment, then fade back in.
+        if self.demoTimer >= 180 then
+            self.demoPhase = 2
+            self.demoTimer = 0
+        end
+    else
+        -- Fade back in to the title screen.
+        local t = math.min(self.demoTimer, 60)
+        gfx.fade(0, 0, 0, math.floor((1 - t / 60) * 255))
+        if self.demoTimer >= 60 then
+            enterPressStart(self)
+        end
+    end
+end
+
+-- Demo playback placeholder. Real demo replays a recorded gameplay movie; for
+-- now we just log so the flow is observable and return immediately.
+local function playDemo(self)
+    print('[title] playing demo (stub)')
+end
+
+local function selectItem(self)
+    print('[title] selected: ' .. MENU_ITEMS[self.selected])
+end
 
 local function update(self)
     self.ticks = self.ticks + 1
 
-    -- Auto-cycle the highlighted item.
-    if self.ticks % CYCLE_TICKS == 0 then
-        self.selected = (self.selected % #MENU_ITEMS) + 1
-        for i, e in ipairs(self.itemEntities) do
-            self:refreshItem(i, e)
+    -- Smoothly animate the logo toward its target position.
+    local ly = self.logoY + (self.logoTargetY - self.logoY) * 0.15
+    self.logoY = ly
+    scene.setField(self.logoRoot, 'y', ly)
+
+    if self.state == STATE_PRESS_START then
+        -- Blink PRESS START on/off (classic RE2 title behaviour), not a colour
+        -- fade — the sdl2 branch showed it appearing and disappearing.
+        local on = math.floor(self.ticks / 30) % 2 == 0
+        scene.setField(self.pressStart, 'text', on and '<span color="' .. COLOR_GOLD .. '">PRESS START</span>' or '')
+
+        -- Timeout -> demo.
+        if self.ticks >= DEMO_TIMEOUT then
+            enterDemo(self)
+            return
         end
-    end
-
-    -- Pulse the PRESS START prompt.
-    if self.pressStart then
-        local on = math.floor(self.ticks / 20) % 2 == 0
-        scene.setField(
-            self.pressStart,
-            'text',
-            on and '<span color="#ffd700">PRESS START</span>' or '<span color="#888888">PRESS START</span>'
-        )
+        -- Start -> menu.
+        if input.pressed('accept') or input.pressed('menu') then
+            enterMenu(self)
+            return
+        end
+    elseif self.state == STATE_MENU then
+        if input.pressed('up') or input.pressed('left') then
+            moveCursor(self, -1)
+        elseif input.pressed('down') or input.pressed('right') then
+            moveCursor(self, 1)
+        end
+        if input.pressed('accept') then
+            selectItem(self)
+        elseif input.pressed('cancel') then
+            enterPressStart(self)
+        end
+    elseif self.state == STATE_DEMO then
+        updateDemo(self)
     end
 end
 
-local function refreshItem(self, index, component)
-    local text = MENU_ITEMS[index]
-    if index == self.selected then
-        text = '<span color="#ffd700">' .. text .. '</span>'
-    else
-        text = '<span color="#bbbbbb">' .. text .. '</span>'
-    end
-    scene.setField(component, 'text', text)
-end
-
-menuMethods = {
+titleMethods = {
     update = update,
     refreshItem = refreshItem,
+    moveCursor = moveCursor,
+    enterMenu = enterMenu,
+    enterPressStart = enterPressStart,
+    enterDemo = enterDemo,
+    updateDemo = updateDemo,
+    playDemo = playDemo,
+    selectItem = selectItem,
 }
 
---- Creates one centred line of text occupying the given vertical band.
---- Returns the core.text component handle (used to update the string later).
+-- Creates one centred line of text occupying the given vertical band.
+-- Returns the entity handle and the core.text component handle.
 local function createLine(font, bandTop, bandHeight, text, name, flags)
     local e = scene.createEntity(scene.getRoot("user"))
     scene.setField(e, 'name', name)
@@ -73,29 +196,29 @@ local function createLine(font, bandTop, bandHeight, text, name, flags)
     scene.setField(t, 'size.width', gfx.screenWidth())
     scene.setField(t, 'size.height', bandHeight)
     scene.setField(t, 'flags', flags)
-    return t
+    return e, t
 end
 
-function Menu:new()
+function Title:new()
     local instance = {}
-    for name, fn in pairs(menuMethods) do
+    for name, fn in pairs(titleMethods) do
         instance[name] = fn
     end
     instance.selected = 1
     instance.ticks = 0
     instance.itemEntities = {}
+    instance.itemComponents = {}
 
     local h = gfx.screenHeight()
     local w = gfx.screenWidth()
 
+    instance.pressLogoY = h * 0.34
+    instance.menuLogoY = h * 0.18
+
     local bigFont = gfx.loadFont('common/data/font0')
     local smallFont = gfx.loadFont('common/data/font0:small')
 
-    -- Original RE2 title artwork, loaded from the game data (data://).
-    -- The background ADT decodes to a 320x240 full-frame image; the logo is
-    -- paged TIMs carved out of tmoji.bin (indices 1 & 2). Pure-black pixels
-    -- are transparent, so the logo overlays the background. Both are created
-    -- before any text so they draw first (behind the text).
+    -- Original RE2 title background (data://).
     local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
     if bgTex then
         local e = scene.createEntity(scene.getRoot("user"))
@@ -109,23 +232,19 @@ function Menu:new()
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
     end
 
-    -- RE2 title logo: two TIMs packed inside tmoji.bin (index 1 & 2), each an
-    -- 8bpp 128x128 texture with a 256-colour CLUT. The original
-    -- (move_and_display_title_image, 0x005065C0) draws the logo as four tiles
-    -- that assemble in a "11/.2" pattern. Each tile is a child of a central
-    -- "logo root" entity so they share its transform; offsets are relative to
-    -- that centre (1:1, src pixels == screen pixels).
+    -- RE2 title logo: two TIMs packed inside tmoji.bin (index 1 & 2). Each tile
+    -- is a child of a central "logo root" so they share its transform and the
+    -- whole logo slides together when it moves up.
     local logoRoot = scene.createEntity(scene.getRoot("user"))
     scene.setField(logoRoot, 'name', 'menu.logo')
     scene.setField(logoRoot, 'x', w * 0.5)
-    scene.setField(logoRoot, 'y', h * 0.26)
-    -- Scale the logo up 2x in x and y; child tiles inherit the parent's scale.
+    scene.setField(logoRoot, 'y', instance.pressLogoY)
     scene.setField(logoRoot, 'scale.x', 2)
     scene.setField(logoRoot, 'scale.y', 2)
+    instance.logoRoot = logoRoot
+    instance.logoY = instance.pressLogoY
+    instance.logoTargetY = instance.pressLogoY
 
-    -- { timIndex, srcX, srcY, srcW, srcH, offsetX, offsetY from centre }
-    -- Assembles as "11/.2": index1 supplies the top row (top 80 left, bottom 48
-    -- right), index2 the bottom-right column; the bottom-left quadrant is empty.
     local LOGO_TILES = {
         { 1, 0, 0,  128, 80, -144 + 0,   -40 },
         { 1, 0, 80, 128, 48, -144 + 128, -40 },
@@ -159,32 +278,45 @@ function Menu:new()
             '<span color="#707070">OpenRE, Resident Evil 2, Version 1.0</span>',
             'menu.disclaimer',
             TextFlags.xLeft | TextFlags.yMiddle)
-
-        -- PRESS START prompt just above the menu.
-        local bandTop = h * 0.56
-        local bandHeight = h * 0.07
-        instance.pressStart = createLine(
-            bigFont,
-            bandTop, bandHeight,
-            '<span color="#ffd700">PRESS START</span>',
-            'menu.pressStart',
-            TextFlags.xCenter | TextFlags.yMiddle)
-
-        -- Stack the main-menu entries.
-        local top = h * 0.66
-        local step = h * 0.075
-        local lineHeight = h * 0.07
-        for i, _ in ipairs(MENU_ITEMS) do
-            local t = createLine(
-                bigFont,
-                top + (i - 1) * step, lineHeight,
-                MENU_ITEMS[i],
-                'menu.item.' .. i,
-                TextFlags.xCenter | TextFlags.yMiddle)
-            instance:refreshItem(i, t)
-            instance.itemEntities[i] = t
-        end
     end
+
+    -- PRESS START prompt (just above the menu band).
+    local _, pt = createLine(
+        bigFont,
+        h * 0.56, h * 0.07,
+        '<span color="' .. COLOR_GOLD .. '">PRESS START</span>',
+        'menu.pressStart',
+        TextFlags.xCenter | TextFlags.yMiddle)
+    instance.pressStart = pt
+
+    -- Menu items (hidden until the menu opens).
+    instance.menuTop = h * 0.60
+    instance.menuStep = h * 0.075
+    instance.menuLineHeight = h * 0.07
+    for i, _ in ipairs(MENU_ITEMS) do
+        local e, t = createLine(
+            bigFont,
+            instance.menuTop + (i - 1) * instance.menuStep, instance.menuLineHeight,
+            '',
+            'menu.item.' .. i,
+            TextFlags.xCenter | TextFlags.yMiddle)
+        instance.itemEntities[i] = e
+        instance.itemComponents[i] = t
+    end
+
+    -- Menu cursor, placed to the left of the list.
+    local ce, ct = createLine(
+        bigFont,
+        instance.menuTop + instance.menuLineHeight * 0.5, instance.menuLineHeight,
+        '',
+        'menu.cursor',
+        TextFlags.xCenter | TextFlags.yMiddle)
+    scene.setField(ce, 'x', -w * 0.22)
+    instance.cursorEntity = ce
+    instance.cursorComponent = ct
+
+    -- Begin on the PRESS START screen.
+    instance.state = STATE_PRESS_START
 
     re.subscribe(HookKind.tick, function()
         update(instance)
@@ -193,4 +325,4 @@ function Menu:new()
     return instance
 end
 
-return Menu
+return Title
