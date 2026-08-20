@@ -126,6 +126,8 @@
     <ClCompile Include="system_gpu.cpp" />
     <ClCompile Include="system_input.cpp" />
     <ClCompile Include="system_window.cpp" />
+    <ClCompile Include="video_decoder.cpp" />
+    <ClCompile Include="video_system.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="texture_loader.cpp" />
     <ClCompile Include="text_layout.cpp" />
@@ -194,6 +196,8 @@
     <ClInclude Include="system_gpu.h" />
     <ClInclude Include="system_input.h" />
     <ClInclude Include="system_window.h" />
+    <ClInclude Include="video_decoder.h" />
+    <ClInclude Include="video_system.h" />
     <ClInclude Include="systems.h" />
     <ClInclude Include="texture_loader.h" />
     <ClInclude Include="text_layout.h" />

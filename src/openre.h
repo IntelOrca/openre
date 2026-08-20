@@ -245,6 +245,10 @@ namespace openre
     /// Sets the active ECS scene (called once from the app shell on boot).
     void set_current_scene(ecs::Scene& scene);
 
+    /// Returns the running app shell (AppContext) or null before boot / after
+    /// teardown. Lets bindings and systems reach the canonical app state.
+    AppContext* current_app();
+
     // Game-loop stage functions, shared with the ECS systems.
     void psx_main();
     bool handle_special_states();

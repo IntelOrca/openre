@@ -33,7 +33,7 @@ namespace openre
     // ModuleSystem drives the loaded game module when OPENRE_GAME is set;
     // otherwise it is a no-op and LegacyGameSystem drives the original game.
     const SystemFn gAppSystems[] = {
-        system_window, system_input, ModuleSystem, LegacyGameSystem, TextLayoutSystem, RenderSystem,
+        system_window, system_input, ModuleSystem, LegacyGameSystem, TextLayoutSystem, VideoSystem, RenderSystem,
     };
 
     // The resolved game module directory (set once at boot below).
@@ -241,5 +241,11 @@ namespace openre
     void set_current_scene(ecs::Scene& scene)
     {
         s_currentScene = &scene;
+    }
+
+    // The running app shell, so bindings/systems can reach the AppContext.
+    AppContext* current_app()
+    {
+        return s_currentApp;
     }
 }

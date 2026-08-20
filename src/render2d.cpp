@@ -575,6 +575,101 @@ namespace openre::render2d
         return handle;
     }
 
+    int SpriteRenderer::createDynamicTexture(int w, int h)
+    {
+        SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
+        if (!dev || w <= 0 || h <= 0)
+            return 0;
+
+        // SAMPLER lets present() bind it; the RGBA8 layout matches the decoded
+        // video frames. (This SDL build uploads via SDL_UploadToGPUTexture
+        // without a separate COPY_DST flag, matching loadTexture above.)
+        SDL_GPUTextureCreateInfo tci{};
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width = (Uint32)w;
+        tci.height = (Uint32)h;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels = 1;
+        tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+        SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &tci);
+        if (!tex)
+        {
+            logging::logError("[render2d] SDL_CreateGPUTexture(dynamic) failed: {}", SDL_GetError());
+            return 0;
+        }
+
+        int handle = 0;
+        for (int i = 0; i < 4096; i++)
+        {
+            if (impl->nextHandle < 1)
+                impl->nextHandle = 1;
+            const int cand = impl->nextHandle++;
+            if (impl->textures.find(cand) == impl->textures.end())
+            {
+                handle = cand;
+                break;
+            }
+        }
+        if (handle == 0)
+        {
+            logging::logError("[render2d] no free dynamic texture handle");
+            SDL_ReleaseGPUTexture(dev, tex);
+            return 0;
+        }
+
+        impl->textures[handle] = { tex, w, h };
+        return handle;
+    }
+
+    void SpriteRenderer::updateDynamicTexture(int handle, const uint8_t* rgba, int w, int h)
+    {
+        SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
+        auto it = impl->textures.find(handle);
+        if (!dev || rgba == nullptr || it == impl->textures.end() || it->second.texture == nullptr)
+            return;
+        if (w != it->second.width || h != it->second.height)
+            return; // size mismatch - the texture was created for another frame
+
+        const Uint32 bytes = (Uint32)w * (Uint32)h * 4;
+        SDL_GPUTransferBufferCreateInfo tbci{};
+        tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        tbci.size = bytes;
+        SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(dev, &tbci);
+        if (!tb)
+            return;
+        void* mapped = SDL_MapGPUTransferBuffer(dev, tb, false);
+        if (mapped)
+        {
+            std::memcpy(mapped, rgba, bytes);
+            SDL_UnmapGPUTransferBuffer(dev, tb);
+        }
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(dev);
+        if (cmd)
+        {
+            SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+            if (cp)
+            {
+                SDL_GPUTextureTransferInfo src{};
+                src.transfer_buffer = tb;
+                src.pixels_per_row = (Uint32)w;
+                src.rows_per_layer = (Uint32)h;
+                SDL_GPUTextureRegion dst{};
+                dst.texture = it->second.texture;
+                dst.w = (Uint32)w;
+                dst.h = (Uint32)h;
+                dst.d = 1;
+                SDL_UploadToGPUTexture(cp, &src, &dst, false);
+                SDL_EndGPUCopyPass(cp);
+            }
+            SDL_SubmitGPUCommandBuffer(cmd);
+        }
+        SDL_ReleaseGPUTransferBuffer(dev, tb); // deferred until GPU done
+    }
+
     void SpriteRenderer::unloadTexture(int handle)
     {
         if (handle <= 0)

@@ -1,6 +1,8 @@
 #include "script_bindings.h"
 #include "app.h"
+#include "ecs_components.h"
 #include "ecs_scene.h"
+#include "ecs_systems.h"
 #include "font.h"
 #include "interop.hpp"
 #include "logger.h"
@@ -10,7 +12,11 @@
 #include "sce.h"
 #include "script_network.h"
 #include "script_vm.h"
+#include "system_input.h"
+#include "system_window.h"
+#include "systems.h"
 #include "texture_loader.h"
+#include "video_system.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -847,6 +853,94 @@ namespace openre::script
             return 0;
         }
 
+        // core.playMovie(path) - plays a movie, blocking until it finishes or
+        // any input skips it. The video entity is created automatically to fill
+        // the window; rendering is driven here because this call runs inside a
+        // Lua tick hook and the rest of the frame pipeline is suspended until
+        // it returns.
+        int apiPlayMovie(lua_State* L)
+        {
+            const char* path = luaL_checkstring(L, 1);
+            auto* app = openre::current_app();
+            if (app == nullptr)
+                return 0;
+
+            ecs::Entity entity = video_play(*app, path);
+            if (entity == ecs::NullEntity)
+            {
+                logging::logWarning("[core] playMovie failed to start: {}", path);
+                return 0;
+            }
+
+            // Reveal the video: clear any full-screen fade left by the splash.
+            render2d::SpriteRenderer::get().setFade({});
+
+            // Edge-detect input so a key already held from the splash does not
+            // skip the movie immediately. Seed the previous state with the
+            // current state so only presses after start count.
+            uint8_t prevKb[256];
+            system::input::get_keyboard_state(prevKb);
+            uint8_t prevMb = system::input::get_mouse_buttons();
+
+            while (true)
+            {
+                auto* scene = openre::current_scene();
+                const bool playing = scene != nullptr && scene->isValid(entity)
+                    && scene->hasComponent<ecs::VideoComponent>(entity)
+                    && scene->getComponent<ecs::VideoComponent>(entity).status == ecs::VideoStatus::Playing;
+                if (!playing || app->closing() || !app->running())
+                    break;
+
+                // Pump events (keep the window responsive, detect quit).
+                system::window::Event ev;
+                bool skip = false;
+                while (system::window::poll_event(ev))
+                {
+                    if (ev.type == system::window::EventType::Quit || ev.type == system::window::EventType::CloseRequested)
+                    {
+                        skip = true;
+                        app->requestClose();
+                    }
+                }
+
+                // Skip on a fresh key/button press (edge since movie start).
+                uint8_t kb[256];
+                system::input::get_keyboard_state(kb);
+                uint8_t mb = system::input::get_mouse_buttons();
+                for (int i = 0; i < 256; i++)
+                {
+                    if (kb[i] && !prevKb[i])
+                        skip = true;
+                }
+                if (mb && !prevMb)
+                    skip = true;
+                std::memcpy(prevKb, kb, sizeof(prevKb));
+                prevMb = mb;
+
+                if (skip)
+                {
+                    video_stop(*app, entity);
+                    break;
+                }
+
+                // Advance the video and present the frame. frameActive is set
+                // so RenderSystem performs the present this pass.
+                app->frameActive = true;
+                VideoSystem(*app);
+                RenderSystem(*app);
+
+                system::window::delay(8);
+            }
+
+            // Tear down the video entity.
+            video_stop(*app, entity);
+            auto* scene = openre::current_scene();
+            if (scene != nullptr && scene->isValid(entity))
+                scene->destroyEntity(entity);
+            app->frameActive = false;
+            return 0;
+        }
+
 #ifdef DEBUG
         int apiEval(lua_State* L)
         {
@@ -978,6 +1072,9 @@ namespace openre::script
         setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
         setGlobal(L, "gfx.fade", gfxFade);
+
+        // core.* - engine services available to game scripts.
+        setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
 
         luaL_newmetatable(L, METATABLE_SCENE_ENTITY);
         lua_pop(L, 1);

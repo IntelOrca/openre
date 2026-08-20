@@ -124,6 +124,34 @@ namespace openre::ecs
         Entity layoutContainer = NullEntity;
     };
 
+    /// Playback state of a VideoComponent.
+    enum class VideoStatus : uint32_t
+    {
+        Stopped = 0,
+        Playing = 1,
+    };
+
+    /// A video clip drawn into the window by the scene-tree render path.
+    ///
+    /// `resource` is the source movie path (set by core.playMovie). `size` is
+    /// the entity bounds in window pixels (top-left at the world transform
+    /// position); the decoded video is letterboxed inside these bounds while
+    /// preserving its aspect ratio. `status` and `position` (playback time in
+    /// seconds) are advanced by the VideoSystem. `texture` is the render2d
+    /// dynamic-texture handle for the latest decoded frame (0 when none), and
+    /// `videoWidth`/`videoHeight` are the native decoded frame size used to
+    /// compute the aspect-preserving draw rectangle.
+    struct VideoComponent
+    {
+        std::string resource;
+        Size2f size;
+        VideoStatus status = VideoStatus::Stopped;
+        float position = 0.0f;
+        int texture = 0;
+        int videoWidth = 0;
+        int videoHeight = 0;
+    };
+
     /// Marks the entity as the "legacy game": the game driven by the original
     /// RE2 loop (psx_main). The LegacyGameSystem updates it and the
     /// RenderSystem presents it, both only while `enabled` is true. Its world

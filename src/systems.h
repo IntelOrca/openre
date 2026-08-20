@@ -16,6 +16,7 @@ namespace openre
     void ModuleSystem(AppContext& app);
     void LegacyGameSystem(AppContext& app);
     void TextLayoutSystem(AppContext& app);
+    void VideoSystem(AppContext& app);
     void RenderSystem(AppContext& app);
 
     // Sets the frame-pacing baseline used by the LegacyGameSystem throttle.

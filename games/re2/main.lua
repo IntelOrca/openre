@@ -41,6 +41,7 @@ scheduler
     :fadeOut(60)
     :exec(function()
         hideSplash()
+        core.playMovie("pl0\\zmovie\\title_l.bin")
         Menu:new()
     end)
     :fadeIn(60)

@@ -77,6 +77,15 @@ namespace openre::render2d
         // failure). The image data is copied, so the caller may free it.
         int loadTexture(const Image& image);
 
+        // Allocates an RGBA8 2D texture that can be re-uploaded every frame via
+        // updateDynamicTexture(). Returns an opaque handle (0 on failure),
+        // usable with present() and unloadTexture(). Intended for video frames.
+        int createDynamicTexture(int w, int h);
+
+        // Re-uploads an RGBA8 frame (w*h*4 contiguous bytes) into a dynamic
+        // texture previously created by createDynamicTexture().
+        void updateDynamicTexture(int handle, const uint8_t* rgba, int w, int h);
+
         // Releases a texture previously returned by loadTexture().
         void unloadTexture(int handle);
 

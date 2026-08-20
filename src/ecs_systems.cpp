@@ -252,6 +252,44 @@ namespace openre
                 draws.push_back(d);
             });
 
+            // Video entities: letterbox the decoded frame into the entity
+            // bounds (preserving aspect ratio) and draw it like a texture.
+            app.scene.each<ecs::VideoComponent>([&](ecs::Entity entity, ecs::VideoComponent& video) {
+                if (video.status != ecs::VideoStatus::Playing || video.texture == 0)
+                    return;
+                if (video.videoWidth <= 0 || video.videoHeight <= 0)
+                    return;
+
+                const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
+                const float x = world.m[3][0];
+                const float y = world.m[3][1];
+                const float sx
+                    = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
+                const float sy
+                    = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
+
+                const float boundsW = video.size.width * sx;
+                const float boundsH = video.size.height * sy;
+                const float vw = static_cast<float>(video.videoWidth);
+                const float vh = static_cast<float>(video.videoHeight);
+                const float scale = std::min(boundsW / vw, boundsH / vh);
+                const float dw = vw * scale;
+                const float dh = vh * scale;
+                const float dx = x + (boundsW - dw) * 0.5f;
+                const float dy = y + (boundsH - dh) * 0.5f;
+
+                render2d::SpriteDraw d{};
+                d.textureHandle = video.texture;
+                d.src = { 0, 0, 0, 0 };
+                d.dst = { dx, dy, dw, dh };
+                d.flags = render2d::kStretchX | render2d::kStretchY;
+                d.r = 255;
+                d.g = 255;
+                d.b = 255;
+                d.a = 255;
+                draws.push_back(d);
+            });
+
             // Full-window fade overlay set this frame (Lua gfx.fade).
             const auto fade = render2d::SpriteRenderer::get().takeFade();
             if (fade.active && fade.a > 0)
