@@ -1,10 +1,13 @@
 #include "resmgr.h"
 
+#include "font.h"
 #include "logger.h"
 #include "render2d.h"
 
 #include <string>
+#include <typeindex>
 #include <utility>
+#include <vector>
 
 namespace openre
 {
@@ -17,6 +20,46 @@ namespace openre
         // an already-destroyed object in that "late release" path.
         static ResourceManager* instance = new ResourceManager();
         return *instance;
+    }
+
+    std::vector<ResourceManager::ResourceInfo> ResourceManager::list() const
+    {
+        std::vector<ResourceInfo> result;
+        for (ResourceCookie cookie = 1; cookie <= this->cookies.size(); cookie++)
+        {
+            const auto handle = this->cookies[cookie - 1];
+            if (handle == 0 || handle > this->resources.size())
+                continue;
+            const auto& entry = this->resources[handle - 1];
+
+            ResourceInfo info;
+            info.cookie = cookie;
+            info.path = entry.path;
+            if (entry.typeIndex == std::type_index(typeid(TextureResource)))
+            {
+                info.type = "texture";
+                if (auto* tex = static_cast<TextureResource*>(entry.resource.get()))
+                {
+                    info.width = tex->rgbaWidth;
+                    info.height = tex->rgbaHeight;
+                }
+            }
+            else if (entry.typeIndex == std::type_index(typeid(FontResource)))
+            {
+                info.type = "font";
+                if (auto* font = static_cast<FontResource*>(entry.resource.get()))
+                {
+                    info.width = font->width;
+                    info.height = font->height;
+                }
+            }
+            else
+            {
+                info.type = "unknown";
+            }
+            result.push_back(std::move(info));
+        }
+        return result;
     }
 
     TextureResource::~TextureResource()

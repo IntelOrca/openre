@@ -10,6 +10,7 @@
 #include "render2d.h"
 #include "resmgr.h"
 #include "sce.h"
+#include "script.h"
 #include "script_network.h"
 #include "script_vm.h"
 #include "system_input.h"
@@ -419,14 +420,20 @@ namespace openre::script
 
         // ── scene.* / gfx.* ────────────────────────────────────────────────
         // The scene-tree API. Entities and components are light userdata
-        // handles into the current ECS scene; textures are userdata wrapping a
-        // ResourceCookie that the resource manager releases on __gc.
+        // handles into the current ECS scene; textures/fonts are userdata
+        // wrapping a ResourceCookie. The resource manager owns the underlying
+        // resource for the session (released at shutdown) — the handle does not
+        // free it on Lua garbage collection, otherwise dropping the only Lua
+        // reference (e.g. a local) would unload a texture still used by a
+        // sprite. The sprite/text component keeps the cookie alive.
 
         namespace ComponentKind
         {
             constexpr int32_t transform = 1;
             constexpr int32_t sprite = 2;
             constexpr int32_t text = 3;
+            constexpr int32_t legacy = 4;
+            constexpr int32_t video = 5;
         }
 
         struct SceneEntityHandle
@@ -663,6 +670,42 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::legacy)
+            {
+                auto* legacy = scene->tryGetComponent<ecs::LegacyGameComponent>(entity);
+                if (legacy == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no legacy component");
+                if (strcmp(name, "enabled") == 0)
+                    legacy->enabled = lua_toboolean(L, 3);
+                else if (strcmp(name, "size.width") == 0)
+                    legacy->size.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "size.height") == 0)
+                    legacy->size.height = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown legacy field '%s'", name);
+                return 0;
+            }
+
+            if (comp->kind == ComponentKind::video)
+            {
+                auto* video = scene->tryGetComponent<ecs::VideoComponent>(entity);
+                if (video == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no video component");
+                if (strcmp(name, "status") == 0)
+                    video->status = static_cast<ecs::VideoStatus>(luaL_checkinteger(L, 3));
+                else if (strcmp(name, "position") == 0)
+                    video->position = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "videoWidth") == 0)
+                    video->videoWidth = static_cast<int>(luaL_checkinteger(L, 3));
+                else if (strcmp(name, "videoHeight") == 0)
+                    video->videoHeight = static_cast<int>(luaL_checkinteger(L, 3));
+                else if (strcmp(name, "resource") == 0)
+                    video->resource = luaL_checkstring(L, 3);
+                else
+                    return luaL_error(L, "scene.setField: unknown video field '%s'", name);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -758,6 +801,48 @@ namespace openre::script
                 return 1;
             }
 
+            if (comp->kind == ComponentKind::legacy)
+            {
+                auto* legacy = scene->tryGetComponent<ecs::LegacyGameComponent>(entity);
+                if (legacy == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "enabled") == 0)
+                    lua_pushboolean(L, legacy->enabled);
+                else if (strcmp(name, "size.width") == 0)
+                    lua_pushnumber(L, legacy->size.width);
+                else if (strcmp(name, "size.height") == 0)
+                    lua_pushnumber(L, legacy->size.height);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::video)
+            {
+                auto* video = scene->tryGetComponent<ecs::VideoComponent>(entity);
+                if (video == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "status") == 0)
+                    lua_pushinteger(L, static_cast<lua_Integer>(video->status));
+                else if (strcmp(name, "position") == 0)
+                    lua_pushnumber(L, video->position);
+                else if (strcmp(name, "videoWidth") == 0)
+                    lua_pushinteger(L, video->videoWidth);
+                else if (strcmp(name, "videoHeight") == 0)
+                    lua_pushinteger(L, video->videoHeight);
+                else if (strcmp(name, "resource") == 0)
+                    lua_pushlstring(L, video->resource.data(), video->resource.size());
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
             lua_pushnil(L);
             return 1;
         }
@@ -807,28 +892,6 @@ namespace openre::script
             return 1;
         }
 
-        int fontRelease(lua_State* L)
-        {
-            auto* font = static_cast<FontHandle*>(luaL_checkudata(L, 1, METATABLE_FONT));
-            if (font->cookie != 0)
-            {
-                ResourceManager::get().release(font->cookie);
-                font->cookie = 0;
-            }
-            return 0;
-        }
-
-        int textureRelease(lua_State* L)
-        {
-            auto* tex = static_cast<TextureHandle*>(luaL_checkudata(L, 1, METATABLE_TEXTURE));
-            if (tex->cookie != 0)
-            {
-                ResourceManager::get().release(tex->cookie);
-                tex->cookie = 0;
-            }
-            return 0;
-        }
-
         int gfxScreenWidth(lua_State* L)
         {
             lua_pushinteger(L, render2d::SpriteRenderer::get().screenWidth());
@@ -851,6 +914,221 @@ namespace openre::script
             state.a = static_cast<uint8_t>(luaL_checkinteger(L, 4));
             render2d::SpriteRenderer::get().setFade(state);
             return 0;
+        }
+
+        // ── scene enumeration / inspection (used by the debug web UI) ───────
+
+        // Resolve a component type name to its ComponentKind (0 if unknown).
+        int32_t componentKindFromName(const char* name)
+        {
+            if (strcmp(name, "core.transform") == 0)
+                return ComponentKind::transform;
+            if (strcmp(name, "core.sprite") == 0)
+                return ComponentKind::sprite;
+            if (strcmp(name, "core.text") == 0)
+                return ComponentKind::text;
+            if (strcmp(name, "core.legacy") == 0)
+                return ComponentKind::legacy;
+            if (strcmp(name, "core.video") == 0)
+                return ComponentKind::video;
+            return 0;
+        }
+
+        // Returns a table of every live entity id in the scene.
+        int sceneAllEntities(lua_State* L)
+        {
+            auto* scene = current_scene();
+            lua_newtable(L);
+            if (scene == nullptr)
+                return 1;
+            int n = 0;
+            scene->eachEntity([&](ecs::Entity e) {
+                n++;
+                lua_pushinteger(L, static_cast<lua_Integer>(e));
+                lua_rawseti(L, -2, n);
+            });
+            return 1;
+        }
+
+        // Builds a SceneEntityHandle userdata from an integer entity id, or nil
+        // if the scene is inactive or the id is stale.
+        int sceneEntityFromId(lua_State* L)
+        {
+            auto id = static_cast<ecs::Entity>(luaL_checkinteger(L, 1));
+            auto* scene = current_scene();
+            if (scene == nullptr || !scene->isValid(id))
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            auto* h = static_cast<SceneEntityHandle*>(lua_newuserdata(L, sizeof(SceneEntityHandle)));
+            h->entity = id;
+            luaL_getmetatable(L, METATABLE_SCENE_ENTITY);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        // Returns a SceneComponentHandle for (entity, typeName), or nil when the
+        // entity lacks that component.
+        int sceneComponent(lua_State* L)
+        {
+            auto* h = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* name = luaL_checkstring(L, 2);
+            auto* scene = current_scene();
+            if (scene == nullptr || !scene->isValid(h->entity))
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            const int32_t kind = componentKindFromName(name);
+            if (kind == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            bool present = true;
+            switch (kind)
+            {
+            case ComponentKind::transform: present = true; break;
+            case ComponentKind::sprite: present = scene->hasComponent<ecs::SpriteComponent>(h->entity); break;
+            case ComponentKind::text: present = scene->hasComponent<ecs::TextComponent>(h->entity); break;
+            case ComponentKind::legacy: present = scene->hasComponent<ecs::LegacyGameComponent>(h->entity); break;
+            case ComponentKind::video: present = scene->hasComponent<ecs::VideoComponent>(h->entity); break;
+            }
+            if (!present)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            auto* comp = static_cast<SceneComponentHandle*>(lua_newuserdata(L, sizeof(SceneComponentHandle)));
+            comp->entity = h->entity;
+            comp->kind = kind;
+            luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        // Returns a table of the component type names present on an entity.
+        int sceneGetComponents(lua_State* L)
+        {
+            auto* h = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* scene = current_scene();
+            lua_newtable(L);
+            if (scene == nullptr || !scene->isValid(h->entity))
+                return 1;
+            int n = 0;
+            auto push = [&](const char* name) {
+                n++;
+                lua_pushlstring(L, name, strlen(name));
+                lua_rawseti(L, -2, n);
+            };
+            push("core.transform");
+            if (scene->hasComponent<ecs::SpriteComponent>(h->entity))
+                push("core.sprite");
+            if (scene->hasComponent<ecs::TextComponent>(h->entity))
+                push("core.text");
+            if (scene->hasComponent<ecs::LegacyGameComponent>(h->entity))
+                push("core.legacy");
+            if (scene->hasComponent<ecs::VideoComponent>(h->entity))
+                push("core.video");
+            return 1;
+        }
+
+        // Returns the parent entity id, or nil for the scene root.
+        int sceneParent(lua_State* L)
+        {
+            auto* h = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* scene = current_scene();
+            if (scene == nullptr || !scene->isValid(h->entity))
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            const auto& t = scene->getComponent<ecs::TransformComponent>(h->entity);
+            if (t.parent == ecs::NullEntity)
+                lua_pushnil(L);
+            else
+                lua_pushinteger(L, static_cast<lua_Integer>(t.parent));
+            return 1;
+        }
+
+        // Returns a table of child entity ids.
+        int sceneChildren(lua_State* L)
+        {
+            auto* h = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* scene = current_scene();
+            lua_newtable(L);
+            if (scene == nullptr || !scene->isValid(h->entity))
+                return 1;
+            const auto& t = scene->getComponent<ecs::TransformComponent>(h->entity);
+            int n = 0;
+            ecs::Entity child = t.firstChild;
+            while (child != ecs::NullEntity)
+            {
+                n++;
+                lua_pushinteger(L, static_cast<lua_Integer>(child));
+                lua_rawseti(L, -2, n);
+                child = scene->getComponent<ecs::TransformComponent>(child).nextSibling;
+            }
+            return 1;
+        }
+
+        // ── gfx resource inspection (used by the debug web UI) ──────────────
+
+        // Returns a table of every live resource: { cookie, type, path, width, height }.
+        int gfxListResources(lua_State* L)
+        {
+            auto& rm = ResourceManager::get();
+            auto infos = rm.list();
+            lua_newtable(L);
+            int n = 0;
+            for (const auto& info : infos)
+            {
+                n++;
+                lua_newtable(L);
+                lua_pushinteger(L, info.cookie);
+                lua_setfield(L, -2, "cookie");
+                lua_pushlstring(L, info.type.data(), info.type.size());
+                lua_setfield(L, -2, "type");
+                lua_pushlstring(L, info.path.data(), info.path.size());
+                lua_setfield(L, -2, "path");
+                lua_pushinteger(L, info.width);
+                lua_setfield(L, -2, "width");
+                lua_pushinteger(L, info.height);
+                lua_setfield(L, -2, "height");
+                lua_rawseti(L, -2, n);
+            }
+            return 1;
+        }
+
+        // Returns { width, height, data } for a resource's texture pixels
+        // (RGBA byte string), or nil when unavailable. Fonts resolve to their
+        // atlas texture.
+        int gfxGetResourceImage(lua_State* L)
+        {
+            auto cookie = static_cast<ResourceCookie>(luaL_checkinteger(L, 1));
+            auto& rm = ResourceManager::get();
+            auto pushTex = [&](const TextureResource* tex) -> int {
+                if (tex == nullptr || tex->rgba.empty())
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                lua_newtable(L);
+                lua_pushinteger(L, tex->rgbaWidth);
+                lua_setfield(L, -2, "width");
+                lua_pushinteger(L, tex->rgbaHeight);
+                lua_setfield(L, -2, "height");
+                lua_pushlstring(L, reinterpret_cast<const char*>(tex->rgba.data()), tex->rgba.size());
+                lua_setfield(L, -2, "data");
+                return 1;
+            };
+            if (auto* tex = rm.fromCookie<TextureResource>(cookie))
+                return pushTex(tex);
+            if (auto* font = rm.fromCookie<FontResource>(cookie))
+                return pushTex(rm.fromCookie<TextureResource>(font->atlas));
+            lua_pushnil(L);
+            return 1;
         }
 
         // core.playMovie(path) - plays a movie, blocking until it finishes or
@@ -928,6 +1206,11 @@ namespace openre::script
                 app->frameActive = true;
                 VideoSystem(*app);
                 RenderSystem(*app);
+
+                // Keep the web inspector responsive while this blocking loop
+                // occupies the main thread (the regular script tick never runs
+                // until the movie ends otherwise).
+                openre::script::pumpScript("web");
 
                 system::window::delay(8);
             }
@@ -1065,6 +1348,12 @@ namespace openre::script
         setGlobal(L, "scene.setField", sceneSetField);
         setGlobal(L, "scene.getField", sceneGetField);
         setGlobal(L, "scene.exit", sceneExit);
+        setGlobal(L, "scene.allEntities", sceneAllEntities);
+        setGlobal(L, "scene.entityFromId", sceneEntityFromId);
+        setGlobal(L, "scene.component", sceneComponent);
+        setGlobal(L, "scene.getComponents", sceneGetComponents);
+        setGlobal(L, "scene.parent", sceneParent);
+        setGlobal(L, "scene.children", sceneChildren);
 
         // gfx.* - 2D engine rendering (textures, fonts, window size, fades).
         setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
@@ -1072,6 +1361,8 @@ namespace openre::script
         setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
         setGlobal(L, "gfx.fade", gfxFade);
+        setGlobal(L, "gfx.listResources", gfxListResources);
+        setGlobal(L, "gfx.getResourceImage", gfxGetResourceImage);
 
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
@@ -1081,12 +1372,8 @@ namespace openre::script
         luaL_newmetatable(L, METATABLE_SCENE_COMPONENT);
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_TEXTURE);
-        lua_pushcfunction(L, textureRelease);
-        lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_FONT);
-        lua_pushcfunction(L, fontRelease);
-        lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 
         luaL_newmetatable(L, METATABLE_ENTITY);

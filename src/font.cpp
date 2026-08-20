@@ -137,6 +137,11 @@ namespace openre
         atlasResource->textureHandle = textureHandle;
         atlasResource->width = image.width;
         atlasResource->height = image.height;
+        if (render2d::decodeImageToRgba(image, atlasResource->rgba))
+        {
+            atlasResource->rgbaWidth = image.width;
+            atlasResource->rgbaHeight = image.height;
+        }
         auto atlasCookie = resmgr.addFirstRef<TextureResource>(filePath + "#atlas", std::move(atlasResource));
 
         auto font = std::make_unique<FontResource>();

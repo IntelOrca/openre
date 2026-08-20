@@ -313,14 +313,49 @@ function scene.addComponent(entity, name) end
 ---@param value any
 function scene.setField(handle, name, value) end
 
---- Read a field on an entity or component. Returns nil for unknown fields.
---- Fields use the same names as scene.setField. The `texture` / `font` fields
---- are returned as the numeric ResourceCookie, not an object; `flags` is
+--- Read a single field on an entity or component. Returns nil for unknown
+--- fields. Fields use the same names as scene.setField. The `texture` / `font`
+--- fields are returned as the numeric ResourceCookie, not an object; `flags` is
 --- returned as the numeric bitmask.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@return any
 function scene.getField(handle, name) end
+
+--- Return a table of every live entity id (integers) in the current scene,
+--- including the hidden root. Returns an empty table when no scene is active.
+---@return integer[]
+function scene.allEntities() end
+
+--- Build a SceneEntity handle from an integer entity id, or nil when the scene
+--- is inactive or the id is stale.
+---@param id integer
+---@return SceneEntity|nil
+function scene.entityFromId(id) end
+
+--- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
+--- one of "core.transform", "core.sprite", "core.text", "core.legacy" or
+--- "core.video". Returns nil when the entity lacks that component.
+---@param entity SceneEntity
+---@param typeName string
+---@return SceneComponent|nil
+function scene.component(entity, typeName) end
+
+--- Return a table of the component type names present on an entity (always
+--- including "core.transform").
+---@param entity SceneEntity
+---@return string[]
+function scene.getComponents(entity) end
+
+--- Return the parent entity id, or nil for the scene root / no scene.
+---@param entity SceneEntity
+---@return integer|nil
+function scene.parent(entity) end
+
+--- Return a table of child entity ids.
+---@param entity SceneEntity
+---@return integer[]
+function scene.children(entity) end
 
 --- Request the application to exit.
 function scene.exit() end
@@ -375,5 +410,19 @@ function gfx.screenHeight() end
 ---@param b integer 0-255
 ---@param a integer 0-255 alpha
 function gfx.fade(r, g, b, a) end
+
+--- Enumerate every live resource in the engine ResourceManager. Returns a table
+--- (array) of `{ cookie, type, path, width, height }` where `type` is
+--- "texture", "font" or "unknown".
+---@return { cookie: integer, type: string, path: string, width: integer, height: integer }[]
+function gfx.listResources() end
+
+--- Return the decoded RGBA pixels of a resource's texture as
+--- `{ width, height, data }` where `data` is a binary string of `width*height*4`
+--- bytes (R,G,B,A per pixel), or nil when unavailable. Fonts resolve to their
+--- atlas texture.
+---@param cookie integer
+---@return { width: integer, height: integer, data: string }|nil
+function gfx.getResourceImage(cookie) end
 
 return re

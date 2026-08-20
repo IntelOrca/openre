@@ -41,6 +41,13 @@ namespace openre
         int width = 0;
         int height = 0;
 
+        // Decoded RGBA pixels (per-pixel R,G,B,A), cached at load time so the
+        // debug web UI can preview the texture without re-decoding the source.
+        // Empty for resources created without pixel data.
+        std::vector<uint8_t> rgba;
+        int rgbaWidth = 0;
+        int rgbaHeight = 0;
+
         ~TextureResource() override;
 
         const char* getName() const override
@@ -97,6 +104,19 @@ namespace openre
         ResourceCookie addRef(ResourceHandle handle);
         ResourceCookie dupRef(ResourceCookie cookie);
         void release(ResourceCookie cookie);
+
+        /// A snapshot of a single resource, used for enumeration/debugging.
+        struct ResourceInfo
+        {
+            ResourceCookie cookie = 0;
+            std::string type; // e.g. "texture", "font"
+            std::string path; // resource key
+            int width = 0;
+            int height = 0;
+        };
+
+        /// Enumerates every live resource, in cookie order.
+        std::vector<ResourceInfo> list() const;
 
         /// Releases every resource and clears the registry. Call before the
         /// renderer/GPU teardown so resource destructors (e.g. TextureResource

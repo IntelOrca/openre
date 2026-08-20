@@ -106,9 +106,14 @@ namespace openre
         const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
         if (legacy.enabled)
         {
-            // Special states (movie / reset) consume the frame.
+            // Special states (movie / reset) consume the frame, but we still
+            // tick scripts so the web inspector server keeps responding while
+            // a movie plays (otherwise HTTP requests hang until it finishes).
             if (handle_special_states())
+            {
+                openre::script::tick();
                 return;
+            }
 
             update_game();
         }

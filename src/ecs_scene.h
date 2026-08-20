@@ -108,6 +108,17 @@ namespace openre::ecs
             storage<T>().each(std::forward<Fn>(fn));
         }
 
+        /// Calls fn(entity) for every live entity in the scene (including the
+        /// hidden root). Used by the debug web UI to enumerate the tree.
+        template<typename Fn> void eachEntity(Fn&& fn) const
+        {
+            for (uint32_t i = 0; i < m_records.size(); i++)
+            {
+                if (m_records[i].alive)
+                    fn(make_entity(i, m_records[i].generation));
+            }
+        }
+
         /// The first live entity carrying a T component, or the null entity.
         template<typename T> Entity find()
         {

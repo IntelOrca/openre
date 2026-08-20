@@ -53,6 +53,29 @@ namespace openre::script
                 entry.second->callHooks(HookKind::tick);
             }
         }
+
+        // OPENRE_LUA_GC forces a full collect on every frame so lifetime bugs
+        // (e.g. textures held only by a fleeting Lua reference) surface
+        // immediately instead of waiting for the natural GC cadence.
+        static const bool forceGc = [] {
+            const char* e = std::getenv("OPENRE_LUA_GC");
+            return e != nullptr && (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+        }();
+        if (forceGc)
+        {
+            for (auto& entry : _scripts)
+            {
+                if (entry.second)
+                    entry.second->collectGarbage();
+            }
+        }
+    }
+
+    void ScriptManager::pumpScript(const std::string& name)
+    {
+        auto it = _scripts.find(name);
+        if (it != _scripts.end() && it->second)
+            it->second->callHooks(HookKind::tick);
     }
 
     void ScriptManager::loadScripts()

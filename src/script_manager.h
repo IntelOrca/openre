@@ -26,6 +26,11 @@ namespace openre::script
         // Called once per frame from the game loop.
         void tick();
 
+        // Runs the tick hooks of a single named script. Used to keep specific
+        // scripts (e.g. the web inspector) alive while the main loop is blocked
+        // inside a long-running hook such as a blocking movie playback.
+        void pumpScript(const std::string& name);
+
         // Loads a game module directory (games/<name>) - runs main.lua in a
         // dedicated Lua VM registered so tick() drives it. No-op if already
         // loaded.

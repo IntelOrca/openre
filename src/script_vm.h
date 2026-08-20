@@ -40,6 +40,9 @@ namespace openre::script
         // Invoke all hooks subscribed for `kind`, each wrapped in pcall.
         void callHooks(HookKind kind);
 
+        // Force a full garbage collection cycle in this VM.
+        void collectGarbage();
+
         // Close the Lua state, running all __gc finalizers (disposes sockets etc).
         void dispose();
 

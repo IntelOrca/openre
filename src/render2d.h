@@ -20,6 +20,12 @@ namespace openre::render2d
         std::vector<uint8_t> palette;
     };
 
+    // Decodes a render2d::Image into 32-bit RGBA (per-pixel byte order
+    // R, G, B, A). Returns false if the image format is unsupported or its
+    // pixel buffer is too small. Used both for GPU upload and for exporting
+    // a texture's pixels to the debug web UI.
+    bool decodeImageToRgba(const Image& img, std::vector<uint8_t>& rgba);
+
     // Per-axis draw flags (mirrors the scene SpriteComponent flags).
     constexpr uint32_t kRepeatX = 1 << 0;
     constexpr uint32_t kRepeatY = 1 << 1;

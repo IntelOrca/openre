@@ -201,6 +201,12 @@ namespace openre::script
         _subscriptions.push_back({ kind, registryRef });
     }
 
+    void LuaVm::collectGarbage()
+    {
+        if (_state != nullptr)
+            lua_gc(_state, LUA_GCCOLLECT, 0);
+    }
+
     std::unique_ptr<LuaVm> createLuaVm(std::string name, std::vector<std::filesystem::path> searchPaths)
     {
         return std::make_unique<LuaVm>(std::move(name), std::move(searchPaths));

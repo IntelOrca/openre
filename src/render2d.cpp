@@ -53,151 +53,151 @@ namespace openre::render2d
             v.r = (uint8_t)((packedColor >> 16) & 0xFF);
             v.a = (uint8_t)((packedColor >> 24) & 0xFF);
         }
-
-        // Decodes a render2d::Image into 32-bit RGBA (used by texture upload).
-        // Mirrors the colour/black-key semantics of the legacy texture loader.
-        bool decodeToRgba(const Image& img, std::vector<uint8_t>& rgba)
-        {
-            rgba.assign((size_t)img.width * img.height * 4, 0);
-
-            if (img.depth == 16)
-            {
-                const size_t needed = (size_t)img.width * img.height * 2;
-                if (img.pixels.size() < needed)
-                {
-                    logging::logWarning("[render2d] 16bpp image pixels too small ({} < {})", img.pixels.size(), needed);
-                    return false;
-                }
-                const auto* src = (const uint16_t*)img.pixels.data();
-                for (int y = 0; y < img.height; y++)
-                {
-                    const uint16_t* row = src + (size_t)y * img.width;
-                    uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
-                    for (int x = 0; x < img.width; x++)
-                    {
-                        const uint16_t v = row[x];
-                        // RE2 PC transparency: pixels with no colour (RGB == 0,
-                        // e.g. 0x0000 or 0x8000) are fully transparent.
-                        const bool transparent = (v & 0x7FFF) == 0;
-                        if (img.psxFormat)
-                        {
-                            // PSX 555: red low, no alpha.
-                            dst[0] = (uint8_t)((v & 0x1F) << 3);
-                            dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
-                            dst[2] = (uint8_t)(((v >> 10) & 0x1F) << 3);
-                        }
-                        else
-                        {
-                            // 555 layout: blue low, alpha in bit 15.
-                            dst[0] = (uint8_t)(((v >> 10) & 0x1F) << 3);
-                            dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
-                            dst[2] = (uint8_t)((v & 0x1F) << 3);
-                        }
-                        dst[3] = transparent ? 0x00 : 0xFF;
-                        dst += 4;
-                    }
-                }
-                return true;
-            }
-
-            if (img.depth == 32)
-            {
-                const size_t needed = (size_t)img.width * img.height * 4;
-                if (img.pixels.size() < needed)
-                {
-                    logging::logWarning("[render2d] 32bpp image pixels too small ({} < {})", img.pixels.size(), needed);
-                    return false;
-                }
-                const auto* src = (const uint32_t*)img.pixels.data();
-                for (int y = 0; y < img.height; y++)
-                {
-                    const uint32_t* row = src + (size_t)y * img.width;
-                    uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
-                    for (int x = 0; x < img.width; x++)
-                    {
-                        const uint32_t v = row[x];
-                        dst[0] = (uint8_t)((v >> 16) & 0xFF);
-                        dst[1] = (uint8_t)((v >> 8) & 0xFF);
-                        dst[2] = (uint8_t)(v & 0xFF);
-                        dst[3] = (uint8_t)((v >> 24) & 0xFF);
-                        dst += 4;
-                    }
-                }
-                return true;
-            }
-
-            if (img.depth == 4 || img.depth == 8)
-            {
-                if (img.palBpp != 16 || img.palCnt <= 0)
-                {
-                    logging::logWarning(
-                        "[render2d] paletted image without 16bpp palette (palBpp={} palCnt={})", img.palBpp, img.palCnt);
-                    return false;
-                }
-                const int entriesPerPal = img.depth == 4 ? 16 : 256;
-                const size_t palNeeded = (size_t)entriesPerPal * img.palCnt * 2;
-                if (img.palette.size() < palNeeded)
-                {
-                    logging::logWarning("[render2d] palette too small ({} < {})", img.palette.size(), palNeeded);
-                    return false;
-                }
-                const auto* pal = (const uint16_t*)img.palette.data();
-
-                uint8_t lut[256 * 4];
-                for (int i = 0; i < entriesPerPal; i++)
-                {
-                    const uint16_t e = pal[i];
-                    lut[i * 4 + 0] = (uint8_t)((e & 0x1F) << 3);
-                    lut[i * 4 + 1] = (uint8_t)(((e >> 5) & 0x1F) << 3);
-                    lut[i * 4 + 2] = (uint8_t)(((e >> 10) & 0x1F) << 3);
-                    lut[i * 4 + 3] = ((e & 0x7FFF) == 0) ? 0x00 : 0xFF;
-                }
-
-                if (img.depth == 4)
-                {
-                    const size_t rowBytes = ((size_t)img.width + 1) / 2;
-                    if (img.pixels.size() < rowBytes * (size_t)img.height)
-                    {
-                        logging::logWarning("[render2d] 4bpp image pixels too small");
-                        return false;
-                    }
-                    for (int y = 0; y < img.height; y++)
-                    {
-                        const uint8_t* src = img.pixels.data() + (size_t)y * rowBytes;
-                        uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
-                        for (int x = 0; x < img.width; x++)
-                        {
-                            const uint8_t nib = (x & 1) ? (src[x / 2] >> 4) : (src[x / 2] & 0xF);
-                            std::memcpy(dst + x * 4, lut + (size_t)nib * 4, 4);
-                        }
-                    }
-                }
-                else
-                {
-                    const size_t rowBytes = (size_t)img.width;
-                    if (img.pixels.size() < rowBytes * (size_t)img.height)
-                    {
-                        logging::logWarning("[render2d] 8bpp image pixels too small");
-                        return false;
-                    }
-                    for (int y = 0; y < img.height; y++)
-                    {
-                        const uint8_t* src = img.pixels.data() + (size_t)y * rowBytes;
-                        uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
-                        for (int x = 0; x < img.width; x++)
-                        {
-                            const uint8_t idx = src[x];
-                            std::memcpy(dst + x * 4, lut + (size_t)idx * 4, 4);
-                        }
-                    }
-                }
-                return true;
-            }
-
-            logging::logWarning("[render2d] unsupported depth {}", img.depth);
-            return false;
-        }
     } // namespace
+
+    // Decodes a render2d::Image into 32-bit RGBA (used by texture upload).
+    // Mirrors the colour/black-key semantics of the legacy texture loader.
+    bool decodeImageToRgba(const Image& img, std::vector<uint8_t>& rgba)
+    {
+        rgba.assign((size_t)img.width * img.height * 4, 0);
+
+        if (img.depth == 16)
+        {
+            const size_t needed = (size_t)img.width * img.height * 2;
+            if (img.pixels.size() < needed)
+            {
+                logging::logWarning("[render2d] 16bpp image pixels too small ({} < {})", img.pixels.size(), needed);
+                return false;
+            }
+            const auto* src = (const uint16_t*)img.pixels.data();
+            for (int y = 0; y < img.height; y++)
+            {
+                const uint16_t* row = src + (size_t)y * img.width;
+                uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
+                for (int x = 0; x < img.width; x++)
+                {
+                    const uint16_t v = row[x];
+                    // RE2 PC transparency: pixels with no colour (RGB == 0,
+                    // e.g. 0x0000 or 0x8000) are fully transparent.
+                    const bool transparent = (v & 0x7FFF) == 0;
+                    if (img.psxFormat)
+                    {
+                        // PSX 555: red low, no alpha.
+                        dst[0] = (uint8_t)((v & 0x1F) << 3);
+                        dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
+                        dst[2] = (uint8_t)(((v >> 10) & 0x1F) << 3);
+                    }
+                    else
+                    {
+                        // 555 layout: blue low, alpha in bit 15.
+                        dst[0] = (uint8_t)(((v >> 10) & 0x1F) << 3);
+                        dst[1] = (uint8_t)(((v >> 5) & 0x1F) << 3);
+                        dst[2] = (uint8_t)((v & 0x1F) << 3);
+                    }
+                    dst[3] = transparent ? 0x00 : 0xFF;
+                    dst += 4;
+                }
+            }
+            return true;
+        }
+
+        if (img.depth == 32)
+        {
+            const size_t needed = (size_t)img.width * img.height * 4;
+            if (img.pixels.size() < needed)
+            {
+                logging::logWarning("[render2d] 32bpp image pixels too small ({} < {})", img.pixels.size(), needed);
+                return false;
+            }
+            const auto* src = (const uint32_t*)img.pixels.data();
+            for (int y = 0; y < img.height; y++)
+            {
+                const uint32_t* row = src + (size_t)y * img.width;
+                uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
+                for (int x = 0; x < img.width; x++)
+                {
+                    const uint32_t v = row[x];
+                    dst[0] = (uint8_t)((v >> 16) & 0xFF);
+                    dst[1] = (uint8_t)((v >> 8) & 0xFF);
+                    dst[2] = (uint8_t)(v & 0xFF);
+                    dst[3] = (uint8_t)((v >> 24) & 0xFF);
+                    dst += 4;
+                }
+            }
+            return true;
+        }
+
+        if (img.depth == 4 || img.depth == 8)
+        {
+            if (img.palBpp != 16 || img.palCnt <= 0)
+            {
+                logging::logWarning(
+                    "[render2d] paletted image without 16bpp palette (palBpp={} palCnt={})", img.palBpp, img.palCnt);
+                return false;
+            }
+            const int entriesPerPal = img.depth == 4 ? 16 : 256;
+            const size_t palNeeded = (size_t)entriesPerPal * img.palCnt * 2;
+            if (img.palette.size() < palNeeded)
+            {
+                logging::logWarning("[render2d] palette too small ({} < {})", img.palette.size(), palNeeded);
+                return false;
+            }
+            const auto* pal = (const uint16_t*)img.palette.data();
+
+            uint8_t lut[256 * 4];
+            for (int i = 0; i < entriesPerPal; i++)
+            {
+                const uint16_t e = pal[i];
+                lut[i * 4 + 0] = (uint8_t)((e & 0x1F) << 3);
+                lut[i * 4 + 1] = (uint8_t)(((e >> 5) & 0x1F) << 3);
+                lut[i * 4 + 2] = (uint8_t)(((e >> 10) & 0x1F) << 3);
+                lut[i * 4 + 3] = ((e & 0x7FFF) == 0) ? 0x00 : 0xFF;
+            }
+
+            if (img.depth == 4)
+            {
+                const size_t rowBytes = ((size_t)img.width + 1) / 2;
+                if (img.pixels.size() < rowBytes * (size_t)img.height)
+                {
+                    logging::logWarning("[render2d] 4bpp image pixels too small");
+                    return false;
+                }
+                for (int y = 0; y < img.height; y++)
+                {
+                    const uint8_t* src = img.pixels.data() + (size_t)y * rowBytes;
+                    uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
+                    for (int x = 0; x < img.width; x++)
+                    {
+                        const uint8_t nib = (x & 1) ? (src[x / 2] >> 4) : (src[x / 2] & 0xF);
+                        std::memcpy(dst + x * 4, lut + (size_t)nib * 4, 4);
+                    }
+                }
+            }
+            else
+            {
+                const size_t rowBytes = (size_t)img.width;
+                if (img.pixels.size() < rowBytes * (size_t)img.height)
+                {
+                    logging::logWarning("[render2d] 8bpp image pixels too small");
+                    return false;
+                }
+                for (int y = 0; y < img.height; y++)
+                {
+                    const uint8_t* src = img.pixels.data() + (size_t)y * rowBytes;
+                    uint8_t* dst = rgba.data() + (size_t)y * img.width * 4;
+                    for (int x = 0; x < img.width; x++)
+                    {
+                        const uint8_t idx = src[x];
+                        std::memcpy(dst + x * 4, lut + (size_t)idx * 4, 4);
+                    }
+                }
+            }
+            return true;
+        }
+
+        logging::logWarning("[render2d] unsupported depth {}", img.depth);
+        return false;
+    }
 
     struct SpriteRenderer::Impl
     {
@@ -483,7 +483,7 @@ namespace openre::render2d
             return 0;
 
         std::vector<uint8_t> rgba;
-        if (!decodeToRgba(image, rgba))
+        if (!decodeImageToRgba(image, rgba))
             return 0;
 
         SDL_GPUTextureCreateInfo tci{};

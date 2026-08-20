@@ -225,6 +225,14 @@ namespace openre
         resource->width = image.width;
         resource->height = image.height;
 
+        // Cache the decoded RGBA so the debug web UI can preview the texture
+        // without re-decoding the source file.
+        if (render2d::decodeImageToRgba(image, resource->rgba))
+        {
+            resource->rgbaWidth = image.width;
+            resource->rgbaHeight = image.height;
+        }
+
         const int textureHandle = resource->textureHandle;
         const int textureWidth = resource->width;
         const int textureHeight = resource->height;
