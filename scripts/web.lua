@@ -128,6 +128,7 @@ document.querySelectorAll('.menu-item').forEach(m=>m.onclick=()=>switchView(m.da
 if (state.view!=='scene') switchView(state.view);
 function entityById(id){ if(!scene) return null; for(const e of scene.entities){ if(e.id===id) return e; } return null; }
 function hexId(id){ return '0x' + Number(id).toString(16).toUpperCase(); }
+function entityLabel(e){ return (e.name && e.name.length>0) ? e.name : ('Entity '+hexId(e.id)); }
 function isExpanded(id){ return state.expanded[id] !== false; }
 function depthOf(e){ let d=0; const seen=new Set(); let cur=e; while(cur && cur.parent!=null && !seen.has(cur.id)){ seen.add(cur.id); cur=entityById(cur.parent); d++; } return d; }
 function treeHash(){
@@ -158,7 +159,7 @@ function treeNode(e,depth){
   const hasKids=(e.children&&e.children.length>0);
   const tog=document.createElement('span'); tog.className='tw-toggle'; tog.textContent=hasKids?(isExpanded(e.id)?'▾':'▸'):'';
   tog.onclick=(ev)=>{ ev.stopPropagation(); if(hasKids){ state.expanded[e.id]=!isExpanded(e.id); saveState(); buildTree(); } };
-  const lab=document.createElement('span'); lab.className='tw-label'; lab.textContent='Entity '+hexId(e.id);
+  const lab=document.createElement('span'); lab.className='tw-label'; lab.textContent=entityLabel(e);
   row.onclick=()=>selectEntity(e.id);
   row.appendChild(tog); row.appendChild(lab); wrap.appendChild(row);
   if(hasKids && isExpanded(e.id)){
@@ -191,7 +192,7 @@ function renderInspector(){
   const key=inspectorKey(e);
   if(key!==state.lastInspectorKey){
     el.innerHTML=''; inspectorInputs={};
-    const title=document.createElement('div'); title.className='insp-title'; title.textContent='Entity '+hexId(e.id); el.appendChild(title);
+    const title=document.createElement('div'); title.className='insp-title'; title.textContent=entityLabel(e); el.appendChild(title);
     for(const comp of e.components){
       const card=document.createElement('div'); card.className='card';
       const h=document.createElement('div'); h.className='card-h'; h.textContent=comp.type; card.appendChild(h);
@@ -452,7 +453,7 @@ end
 -- Field schema for each component type, in display order. Keep in sync with
 -- the component names returned by scene.getComponents.
 local SCENE_SCHEMA = {
-    ["core.transform"] = { "x", "y", "z", "scale.x", "scale.y", "scale.z" },
+    ["core.transform"] = { "name", "x", "y", "z", "scale.x", "scale.y", "scale.z" },
     ["core.sprite"] = { "size.width", "size.height", "src.x", "src.y", "src.width", "src.height", "texture", "flags" },
     ["core.text"] = { "text", "size.width", "size.height", "flags", "font" },
     ["core.legacy"] = { "enabled", "size.width", "size.height" },
@@ -468,6 +469,7 @@ local function buildScene()
         if ent then
             local node = {
                 id = id,
+                name = scene.getField(ent, "name"),
                 parent = scene.parent(ent),
                 children = scene.children(ent),
                 components = {},

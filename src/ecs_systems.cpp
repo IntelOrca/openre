@@ -40,9 +40,10 @@ namespace openre::ecs
         if (game_module_active())
             return;
 
-        // The hidden root already exists (Scene ctor). Add one child that
-        // carries the LegacyGameComponent, sized to the configured window.
-        Entity entity = scene.createEntity(scene.root());
+        // The hidden root already exists (Scene ctor). Add one child under the
+        // "game" sub-root that carries the LegacyGameComponent, sized to the
+        // configured window.
+        Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
         legacy.enabled = true;
         const auto windowSize = system::config::get_window_size();

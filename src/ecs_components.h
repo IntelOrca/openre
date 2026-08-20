@@ -21,6 +21,11 @@ namespace openre::ecs
         Entity firstChild = NullEntity;
         Entity nextSibling = NullEntity;
 
+        // Optional human-readable name ("" by default). Lua can get/set it via
+        // the transform component; the debug web UI shows it in place of the
+        // raw entity id.
+        std::string name;
+
         Vec3 position;
         Quat rotation;
         Vec3 scale{ 1.0f, 1.0f, 1.0f };

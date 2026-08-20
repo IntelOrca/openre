@@ -4,10 +4,35 @@
 
 namespace openre::ecs
 {
+    namespace
+    {
+        constexpr const char* rootName(Scene::RootKind kind)
+        {
+            switch (kind)
+            {
+            case Scene::RootKind::User: return "user";
+            case Scene::RootKind::Game: return "game";
+            case Scene::RootKind::Movie: return "movie";
+            case Scene::RootKind::Fade: return "fade";
+            case Scene::RootKind::Overlay: return "overlay";
+            }
+            return "";
+        }
+    }
+
     Scene::Scene()
     {
         m_root = allocEntity();
         storage<TransformComponent>().add(m_root);
+
+        // Create the five strict sub-roots beneath the hidden root.
+        for (uint32_t i = 0; i < 5; i++)
+        {
+            auto kind = static_cast<RootKind>(i);
+            Entity e = createEntity(m_root);
+            getComponent<TransformComponent>(e).name = rootName(kind);
+            m_roots[i] = e;
+        }
     }
 
     Scene::~Scene() = default;
@@ -68,6 +93,19 @@ namespace openre::ecs
     {
         assert(isValid(entity) && entity != m_root);
         destroySubtree(entity);
+    }
+
+    Entity Scene::getRoot(RootKind kind)
+    {
+        const uint32_t index = static_cast<uint32_t>(kind);
+        assert(index < 5);
+        Entity& root = m_roots[index];
+        if (root == NullEntity || !isValid(root))
+        {
+            root = createEntity(m_root);
+            getComponent<TransformComponent>(root).name = rootName(kind);
+        }
+        return root;
     }
 
     void Scene::destroySubtree(Entity entity)

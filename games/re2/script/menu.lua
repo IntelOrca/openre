@@ -62,8 +62,9 @@ menuMethods = {
 
 --- Creates one centred line of text occupying the given vertical band.
 --- Returns the core.text component handle (used to update the string later).
-local function createLine(font, bandTop, bandHeight, text, flags)
-    local e = scene.createEntity()
+local function createLine(font, bandTop, bandHeight, text, name, flags)
+    local e = scene.createEntity(scene.getRoot("user"))
+    scene.setField(e, 'name', name)
     scene.setField(e, 'x', 0)
     scene.setField(e, 'y', bandTop)
     local t = scene.addComponent(e, 'core.text')
@@ -97,7 +98,8 @@ function Menu:new()
     -- before any text so they draw first (behind the text).
     local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
     if bgTex then
-        local e = scene.createEntity()
+        local e = scene.createEntity(scene.getRoot("user"))
+        scene.setField(e, 'name', 'menu.background')
         scene.setField(e, 'x', 0)
         scene.setField(e, 'y', 0)
         local s = scene.addComponent(e, 'core.sprite')
@@ -113,7 +115,8 @@ function Menu:new()
     -- that assemble in a "11/.2" pattern. Each tile is a child of a central
     -- "logo root" entity so they share its transform; offsets are relative to
     -- that centre (1:1, src pixels == screen pixels).
-    local logoRoot = scene.createEntity()
+    local logoRoot = scene.createEntity(scene.getRoot("user"))
+    scene.setField(logoRoot, 'name', 'menu.logo')
     scene.setField(logoRoot, 'x', w * 0.5)
     scene.setField(logoRoot, 'y', h * 0.26)
     -- Scale the logo up 2x in x and y; child tiles inherit the parent's scale.
@@ -132,8 +135,8 @@ function Menu:new()
     for _, t in ipairs(LOGO_TILES) do
         local tex = gfx.loadTexture('common/data/tmoji.bin', 0, 0, t[1])
         if tex then
-            local e = scene.createEntity()
-            scene.setParent(e, logoRoot)
+            local e = scene.createEntity(logoRoot)
+            scene.setField(e, 'name', 'menu.logo.tile')
             scene.setField(e, 'x', t[6])
             scene.setField(e, 'y', t[7])
             local s = scene.addComponent(e, 'core.sprite')
@@ -154,6 +157,7 @@ function Menu:new()
             smallFont,
             h * 0.92, h * 0.06,
             '<span color="#707070">OpenRE, Resident Evil 2, Version 1.0</span>',
+            'menu.disclaimer',
             TextFlags.xLeft | TextFlags.yMiddle)
 
         -- PRESS START prompt just above the menu.
@@ -163,6 +167,7 @@ function Menu:new()
             bigFont,
             bandTop, bandHeight,
             '<span color="#ffd700">PRESS START</span>',
+            'menu.pressStart',
             TextFlags.xCenter | TextFlags.yMiddle)
 
         -- Stack the main-menu entries.
@@ -174,6 +179,7 @@ function Menu:new()
                 bigFont,
                 top + (i - 1) * step, lineHeight,
                 MENU_ITEMS[i],
+                'menu.item.' .. i,
                 TextFlags.xCenter | TextFlags.yMiddle)
             instance:refreshItem(i, t)
             instance.itemEntities[i] = t

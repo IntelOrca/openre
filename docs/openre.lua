@@ -272,10 +272,21 @@ local Font = {}
 ---@class scene
 local scene = {}
 
---- Create a new entity under the scene root. Returns nil when no scene is
---- active (for example inside the legacy game).
+--- Create a new entity. With no argument it is created under the scene root;
+--- pass a parent (e.g. a `scene.getRoot(...)` handle) to nest it. Returns nil
+--- when no scene is active (for example inside the legacy game).
+---@param parent? SceneEntity Parent entity; defaults to the scene root.
 ---@return SceneEntity|nil
-function scene.createEntity() end
+function scene.createEntity(parent) end
+
+--- Return one of the five strict top-level sub-roots of the scene by name.
+--- These are fixed containers the engine and Lua organise content under:
+--- `"user"` (what Lua code has access to), `"game"` (contains the legacy game
+--- entity), `"movie"` (for the video component entity), `"fade"` (for the fade
+--- black overlay) and `"overlay"` (mostly for debug overlay text).
+---@param name string one of "user", "game", "movie", "fade", "overlay"
+---@return SceneEntity
+function scene.getRoot(name) end
 
 --- Reparent an entity under another entity. Child entities inherit the
 --- parent's transform: their `x`/`y` set via `scene.setField` are interpreted
@@ -296,10 +307,11 @@ function scene.setParent(child, parent) end
 function scene.addComponent(entity, name) end
 
 --- Write a field on an entity or component. When the handle is an entity, or
---- for a transform component, the fields are `x`, `y`, `z` (world position in
---- window pixels) and `scale.x`, `scale.y`, `scale.z` (scale multiplier; 1 =
---- natural size). Entity positions are relative to the parent when the entity
---- was attached with `scene.setParent`, and a parent's scale is inherited by
+--- for a transform component, the fields are `name` (a human-readable string;
+--- "" by default), `x`, `y`, `z` (world position in window pixels) and
+--- `scale.x`, `scale.y`, `scale.z` (scale multiplier; 1 = natural size). Entity
+--- positions are relative to the parent when the entity was attached with
+--- `scene.setParent`, and a parent's scale is inherited by
 --- its children (offsets and rendered sizes both scale). Sprite fields mirror the layout of the underlying C++
 --- struct: `size.width`, `size.height` (destination size in window pixels),
 --- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
@@ -316,7 +328,8 @@ function scene.setField(handle, name, value) end
 --- Read a single field on an entity or component. Returns nil for unknown
 --- fields. Fields use the same names as scene.setField. The `texture` / `font`
 --- fields are returned as the numeric ResourceCookie, not an object; `flags` is
---- returned as the numeric bitmask.
+--- returned as the numeric bitmask; the transform `name` field is returned as a
+--- string.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@return any

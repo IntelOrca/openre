@@ -466,7 +466,47 @@ namespace openre::script
                 return 1;
             }
 
-            auto entity = scene->createEntity(scene->root());
+            ecs::Entity parent = scene->root();
+            if (lua_gettop(L) >= 1 && !lua_isnil(L, 1))
+            {
+                auto* parentHandle = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+                parent = parentHandle->entity;
+            }
+
+            auto entity = scene->createEntity(parent);
+            auto* handle = static_cast<SceneEntityHandle*>(lua_newuserdata(L, sizeof(SceneEntityHandle)));
+            handle->entity = entity;
+            luaL_getmetatable(L, METATABLE_SCENE_ENTITY);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        // Returns one of the five strict top-level sub-roots (user, game, movie,
+        // fade, overlay) by name.
+        int sceneGetRoot(lua_State* L)
+        {
+            auto* name = luaL_checkstring(L, 1);
+            auto* scene = current_scene();
+            if (scene == nullptr)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            ecs::Scene::RootKind kind;
+            if (strcmp(name, "user") == 0)
+                kind = ecs::Scene::RootKind::User;
+            else if (strcmp(name, "game") == 0)
+                kind = ecs::Scene::RootKind::Game;
+            else if (strcmp(name, "movie") == 0)
+                kind = ecs::Scene::RootKind::Movie;
+            else if (strcmp(name, "fade") == 0)
+                kind = ecs::Scene::RootKind::Fade;
+            else if (strcmp(name, "overlay") == 0)
+                kind = ecs::Scene::RootKind::Overlay;
+            else
+                return luaL_error(L, "scene.getRoot: unknown root '%s'", name);
+
+            auto entity = scene->getRoot(kind);
             auto* handle = static_cast<SceneEntityHandle*>(lua_newuserdata(L, sizeof(SceneEntityHandle)));
             handle->entity = entity;
             luaL_getmetatable(L, METATABLE_SCENE_ENTITY);
@@ -558,7 +598,12 @@ namespace openre::script
             if (ent != nullptr || comp->kind == ComponentKind::transform)
             {
                 auto& transform = scene->getComponent<ecs::TransformComponent>(entity);
-                if (strcmp(name, "x") == 0)
+                if (strcmp(name, "name") == 0)
+                {
+                    const char* value = luaL_checkstring(L, 3);
+                    transform.name = value;
+                }
+                else if (strcmp(name, "x") == 0)
                     transform.position.x = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "y") == 0)
                     transform.position.y = static_cast<float>(luaL_checknumber(L, 3));
@@ -732,7 +777,9 @@ namespace openre::script
             if (ent != nullptr || comp->kind == ComponentKind::transform)
             {
                 const auto& transform = scene->getComponent<ecs::TransformComponent>(entity);
-                if (strcmp(name, "x") == 0)
+                if (strcmp(name, "name") == 0)
+                    lua_pushlstring(L, transform.name.data(), transform.name.size());
+                else if (strcmp(name, "x") == 0)
                     lua_pushnumber(L, transform.position.x);
                 else if (strcmp(name, "y") == 0)
                     lua_pushnumber(L, transform.position.y);
@@ -1343,6 +1390,7 @@ namespace openre::script
         // scene.* - ECS scene-tree API (component names are namespaced:
         // core.* for built-ins, app.* reserved for future Lua components).
         setGlobal(L, "scene.createEntity", sceneCreateEntity);
+        setGlobal(L, "scene.getRoot", sceneGetRoot);
         setGlobal(L, "scene.setParent", sceneSetParent);
         setGlobal(L, "scene.addComponent", sceneAddComponent);
         setGlobal(L, "scene.setField", sceneSetField);

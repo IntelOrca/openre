@@ -102,7 +102,8 @@ namespace openre
         }
 
         auto& scene = app.scene;
-        ecs::Entity entity = scene.createEntity(scene.root());
+        ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
+        scene.getComponent<ecs::TransformComponent>(entity).name = "movie";
         auto& video = scene.addComponent<ecs::VideoComponent>(entity);
         video.resource = path;
         video.status = ecs::VideoStatus::Playing;

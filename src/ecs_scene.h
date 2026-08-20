@@ -36,6 +36,18 @@ namespace openre::ecs
     class Scene
     {
     public:
+        /// The strict top-level sub-roots of the scene, all children of the
+        /// hidden root. Each is a fixed container the engine and Lua organise
+        /// content under.
+        enum class RootKind : uint32_t
+        {
+            User = 0,    // what Lua game/plugin code has access to
+            Game = 1,    // contains the legacy game entity
+            Movie = 2,   // for the video component entity
+            Fade = 3,    // for the fade black overlay
+            Overlay = 4, // mostly for debug overlay text
+        };
+
         Scene();
         ~Scene();
 
@@ -58,6 +70,10 @@ namespace openre::ecs
         {
             return m_root;
         }
+        /// Returns one of the five strict top-level sub-roots (User, Game, Movie,
+        /// Fade, Overlay). The root is created lazily on first access and given
+        /// its canonical name, so this is safe to call even after clear().
+        Entity getRoot(RootKind kind);
         /// Whether `entity` is a live handle in this scene.
         bool isValid(Entity entity) const;
 
@@ -247,5 +263,6 @@ namespace openre::ecs
         std::vector<uint32_t> m_freeIndices;
         std::unordered_map<uint32_t, std::unique_ptr<StorageBase>> m_storages;
         Entity m_root = NullEntity;
+        Entity m_roots[5] = { NullEntity, NullEntity, NullEntity, NullEntity, NullEntity };
     };
 }

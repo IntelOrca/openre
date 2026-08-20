@@ -6,7 +6,8 @@ local Menu = require('script/menu')
 local splash = {}
 
 local function createSplash()
-    splash.entity = scene.createEntity()
+    splash.entity = scene.createEntity(scene.getRoot("user"))
+    scene.setField(splash.entity, 'name', 'splash')
     splash.sprite = scene.addComponent(splash.entity, 'core.sprite')
     splash.texture = gfx.loadTexture('common/data/gw2', 320, 240)
     scene.setField(splash.sprite, 'texture', splash.texture)
