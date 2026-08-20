@@ -31,5 +31,15 @@ namespace openre::tim
     // buffer is the raw 16-bit-aligned TIM pixel data (pitch * height bytes)
     // and the palette buffer the raw CLUT entries, matching the layout that
     // timobject_in used to produce via MarniSurface2.
-    bool decodeTim(const uint8_t* data, marni::Image& image);
+    //
+    // `size` is the number of bytes available at `data` and is used to bound
+    // reads against truncated buffers.
+    bool decodeTim(const uint8_t* data, size_t size, marni::Image& image);
+
+    // Decodes the `index`-th TIM from a file that packs several TIMs back to
+    // back (e.g. tmoji.bin). Each entry's block length fields let us walk from
+    // one TIM to the next: clut block length (offset +8 when a CLUT is present)
+    // then the pixel block length. Returns false when `index` is out of range
+    // or a TIM fails to decode.
+    bool decodeTimIndex(const uint8_t* data, size_t size, int index, marni::Image& image);
 }

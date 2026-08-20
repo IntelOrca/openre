@@ -52,6 +52,8 @@ namespace openre
                     auto path = moduleDir / std::string(logicalPath);
                     if (!ext.empty())
                         path += ext;
+                    if (system::fs::info(path.string().c_str()).kind != system::fs::FileKind::file)
+                        continue;
                     outBytes = system::fs::readAllBytes(path.string().c_str());
                     if (!outBytes.empty())
                     {
@@ -72,6 +74,8 @@ namespace openre
                     const std::string candidate = dataPrefix + ext;
                     const std::string resolved = system::fs::resolve(candidate.c_str());
                     if (resolved.empty())
+                        continue;
+                    if (system::fs::info(resolved.c_str()).kind != system::fs::FileKind::file)
                         continue;
                     outBytes = system::fs::readAllBytes(resolved.c_str());
                     if (!outBytes.empty())
@@ -150,7 +154,7 @@ namespace openre
         }
     } // namespace
 
-    ResourceCookie loadTextureResource(std::string_view path, int width, int height)
+    ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex)
     {
         (void)width;
         (void)height;
@@ -171,9 +175,14 @@ namespace openre
         case TextureType::tim:
         {
             marni::Image marniImage;
-            if (!tim::decodeTim(bytes.data(), marniImage))
+            bool ok = timIndex > 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
+                                   : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
+            if (!ok)
             {
-                logging::logError("[texture_loader] failed to decode TIM '{}'", label);
+                if (timIndex > 0)
+                    logging::logError("[texture_loader] failed to decode TIM index {} of '{}'", timIndex, label);
+                else
+                    logging::logError("[texture_loader] failed to decode TIM '{}'", label);
                 return 0;
             }
             image = imageFromTim(marniImage);
@@ -186,7 +195,9 @@ namespace openre
             if (bytes.size() >= 4 && (uint8_t)bytes[0] == 0x10 && bytes[1] == 0x00 && bytes[2] == 0x00 && bytes[3] == 0x00)
             {
                 marni::Image marniImage;
-                if (tim::decodeTim(bytes.data(), marniImage))
+                bool ok = timIndex > 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
+                                       : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
+                if (ok)
                 {
                     image = imageFromTim(marniImage);
                     break;
@@ -217,7 +228,10 @@ namespace openre
         const int textureHandle = resource->textureHandle;
         const int textureWidth = resource->width;
         const int textureHeight = resource->height;
-        auto cookie = resmgr.addFirstRef<TextureResource>(std::string(path), std::move(resource));
+        // Key the resource by path plus (when an indexed TIM is selected) the
+        // index, so different TIMs from the same multi-TIM file stay separate.
+        const std::string key = timIndex > 0 ? (std::string(path) + "#tim" + std::to_string(timIndex)) : std::string(path);
+        auto cookie = resmgr.addFirstRef<TextureResource>(key, std::move(resource));
         logging::logInfo(
             "[texture_loader] loaded '{}' -> cookie {}, handle {}, {}x{}",
             label,

@@ -277,6 +277,14 @@ local scene = {}
 ---@return SceneEntity|nil
 function scene.createEntity() end
 
+--- Reparent an entity under another entity. Child entities inherit the
+--- parent's transform: their `x`/`y` set via `scene.setField` are interpreted
+--- as offsets relative to the parent's position (which itself may be nested).
+--- Useful for grouping sprites that should move or scale together.
+---@param child SceneEntity
+---@param parent SceneEntity
+function scene.setParent(child, parent) end
+
 --- Add a component to an entity and return a component handle. Built-in
 --- components are namespaced `core.*`; `app.*` names are reserved for future
 --- Lua-defined components. `core.transform` is implicit on every entity.
@@ -289,7 +297,10 @@ function scene.addComponent(entity, name) end
 
 --- Write a field on an entity or component. When the handle is an entity, or
 --- for a transform component, the fields are `x`, `y`, `z` (world position in
---- window pixels). Sprite fields mirror the layout of the underlying C++
+--- window pixels) and `scale.x`, `scale.y`, `scale.z` (scale multiplier; 1 =
+--- natural size). Entity positions are relative to the parent when the entity
+--- was attached with `scene.setParent`, and a parent's scale is inherited by
+--- its children (offsets and rendered sizes both scale). Sprite fields mirror the layout of the underlying C++
 --- struct: `size.width`, `size.height` (destination size in window pixels),
 --- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
 --- pixels; 0-sized means "full texture"), `texture` (a Texture or nil), and
@@ -324,11 +335,17 @@ local gfx = {}
 --- falls back to the original game data (`data://`). `.adt` and `.tim`
 --- extensions are appended automatically when not present. Width and height
 --- are hints for ADT files missing an intrinsic size.
+---
+--- When a `.tim` file packs several TIMs back to back (e.g. tmoji.bin), pass
+--- `timIndex` to select which one to decode; 0 (the default) decodes the
+--- first. Each entry's block-length headers let the loader walk from one TIM
+--- to the next.
 ---@param path string e.g. "common/data/gw2"
 ---@param width? integer
 ---@param height? integer
+---@param timIndex? integer Which TIM in the file to load (default 0).
 ---@return Texture|nil
-function gfx.loadTexture(path, width, height) end
+function gfx.loadTexture(path, width, height, timIndex) end
 
 --- Load an RE2 font (font0.tim / font1.tim) and return a Font handle, or nil
 --- on failure. The same path probing as gfx.loadTexture applies. The font

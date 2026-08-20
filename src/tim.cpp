@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace openre::tim
@@ -186,7 +187,9 @@ namespace openre::tim
     int tim_buffer_to_surface(Tim* pTim, uint32_t page, uint32_t mode)
     {
         marni::Image image;
-        bool decoded = decodeTim((const uint8_t*)pTim, image);
+        // The original passes a single TIM buffer without a length; size it by
+        // walking the block headers exactly as decodeTimIndex does.
+        bool decoded = decodeTim((const uint8_t*)pTim, std::numeric_limits<size_t>::max(), image);
         if (page >= std::size(gGameTable.texture_pages))
             return 0;
         if (!decoded)
@@ -205,8 +208,13 @@ namespace openre::tim
         return marni::loadTexturePage(page, image, mode2) != 0 ? 1 : 0;
     }
 
-    bool decodeTim(const uint8_t* data, marni::Image& image)
+    bool decodeTim(const uint8_t* data, size_t size, marni::Image& image)
     {
+        // The smallest possible TIM is a header + flags dword + a pixel block
+        // header (8 bytes), i.e. 16 bytes with no CLUT.
+        if (size < 16)
+            return false;
+
         const uint32_t* pTimData = (const uint32_t*)data;
 
         image = marni::Image();
@@ -225,21 +233,33 @@ namespace openre::tim
         const uint8_t* clutData = nullptr;
         int pTima = 1;
 
+        size_t clutBytes = 0;
+        size_t pixelBlockOffset;
         if (hasClut)
         {
             // Clut block: pTim[2] = block length (unused), pTim[3] = clut x/y,
             // pTim[4] = colors/palettes; clut pixel data starts at pTim[5].
             clutWidth = (uint16_t)pTimData[4];
             palCount = (int)(pTimData[4] >> 16);
+            clutBytes = (size_t)2 * clutWidth * palCount;
             clutData = (const uint8_t*)(pTimData + 5);
-            pixelData = (const TimPixelData*)((const uint8_t*)data + 20 + 2 * clutWidth * palCount);
+            pixelBlockOffset = 20 + clutBytes;
         }
         else
         {
             // No clut: pixel data block starts right after the header/flags dwords.
             clutWidth = (uint32_t)(uintptr_t)data; // only ever compared against 0x10 below
-            pixelData = (const TimPixelData*)(pTimData + 2);
+            pixelBlockOffset = 8;
         }
+
+        // The pixel block carries a 12-byte header before scan0
+        // (length,x,y,width,height); require at least that header to fit.
+        if (pixelBlockOffset + 12 > size)
+            return false;
+        if (hasClut && (20 + clutBytes > size))
+            return false;
+
+        pixelData = (const TimPixelData*)(data + pixelBlockOffset);
 
         int width = pixelData->width;
         int height = pixelData->height;
@@ -264,6 +284,10 @@ namespace openre::tim
         default: marni::out("not supported type MarniSystem TIMObject::In", ""); return false;
         }
 
+        size_t bitmapBytes = (size_t)2 * width * height;
+        if (pixelBlockOffset + 12 + bitmapBytes > size)
+            return false;
+
         image.psxFormat = true;
 
         if (!hasClut)
@@ -275,7 +299,7 @@ namespace openre::tim
             image.depth = 16;
             image.palBpp = 0;
             image.palCnt = 0;
-            image.pixels.assign(pBitmap, pBitmap + (size_t)2 * width * height);
+            image.pixels.assign(pBitmap, pBitmap + bitmapBytes);
             return true;
         }
 
@@ -288,9 +312,65 @@ namespace openre::tim
         image.depth = depth;
         image.palBpp = 16;
         image.palCnt = palCount * pTima;
-        image.pixels.assign(pBitmap, pBitmap + (size_t)2 * width * height);
-        image.palette.assign(clutData, clutData + (size_t)2 * clutWidth * palCount);
+        image.pixels.assign(pBitmap, pBitmap + bitmapBytes);
+        image.palette.assign(clutData, clutData + clutBytes);
         return true;
+    }
+
+    // 0x0042FB70-equivalent seek: walks a file that packs several TIMs back to
+    // back, using each entry's block length fields to advance to the next one,
+    // then decodes the `index`-th TIM. On success the returned sub-buffer is
+    // handed to decodeTim. A -1 (or any out-of-range) index yields false.
+    bool decodeTimIndex(const uint8_t* data, size_t size, int index, marni::Image& image)
+    {
+        if (index < 0)
+            return false;
+
+        size_t offset = 0;
+        while (offset < size)
+        {
+            if (size - offset < 16)
+                return false;
+
+            const uint32_t* pTimData = (const uint32_t*)(data + offset);
+            if (pTimData[0] != 16)
+                return false;
+
+            uint32_t flags = pTimData[1];
+            bool hasClut = (flags & 8) != 0;
+
+            // CLUT block length when present (includes its own header), else the
+            // image block begins right after the two header dwords.
+            size_t pixelBlockOffset;
+            if (hasClut)
+            {
+                uint32_t clutLen = pTimData[2];
+                if (clutLen < 12 || offset + 8 + clutLen > size)
+                    return false;
+                pixelBlockOffset = offset + 8 + clutLen;
+            }
+            else
+            {
+                pixelBlockOffset = offset + 8;
+            }
+
+            if (size - pixelBlockOffset < 8)
+                return false;
+
+            // The pixel block's first dword is its own length (header included).
+            const uint32_t* pixHeader = (const uint32_t*)(data + pixelBlockOffset);
+            uint32_t pixLen = pixHeader[0];
+            if (pixLen < 8 || pixelBlockOffset + pixLen > size)
+                return false;
+
+            if (index == 0)
+                return decodeTim(data + offset, size - offset, image);
+
+            offset = pixelBlockOffset + pixLen;
+            --index;
+        }
+
+        return false;
     }
 
     void tim_init_hooks()

@@ -461,6 +461,19 @@ namespace openre::script
             return 1;
         }
 
+        int sceneSetParent(lua_State* L)
+        {
+            auto* scene = current_scene();
+            if (scene == nullptr)
+                return 0;
+
+            // Child and parent are both scene entity handles.
+            auto* child = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* parent = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 2, METATABLE_SCENE_ENTITY));
+            scene->setParent(child->entity, parent->entity);
+            return 0;
+        }
+
         int sceneAddComponent(lua_State* L)
         {
             auto* handle = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
@@ -538,6 +551,12 @@ namespace openre::script
                     transform.position.y = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "z") == 0)
                     transform.position.z = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "scale.x") == 0)
+                    transform.scale.x = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "scale.y") == 0)
+                    transform.scale.y = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "scale.z") == 0)
+                    transform.scale.z = static_cast<float>(luaL_checknumber(L, 3));
                 else
                     return luaL_error(L, "scene.setField: unknown transform field '%s'", name);
                 return 0;
@@ -670,6 +689,12 @@ namespace openre::script
                     lua_pushnumber(L, transform.position.y);
                 else if (strcmp(name, "z") == 0)
                     lua_pushnumber(L, transform.position.z);
+                else if (strcmp(name, "scale.x") == 0)
+                    lua_pushnumber(L, transform.scale.x);
+                else if (strcmp(name, "scale.y") == 0)
+                    lua_pushnumber(L, transform.scale.y);
+                else if (strcmp(name, "scale.z") == 0)
+                    lua_pushnumber(L, transform.scale.z);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -742,8 +767,11 @@ namespace openre::script
             auto* path = luaL_checkstring(L, 1);
             auto width = static_cast<int>(luaL_optinteger(L, 2, 0));
             auto height = static_cast<int>(luaL_optinteger(L, 3, 0));
+            // Optional 4th arg: which TIM to decode when the file packs several
+            // TIMs back to back (e.g. tmoji.bin). 0 (default) = the first.
+            auto timIndex = static_cast<int>(luaL_optinteger(L, 4, 0));
 
-            auto cookie = loadTextureResource(path, width, height);
+            auto cookie = loadTextureResource(path, width, height, timIndex);
             if (cookie == 0)
             {
                 lua_pushnil(L);
@@ -938,6 +966,7 @@ namespace openre::script
         // scene.* - ECS scene-tree API (component names are namespaced:
         // core.* for built-ins, app.* reserved for future Lua components).
         setGlobal(L, "scene.createEntity", sceneCreateEntity);
+        setGlobal(L, "scene.setParent", sceneSetParent);
         setGlobal(L, "scene.addComponent", sceneAddComponent);
         setGlobal(L, "scene.setField", sceneSetField);
         setGlobal(L, "scene.getField", sceneGetField);

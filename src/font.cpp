@@ -35,6 +35,8 @@ namespace openre
                     auto path = moduleDir / std::string(logicalPath);
                     if (!ext.empty())
                         path += ext;
+                    if (system::fs::info(path.string().c_str()).kind != system::fs::FileKind::file)
+                        continue;
                     outBytes = system::fs::readAllBytes(path.string().c_str());
                     if (!outBytes.empty())
                         return true;
@@ -47,6 +49,8 @@ namespace openre
                 {
                     const std::string resolved = system::fs::resolve((dataPrefix + ext).c_str());
                     if (resolved.empty())
+                        continue;
+                    if (system::fs::info(resolved.c_str()).kind != system::fs::FileKind::file)
                         continue;
                     outBytes = system::fs::readAllBytes(resolved.c_str());
                     if (!outBytes.empty())
@@ -94,7 +98,7 @@ namespace openre
         }
 
         marni::Image marniImage;
-        if (!tim::decodeTim(bytes.data(), marniImage))
+        if (!tim::decodeTim(bytes.data(), bytes.size(), marniImage))
         {
             logging::logError("[font] failed to decode TIM for '{}'", filePath);
             return 0;

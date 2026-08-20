@@ -12,6 +12,7 @@
 #include "system_window.h"
 #include "text_layout.h"
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -61,7 +62,10 @@ namespace openre::ecs
         for (auto it = chain.rbegin(); it != chain.rend(); ++it)
         {
             const auto& t = scene.getComponent<TransformComponent>(*it);
-            world = world * trs(t.position, t.rotation, t.scale);
+            // Prepend so the entity's own transform is applied innermost; a
+            // parent's scale then correctly scales child offsets and sizes.
+            // (Row-vector convention: p_world = p_local * world.)
+            world = trs(t.position, t.rotation, t.scale) * world;
         }
         return world;
     }
@@ -221,6 +225,12 @@ namespace openre
                 const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
                 const float x = world.m[3][0];
                 const float y = world.m[3][1];
+                // Axis-aligned scale inherited from ancestor transforms (e.g. a
+                // scaled parent). Extracted from the world matrix columns.
+                const float sx
+                    = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
+                const float sy
+                    = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
 
                 TextureResource* tex = nullptr;
                 if (sprite.texture != 0)
@@ -233,7 +243,7 @@ namespace openre
                 render2d::SpriteDraw d{};
                 d.textureHandle = tex ? tex->textureHandle : 0;
                 d.src = { sprite.src.x, sprite.src.y, sprite.src.width, sprite.src.height };
-                d.dst = { x, y, sprite.size.width, sprite.size.height };
+                d.dst = { x, y, sprite.size.width * sx, sprite.size.height * sy };
                 d.flags = sprite.flags;
                 d.r = sprite.color.r;
                 d.g = sprite.color.g;

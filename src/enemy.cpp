@@ -9,6 +9,7 @@
 #include "tim.h"
 #include <array>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 using namespace openre::file;
@@ -380,7 +381,7 @@ namespace openre::enemy
         gPlTextureMode = (-(gGameTable.graphics_ptr_data != 2) & 0x20) + 17;
 
         marni::Image image;
-        if (!tim::decodeTim((const uint8_t*)pTim, image))
+        if (!tim::decodeTim((const uint8_t*)pTim, std::numeric_limits<size_t>::max(), image))
             return;
 
         if (gGameTable.graphics_ptr_data == 2)

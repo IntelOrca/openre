@@ -85,6 +85,10 @@ namespace openre::ecs
 
     Mat4 trs(const Vec3& t, const Quat& q, const Vec3& s)
     {
-        return Mat4::translation(t) * Mat4::rotation(q) * Mat4::scale(s);
+        // Scale * Rotation * Translation (row-vector convention). A node's
+        // position `t` is expressed in its parent's coordinate space, so it is
+        // NOT multiplied by the node's own scale; a parent's scale instead
+        // propagates to child offsets/sizes through the accumulated 3x3.
+        return Mat4::scale(s) * Mat4::rotation(q) * Mat4::translation(t);
     }
 }

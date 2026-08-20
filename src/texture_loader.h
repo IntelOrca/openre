@@ -19,6 +19,9 @@ namespace openre
      * TIM data via tim::decodeTim. The decoded image is uploaded through the
      * render2d sprite renderer and the resulting GPU handle is stored in the
      * TextureResource.
+     *
+     * `timIndex` selects which TIM to decode when the file packs several TIMs
+     * back to back (e.g. tmoji.bin); 0 decodes the first.
      */
-    ResourceCookie loadTextureResource(std::string_view path, int width, int height);
+    ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex = 0);
 }

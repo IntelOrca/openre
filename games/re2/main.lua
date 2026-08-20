@@ -1,40 +1,46 @@
 require('script/scheduler')
 require('script/util')
 
-local app = {}
-local scheduler
-local splashTexture
-local splashEntity
-local splashSprite
+local Menu = require('script/menu')
+
+local splash = {}
 
 local function createSplash()
-    splashEntity = scene.createEntity()
-    splashSprite = scene.addComponent(splashEntity, 'core.sprite')
-    splashTexture = gfx.loadTexture('common/data/gw2', 320, 240)
-    scene.setField(splashSprite, 'texture', splashTexture)
-        scene.setField(splashSprite, 'size.width', gfx.screenWidth())
-        scene.setField(splashSprite, 'size.height', gfx.screenHeight())
-        scene.setField(splashSprite, 'src.x', 0)
-        scene.setField(splashSprite, 'src.y', 0)
-        scene.setField(splashSprite, 'src.width', 0)
-        scene.setField(splashSprite, 'src.height', 0)
-        scene.setField(splashSprite, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
+    splash.entity = scene.createEntity()
+    splash.sprite = scene.addComponent(splash.entity, 'core.sprite')
+    splash.texture = gfx.loadTexture('common/data/gw2', 320, 240)
+    scene.setField(splash.sprite, 'texture', splash.texture)
+    scene.setField(splash.sprite, 'size.width', gfx.screenWidth())
+    scene.setField(splash.sprite, 'size.height', gfx.screenHeight())
+    scene.setField(splash.sprite, 'src.x', 0)
+    scene.setField(splash.sprite, 'src.y', 0)
+    scene.setField(splash.sprite, 'src.width', 0)
+    scene.setField(splash.sprite, 'src.height', 0)
+    scene.setField(splash.sprite, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
 end
 
-scheduler = Scheduler:new()
-
-local function main()
-    scheduler
-        :exec(function()
-            createSplash()
-        end)
-        :fadeIn(60)
-        :wait(120)
-        :fadeOut(60)
-        :exec(function()
-            splashTexture = nil
-            scene.exit()
-        end)
+-- Hides the splash after the menu takes over so it doesn't linger behind it.
+local function hideSplash()
+    if splash.sprite then
+        scene.setField(splash.sprite, 'size.width', 0)
+        scene.setField(splash.sprite, 'size.height', 0)
+    end
+    splash.entity = nil
+    splash.sprite = nil
+    splash.texture = nil
 end
 
-main()
+local scheduler = Scheduler:new()
+
+scheduler
+    :exec(function()
+        createSplash()
+    end)
+    :fadeIn(60)
+    :wait(120)
+    :fadeOut(60)
+    :exec(function()
+        hideSplash()
+        Menu:new()
+    end)
+    :fadeIn(60)
