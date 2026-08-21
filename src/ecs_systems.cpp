@@ -290,13 +290,12 @@ namespace openre
                 const float scale = std::min(boundsW / vw, boundsH / vh);
                 const float dw = vw * scale;
                 const float dh = vh * scale;
-                const float dx = x + (boundsW - dw) * 0.5f;
-                const float dy = y + (boundsH - dh) * 0.5f;
-
+                // The sprite is centred on its transform (see render2d), so
+                // anchor the letterboxed video on the entity position.
                 render2d::SpriteDraw d{};
                 d.textureHandle = video.texture;
                 d.src = { 0, 0, 0, 0 };
-                d.dst = { dx, dy, dw, dh };
+                d.dst = { x, y, dw, dh };
                 d.flags = render2d::kStretchX | render2d::kStretchY;
                 d.r = 255;
                 d.g = 255;
@@ -313,7 +312,9 @@ namespace openre
                 const float h = (float)render2d::SpriteRenderer::get().screenHeight();
                 render2d::SpriteDraw d{};
                 d.textureHandle = 0;
-                d.dst = { 0.0f, 0.0f, w, h };
+                // Sprites are centred on their position (see render2d), so anchor
+                // the full-window fade on the screen centre.
+                d.dst = { w * 0.5f, h * 0.5f, w, h };
                 d.r = fade.r;
                 d.g = fade.g;
                 d.b = fade.b;

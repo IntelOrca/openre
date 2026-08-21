@@ -1,6 +1,5 @@
 require('script/scheduler')
-require('script/util')
-
+local util = require('script/util')
 local Title = require('script/menu')
 
 local splash = {}
@@ -8,16 +7,28 @@ local splash = {}
 local function createSplash()
     splash.entity = scene.createEntity(scene.getRoot("user"))
     scene.setField(splash.entity, 'name', 'splash')
-    splash.sprite = scene.addComponent(splash.entity, 'core.sprite')
     splash.texture = gfx.loadTexture('common/data/gw2', 320, 240)
+    splash.sprite = scene.addComponent(splash.entity, 'core.sprite')
     scene.setField(splash.sprite, 'texture', splash.texture)
-    scene.setField(splash.sprite, 'size.width', gfx.screenWidth())
-    scene.setField(splash.sprite, 'size.height', gfx.screenHeight())
+    -- Authored in the 320x240 design space. The canvas entity (splash.entity)
+    -- is centred in the window by util.fitCanvas, and the engine renders the
+    -- sprite centred on the entity's transform, so a 320x240 sprite at the
+    -- canvas origin (0,0) fills the window-centred canvas.
+    scene.setField(splash.sprite, 'size.width', 320)
+    scene.setField(splash.sprite, 'size.height', 240)
     scene.setField(splash.sprite, 'src.x', 0)
     scene.setField(splash.sprite, 'src.y', 0)
     scene.setField(splash.sprite, 'src.width', 0)
     scene.setField(splash.sprite, 'src.height', 0)
     scene.setField(splash.sprite, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
+    -- Keep the splash canvas centred and fit-scaled every frame so it tracks
+    -- any window resize while it is on screen.
+    util.fitCanvas(splash.entity)
+    re.subscribe(HookKind.tick, function()
+        if splash.entity then
+            util.fitCanvas(splash.entity)
+        end
+    end)
 end
 
 -- Hides the splash after the menu takes over so it doesn't linger behind it.

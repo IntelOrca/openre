@@ -800,10 +800,14 @@ namespace openre::render2d
             const float u1 = u0 + uSpan;
             const float v1 = v0 + vSpan;
 
-            const float x0 = s.dst.x;
-            const float y0 = s.dst.y;
-            const float x1 = s.dst.x + s.dst.width;
-            const float y1 = s.dst.y + s.dst.height;
+            // The sprite is centred on its transform position: the entity's
+            // (x, y) is the centre of the drawn quad, not the top-left.
+            const float halfW = s.dst.width * 0.5f;
+            const float halfH = s.dst.height * 0.5f;
+            const float x0 = s.dst.x - halfW;
+            const float y0 = s.dst.y - halfH;
+            const float x1 = s.dst.x + halfW;
+            const float y1 = s.dst.y + halfH;
 
             Vertex verts[4]{};
             verts[0].sx = x0;

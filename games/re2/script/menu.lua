@@ -13,24 +13,34 @@
 
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
-local Title = {}
-local titleMethods = {}
+local util              = require("script/util")
+
+local Title             = {}
+local titleMethods      = {}
+
+-- Design space for the title screen: all content (background, logo, text) is
+-- laid out in this fixed 320x240 coordinate space, then a single "canvas"
+-- entity is scaled to fit and centred in the window (preserving aspect ratio).
+-- This replaces the old approach of stretching the background to the screen
+-- and drawing the logo at a fixed 2x.
+local CANVAS_W          = 320
+local CANVAS_H          = 240
 
 local STATE_PRESS_START = 0
-local STATE_MENU = 1
-local STATE_DEMO = 2
+local STATE_MENU        = 1
+local STATE_DEMO        = 2
 
 -- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
-local DEMO_TIMEOUT = 60 * 15
+local DEMO_TIMEOUT      = 60 * 15
 
 -- Colours, kept consistent with the original RE2 title / sdl2 branch look.
-local COLOR_GOLD = "#ffd700" -- selected item / highlighted prompt
-local COLOR_GREY = "#bbbbbb" -- unselected menu item
-local COLOR_DIM  = "#888888" -- PRESS START when not lit
+local COLOR_GOLD        = "#ffd700" -- selected item / highlighted prompt
+local COLOR_GREY        = "#bbbbbb" -- unselected menu item
+local COLOR_DIM         = "#888888" -- PRESS START when not lit
 
 -- Main-menu entries shown once the title is up. Actions are placeholders for
 -- now; each can later carry a callback.
-local MENU_ITEMS = {
+local MENU_ITEMS        = {
     'LOAD GAME',
     'ORIGINAL MODE',
     'ARRANGE MODE',
@@ -55,8 +65,9 @@ local function moveCursor(self, delta)
     for i = 1, n do
         refreshItem(self, i)
     end
-    -- Place the cursor beside the selected item.
-    local y = self.menuTop + (self.selected - 1) * self.menuStep + self.menuLineHeight * 0.5
+    -- Place the cursor beside the selected item (band centre in the canvas's
+    -- centred coordinate space; the engine renders sprites centred on the box).
+    local y = bandCenterY(self.menuTop + (self.selected - 1) * self.menuStep, self.menuLineHeight)
     scene.setField(self.cursorEntity, 'y', y)
 end
 
@@ -134,6 +145,9 @@ end
 local function update(self)
     self.ticks = self.ticks + 1
 
+    -- Re-fit and re-centre the canvas every frame so it tracks window resizes.
+    util.fitCanvas(self.canvas)
+
     -- Smoothly animate the logo toward its target position.
     local ly = self.logoY + (self.logoTargetY - self.logoY) * 0.15
     self.logoY = ly
@@ -183,18 +197,32 @@ titleMethods = {
     selectItem = selectItem,
 }
 
--- Creates one centred line of text occupying the given vertical band.
--- Returns the entity handle and the core.text component handle.
-local function createLine(font, bandTop, bandHeight, text, name, flags)
-    local e = scene.createEntity(scene.getRoot("user"))
+-- Convert a top-left-style vertical band (top fraction of the canvas height,
+-- height fraction) into the band's centre in the canvas's centred coordinate
+-- space, where (0,0) is the canvas centre.
+local function bandCenterY(topFrac, heightFrac)
+    return CANVAS_H * (topFrac - 0.5) + CANVAS_H * heightFrac * 0.5
+end
+
+-- Creates one line of text parented under the 320x240 canvas so it scales and
+-- centres with everything else. `centerX`/`centerY` are the desired CENTRE of
+-- the text box in the canvas's centred coordinate space (origin = canvas centre
+-- = window centre); `bandW`/`bandH` are the text box size. The engine renders
+-- sprites centred on their transform, and text_layout centres the glyphs within
+-- a box centred on the entity, so a text entity placed at (centerX, centerY)
+-- sits exactly there. The text flags align the glyphs within that centred box
+-- (xCenter / yMiddle centre them on centerX/Y, xLeft aligns them to the box's
+-- left edge, etc.).
+local function createLine(canvas, font, centerX, centerY, bandW, bandH, text, name, flags)
+    local e = scene.createEntity(canvas)
     scene.setField(e, 'name', name)
-    scene.setField(e, 'x', 0)
-    scene.setField(e, 'y', bandTop)
+    scene.setField(e, 'x', centerX)
+    scene.setField(e, 'y', centerY)
     local t = scene.addComponent(e, 'core.text')
     scene.setField(t, 'font', font)
     scene.setField(t, 'text', text)
-    scene.setField(t, 'size.width', gfx.screenWidth())
-    scene.setField(t, 'size.height', bandHeight)
+    scene.setField(t, 'size.width', bandW)
+    scene.setField(t, 'size.height', bandH)
     scene.setField(t, 'flags', flags)
     return e, t
 end
@@ -209,55 +237,82 @@ function Title:new()
     instance.itemEntities = {}
     instance.itemComponents = {}
 
-    local h = gfx.screenHeight()
-    local w = gfx.screenWidth()
+    -- Logo vertical positions, expressed as offsets from the canvas centre
+    -- (the canvas's local origin is its centre, which maps to the window
+    -- centre). Negative = above centre.
+    instance.pressLogoY = CANVAS_H * (0.34 - 0.5)
+    instance.menuLogoY = CANVAS_H * (0.18 - 0.5)
 
-    instance.pressLogoY = h * 0.34
-    instance.menuLogoY = h * 0.18
+    -- Everything (background, logo, text) lives inside a single 320x240
+    -- "canvas" entity. The canvas root is placed at the window centre and
+    -- scaled to fit each frame (see update()); its children are laid out in a
+    -- coordinate space centred on (0,0), and each piece of content is centred
+    -- on its own local origin.
+    local canvas = scene.createEntity(scene.getRoot("user"))
+    scene.setField(canvas, 'name', 'menu.canvas')
+    instance.canvas = canvas
+    util.fitCanvas(canvas)
 
     local bigFont = gfx.loadFont('common/data/font0')
     local smallFont = gfx.loadFont('common/data/font0:small')
 
-    -- Original RE2 title background (data://).
+    -- Original RE2 title background (data://), authored at 320x240. It is
+    -- centred on the canvas origin (0,0) so it fills the window-centred canvas.
     local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
     if bgTex then
-        local e = scene.createEntity(scene.getRoot("user"))
+        local e = scene.createEntity(canvas)
         scene.setField(e, 'name', 'menu.background')
         scene.setField(e, 'x', 0)
         scene.setField(e, 'y', 0)
         local s = scene.addComponent(e, 'core.sprite')
         scene.setField(s, 'texture', bgTex)
-        scene.setField(s, 'size.width', w)
-        scene.setField(s, 'size.height', h)
+        scene.setField(s, 'size.width', CANVAS_W)
+        scene.setField(s, 'size.height', CANVAS_H)
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
     end
 
-    -- RE2 title logo: two TIMs packed inside tmoji.bin (index 1 & 2). Each tile
-    -- is a child of a central "logo root" so they share its transform and the
-    -- whole logo slides together when it moves up.
-    local logoRoot = scene.createEntity(scene.getRoot("user"))
+    -- RE2 title logo: the logo art lives entirely in TIM index 1 of
+    -- tmoji.bin (TIM index 2 is blank in the shipped asset, so it is omitted).
+    -- Each tile is a child of a central "logo root" so they share its transform
+    -- and the whole logo slides together when it moves up. The canvas entity
+    -- provides all window-fit scaling, so the logo root simply sits at the
+    -- horizontal centre of the 320x240 design space. The engine renders each
+    -- sprite centred on its own position (transform), so each tile is placed at
+    -- the centre of its own cell, offset by the logo's centre so the artwork is
+    -- centred on that root.
+    local LOGO_TILES = {
+        { 1, 0, 0,  128, 80, -144 + 0,   -40 },
+        { 1, 0, 80, 128, 48, -144 + 128, -40 },
+    }
+    local logoMinX, logoMinY, logoMaxX, logoMaxY = 1e9, 1e9, -1e9, -1e9
+    for _, t in ipairs(LOGO_TILES) do
+        logoMinX = math.min(logoMinX, t[6])
+        logoMaxX = math.max(logoMaxX, t[6] + t[4])
+        logoMinY = math.min(logoMinY, t[7])
+        logoMaxY = math.max(logoMaxY, t[7] + t[5])
+    end
+    local logoCx = (logoMinX + logoMaxX) * 0.5
+    local logoCy = (logoMinY + logoMaxY) * 0.5
+
+    local logoRoot = scene.createEntity(canvas)
     scene.setField(logoRoot, 'name', 'menu.logo')
-    scene.setField(logoRoot, 'x', w * 0.5)
+    -- Centred on the canvas origin (0,0) = window centre; each tile below is
+    -- placed at the centre of its own cell, offset by the logo centre so the
+    -- artwork is centred on this root.
+    scene.setField(logoRoot, 'x', 0)
     scene.setField(logoRoot, 'y', instance.pressLogoY)
-    scene.setField(logoRoot, 'scale.x', 2)
-    scene.setField(logoRoot, 'scale.y', 2)
     instance.logoRoot = logoRoot
     instance.logoY = instance.pressLogoY
     instance.logoTargetY = instance.pressLogoY
 
-    local LOGO_TILES = {
-        { 1, 0, 0,  128, 80, -144 + 0,   -40 },
-        { 1, 0, 80, 128, 48, -144 + 128, -40 },
-        { 2, 0, 0,  128, 32, -144 + 128, 8 },
-        { 2, 0, 32, 128, 80, -144 + 256, -40 },
-    }
     for _, t in ipairs(LOGO_TILES) do
         local tex = gfx.loadTexture('common/data/tmoji.bin', 0, 0, t[1])
         if tex then
             local e = scene.createEntity(logoRoot)
             scene.setField(e, 'name', 'menu.logo.tile')
-            scene.setField(e, 'x', t[6])
-            scene.setField(e, 'y', t[7])
+            -- Sprite is centred on its transform, so use the cell centre.
+            scene.setField(e, 'x', t[6] + t[4] * 0.5 - logoCx)
+            scene.setField(e, 'y', t[7] + t[5] * 0.5 - logoCy)
             local s = scene.addComponent(e, 'core.sprite')
             scene.setField(s, 'texture', tex)
             scene.setField(s, 'src.x', t[2])
@@ -273,8 +328,9 @@ function Title:new()
     if smallFont then
         -- Version disclaimer along the bottom edge.
         createLine(
+            canvas,
             smallFont,
-            h * 0.92, h * 0.06,
+            4, bandCenterY(0.92, 0.06), CANVAS_W, CANVAS_H * 0.06,
             '<span color="#707070">OpenRE, Resident Evil 2, Version 1.0</span>',
             'menu.disclaimer',
             TextFlags.xLeft | TextFlags.yMiddle)
@@ -282,21 +338,24 @@ function Title:new()
 
     -- PRESS START prompt (just above the menu band).
     local _, pt = createLine(
+        canvas,
         bigFont,
-        h * 0.56, h * 0.07,
+        0, bandCenterY(0.56, 0.07), CANVAS_W, CANVAS_H * 0.07,
         '<span color="' .. COLOR_GOLD .. '">PRESS START</span>',
         'menu.pressStart',
         TextFlags.xCenter | TextFlags.yMiddle)
     instance.pressStart = pt
 
     -- Menu items (hidden until the menu opens).
-    instance.menuTop = h * 0.60
-    instance.menuStep = h * 0.075
-    instance.menuLineHeight = h * 0.07
+    instance.menuTop = 0.50
+    instance.menuStep = 0.075
+    instance.menuLineHeight = 0.07
     for i, _ in ipairs(MENU_ITEMS) do
         local e, t = createLine(
+            canvas,
             bigFont,
-            instance.menuTop + (i - 1) * instance.menuStep, instance.menuLineHeight,
+            0, bandCenterY(instance.menuTop + (i - 1) * instance.menuStep, instance.menuLineHeight),
+            CANVAS_W, CANVAS_H * instance.menuLineHeight,
             '',
             'menu.item.' .. i,
             TextFlags.xCenter | TextFlags.yMiddle)
@@ -306,12 +365,13 @@ function Title:new()
 
     -- Menu cursor, placed to the left of the list.
     local ce, ct = createLine(
+        canvas,
         bigFont,
-        instance.menuTop + instance.menuLineHeight * 0.5, instance.menuLineHeight,
+        CANVAS_W * -0.22, bandCenterY(instance.menuTop, instance.menuLineHeight),
+        CANVAS_W, CANVAS_H * instance.menuLineHeight,
         '',
         'menu.cursor',
         TextFlags.xCenter | TextFlags.yMiddle)
-    scene.setField(ce, 'x', -w * 0.22)
     instance.cursorEntity = ce
     instance.cursorComponent = ct
 

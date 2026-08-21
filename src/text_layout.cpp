@@ -463,19 +463,25 @@ namespace openre::text
         const float totalW = measureWidth(runs);
         const float totalH = small ? kSmallCellSize : kCellSize;
 
-        // Alignment offsets within text.size.
+        // The text entity's transform is the centre of its bounding box, and
+        // glyphs are rendered centred on their own transforms (see render2d), so
+        // align within a box centred on the origin.
         const TextAlignX ax = (TextAlignX)((text.flags & (uint32_t)TextFlags::XMask) >> 0);
         const TextAlignY ay = (TextAlignY)((text.flags & (uint32_t)TextFlags::YMask) >> 2);
         float originX = 0;
         if (ax == TextAlignX::Center)
-            originX = (text.size.width - totalW) * 0.5f;
+            originX = -totalW * 0.5f;
         else if (ax == TextAlignX::Right)
-            originX = text.size.width - totalW;
+            originX = text.size.width * 0.5f - totalW;
+        else
+            originX = -text.size.width * 0.5f; // Left
         float originY = 0;
         if (ay == TextAlignY::Middle)
-            originY = (text.size.height - totalH) * 0.5f;
+            originY = -totalH * 0.5f;
         else if (ay == TextAlignY::Bottom)
-            originY = text.size.height - totalH;
+            originY = text.size.height * 0.5f - totalH;
+        else
+            originY = -text.size.height * 0.5f; // Top
 
         float x = originX;
         float y = originY;
@@ -490,8 +496,10 @@ namespace openre::text
 
             Entity g = scene.createEntity(container);
             auto& transform = scene.getComponent<TransformComponent>(g);
-            transform.position.x = x;
-            transform.position.y = y;
+            // The glyph is centred on its position (render2d), so offset by
+            // half a cell from the top-left pen position.
+            transform.position.x = x + run.advanceX * 0.5f;
+            transform.position.y = y + run.advanceY * 0.5f;
 
             auto& sprite = scene.addComponent<SpriteComponent>(g);
             sprite.size = { run.advanceX, run.advanceY };

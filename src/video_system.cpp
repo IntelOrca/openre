@@ -103,12 +103,17 @@ namespace openre
 
         auto& scene = app.scene;
         ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
-        scene.getComponent<ecs::TransformComponent>(entity).name = "movie";
+        const auto ws = system::config::get_window_size();
+        auto& videoTransform = scene.getComponent<ecs::TransformComponent>(entity);
+        videoTransform.name = "movie";
+        // Sprites (and thus the video) are centred on their transform (see
+        // render2d), so anchor the full-window movie on the screen centre.
+        videoTransform.position.x = ws.width * 0.5f;
+        videoTransform.position.y = ws.height * 0.5f;
         auto& video = scene.addComponent<ecs::VideoComponent>(entity);
         video.resource = path;
         video.status = ecs::VideoStatus::Playing;
 
-        const auto ws = system::config::get_window_size();
         video.size = { static_cast<float>(ws.width), static_cast<float>(ws.height) };
 
         auto* decoder = new VideoDecoder();

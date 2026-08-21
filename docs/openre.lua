@@ -316,7 +316,9 @@ function scene.addComponent(entity, name) end
 --- struct: `size.width`, `size.height` (destination size in window pixels),
 --- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
 --- pixels; 0-sized means "full texture"), `texture` (a Texture or nil), and
---- `flags` (a bitmask of SpriteFlags values combined with `|`). Text fields:
+--- `flags` (a bitmask of SpriteFlags values combined with `|`). A sprite is
+--- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
+--- place the entity where you want the centre of the sprite. Text fields:
 --- `text` (UTF-8 string; supports `<span color="#ff0">` markup), `font` (a
 --- Font or nil), `size.width` / `size.height` (bounds the text is aligned
 --- within), and `flags` (a bitmask of TextFlags values combined with `|`).
