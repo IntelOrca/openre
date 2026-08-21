@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ida-pro-mcp": {
+      "tools": [
+        "*"
+      ],
+      "type": "http",
+      "url": "http://IDA-VM:13337/mcp"
+    }
+  }
+}
