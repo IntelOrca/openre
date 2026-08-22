@@ -271,34 +271,22 @@ function Title:new()
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
     end
 
-    -- RE2 title logo: the logo art lives entirely in TIM index 1 of
-    -- tmoji.bin (TIM index 2 is blank in the shipped asset, so it is omitted).
-    -- Each tile is a child of a central "logo root" so they share its transform
-    -- and the whole logo slides together when it moves up. The canvas entity
-    -- provides all window-fit scaling, so the logo root simply sits at the
-    -- horizontal centre of the 320x240 design space. The engine renders each
-    -- sprite centred on its own position (transform), so each tile is placed at
-    -- the centre of its own cell, offset by the logo's centre so the artwork is
-    -- centred on that root.
+    -- RE2 title logo: assembled from TIM index 1 and TIM index 2 of tmoji.bin.
+    -- The logo root sits at the canvas centre (0,0); each tile is a static
+    -- relative offset from that root, chosen so the assembled logo is centred.
+    -- (The right-hand TIM is mostly empty, so the offsets are biased left of the
+    -- raw source-rectangle centre to keep the visible logo centred.)
     local LOGO_TILES = {
-        { 1, 0, 0,  128, 80, -144 + 0,   -40 },
-        { 1, 0, 80, 128, 48, -144 + 128, -40 },
+        { 1, 0, 0,  128, 80, -76,   0 },
+        { 1, 0, 80, 128, 48,  52, -16 },
+        { 2, 0, 0,  128, 32,  52,  24 },
+        { 2, 0, 32, 128, 80, 180,   0 },
     }
-    local logoMinX, logoMinY, logoMaxX, logoMaxY = 1e9, 1e9, -1e9, -1e9
-    for _, t in ipairs(LOGO_TILES) do
-        logoMinX = math.min(logoMinX, t[6])
-        logoMaxX = math.max(logoMaxX, t[6] + t[4])
-        logoMinY = math.min(logoMinY, t[7])
-        logoMaxY = math.max(logoMaxY, t[7] + t[5])
-    end
-    local logoCx = (logoMinX + logoMaxX) * 0.5
-    local logoCy = (logoMinY + logoMaxY) * 0.5
 
     local logoRoot = scene.createEntity(canvas)
     scene.setField(logoRoot, 'name', 'menu.logo')
-    -- Centred on the canvas origin (0,0) = window centre; each tile below is
-    -- placed at the centre of its own cell, offset by the logo centre so the
-    -- artwork is centred on this root.
+    -- Centred on the canvas origin (0,0) = window centre; the tiles below are
+    -- static offsets from this root already chosen to centre the assembled logo.
     scene.setField(logoRoot, 'x', 0)
     scene.setField(logoRoot, 'y', instance.pressLogoY)
     instance.logoRoot = logoRoot
@@ -310,9 +298,8 @@ function Title:new()
         if tex then
             local e = scene.createEntity(logoRoot)
             scene.setField(e, 'name', 'menu.logo.tile')
-            -- Sprite is centred on its transform, so use the cell centre.
-            scene.setField(e, 'x', t[6] + t[4] * 0.5 - logoCx)
-            scene.setField(e, 'y', t[7] + t[5] * 0.5 - logoCy)
+            scene.setField(e, 'x', t[6])
+            scene.setField(e, 'y', t[7])
             local s = scene.addComponent(e, 'core.sprite')
             scene.setField(s, 'texture', tex)
             scene.setField(s, 'src.x', t[2])
