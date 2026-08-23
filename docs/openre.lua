@@ -263,8 +263,9 @@ local SceneComponent = {}
 local Texture = {}
 
 ---@class Font
---- Opaque handle to a loaded RE2 font (font0.tim / font1.tim). Created with
---- `gfx.loadFont`. Reference counted and released by the garbage collector.
+--- Opaque handle to a loaded RE2 font (a `.fnt` file, or a raw font0.tim /
+--- font1.tim atlas). Created with `gfx.loadFont`. Reference counted and
+--- released by the garbage collector.
 local Font = {}
 
 --[[ The scene namespace (module mode) ]]
@@ -469,15 +470,21 @@ local gfx = {}
 ---@return Texture|nil
 function gfx.loadTexture(path, width, height, timIndex) end
 
---- Load an RE2 font (font0.tim / font1.tim) and return a Font handle, or nil
---- on failure. The same path probing as gfx.loadTexture applies. The font
---- atlas's index-0 colour is treated as transparent so glyphs render with a
---- clear background. Use it with a `core.text` component's `font` field.
+--- Load an RE2 font and return a Font handle, or nil on failure. The same
+--- path probing as gfx.loadTexture applies. The font atlas's index-0 colour
+--- is treated as transparent so glyphs render with a clear background. Use it
+--- with a `core.text` component's `font` field.
 ---
---- A `:variant` suffix selects a virtual sub-font of the same atlas. Only
+--- A path ending in `.fnt` selects the OpenRE binary font format: explicit
+--- per-character records with kerning and one or more texture atlases,
+--- e.g. `gfx.loadFont("fonts/std.fnt")` (normal font) or
+--- `gfx.loadFont("fonts/sm.fnt")` (small font).
+---
+--- Otherwise the path names a raw RE2 atlas (font0.tim / font1.tim). A
+--- `:variant` suffix selects a virtual sub-font of the same atlas. Only
 --- `:small` is supported for now - the compact ASCII set (0x20-0x7F) in an
 --- 8px-cell grid (32 per row) on font0, e.g. `gfx.loadFont("common/data/font0:small")`.
----@param path string e.g. "common/data/font0"
+---@param path string e.g. "fonts/std.fnt"
 ---@return Font|nil
 function gfx.loadFont(path) end
 

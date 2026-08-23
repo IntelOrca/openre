@@ -737,8 +737,8 @@ function Title:new()
     instance.back, instance.backFrame = createLayer('menu.back', 0)
     instance.front, instance.frontFrame = createLayer('menu.front', SCALE_STEP)
 
-    local bigFont = gfx.loadFont('common/data/font0')
-    local smallFont = gfx.loadFont('common/data/font0:small')
+    local bigFont = gfx.loadFont('fonts/std.fnt')
+    local smallFont = gfx.loadFont('fonts/sm.fnt')
 
     -- Original RE2 title background (data://), authored at 320x240. It lives
     -- under the back layer, centred on the layer origin (0,0) = window centre,

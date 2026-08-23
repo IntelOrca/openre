@@ -3,28 +3,53 @@
 #include "resmgr.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace openre
 {
     /**
-     * A decoded RE2 font atlas (font0.tim / font1.tim) plus the glyph-cell
-     * lookup used to map Unicode text into 14x14 texture cells.
+     * One glyph record from a .fnt font.
+     */
+    struct FontGlyph
+    {
+        // Index into FontResource::textures.
+        uint16_t textureIndex = 0;
+        // Kerning: the glyph is drawn at pen_x - left and the pen then
+        // advances by left + right. top/bottom are vertical bearings
+        // (reserved, currently always 0).
+        int32_t left = 0;
+        int32_t top = 0;
+        int32_t right = 0;
+        int32_t bottom = 0;
+        // Source rectangle within the texture.
+        float srcX = 0;
+        float srcY = 0;
+        float srcW = 0;
+        float srcH = 0;
+    };
+
+    /**
+     * A font. Two flavours:
      *
-     * - The atlas is uploaded as a TextureResource; its cookie is stored in
-     *   `atlas` so glyph SpriteComponents can reference it via SpriteComponent.
-     * - The texture's palette index 0 is forced transparent so glyph cells
-     *   render with a clear background (the raw font palette uses entry 0 for
-     *   an opaque green).
-     * - Glyph cell for byte/code N is: u = 14 * (N % 18), v = 14 * (N / 18).
-     *   ASCII 0x20-0x7E map directly to their codepoint. Kana/kanji use the
-     *   RE2 text character table (see glyph.cpp).
+     * - A parsed .fnt file (`fromFnt`): explicit glyph records keyed by
+     *   Unicode codepoint across one or more textures (`textures` holds each
+     *   referenced texture's TextureResource cookie). Characters missing from
+     *   the map draw nothing and advance by defaultLeft + defaultRight; the
+     *   line box height is defaultBottom - defaultTop (the defaults are
+     *   signed vertical extents either side of the line).
+     * - A raw RE2 font atlas ("common/data/font0", optionally ":small"):
+     *   the atlas is uploaded as a TextureResource whose cookie is in
+     *   `atlas`, and glyphs are located by implicit grid math (see
+     *   text_layout.cpp). ASCII 0x20-0x7E maps to cell = codepoint in the
+     *   14px/18-column grid; `small` selects the compact 8px-cell grid with
+     *   32 cells per row at cell = codepoint - 0x20. Kana and kanji use the
+     *   RE2 text-character table.
      *
-     * `small` is a virtual sub-font exposing the compact ASCII set (0x20-0x7F)
-     * in a grid of 8px cells, 32 per row. The cell index is (codepoint -
-     * 0x20): space=0, '!'=1, ..., 'A'=33 (col 1, row 1). Glyph cell N is at
-     * u = 8 * (N % 32), v = 8 * (N / 32).
+     * .fnt fonts also fill the legacy `atlas`/`width`/`height` fields with
+     * their first texture so grid-based fallbacks keep working.
      */
     class FontResource : public Resource
     {
@@ -43,20 +68,56 @@ namespace openre
         int width = 0;  // atlas width in pixels
         int height = 0; // atlas height in pixels
 
-        // Which physical font this atlas is (0 = font0, 1 = font1).
+        // Which physical font this atlas is (0 = font0, 1 = font1). Legacy
+        // fonts only.
         int page = 0;
 
         // True for a "virtual" sub-font exposing the small compact ASCII set
-        // (0x20-0x7F in an 8px-cell, 32-per-row grid on the same font0 texture).
+        // (0x20-0x7F in an 8px-cell, 32-per-row grid on the same font0
+        // texture). Legacy fonts only.
         bool small = false;
+
+        // True when this resource was parsed from a .fnt file.
+        bool fromFnt = false;
+
+        // Default metrics for characters without an explicit record.
+        int32_t defaultLeft = 0;
+        int32_t defaultRight = 0;
+        int32_t defaultTop = 0;
+        int32_t defaultBottom = 0;
+
+        struct FntTexture
+        {
+            std::string path;
+            int width = 0;
+            int height = 0;
+            ResourceCookie atlas = 0;
+        };
+        std::vector<FntTexture> textures;
+        std::unordered_map<uint32_t, FontGlyph> glyphs;
+
+        int lineHeight() const
+        {
+            return this->defaultBottom - this->defaultTop;
+        }
+
+        const FontGlyph* findGlyph(uint32_t codepoint) const
+        {
+            auto it = this->glyphs.find(codepoint);
+            return it != this->glyphs.end() ? &it->second : nullptr;
+        }
     };
 
     /**
-     * Loads a RE2 font (font0.tim / font1.tim) and registers it with the
-     * resource manager, returning a ResourceCookie holding one reference
-     * (0 on failure). `path` is a logical asset path like
-     * "common/data/font0" (probes "" / ".tim" / ".adt" via data://),
-     * matching loadTextureResource.
+     * Loads a RE2 font (.fnt file or raw font0/font1 atlas) and registers it
+     * with the resource manager, returning a ResourceCookie holding one
+     * reference (0 on failure).
+     *
+     * For an atlas path like "common/data/font0" the extension is probed
+     * ("" / ".tim" / ".adt") via data://. The ":small" suffix selects the
+     * compact ASCII sub-font of the same atlas. A path ending in ".fnt" is
+     * parsed as the binary OpenRE font format; texture paths inside it are
+     * resolved like any other logical asset path.
      */
     ResourceCookie loadFontResource(std::string_view path);
 }

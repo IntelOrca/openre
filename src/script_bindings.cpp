@@ -1570,7 +1570,7 @@ namespace openre::script
                     captionText.size = { static_cast<float>(render2d::SpriteRenderer::get().screenWidth()), 24.0f };
                     captionText.flags
                         = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
-                    captionText.font = loadFontResource("common/data/font0:small");
+                    captionText.font = loadFontResource("fonts/sm.fnt");
                 }
             }
 

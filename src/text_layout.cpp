@@ -357,7 +357,8 @@ namespace openre::text
         return -1;
     }
 
-    std::vector<GlyphRun> decodeText(std::string_view text, float advanceX, float advanceY, bool small)
+    std::vector<GlyphRun>
+    decodeText(std::string_view text, const FontResource* font, float fallbackAdvanceX, float fallbackAdvanceY)
     {
         std::vector<GlyphRun> runs;
         runs.reserve(text.size());
@@ -397,18 +398,47 @@ namespace openre::text
             uint32_t cp = 0;
             decodeUtf8(p, end, cp);
 
-            int cell = lookupCell(cp, page, small);
             GlyphRun g;
-            // Literal spaces (and any glyph we can't resolve) are blank: they
-            // advance the pen but draw nothing. Cell 0x20 in the PC atlas is
-            // not a blank cell (it holds a stray glyph), so we must not draw
-            // it for spaces.
-            g.cell = cell >= 0 ? cell : 0;
-            g.page = page;
-            g.blank = (cp == 0x20 || cell < 0);
-            g.advanceX = advanceX > 0 ? advanceX : kCellSize;
-            g.advanceY = advanceY;
             g.color = color;
+            g.advanceY = fallbackAdvanceY;
+
+            const FontGlyph* glyph = font != nullptr && font->fromFnt ? font->findGlyph(cp) : nullptr;
+            if (glyph != nullptr && cp != 0x20)
+            {
+                // Explicit .fnt record: kerning-aware metrics and source rect.
+                g.hasSrc = true;
+                g.srcX = glyph->srcX;
+                g.srcY = glyph->srcY;
+                g.srcW = glyph->srcW;
+                g.srcH = glyph->srcH;
+                g.texture = font->textures[glyph->textureIndex].atlas;
+                g.advanceX = static_cast<float>(glyph->left + glyph->right);
+                g.leftBearing = static_cast<float>(glyph->left);
+            }
+            else if (font != nullptr && font->fromFnt)
+            {
+                // Spaces and characters missing from the map draw nothing but
+                // still advance the pen, by their recorded metrics or the
+                // header defaults.
+                g.blank = true;
+                const int32_t left = glyph != nullptr ? glyph->left : font->defaultLeft;
+                const int32_t right = glyph != nullptr ? glyph->right : font->defaultRight;
+                g.advanceX = static_cast<float>(left + right);
+                if (g.advanceX <= 0)
+                    g.advanceX = fallbackAdvanceX > 0 ? fallbackAdvanceX : kCellSize;
+            }
+            else
+            {
+                int cell = lookupCell(cp, page, font != nullptr && font->small);
+                g.cell = cell >= 0 ? cell : 0;
+                g.page = page;
+                // Literal spaces (and any glyph we can't resolve) are blank:
+                // they advance the pen but draw nothing. Cell 0x20 in the PC
+                // atlas is not a blank cell (it holds a stray glyph), so we
+                // must not draw it for spaces.
+                g.blank = cp == 0x20 || cell < 0;
+                g.advanceX = fallbackAdvanceX > 0 ? fallbackAdvanceX : kCellSize;
+            }
             runs.push_back(g);
         }
         return runs;
@@ -433,18 +463,20 @@ namespace openre::text
     void layoutEntity(ecs::Scene& scene, ecs::Entity entity, ecs::TextComponent& text)
     {
         // Resolve the font resource to find its atlas texture cookie.
+        const FontResource* font = nullptr;
         ResourceCookie atlas = 0;
         bool small = false;
         if (text.font != 0)
         {
-            auto* font = ResourceManager::get().fromCookie<FontResource>(text.font);
-            if (font != nullptr)
+            auto* resource = ResourceManager::get().fromCookie<FontResource>(text.font);
+            if (resource != nullptr)
             {
+                font = resource;
                 atlas = font->atlas;
                 small = font->small;
             }
         }
-        if (atlas == 0)
+        if (font == nullptr || atlas == 0)
             return; // no font; nothing to draw
 
         // Ensure the dedicated layout container exists.
@@ -462,13 +494,13 @@ namespace openre::text
             text.layoutContainer = container;
         }
 
-        const float advance = small ? kSmallCellSize : kCellSize;
-        auto runs = decodeText(text.text, advance, advance, small);
+        const float cellSize = small ? kSmallCellSize : kCellSize;
+        auto runs = decodeText(text.text, font, cellSize, cellSize);
         if (runs.empty())
             return;
 
         const float totalW = measureWidth(runs);
-        const float totalH = small ? kSmallCellSize : kCellSize;
+        const float totalH = font->fromFnt ? static_cast<float>(font->lineHeight()) : cellSize;
 
         // The text entity's transform is the centre of its bounding box, and
         // glyphs are rendered centred on their own transforms (see render2d), so
@@ -503,31 +535,44 @@ namespace openre::text
 
             Entity g = scene.createEntity(container);
             auto& transform = scene.getComponent<TransformComponent>(g);
-            // The glyph is centred on its position (render2d), so offset by
-            // half a cell from the top-left pen position.
-            transform.position.x = x + run.advanceX * 0.5f;
+            // Sprites are centred on their position (render2d). Grid glyphs
+            // fill the full cell; .fnt glyphs sit at pen_x - leftBearing and
+            // are centred on their own source rectangle.
+            if (run.hasSrc)
+                transform.position.x = x - run.leftBearing + run.srcW * 0.5f;
+            else
+                transform.position.x = x + run.advanceX * 0.5f;
             transform.position.y = y + run.advanceY * 0.5f;
 
             auto& sprite = scene.addComponent<SpriteComponent>(g);
-            sprite.size = { run.advanceX, run.advanceY };
-            sprite.texture = atlas;
-            if (small)
+            if (run.hasSrc)
             {
-                sprite.src = {
-                    kSmallCellSize * (run.cell % kSmallGridCols),
-                    kSmallCellSize * (run.cell / kSmallGridCols),
-                    kSmallCellSize,
-                    kSmallCellSize,
-                };
+                sprite.size = { run.srcW, run.srcH };
+                sprite.src = { run.srcX, run.srcY, run.srcW, run.srcH };
+                sprite.texture = run.texture;
             }
             else
             {
-                sprite.src = {
-                    14.0f * (run.cell % kGridCols),
-                    14.0f * (run.cell / kGridCols),
-                    kCellSize,
-                    kCellSize,
-                };
+                sprite.size = { run.advanceX, run.advanceY };
+                sprite.texture = atlas;
+                if (small)
+                {
+                    sprite.src = {
+                        kSmallCellSize * (run.cell % kSmallGridCols),
+                        kSmallCellSize * (run.cell / kSmallGridCols),
+                        kSmallCellSize,
+                        kSmallCellSize,
+                    };
+                }
+                else
+                {
+                    sprite.src = {
+                        14.0f * (run.cell % kGridCols),
+                        14.0f * (run.cell / kGridCols),
+                        kCellSize,
+                        kCellSize,
+                    };
+                }
             }
             sprite.color = run.color;
             x += run.advanceX;
