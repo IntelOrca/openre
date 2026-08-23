@@ -421,14 +421,29 @@ namespace openre::script
             return 1;
         }
 
+        // re.collectGarbage() - runs a full Lua garbage collection step. The
+        // sandboxed VM removes the standard collectgarbage(); this safe
+        // replacement lets scripts release resource handles (textures, fonts,
+        // sounds) deterministically after dropping their last reference,
+        // e.g. when handing over from one screen to another.
+        int apiCollectGarbage(lua_State* L)
+        {
+            lua_gc(L, LUA_GCCOLLECT);
+            return 0;
+        }
+
         // ── scene.* / gfx.* ────────────────────────────────────────────────
         // The scene-tree API. Entities and components are light userdata
-        // handles into the current ECS scene; textures/fonts are userdata
-        // wrapping a ResourceCookie. The resource manager owns the underlying
-        // resource for the session (released at shutdown) — the handle does not
-        // free it on Lua garbage collection, otherwise dropping the only Lua
-        // reference (e.g. a local) would unload a texture still used by a
-        // sprite. The sprite/text component keeps the cookie alive.
+        // handles into the current ECS scene; textures/fonts/sounds are
+        // userdata wrapping a ResourceCookie. The Lua handle OWNS its
+        // resource-manager reference: when the last handle is garbage
+        // collected the resource is unloaded. Scene components that point at
+        // a resource through a field (sprite texture, text font, emitter
+        // sound) borrow it, so scripts must keep the handle alive as long as
+        // the component uses it (e.g. store it alongside the entity).
+        // Resources still live at shutdown are released wholesale by
+        // ResourceManager::releaseAll(); late __gc finalizers then release
+        // against an empty registry and are safe no-ops.
 
         namespace ComponentKind
         {
@@ -461,6 +476,20 @@ namespace openre::script
         {
             ResourceCookie cookie;
         };
+
+        // __gc for TextureHandle/FontHandle/SoundHandle: returns the handle's
+        // resource-manager reference. Safe after releaseAll() (the empty
+        // registry makes release a no-op).
+        template<typename T> int resourceHandleGC(lua_State* L)
+        {
+            auto* handle = static_cast<T*>(lua_touserdata(L, 1));
+            if (handle != nullptr && handle->cookie != 0)
+            {
+                ResourceManager::get().release(handle->cookie);
+                handle->cookie = 0;
+            }
+            return 0;
+        }
 
         int sceneCreateEntity(lua_State* L)
         {
@@ -1776,6 +1805,7 @@ namespace openre::script
         setGlobal(L, "re.getEntity", apiGetEntity);
         setGlobalWithVm(L, "re.log", apiLog, vm);
         setGlobal(L, "re.getEnv", apiGetEnv);
+        setGlobal(L, "re.collectGarbage", apiCollectGarbage);
 #ifdef DEBUG
         setGlobal(L, "re.eval", apiEval);
         setGlobal(L, "re.evalIn", apiEvalIn);
@@ -1849,8 +1879,12 @@ namespace openre::script
         luaL_newmetatable(L, METATABLE_SCENE_COMPONENT);
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_TEXTURE);
+        lua_pushcfunction(L, resourceHandleGC<TextureHandle>);
+        lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_FONT);
+        lua_pushcfunction(L, resourceHandleGC<FontHandle>);
+        lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 
         luaL_newmetatable(L, METATABLE_ENTITY);

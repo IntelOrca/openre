@@ -24,16 +24,29 @@ namespace openre
 
     std::vector<ResourceManager::ResourceInfo> ResourceManager::list() const
     {
+        // One entry per live RESOURCE (not per cookie): several cookies may
+        // reference the same resource, and reporting each would list the same
+        // asset repeatedly. The reported cookie is the first live one, usable
+        // with fromCookie()/preview endpoints.
         std::vector<ResourceInfo> result;
-        for (ResourceCookie cookie = 1; cookie <= this->cookies.size(); cookie++)
+        for (ResourceHandle handle = 1; handle <= this->resources.size(); handle++)
         {
-            const auto handle = this->cookies[cookie - 1];
-            if (handle == 0 || handle > this->resources.size())
-                continue;
             const auto& entry = this->resources[handle - 1];
+            if (!entry.resource)
+                continue;
+
+            ResourceCookie firstCookie = 0;
+            for (size_t i = 0; i < this->cookies.size(); i++)
+            {
+                if (this->cookies[i] == handle)
+                {
+                    firstCookie = static_cast<ResourceCookie>(i + 1);
+                    break;
+                }
+            }
 
             ResourceInfo info;
-            info.cookie = cookie;
+            info.cookie = firstCookie;
             info.path = entry.path;
             if (entry.typeIndex == std::type_index(typeid(TextureResource)))
             {
@@ -71,19 +84,17 @@ namespace openre
     ResourceHandle
     ResourceManager::addImpl(std::string_view path, std::unique_ptr<Resource> resource, std::type_index typeIndex)
     {
+        // One resource per (path, type): a repeated load reuses the existing
+        // entry instead of piling up duplicates.
         auto existingHandle = find(path, typeIndex);
         if (existingHandle != 0)
         {
-            logging::logWarning("[resmgr] resource already loaded for path '{}'", std::string(path));
+            logging::logDebug("[resmgr] resource '{}' already loaded, reusing handle", std::string(path));
+            return existingHandle;
         }
-        else
-        {
-            logging::logInfo(
-                "[resmgr] load {} handle = {}, path = '{}'",
-                resource->getName(),
-                this->resources.size() + 1,
-                std::string(path));
-        }
+
+        logging::logInfo(
+            "[resmgr] load {} handle = {}, path = '{}'", resource->getName(), this->resources.size() + 1, std::string(path));
 
         auto& resourceEntry = this->resources.emplace_back();
         resourceEntry.handle = static_cast<ResourceHandle>(this->resources.size());

@@ -737,13 +737,18 @@ function Title:new()
     instance.back, instance.backFrame = createLayer('menu.back', 0)
     instance.front, instance.frontFrame = createLayer('menu.front', SCALE_STEP)
 
+    -- Fonts and textures borrowed by this menu's components. Resource
+    -- handles unload on garbage collection, so the instance must keep every
+    -- handle alive for as long as its components reference the cookies.
     local bigFont = gfx.loadFont('fonts/std.fnt')
     local smallFont = gfx.loadFont('fonts/sm.fnt')
+    local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
+    instance.assets = { bigFont, smallFont, bgTex }
 
     -- Original RE2 title background (data://), authored at 320x240. It lives
     -- under the back layer, centred on the layer origin (0,0) = window centre,
     -- so it tracks the window smoothly while the front UI snaps between steps.
-    local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
+    local bgTex = instance.assets[3]
     if bgTex then
         local e = scene.createEntity(instance.back)
         scene.setField(e, 'name', 'menu.background')
@@ -781,6 +786,7 @@ function Title:new()
     for _, t in ipairs(LOGO_TILES) do
         local tex = gfx.loadTexture('common/data/tmoji.bin', 0, 0, t[1])
         if tex then
+            instance.assets[#instance.assets + 1] = tex
             local e = scene.createEntity(logoRoot)
             scene.setField(e, 'name', 'menu.logo.tile')
             scene.setField(e, 'x', t[6])

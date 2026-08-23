@@ -621,6 +621,7 @@ namespace openre::render2d
         }
 
         impl->textures[handle] = { tex, w, h };
+        logging::logInfo("[render2d] loaded dynamic texture handle {} ({}x{})", handle, w, h);
         return handle;
     }
 

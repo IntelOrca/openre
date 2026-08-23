@@ -32,7 +32,8 @@ local function createSplash()
 end
 
 -- Hides the splash after the menu takes over so it doesn't linger behind it.
--- The canvas entity is destroyed so it is fully removed from the scene.
+-- The canvas entity is destroyed and the Lua references dropped, then a full
+-- collection unloads the texture through the handles' __gc.
 local function hideSplash()
     if splash.entity then
         scene.destroy(splash.entity)
@@ -40,6 +41,7 @@ local function hideSplash()
     splash.entity = nil
     splash.sprite = nil
     splash.texture = nil
+    re.collectGarbage()
 end
 
 -- Optional boot override for testing: set OPENRE_PROLOGUE="leon,a" (or

@@ -54,7 +54,9 @@ namespace openre
     class FontResource : public Resource
     {
     public:
-        ~FontResource() override = default;
+        // Releases the atlas texture references owned by this font, so the
+        // shared atlas unloads with the last font that uses it.
+        ~FontResource() override;
 
         const char* getName() const override
         {

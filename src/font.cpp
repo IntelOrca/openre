@@ -10,6 +10,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -17,6 +18,25 @@
 
 namespace openre
 {
+    FontResource::~FontResource()
+    {
+        // The font owns one reference per distinct atlas texture (raw fonts
+        // have a single atlas; .fnt fonts reference every texture listed in
+        // the file). Releasing them lets the atlas unload with the last font
+        // using it. Safe during releaseAll(): cookie slots are zeroed before
+        // resources are destroyed, making the nested releases no-ops.
+        auto& resmgr = ResourceManager::get();
+        std::set<ResourceCookie> cookies;
+        if (this->atlas != 0)
+            cookies.insert(this->atlas);
+        for (const auto& tex : this->textures)
+        {
+            if (tex.atlas != 0)
+                cookies.insert(tex.atlas);
+        }
+        for (const ResourceCookie cookie : cookies)
+            resmgr.release(cookie);
+    }
     namespace
     {
         // Reads the font file from the module dir then the data:// fallback,

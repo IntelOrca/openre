@@ -158,6 +158,13 @@ function re.getEntity(kind, index) end
 ---@return string|nil
 function re.getEnv(name) end
 
+--- Run a full Lua garbage collection. Resource handles (textures, fonts,
+--- sounds) unload their underlying resource when collected, so call this
+--- after dropping the last references to free them immediately instead of
+--- waiting for the automatic collector — e.g. when a screen hands over to
+--- the next one.
+function re.collectGarbage() end
+
 --- Route a message to the C++ logger.
 ---@param level LogLevel
 ---@param msg string
@@ -258,14 +265,17 @@ local SceneComponent = {}
 ---@class Texture
 --- Opaque handle to a loaded GPU texture. Created with `gfx.loadTexture`.
 --- The underlying resource is reference counted and released by the garbage
---- collector when this value is no longer referenced; nil-ing the Lua
---- reference is enough to free the GPU texture.
+--- collector when the last handle is collected; nil-ing the Lua reference is
+--- enough to free the GPU texture (after one final collection). Scene
+--- components borrowing the texture through their `texture` field do NOT keep
+--- it alive — keep the handle referenced for as long as a sprite uses it.
 local Texture = {}
 
 ---@class Font
 --- Opaque handle to a loaded RE2 font (a `.fnt` file, or a raw font0.tim /
 --- font1.tim atlas). Created with `gfx.loadFont`. Reference counted and
---- released by the garbage collector.
+--- released by the garbage collector; like textures, keep the handle
+--- referenced while text components use it.
 local Font = {}
 
 --[[ The scene namespace (module mode) ]]

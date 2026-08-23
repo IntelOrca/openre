@@ -885,6 +885,12 @@ local function beginMovie(c)
     -- sequence and interrupting one skips only that one.
     stopAudio(c)
     destroyScene(c)
+    -- The slideshow's assets belong to this screen only: drop the texture
+    -- cache and collect so everything is unloaded before the movie starts.
+    for k in pairs(texCache) do
+        texCache[k] = nil
+    end
+    re.collectGarbage()
     core.playMovie(def.movie)
     c.movies[#c.movies + 1] = def.movie
     core.playMovie(def.movieAlt)
