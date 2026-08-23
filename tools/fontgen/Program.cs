@@ -113,6 +113,18 @@ namespace fontgen
             0, 0,
         };
 
+        // Hiragana and katakana glyphs occupying the atlas cells after 'z',
+        // in atlas order. The first character is cell 123 (the cell directly
+        // after 'z'), the second cell 124, and so on. Note: the katakana
+        // 'he' slot uses the hiragana へ glyph, matching the original font.
+        private const string KanaChars =
+            "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん" +
+            "がぎぐげござじずぜぞだぢづでどばびぶべぼ" +
+            "ぱぴぷぺぽ" +
+            "ぁぃぅぇぉゃゅょっ" +
+            "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフへホマミムメモヤユヨラリルレロワヲン" +
+            "ガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ";
+
         // Hand-tuned metric overrides {left, right} by codepoint, applied on
         // top of everything else. Kept empty - glyph metrics are measured
         // automatically from the reference PNG for A-Za-z0-9.
@@ -222,10 +234,11 @@ namespace fontgen
         /// Rows 0-1 of the atlas are empty; cells 36-47 hold a handful of
         /// symbols. From '0' (cell 48) the atlas is ASCII-aligned for the
         /// digits and letters, but the punctuation runs differ from ASCII:
-        /// between '9' and 'A' sit : 、 , ” ! ? ⁉, and between 'Z' and 'a'
-        /// sit [ / ] ’ - •. Metrics for A-Za-z0-9 are measured from the
-        /// reference PNG when available so every glyph gets a uniform ink
-        /// gap; other characters use the extracted width_tbl values.
+        /// sit [ / ] ’ - •. The cells after 'z' hold hiragana and katakana
+        /// in atlas order (KanaChars). Metrics for A-Za-z0-9 are measured
+        /// from the reference PNG when available so every glyph gets a
+        /// uniform ink gap; other characters use the extracted width_tbl
+        /// values, and kana use the full-cell default.
         /// </summary>
         private FontDef BuildStdFont()
         {
@@ -304,6 +317,11 @@ namespace fontgen
             // Lower-case letters: ASCII-aligned with the atlas cells.
             for (uint cp = 0x61; cp <= 0x7A; cp++)
                 Add(cp, (int)cp);
+
+            // Hiragana and katakana following 'z', in atlas order. Kana are
+            // full-width so they fall back to the default {0, 14} metrics.
+            for (var i = 0; i < KanaChars.Length; i++)
+                Add(KanaChars[i], 123 + i);
 
             characters.Sort((a, b) => a.Codepoint.CompareTo(b.Codepoint));
 
