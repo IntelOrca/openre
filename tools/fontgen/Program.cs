@@ -42,16 +42,16 @@ namespace fontgen
             3, 8, // 『
             4, 7, // 』
             6, 8, // “
-            1, 8, // ”
+            1, 8, // (unidentified)
             2, 10, // ▼
             1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, // 0-9
             4, 7, // :
-            0, 14, // ;
-            2, 5, // <
-            2, 11, // =
-            4, 6, // >
+            0, 14, // 、
+            2, 5, // ,
+            2, 11, // ”
+            4, 6, // !
             2, 10, // ?
-            1, 13, // @
+            1, 13, // ⁉
             0, 14, // A
             1, 13, // B
             1, 12, // C
@@ -79,11 +79,11 @@ namespace fontgen
             1, 13, // Y
             1, 13, // Z
             3, 8, // [
-            0, 15, // \
+            0, 15, // /
             3, 8, // ]
-            4, 7, // ^
-            0, 14, // _
-            0, 14, // `
+            4, 7, // ’
+            0, 14, // -
+            0, 14, // •
             2, 10, // a
             2, 10, // b
             3, 9, // c
@@ -220,8 +220,10 @@ namespace fontgen
         /// <summary>
         /// The standard (large) font: 14px cells, 18 per row on font0.tim.
         /// Rows 0-1 of the atlas are empty; cells 36-47 hold a handful of
-        /// symbols before the atlas becomes ASCII-aligned again from '0'
-        /// (cell 48) onwards. Metrics for A-Za-z0-9 are measured from the
+        /// symbols. From '0' (cell 48) the atlas is ASCII-aligned for the
+        /// digits and letters, but the punctuation runs differ from ASCII:
+        /// between '9' and 'A' sit : 、 , ” ! ? ⁉, and between 'Z' and 'a'
+        /// sit [ / ] ’ - •. Metrics for A-Za-z0-9 are measured from the
         /// reference PNG when available so every glyph gets a uniform ink
         /// gap; other characters use the extracted width_tbl values.
         /// </summary>
@@ -260,7 +262,8 @@ namespace fontgen
                 characters.Add(glyph);
             }
 
-            // Symbols occupying the first 12 cells of row 2.
+            // Symbols occupying the first 12 cells of row 2. (Cell 46 is an
+            // unidentified symbol; it is left unmapped until identified.)
             Add(0x20, 36); // space
             Add(0x2E, 37); // .
             Add(0x1F782, 38); // right arrow
@@ -271,11 +274,35 @@ namespace fontgen
             Add(0x300E, 43); // 『
             Add(0x300F, 44); // 』
             Add(0x201C, 45); // “
-            Add(0x201D, 46); // ”
             Add(0x25BC, 47); // ▼
 
-            // From '0' onwards the atlas is aligned with ASCII.
-            for (uint cp = 0x30; cp <= 0x7E; cp++)
+            // Digits: ASCII-aligned with the atlas cells.
+            for (uint cp = 0x30; cp <= 0x39; cp++)
+                Add(cp, (int)cp);
+
+            // Symbols between '9' and 'A'.
+            Add(0x3A, 58); // :
+            Add(0x3001, 59); // 、(\-shaped comma)
+            Add(0x2C, 60); // ,
+            Add(0x201D, 61); // ”
+            Add(0x21, 62); // !
+            Add(0x3F, 63); // ?
+            Add(0x2049, 64); // ⁉
+
+            // Upper-case letters: ASCII-aligned with the atlas cells.
+            for (uint cp = 0x41; cp <= 0x5A; cp++)
+                Add(cp, (int)cp);
+
+            // Symbols between 'Z' and 'a'.
+            Add(0x5B, 91); // [
+            Add(0x2F, 92); // /
+            Add(0x5D, 93); // ]
+            Add(0x2019, 94); // ’
+            Add(0x2D, 95); // -
+            Add(0x2022, 96); // •
+
+            // Lower-case letters: ASCII-aligned with the atlas cells.
+            for (uint cp = 0x61; cp <= 0x7A; cp++)
                 Add(cp, (int)cp);
 
             characters.Sort((a, b) => a.Codepoint.CompareTo(b.Codepoint));
