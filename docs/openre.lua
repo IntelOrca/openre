@@ -657,15 +657,64 @@ input = {}
 
 --- Whether a game command is currently held this frame.
 ---@param name string|integer INI command name ("up", "accept", "menu", "cancel",
----  "left", "right", "down", ...) or a numeric Command index.
+---  "left", "right", "down", "tab_left", "tab_right", "subtab_left",
+---  "subtab_right", ...) or a numeric Command index.
 ---@return boolean
 function input.down(name) end
 
 --- Whether a game command rose (edge) this frame — i.e. it was not held last
 --- frame but is held now. Use this for one-shot menu actions (select, navigate,
---- confirm) so a held key does not repeat every frame.
+--- confirm, switch tabs with "tab_left"/"tab_right" or sub-tabs with
+--- "subtab_left"/"subtab_right") so a held key does not repeat every frame.
 ---@param name string|integer INI command name or numeric Command index.
 ---@return boolean
 function input.pressed(name) end
+
+--[[ options — engine-wide settings registry ]]
+
+--- Static description of one registered option (as returned by
+--- `options.list`). Fields other than `labels`/`min`/`max`/`step` depend on
+--- `kind`: `labels` is present for toggle and enum options, while
+--- `min`/`max`/`step` are present for range options only.
+---@class OptionsDef
+---@field id string Stable persistence key inside the [options] INI section.
+---@field category string Outer tab the option lives under.
+---@field subcategory string Inner tab the option lives under.
+---@field group string Section header; a changed group starts a new section.
+---@field title string Display title.
+---@field tooltip string Help text shown for the option.
+---@field kind "toggle"|"enum"|"range"|"external"
+---@field labels string[]|nil Value labels ("toggle"/"enum" kinds only).
+---@field min integer|nil Range lower bound ("range" kind only).
+---@field max integer|nil Range upper bound ("range" kind only).
+---@field step integer|nil Range step grid, <= 1 means unstepped ("range" only).
+---@field default integer Value applied on first run.
+
+---@class options
+options = {}
+
+--- Enumerate every registered option definition in registration order.
+---@return OptionsDef[]
+function options.list() end
+
+--- Current value of an option, or nil when the id is unknown.
+---@param id string|integer Option id, or its registration index from options.list().
+---@return integer|nil
+function options.get(id) end
+
+--- Validate and store a new value for an option, marking it dirty when the
+--- value changed. Returns false when the option is unknown or the value is
+--- rejected by its kind: an enum index outside its label list, a toggle other
+--- than 0/1, or an external entry. Range values are clamped to [min, max] and
+--- snapped down onto the step grid instead of being rejected.
+---@param id string|integer Option id, or its registration index from options.list().
+---@param value integer
+---@return boolean success
+function options.set(id, value) end
+
+--- Write every dirty option into the [options] INI section of the config file
+--- and save once afterwards. No-op when nothing is dirty; call after batching
+--- options.set changes.
+function options.flush() end
 
 return re

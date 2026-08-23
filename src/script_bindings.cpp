@@ -8,6 +8,7 @@
 #include "interop.hpp"
 #include "logger.h"
 #include "openre.h"
+#include "options.h"
 #include "render2d.h"
 #include "resmgr.h"
 #include "sce.h"
@@ -1777,7 +1778,7 @@ namespace openre::script
             return inputCommandState(L, openre::input::command_edge());
         }
 
-        // core.loadMovie(path) - registers a movie as a streamed resource and
+// core.loadMovie(path) - registers a movie as a streamed resource and
         // returns a Movie handle, or nil when the file cannot be resolved.
         // Nothing is read beyond validating that the file exists; playback
         // streams it from disk. Loading the same path twice returns a handle
@@ -1796,6 +1797,124 @@ namespace openre::script
             luaL_getmetatable(L, METATABLE_MOVIE);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        // options.* - expose the engine-wide settings registry so game
+        // scripts (e.g. the options menu) can enumerate, read, change and
+        // persist user settings. `id` is either the stable string key from
+        // Def::id or a registration index as returned by options.list().
+        int optionsList(lua_State* L)
+        {
+            const char* kindName;
+            auto pushLabels = [](lua_State* L, const std::vector<std::string>& labels) {
+                lua_newtable(L);
+                for (size_t i = 0; i < labels.size(); i++)
+                {
+                    lua_pushstring(L, labels[i].c_str());
+                    lua_rawseti(L, -2, static_cast<int>(i + 1));
+                }
+            };
+
+            lua_newtable(L);
+            const auto count = options::count();
+            for (auto i = 0; i < count; i++)
+            {
+                const auto& def = options::def(i);
+                switch (def.kind)
+                {
+                case options::OptionKind::Toggle: kindName = "toggle"; break;
+                case options::OptionKind::Enum: kindName = "enum"; break;
+                case options::OptionKind::Range: kindName = "range"; break;
+                case options::OptionKind::External: kindName = "external"; break;
+                default: kindName = "toggle"; break;
+                }
+
+                lua_newtable(L);
+                lua_pushstring(L, def.id.c_str());
+                lua_setfield(L, -2, "id");
+                lua_pushstring(L, def.category.c_str());
+                lua_setfield(L, -2, "category");
+                lua_pushstring(L, def.subcategory.c_str());
+                lua_setfield(L, -2, "subcategory");
+                lua_pushstring(L, def.group.c_str());
+                lua_setfield(L, -2, "group");
+                lua_pushstring(L, def.title.c_str());
+                lua_setfield(L, -2, "title");
+                lua_pushstring(L, def.tooltip.c_str());
+                lua_setfield(L, -2, "tooltip");
+                lua_pushstring(L, kindName);
+                lua_setfield(L, -2, "kind");
+                switch (def.kind)
+                {
+                case options::OptionKind::Toggle:
+                case options::OptionKind::Enum:
+                    pushLabels(L, def.labels);
+                    lua_setfield(L, -2, "labels");
+                    break;
+                case options::OptionKind::Range:
+                    lua_pushinteger(L, def.min);
+                    lua_setfield(L, -2, "min");
+                    lua_pushinteger(L, def.max);
+                    lua_setfield(L, -2, "max");
+                    lua_pushinteger(L, def.step);
+                    lua_setfield(L, -2, "step");
+                    break;
+                default: break;
+                }
+                lua_pushinteger(L, def.defaultValue);
+                lua_setfield(L, -2, "default");
+                lua_rawseti(L, -2, i + 1);
+            }
+            return 1;
+        }
+
+        // Resolves an id argument to a registration index, or -1 when it is
+        // neither a known string id nor a valid numeric index.
+        int optionIndexOfArg(lua_State* L, int arg)
+        {
+            if (lua_type(L, arg) == LUA_TSTRING)
+            {
+                auto index = options::index_of(lua_tostring(L, arg));
+                if (index < 0)
+                {
+                    // Unknown string id: keep the registry's 0-value contract
+                    // but flag it through the caller's nil/false result.
+                    return -1;
+                }
+                return index;
+            }
+
+            auto index = static_cast<int>(luaL_checkinteger(L, arg));
+            if (index < 0 || index >= options::count())
+                return -1;
+            return index;
+        }
+
+        int optionsGet(lua_State* L)
+        {
+            auto index = optionIndexOfArg(L, 1);
+            if (index < 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            lua_pushinteger(L, options::get_by_index(index));
+            return 1;
+        }
+
+        int optionsSet(lua_State* L)
+        {
+            auto value = static_cast<int32_t>(luaL_checkinteger(L, 2));
+            auto index = optionIndexOfArg(L, 1);
+            auto ok = index >= 0 && options::set(options::def(index).id.c_str(), value);
+            lua_pushboolean(L, ok);
+            return 1;
+        }
+
+        int optionsFlush(lua_State* L)
+        {
+            options::flush();
+            return 0;
         }
 
         // core.playMovie(movie [, captions]) - plays a movie previously
@@ -2172,6 +2291,12 @@ namespace openre::script
         // input.* - runtime command state for menu / title-screen navigation.
         setGlobal(L, "input.down", inputCommandDown);
         setGlobal(L, "input.pressed", inputCommandPressed);
+
+        // options.* - engine-wide settings registry (menu screens).
+        setGlobal(L, "options.list", optionsList);
+        setGlobal(L, "options.get", optionsGet);
+        setGlobal(L, "options.set", optionsSet);
+        setGlobal(L, "options.flush", optionsFlush);
 
         luaL_newmetatable(L, METATABLE_SCENE_ENTITY);
         lua_pop(L, 1);

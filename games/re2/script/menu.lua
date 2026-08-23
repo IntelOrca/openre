@@ -16,12 +16,16 @@
 --   LEAVING      difficulty start sequence: play the 'RESIDENT EVIL 2' voice
 --                bite behind a white flash, fade to black, hold solid black,
 --                destroy the menu and hand over to the prologue.
+--   OPTIONS      the options overlay (script/options.lua) is open on top of
+--                the root menu; the menu suspends all input polling until the
+--                overlay closes itself, then returns to MENU.
 
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
 local prologue          = require("script/prologue")
 local LoadScreen        = require("script/load")
 require("script/scheduler") -- Scheduler (global) for the handoff chains
+local options           = require("script/options")
 
 local Title             = {}
 local titleMethods      = {}
@@ -39,6 +43,7 @@ local STATE_PRESS_START = 0
 local STATE_MENU        = 1
 local STATE_DEMO        = 2
 local STATE_LEAVING     = 3
+local STATE_OPTIONS     = 4
 
 -- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
 local DEMO_TIMEOUT      = 60 * 15
@@ -301,7 +306,24 @@ local ROOT_MENU = {
           sub = EXTRA_GAMES_MENU },
         { label = 'Bonuses', tooltip = 'Unlockable gallery content.',
           sub = BONUSES_MENU },
-        { label = 'Options', tooltip = 'Adjust game settings.', action = noop },
+        { label = 'Options', tooltip = 'Adjust game settings.',
+          -- Enter STATE_OPTIONS: the overlay takes over input until it closes
+          -- itself on cancel (see the STATE_OPTIONS branch in update()).
+          -- If opening fails, fall straight back to the menu.
+          action = function(self)
+              self.state = STATE_OPTIONS
+              local ok, err
+              if options ~= nil and type(options.open) == 'function' then
+                  ok, err = pcall(options.open)
+              else
+                  ok, err = false, 'options module unavailable'
+              end
+              if not ok then
+                  print('[menu] failed to open options overlay: '
+                      .. tostring(err))
+                  self.state = STATE_MENU
+              end
+          end },
         { label = 'Exit', tooltip = 'Quit to the desktop.',
           action = function() scene.exit() end },
     },
@@ -731,6 +753,23 @@ local function update(self)
                 playSfx(self, self.sfx.back)
                 enterPressStart(self)
             end
+        end
+    elseif self.state == STATE_OPTIONS then
+        -- Input arbitration: the options overlay owns all input while open, so
+        -- this branch polls nothing (up/down/accept/cancel/tab are ignored by
+        -- the menu). Tick ordering: main.lua loads this module - and thereby
+        -- script/options.lua, whose inert tick handler subscribes at require
+        -- time - long before Title:new() subscribes our tick, so the
+        -- overlay's tick runs BEFORE ours within each frame. When cancel
+        -- closes the overlay on frame N, our tick that same frame sees
+        -- isOpen() == false, returns to STATE_MENU having polled nothing, and
+        -- the cancel edge expires with frame N (input.pressed reports
+        -- per-frame rising edges), so STATE_MENU polling resumes clean on
+        -- frame N+1 with no double-handling. Should the subscription order
+        -- ever flip, the closure is merely noticed one frame later - equally
+        -- leak-free, since this branch never reads input.
+        if not options.isOpen() then
+            self.state = STATE_MENU
         end
     elseif self.state == STATE_DEMO then
         updateDemo(self)

@@ -105,6 +105,7 @@
     <ClCompile Include="model.cpp" />
     <ClCompile Include="msadpcm.cpp" />
     <ClCompile Include="openre.cpp" />
+    <ClCompile Include="options.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
     <ClCompile Include="render2d.cpp" />
@@ -177,6 +178,7 @@
     <ClInclude Include="model.h" />
     <ClInclude Include="msadpcm.h" />
     <ClInclude Include="openre.h" />
+    <ClInclude Include="options.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
     <ClInclude Include="re2.h" />

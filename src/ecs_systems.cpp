@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "marni_renderer.h"
 #include "openre.h"
+#include "options.h"
 #include "render2d.h"
 #include "resmgr.h"
 #include "script.h"
@@ -161,6 +162,9 @@ namespace openre
             // skips that boot, so populate the command bindings here or no
             // command (and thus no input) is ever detected for scripts.
             openre::input::load_bindings();
+            // Same story for the options registry: seed it and load persisted
+            // values before the module's scripts can read or write options.
+            openre::options::init();
             script::loadGameModule(game_module_dir());
         }
 

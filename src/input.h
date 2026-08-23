@@ -8,7 +8,7 @@
 
 namespace openre::input
 {
-    // The game commands. Command state is a 20-bit mask: bit N == command N
+    // The game commands. Command state is a bitmask: bit N == command N
     // active. Each command maps to one or more of the 6 legacy output values.
     enum Command : uint8_t
     {
@@ -32,6 +32,10 @@ namespace openre::input
         COMMAND_MAP,
         COMMAND_CHANGE_TARGET,
         COMMAND_QUICK_TURN,
+        COMMAND_TAB_LEFT,
+        COMMAND_TAB_RIGHT,
+        COMMAND_SUB_TAB_LEFT,
+        COMMAND_SUB_TAB_RIGHT,
         COMMAND_COUNT,
     };
 
@@ -126,9 +130,9 @@ namespace openre::input
     void save_bindings();
 
     // Runtime command-state accessors for UI / script consumers.
-    // 20-bit mask of commands active this frame (bit N == command N).
+    // Bitmask of commands active this frame (bit N == command N).
     [[nodiscard]] uint32_t command_state();
-    // 20-bit mask of commands that rose (edge) this frame, i.e. were not
+    // Bitmask of commands that rose (edge) this frame, i.e. were not
     // active last frame but are active now.
     [[nodiscard]] uint32_t command_edge();
     // Maps an INI command name ("up", "accept", "menu", ...) to its Command,

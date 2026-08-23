@@ -33,16 +33,29 @@ namespace openre
             none,
             adt,
             tim,
+            bmp,
         };
 
+        TextureType textureTypeForExtension(const std::string& ext)
+        {
+            const std::string e = lowerCase(ext);
+            if (e == ".adt")
+                return TextureType::adt;
+            if (e == ".tim")
+                return TextureType::tim;
+            if (e == ".bmp")
+                return TextureType::bmp;
+            return TextureType::none;
+        }
+
         // Reads the first candidate (module dir, then data://) that exists,
-        // probing "", ".tim" and ".adt" extensions (raw TIM preferred, matching
-        // font.cpp). Returns the bytes and the detected type.
+        // probing "", ".tim", ".adt" and ".bmp" extensions (raw TIM preferred,
+        // matching font.cpp). Returns the bytes and the detected type.
         bool findAndRead(
             std::string_view logicalPath, const std::filesystem::path& moduleDir, std::vector<uint8_t>& outBytes,
             TextureType& outType, std::string& outLabel)
         {
-            const std::vector<std::string> extensions = { "", ".tim", ".adt" };
+            const std::vector<std::string> extensions = { "", ".tim", ".adt", ".bmp" };
 
             // 1. Module directory first.
             if (!moduleDir.empty())
@@ -57,9 +70,7 @@ namespace openre
                     outBytes = system::fs::readAllBytes(path.string().c_str());
                     if (!outBytes.empty())
                     {
-                        outType = lowerCase(ext) == ".adt" ? TextureType::adt
-                            : lowerCase(ext) == ".tim"     ? TextureType::tim
-                                                           : TextureType::none;
+                        outType = textureTypeForExtension(ext);
                         outLabel = path.string();
                         return true;
                     }
@@ -80,9 +91,7 @@ namespace openre
                     outBytes = system::fs::readAllBytes(resolved.c_str());
                     if (!outBytes.empty())
                     {
-                        outType = lowerCase(ext) == ".adt" ? TextureType::adt
-                            : lowerCase(ext) == ".tim"     ? TextureType::tim
-                                                           : TextureType::none;
+                        outType = textureTypeForExtension(ext);
                         outLabel = resolved;
                         return true;
                     }
@@ -176,6 +185,103 @@ namespace openre
             image.pixels = std::move(reorg);
             return image;
         }
+
+        uint16_t readU16Le(const std::vector<uint8_t>& b, size_t off)
+        {
+            return (uint16_t)((uint32_t)b[off] | ((uint32_t)b[off + 1] << 8));
+        }
+
+        uint32_t readU32Le(const std::vector<uint8_t>& b, size_t off)
+        {
+            return (uint32_t)b[off] | ((uint32_t)b[off + 1] << 8) | ((uint32_t)b[off + 2] << 16) | ((uint32_t)b[off + 3] << 24);
+        }
+
+        // Minimal uncompressed 8bpp BMP decoder (BITMAPINFOHEADER, BI_RGB only).
+        // Bottom-up rows are flipped to top-down; the palette may hold fewer
+        // than 256 entries (its size derives from the pixel data offset). Pure
+        // magenta palette entries map to fully transparent pixels. Produces a
+        // 32bpp image whose pixels are native-endian 0xAARRGGBB values, which
+        // render2d::decodeImageToRgba uploads directly.
+        render2d::Image imageFromBmp(const std::vector<uint8_t>& bytes)
+        {
+            auto fail = [](const char* why) {
+                logging::logWarning("[texture_loader] BMP rejected: {}", why);
+                return render2d::Image{};
+            };
+
+            if (bytes.size() < 54 || bytes[0] != 'B' || bytes[1] != 'M')
+                return fail("not a BMP file");
+
+            const uint32_t dataOffset = readU32Le(bytes, 10);
+            const uint32_t headerSize = readU32Le(bytes, 14);
+            if (headerSize < 40 || (size_t)headerSize + 14 > bytes.size())
+                return fail("unsupported BMP header");
+
+            const int32_t width = (int32_t)readU32Le(bytes, 18);
+            const int32_t storedHeight = (int32_t)readU32Le(bytes, 22);
+            const uint16_t bpp = readU16Le(bytes, 28);
+            const uint32_t compression = readU32Le(bytes, 30);
+
+            if (width <= 0 || storedHeight < 0)
+                return fail("top-down/negative height not supported");
+            if (bpp != 8)
+            {
+                logging::logWarning("[texture_loader] BMP rejected: {}bpp not supported (only 8bpp)", bpp);
+                return {};
+            }
+            if (compression != 0)
+                return fail("compressed BMP (e.g. RLE) not supported");
+
+            // The palette sits between the info header and the pixel data;
+            // its entry count follows from the pixel data offset.
+            const size_t palOffset = 14 + headerSize;
+            size_t palEntries = dataOffset > palOffset ? ((size_t)dataOffset - palOffset) / 4 : 0;
+            if (palEntries > 256)
+                palEntries = 256;
+            if (palEntries == 0)
+                return fail("no palette");
+
+            const int32_t height = storedHeight;
+            const size_t stride = (((size_t)width + 3) / 4) * 4;
+            const size_t neededPixels = stride * (size_t)height;
+            if ((size_t)dataOffset > bytes.size() || bytes.size() - (size_t)dataOffset < neededPixels)
+                return fail("truncated pixel data");
+
+            render2d::Image image;
+            image.width = width;
+            image.height = height;
+            image.depth = 32;
+            image.psxFormat = false; // plain RGBA, not PSX 555
+            image.pixels.assign((size_t)width * height * 4, 0);
+
+            for (int32_t y = 0; y < height; y++)
+            {
+                // BMP rows are stored bottom-up: flip while copying.
+                const uint8_t* src = bytes.data() + dataOffset + (size_t)(height - 1 - y) * stride;
+                uint8_t* dst = image.pixels.data() + (size_t)y * width * 4;
+                for (int32_t x = 0; x < width; x++)
+                {
+                    const uint8_t index = src[x];
+                    uint8_t r = 0, g = 0, b = 0;
+                    if (index < palEntries)
+                    {
+                        const size_t po = palOffset + (size_t)index * 4;
+                        b = bytes[po + 0];
+                        g = bytes[po + 1];
+                        r = bytes[po + 2];
+                    }
+                    const uint8_t a = (r == 255 && g == 0 && b == 255) ? 0 : 255;
+                    // Little-endian byte order of 0xAARRGGBB, matching how
+                    // decodeImageToRgba reads depth-32 pixels.
+                    dst[0] = b;
+                    dst[1] = g;
+                    dst[2] = r;
+                    dst[3] = a;
+                    dst += 4;
+                }
+            }
+            return image;
+        }
     } // namespace
 
     ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex)
@@ -203,6 +309,16 @@ namespace openre
         switch (type)
         {
         case TextureType::adt: image = imageFromAdt(std::move(bytes), timIndex); break;
+        case TextureType::bmp:
+        {
+            image = imageFromBmp(bytes);
+            if (image.width <= 0)
+            {
+                logging::logError("[texture_loader] failed to decode BMP '{}'", label);
+                return 0;
+            }
+            break;
+        }
         case TextureType::tim:
         {
             marni::Image marniImage;

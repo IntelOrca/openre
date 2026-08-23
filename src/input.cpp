@@ -83,7 +83,7 @@ namespace openre::input
 
     // ---- command state engine ----
 
-    // The command engine turns raw mouse/keyboard/gamepad input into a 20-bit
+    // The command engine turns raw mouse/keyboard/gamepad input into a command
     // command state via the [input] INI bindings, OR-merges the three devices,
     // computes the rising edge once on the merged state, and fans the result
     // out to the 6 legacy outputs (g_key, key_trg, raw_state/raw_state_lo,
@@ -98,8 +98,10 @@ namespace openre::input
         constexpr const char* kTokenMouse = "mu:";
 
         constexpr const char* kCommandIniNames[COMMAND_COUNT] = {
-            "cancel", "accept", "up",   "down",   "left",      "right", "forward",  "backward", "turn_left",     "turn_right",
-            "aim",    "run",    "fire", "reload", "inventory", "menu",  "interact", "map",      "change_target", "quick_turn",
+            "cancel",        "accept",     "up",        "down",       "left",        "right",
+            "forward",       "backward",   "turn_left", "turn_right", "aim",         "run",
+            "fire",          "reload",     "inventory", "menu",       "interact",    "map",
+            "change_target", "quick_turn", "tab_left",  "tab_right",  "subtab_left", "subtab_right",
         };
         static_assert(std::size(kCommandIniNames) == COMMAND_COUNT, "kCommandIniNames order must match Command enum");
 
@@ -125,6 +127,10 @@ namespace openre::input
             "kb:m,gp:mode",                                // map
             "gp:r_shoulder",                               // change_target
             "kb:q",                                        // quick_turn
+            "gp:l_shoulder,kb:q",                          // tab_left
+            "gp:r_shoulder,kb:e",                          // tab_right
+            "gp:l_trigger,kb:1",                           // subtab_left
+            "gp:r_trigger,kb:3",                           // subtab_right
         };
         static_assert(std::size(kCommandDefaultTokens) == COMMAND_COUNT, "kCommandDefaultTokens order must match Command enum");
 
@@ -190,6 +196,13 @@ namespace openre::input
             /* map        */ { 0x4000, 0, 0, 0, 0 },
             /* change_target */ { 0, 0, 0x4, 0x4, 0x4 },
             /* quick_turn */ { 0x400, 0, 0, 0, 0 },
+            // UI-only commands (options screen tab navigation): zero legacy
+            // output bits; consumed via command_state/command_edge by the Lua
+            // input.down()/input.pressed() API.
+            /* tab_left      */ { 0, 0, 0, 0, 0 },
+            /* tab_right     */ { 0, 0, 0, 0, 0 },
+            /* subtab_left   */ { 0, 0, 0, 0, 0 },
+            /* subtab_right  */ { 0, 0, 0, 0, 0 },
         };
         static_assert(std::size(kCommandOutput) == COMMAND_COUNT, "kCommandOutput order must match Command enum");
 
