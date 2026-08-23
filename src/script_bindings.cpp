@@ -15,6 +15,7 @@
 #include "script_manager.h"
 #include "script_network.h"
 #include "script_vm.h"
+#include "sound_loader.h"
 #include "system_audio.h"
 #include "system_input.h"
 #include "system_window.h"
@@ -40,6 +41,7 @@ namespace openre::script
         constexpr const char* METATABLE_SCENE_COMPONENT = "meta_scene_component";
         constexpr const char* METATABLE_TEXTURE = "meta_texture";
         constexpr const char* METATABLE_FONT = "meta_font";
+        constexpr const char* METATABLE_SOUND = "meta_sound";
 
         namespace LogLevel
         {
@@ -477,6 +479,11 @@ namespace openre::script
             ResourceCookie cookie;
         };
 
+        struct SoundHandle
+        {
+            ResourceCookie cookie;
+        };
+
         // __gc for TextureHandle/FontHandle/SoundHandle: returns the handle's
         // resource-manager reference. Safe after releaseAll() (the empty
         // registry makes release a no-op).
@@ -864,6 +871,19 @@ namespace openre::script
                     emitter->fadeFrames = static_cast<int>(luaL_checkinteger(L, 3));
                 else if (strcmp(name, "fadeTargetVolume") == 0)
                     emitter->fadeTargetVolume = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "sound") == 0)
+                {
+                    // A Sound from audio.loadAudio() switches the emitter into
+                    // resident one-shot mode; nil clears it back to source mode.
+                    if (lua_isnil(L, 3))
+                        emitter->sound = 0;
+                    else if (auto* snd = static_cast<SoundHandle*>(luaL_testudata(L, 3, METATABLE_SOUND)))
+                        emitter->sound = snd->cookie;
+                    else
+                        return luaL_error(L, "scene.setField: expected a sound or nil for audio_emitter field 'sound'");
+                }
+                else if (strcmp(name, "trigger") == 0)
+                    emitter->trigger = static_cast<int32_t>(luaL_checkinteger(L, 3));
                 else
                     return luaL_error(L, "scene.setField: unknown audio_emitter field '%s'", name);
                 return 0;
@@ -1077,6 +1097,22 @@ namespace openre::script
                     lua_pushinteger(L, emitter->fadeFrames);
                 else if (strcmp(name, "fadeTargetVolume") == 0)
                     lua_pushnumber(L, emitter->fadeTargetVolume);
+                else if (strcmp(name, "sound") == 0)
+                {
+                    if (emitter->sound == 0)
+                        lua_pushnil(L);
+                    else
+                    {
+                        // The returned handle owns a reference (released by
+                        // __gc), so take one now.
+                        auto* snd = static_cast<SoundHandle*>(lua_newuserdata(L, sizeof(SoundHandle)));
+                        snd->cookie = ResourceManager::get().dupRef(emitter->sound);
+                        luaL_getmetatable(L, METATABLE_SOUND);
+                        lua_setmetatable(L, -2);
+                    }
+                }
+                else if (strcmp(name, "trigger") == 0)
+                    lua_pushinteger(L, emitter->trigger);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1177,6 +1213,48 @@ namespace openre::script
             state.b = static_cast<uint8_t>(luaL_checkinteger(L, 3));
             state.a = static_cast<uint8_t>(luaL_checkinteger(L, 4));
             render2d::SpriteRenderer::get().setFade(state);
+            return 0;
+        }
+
+        // ── audio.* ─────────────────────────────────────────────────────────
+        // Resident sound effects. Sounds are decoded fully into memory at load
+        // time (unlike audio emitters, which are meant for longer sources) and
+        // stay loaded for the session; play() is a fire-and-forget one-shot.
+
+        // audio.loadAudio(path [, sub]) - decodes a .sap file into memory and
+        // returns a Sound handle, or nil on failure. The optional `sub` index
+        // selects one sub-sound of a multi-sound .sap container (e.g. sub 0
+        // of core22.sap). Loading the same path/sub pair twice returns a
+        // handle to the same shared sound.
+        int audioLoadAudio(lua_State* L)
+        {
+            auto* path = luaL_checkstring(L, 1);
+            const auto sub = static_cast<int>(luaL_optinteger(L, 2, -1));
+            const auto cookie = loadSoundResource(path, sub);
+            if (cookie == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            auto* sound = static_cast<SoundHandle*>(lua_newuserdata(L, sizeof(SoundHandle)));
+            sound->cookie = cookie;
+            luaL_getmetatable(L, METATABLE_SOUND);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        // audio.play(sound) - plays a previously loaded sound as a one-shot.
+        // Re-triggering while it is still playing restarts it from the start.
+        int audioPlay(lua_State* L)
+        {
+            auto* handle = static_cast<SoundHandle*>(luaL_checkudata(L, 1, METATABLE_SOUND));
+            if (handle == nullptr)
+                return luaL_argerror(L, 1, "expected a sound");
+            if (auto* resource = ResourceManager::get().fromCookie<SoundResource>(handle->cookie))
+            {
+                if (resource->audioHandle != 0)
+                    system::audio::play(resource->audioHandle);
+            }
             return 0;
         }
 
@@ -1867,6 +1945,9 @@ namespace openre::script
         setGlobal(L, "gfx.listResources", gfxListResources);
         setGlobal(L, "gfx.getResourceImage", gfxGetResourceImage);
 
+        setGlobal(L, "audio.loadAudio", audioLoadAudio);
+        setGlobal(L, "audio.play", audioPlay);
+
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
 
@@ -1884,6 +1965,10 @@ namespace openre::script
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_FONT);
         lua_pushcfunction(L, resourceHandleGC<FontHandle>);
+        lua_setfield(L, -2, "__gc");
+        lua_pop(L, 1);
+        luaL_newmetatable(L, METATABLE_SOUND);
+        lua_pushcfunction(L, resourceHandleGC<SoundHandle>);
         lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 

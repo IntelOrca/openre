@@ -2,6 +2,7 @@
 #include "logger.h"
 #include "msadpcm.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -184,6 +185,67 @@ namespace openre::system::audio
             if (!gMutex)
                 gMutex = SDL_CreateMutex();
             return gMutex;
+        }
+
+        uint32_t read_le32(const uint8_t* p)
+        {
+            return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        }
+
+        // Total length of the RIFF WAV chunk at `pos` (8-byte chunk header plus
+        // contents plus any pad byte), bounds-checked against the buffer; 0
+        // when there is no valid complete chunk there.
+        uint32_t riff_chunk_length_at(const uint8_t* data, size_t size, size_t pos)
+        {
+            if (pos + 12 > size || std::memcmp(data + pos, "RIFF", 4) != 0)
+                return 0;
+            const uint32_t cksize = read_le32(data + pos + 4);
+            const uint32_t length = 8 + cksize + (cksize & 1);
+            if (length < 8 || pos + length > size)
+                return 0;
+            return length;
+        }
+
+        // Locates sub-sound `index` within a .sap payload. Masked containers
+        // start with an 8-byte header (u32 mask0 covering subs 0..31, u32 mask1
+        // covering subs 32..47) followed by one RIFF WAV chunk per set bit in
+        // ascending bit order; plain files begin directly with "RIFF" and hold
+        // a single sound (#0). Returns the exact byte range to decode.
+        bool sap_sub_range(const uint8_t* data, int size, int index, const uint8_t** outData, int* outSize)
+        {
+            if (!data || size < 12 || index < 0)
+                return false;
+            if (std::memcmp(data, "RIFF", 4) == 0)
+            {
+                if (index != 0)
+                    return false;
+                *outData = data;
+                *outSize = size;
+                return true;
+            }
+            const uint32_t mask0 = read_le32(data);
+            const uint32_t mask1 = read_le32(data + 4);
+            size_t pos = 8;
+            int seen = 0;
+            for (int b = 0; b < 48; b++)
+            {
+                const uint32_t mask = b < 32 ? mask0 : mask1;
+                const int bit = b < 32 ? b : b - 32;
+                if (((mask >> bit) & 1) == 0)
+                    continue;
+                const uint32_t length = riff_chunk_length_at(data, (size_t)size, pos);
+                if (length == 0)
+                    return false;
+                if (seen == index)
+                {
+                    *outData = data + pos;
+                    *outSize = (int)length;
+                    return true;
+                }
+                seen++;
+                pos += length;
+            }
+            return false;
         }
 
         Voice* voice_at(uint32_t handle)
@@ -530,57 +592,106 @@ namespace openre::system::audio
         logging::logInfo("system_audio: format set to {} Hz, {} channel(s)", frequency, channels);
     }
 
-    uint32_t load_sap(const uint8_t* data, int size, int type, int sub)
+    namespace
     {
-        if (!data || size < 12)
+        // Shared decoder behind load_sap() / decode_sap(). See load_sap() for
+        // the meaning of `sapSub`.
+        bool decode_sap_impl(
+            const uint8_t* data, int size, int sapSub, std::vector<int16_t>& outPcm, int& outFrequency, int& outChannels)
+        {
+            if (!data || size < 12)
+                return false;
+
+            const uint8_t* wav = nullptr;
+            int wavSize = 0;
+            if (sapSub >= 0)
+            {
+                if (!sap_sub_range(data, size, sapSub, &wav, &wavSize))
+                {
+                    logging::logInfo("system_audio: sub-sound #{} not found in payload ({} bytes)", sapSub, size);
+                    return false;
+                }
+            }
+            else
+            {
+                // The .sap container files used by RE2 carry a short SED-style
+                // header before the actual RIFF/WAV body: u32 version/tag (1)
+                // followed by a u32 offset (usually 8) to the "RIFF" block.
+                // Skip it so the decoder sees a clean RIFF stream (bare
+                // PCM/ADPCM data stays untouched).
+                int offset = 0;
+                if (size >= 12 && data[0] == 0x01 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x00
+                    && std::memcmp(data + 8, "RIFF", 4) == 0)
+                {
+                    // The container header is 8 bytes: a u32 tag (1) plus a u32
+                    // offset field (ignored — some files store 0 here) followed
+                    // by the RIFF body at data + 8.
+                    offset = 8;
+                }
+                wav = data + offset;
+                wavSize = size - offset;
+            }
+
+            msadpcm::DecodedWave decoded;
+            if (!msadpcm::decode_sap(wav, (size_t)wavSize, decoded) || decoded.samples.empty())
+            {
+                logging::logInfo("system_audio: decode_sap FAILED ({} bytes)", wavSize);
+                return false;
+            }
+
+            outPcm = std::move(decoded.samples);
+            outFrequency = decoded.samplesPerSec;
+            outChannels = decoded.channels;
+            return true;
+        }
+    }
+
+    bool
+    decode_sap(const uint8_t* data, int size, int sapSub, std::vector<int16_t>& outPcm, int& outFrequency, int& outChannels)
+    {
+        return decode_sap_impl(data, size, sapSub, outPcm, outFrequency, outChannels);
+    }
+
+    uint32_t load_sap(const uint8_t* data, int size, int type, int sub, int sapSub)
+    {
+        std::vector<int16_t> pcm;
+        int frequency = 0;
+        int channels = 0;
+        if (!decode_sap_impl(data, size, sapSub, pcm, frequency, channels))
             return 0;
 
-        // The .sap container files used by RE2 carry a short SED-style header
-        // before the actual RIFF/WAV body: u32 version/tag (1) followed by a
-        // u32 offset (usually 8) to the "RIFF" block. Skip it so the decoder
-        // sees a clean RIFF stream (bare PCM/ADPCM data stays untouched).
-        int offset = 0;
-        if (static_cast<size_t>(size) >= 12 && data[0] == 0x01 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x00
-            && std::memcmp(data + 8, "RIFF", 4) == 0)
-        {
-            // The container header is 8 bytes: a u32 tag (1) plus a u32 offset
-            // field (ignored — some files store 0 here) followed by the RIFF
-            // body at data + 8.
-            offset = 8;
-        }
-
-        msadpcm::DecodedWave decoded;
-        logging::logInfo(
-            "system_audio: load_sap type={} sub={} size={} offset={} first={:02X} {:02X} {:02X} {:02X}",
-            type,
-            sub,
-            size,
-            offset,
-            data[0],
-            data[1],
-            data[2],
-            data[3]);
-        if (!msadpcm::decode_sap(data + offset, (size_t)(size - offset), decoded) || decoded.samples.empty())
-        {
-            logging::logInfo("system_audio: decode_sap FAILED ({} bytes after offset {})", size - offset, offset);
-            return 0;
-        }
-
-        // decoded.samples holds frames * channels interleaved samples.
-        int frames = (int)(decoded.samples.size() / (size_t)decoded.channels);
-        uint32_t handle = create_buffer(
-            type, sub, decoded.samples.data(), (int)decoded.samples.size(), decoded.samplesPerSec, decoded.channels, false);
+        uint32_t handle = create_buffer(type, sub, pcm.data(), (int)pcm.size(), frequency, channels, false);
         if (handle == 0)
             return 0;
         logging::logInfo(
-            "system_audio: loaded sap type={} sub={} ({} Hz, {} ch, {} frames, tag {})",
+            "system_audio: loaded sap type={} sub={} ({} Hz, {} ch, {} frames)",
             type,
             sub,
-            decoded.samplesPerSec,
-            decoded.channels,
-            frames,
-            decoded.formatTag);
-        dump_wav(decoded.samples, decoded.channels, decoded.samplesPerSec, type, sub);
+            frequency,
+            channels,
+            pcm.size() / (size_t)std::max(channels, 1));
+        dump_wav(pcm, channels, frequency, type, sub);
+        return handle;
+    }
+
+    uint32_t load_sap_unused(int type, const uint8_t* data, int size)
+    {
+        std::vector<int16_t> pcm;
+        int frequency = 0;
+        int channels = 0;
+        if (!decode_sap_impl(data, size, -1, pcm, frequency, channels))
+            return 0;
+
+        uint32_t handle = create_buffer_unused(type, pcm.data(), (int)pcm.size(), frequency, channels);
+        if (handle == 0)
+            return 0;
+        logging::logInfo(
+            "system_audio: loaded sap (unused slot of group {}) ({} Hz, {} ch, {} frames)",
+            type,
+            frequency,
+            channels,
+            pcm.size() / (size_t)std::max(channels, 1));
+        dump_wav(pcm, channels, frequency, type, -1);
         return handle;
     }
 
@@ -602,6 +713,35 @@ namespace openre::system::audio
         v.channels = channels;
         v.loop = loop;
         return (uint32_t)(slot + 1);
+    }
+
+    uint32_t create_buffer_unused(int type, const void* pcm, int num_samples, int frequency, int channels)
+    {
+        if (type < 0 || type >= kGroupCount)
+            return 0;
+        const int16_t* src = static_cast<const int16_t*>(pcm);
+        if (!src || num_samples <= 0 || frequency <= 0 || (channels != 1 && channels != 2))
+            return 0;
+
+        ScopedLock lock(get_mutex());
+        const int base = kGroupBase[type];
+        for (int sub = 0; sub < kGroupCapacity[type]; sub++)
+        {
+            // An empty voice is a free slot: data is only ever non-empty while
+            // a buffer is registered in it.
+            Voice& v = gVoices[base + sub];
+            if (!v.data.empty())
+                continue;
+            v = Voice();
+            v.data.assign(src, src + (size_t)num_samples);
+            v.total = num_samples / channels; // frames
+            v.frequency = frequency;
+            v.channels = channels;
+            v.loop = false;
+            return (uint32_t)(base + sub + 1);
+        }
+        logging::logWarning("system_audio: buffer group {} is full", type);
+        return 0;
     }
 
     bool play(uint32_t handle)
@@ -628,6 +768,17 @@ namespace openre::system::audio
             // so every trigger is audible; looping voices are left untouched.
             v->pos = 0.0;
         }
+        return true;
+    }
+
+    bool trigger(uint32_t handle)
+    {
+        ScopedLock lock(get_mutex());
+        Voice* v = voice_at(handle);
+        if (!v || v->data.empty() || v->total <= 0)
+            return false;
+        v->pos = 0.0;
+        v->playing = true;
         return true;
     }
 

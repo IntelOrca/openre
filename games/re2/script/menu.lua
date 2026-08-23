@@ -87,6 +87,28 @@ local function greySpan(text, alphaFrac)
 end
 
 -------------------------------------------------------------------------------
+-- UI sound effects -----------------------------------------------------------
+-------------------------------------------------------------------------------
+
+-- The menu sounds, loaded the first time the title screen is created (not at
+-- script load). core22.sap packs four menu blips (sub 0 cursor, 1 back,
+-- 2 accept, 3 invalid); core17.sap sub 0 is the 'RESIDENT EVIL 2' voice bite
+-- played when a new game starts. audio.loadAudio deduplicates, so later
+-- Title instances share the same decoded sounds.
+
+-- Plays a resident sound through the menu's audio_emitter: point it at the
+-- sound, then write a fresh trigger value so AudioSystem fires the one-shot
+-- from its first sample. Safe for rapid repeated input.
+local function playSfx(self, sound)
+    if sound == nil or self.emitter == nil then
+        return
+    end
+    self.sfxTrigger = self.sfxTrigger + 1
+    scene.setField(self.emitter, 'sound', sound)
+    scene.setField(self.emitter, 'trigger', self.sfxTrigger)
+end
+
+-------------------------------------------------------------------------------
 -- Difficulty / start helpers -------------------------------------------------
 -------------------------------------------------------------------------------
 
@@ -99,17 +121,8 @@ local function startGame(self)
     self.leaveTimer = 0
     self.gameCtx = ctx
 
-    -- Play BIOHAZARD soundbite once (non-looping).
-    local e = scene.createEntity(self.userRoot)
-    scene.setField(e, 'name', 'title.soundbite')
-    local a = scene.addComponent(e, 'core.audio_emitter')
-    scene.setField(a, 'category', 'sfx')
-    scene.setField(a, 'volume', 100)
-    scene.setField(a, 'pan', 0)
-    scene.setField(a, 'loop', false)
-    scene.setField(a, 'source', 'common/sound/core/core16.sap')
-    scene.setField(a, 'state', 'playing')
-    self.soundbite = a
+    -- Play the voice bite once (non-looping).
+    playSfx(self, self.sfx.startVoice)
 end
 
 -------------------------------------------------------------------------------
@@ -357,7 +370,11 @@ end
 
 local function moveCursor(self, delta)
     local n = #self.menu.items
+    local previous = self.selected
     self.selected = ((self.selected - 1 + delta) % n) + 1
+    if self.selected ~= previous then
+        playSfx(self, self.sfx.cursor)
+    end
     self.pulseTicks = 0
     refreshItems(self)
     refreshTooltip(self)
@@ -415,6 +432,7 @@ local function enterSubmenu(self)
 end
 
 local function goBack(self)
+    playSfx(self, self.sfx.back)
     transitionTo(self, function()
         local top = table.remove(self.stack)
         self.menu = top.menu
@@ -428,13 +446,18 @@ local function selectItem(self)
     if item == nil then
         return
     end
-    if item.locked and not DEBUG_UNLOCK then
+    if (item.locked and not DEBUG_UNLOCK) or item.action == noop then
+        playSfx(self, self.sfx.invalid)
         return -- locked '???': cursor lands, accept is a no-op
     end
     if item.sub then
+        playSfx(self, self.sfx.accept)
         enterSubmenu(self)
     elseif item.action then
+        playSfx(self, self.sfx.accept)
         item.action(self)
+    else
+        playSfx(self, self.sfx.invalid)
     end
 end
 
@@ -623,6 +646,7 @@ local function update(self)
         end
         -- Start -> menu.
         if input.pressed('accept') or input.pressed('menu') then
+            playSfx(self, self.sfx.accept)
             enterMenu(self)
             return
         end
@@ -646,6 +670,7 @@ local function update(self)
             if #self.stack > 0 then
                 goBack(self)
             else
+                playSfx(self, self.sfx.back)
                 enterPressStart(self)
             end
         end
@@ -700,6 +725,18 @@ function Title:new()
     -- Root entity for things that must outlive the menu layers.
     instance.userRoot = scene.getRoot("user")
 
+    -- Menu sounds, loaded on first open (audio.loadAudio deduplicates, so
+    -- later Title instances share the same decoded sounds). The handles are
+    -- kept on the instance: resource handles are garbage collected, and the
+    -- emitter's `sound` field only borrows its cookie.
+    instance.sfx = {
+        cursor = audio.loadAudio('common/sound/core/core22.sap', 0),
+        back = audio.loadAudio('common/sound/core/core22.sap', 1),
+        accept = audio.loadAudio('common/sound/core/core22.sap', 2),
+        invalid = audio.loadAudio('common/sound/core/core22.sap', 3),
+        startVoice = audio.loadAudio('common/sound/core/core17.sap', 0),
+    }
+
     -- Two sibling layers under the user root, each mapping the 320x240 design
     -- space onto the window through a native scaled-frame component (the
     -- ScaledFrameSystem applies the actual scale every frame):
@@ -719,6 +756,17 @@ function Title:new()
         scene.setField(frame, 'increment', increment)
         return entity, frame
     end
+
+    -- One persistent audio emitter for every UI sound: playSfx points it at a
+    -- resident sound and bumps `trigger` to fire it as a one-shot. The
+    -- component handle (not the entity) is kept, as emitter fields live on
+    -- the component.
+    local emitter = scene.createEntity(instance.userRoot)
+    scene.setField(emitter, 'name', 'title.sfx')
+    local emitterComponent = scene.addComponent(emitter, 'core.audio_emitter')
+    instance.emitterEntity = emitter
+    instance.emitter = emitterComponent
+    instance.sfxTrigger = 0
 
     -- Solid dark-red backdrop filling the whole window. Created before the
     -- layers so it paints behind them (equal z keeps creation order); a
@@ -848,9 +896,7 @@ function Title:new()
     instance.stack = {}
     instance.transition = nil
     instance.gameCtx = nil
-    instance.soundbite = nil
     instance.closed = false
-
     re.subscribe(HookKind.tick, function()
         update(instance)
     end)

@@ -84,16 +84,24 @@ namespace openre::ecs
 
     /// A sound emitter mixed by the native SDL3 audio layer (AudioSystem).
     ///
-    /// Playback is edge-triggered through `state`: setting it to "playing"
-    /// starts the source, changing it to anything else stops the voice.
-    /// `source` is a `.sap` file (RIFF WAV container) resolved relative to the
-    /// game module directory. `volume` (0-100), `pan` (-100..100),
-    /// `fadeFrames` / `fadeTargetVolume` are pushed to the voice every frame
-    /// while playing; a fade runs once per distinct fadeFrames value. The
-    /// system writes the observed playback state back into `status`
-    /// ("stopped", "playing" or "finished"). `category` groups emitters for
-    /// future mixer configuration ("bgm", "sfx", "voice"; all full volume for
-    /// now).
+    /// Two playback modes:
+    ///
+    /// Source mode (default): playback is edge-triggered through `state` —
+    /// setting it to "playing" starts `source`, changing it to anything else
+    /// stops the voice. `source` is a `.sap` file (RIFF WAV container)
+    /// resolved relative to the game module directory.
+    ///
+    /// Resident mode: when `sound` holds a Sound cookie from
+    /// audio.loadAudio(), `source`/`state` are ignored. Writing any new value
+    /// to `trigger` plays that resident buffer once from its first sample,
+    /// making it suitable for rapid-fire UI sound effects.
+    ///
+    /// `volume` (0-100), `pan` (-100..100), `fadeFrames` / `fadeTargetVolume`
+    /// are pushed to the voice every frame while playing; a fade runs once per
+    /// distinct fadeFrames value. The system writes the observed playback
+    /// state back into `status` ("stopped", "playing" or "finished").
+    /// `category` groups emitters for future mixer configuration ("bgm",
+    /// "sfx", "voice"; all full volume for now).
     struct AudioEmitterComponent
     {
         std::string category = "sfx";
@@ -105,6 +113,8 @@ namespace openre::ecs
         std::string status = "stopped";
         int fadeFrames = 0;
         float fadeTargetVolume = 100.0f;
+        uint32_t sound = 0; // resident Sound cookie; 0 = source mode
+        int32_t trigger = 0;
     };
 
     /// Fit mode of a ScaledFrameComponent.

@@ -3,6 +3,7 @@
 #include "font.h"
 #include "logger.h"
 #include "render2d.h"
+#include "system_audio.h"
 
 #include <string>
 #include <typeindex>
@@ -66,6 +67,10 @@ namespace openre
                     info.height = font->height;
                 }
             }
+            else if (entry.typeIndex == std::type_index(typeid(SoundResource)))
+            {
+                info.type = "sound";
+            }
             else
             {
                 info.type = "unknown";
@@ -79,6 +84,12 @@ namespace openre
     {
         if (textureHandle != 0)
             render2d::SpriteRenderer::get().unloadTexture(textureHandle);
+    }
+
+    SoundResource::~SoundResource()
+    {
+        if (audioHandle != 0)
+            system::audio::unload(audioHandle);
     }
 
     ResourceHandle

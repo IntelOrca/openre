@@ -268,6 +268,7 @@ namespace openre
             int fadeFramesLeft = 0;         // frames remaining in the active fade
             float fadeTotal = 0.0f;         // fade length in frames
             int fadeArmed = -1;             // fadeFrames value the current fade was armed for
+            int32_t lastTrigger = 0;        // trigger value already fired (resident mode)
         };
 
         // Source path -> decoded voice handle, so several emitters (or a
@@ -291,8 +292,6 @@ namespace openre
             return;
 
         static std::unordered_map<ecs::Entity, AudioVoiceState> s_voices;
-        static std::unordered_map<std::string, int> s_sourceSubs;
-        static int s_nextSub = 0;
 
         // Retire voices whose emitter entity/component is gone so destroyed
         // entities do not keep sounding.
@@ -312,105 +311,123 @@ namespace openre
             AudioVoiceState& voice = s_voices[entity];
             const bool want = em.state == "playing";
 
-            // A source change while the voice is still flagged as playing is a
-            // re-trigger (the Lua script swaps `source` then raises `state` in
-            // the same frame, so the falling/rising edge is never observed).
-            // Stop the old voice and let the rising-edge path reload the new
-            // source.
-            if (want && voice.playing && !em.source.empty() && em.source != voice.source)
+            // Resident mode: `sound` holds a cookie from audio.loadAudio() and
+            // every new `trigger` value plays it once from the start. The
+            // state/source machinery below is bypassed entirely.
+            if (em.sound != 0)
             {
-                if (voice.handle != 0)
-                    system::audio::stop(voice.handle);
-                voice.playing = false;
-                voice.failed = false;
-                voice.handle = 0;
-                voice.source = em.source;
-            }
-
-            // Rising edge: load (once, cached by source path) and start.
-            if (want && !voice.playing && !voice.failed)
-            {
-                if (!em.source.empty())
+                if (em.trigger != voice.lastTrigger)
                 {
-                    if (voice.handle == 0)
+                    voice.lastTrigger = em.trigger;
+                    if (auto* snd = ResourceManager::get().fromCookie<SoundResource>(em.sound))
                     {
-                        auto& cache = audioSourceCache();
-                        const auto cached = cache.find(em.source);
-                        if (cached != cache.end())
-                            voice.handle = cached->second;
-                    }
-                    if (voice.handle == 0)
-                    {
-                        // Resolve the source: a plain relative path is tried
-                        // against the game module dir first, then falls back to
-                        // the original RE2 data set (data://), mirroring the
-                        // texture loader so module-relative and data assets both
-                        // work. A bare tex name without a data:// prefix is
-                        // resolved as data://<source> for the fallback.
-                        std::vector<uint8_t> bytes;
-                        if (em.source.find("data://") != 0)
+                        if (snd->audioHandle != 0)
                         {
-                            const auto path = game_module_dir() / em.source;
-                            // Probe existence first so a missing module-dir
-                            // file does not log a filesystem error (the
-                            // data:// fallback below is expected).
-                            if (system::fs::info(path.string().c_str()).kind == system::fs::FileKind::file)
-                                bytes = system::fs::readAllBytes(path.string().c_str());
+                            system::audio::set_loop(snd->audioHandle, false);
+                            system::audio::trigger(snd->audioHandle);
+                            voice.handle = snd->audioHandle;
+                            voice.playing = true;
+                            voice.failed = false;
                         }
-                        if (bytes.empty())
-                        {
-                            const auto resolved = system::fs::resolve(("data://" + em.source).c_str());
-                            if (!resolved.empty() && system::fs::info(resolved.c_str()).kind == system::fs::FileKind::file)
-                                bytes = system::fs::readAllBytes(resolved.c_str());
-                        }
-                        if (!bytes.empty())
-                        {
-                            // Mixer slot: the 8 fixed groups (door/weapon/room/
-                            // enemy/core/bgm/sbgm/voice) take a small type; use
-                            // the "core" group (4, capacity 22) so many distinct
-                            // emitter sources can coexist. A per-source sub keeps
-                            // each unique path on its own slot.
-                            const auto& srcRef = em.source;
-                            auto subIt = s_sourceSubs.find(srcRef);
-                            if (subIt == s_sourceSubs.end())
-                            {
-                                subIt = s_sourceSubs.emplace(srcRef, s_nextSub).first;
-                                s_nextSub = (s_nextSub + 1) % 22;
-                            }
-                            const int type = 4; // core group
-                            const int sub = subIt->second;
-                            voice.handle = system::audio::load_sap(bytes.data(), static_cast<int>(bytes.size()), type, sub);
-                        }
-                        if (voice.handle != 0)
-                            audioSourceCache()[em.source] = voice.handle;
-                    }
-
-                    if (voice.handle != 0)
-                    {
-                        system::audio::set_loop(voice.handle, em.loop);
-                        system::audio::play(voice.handle);
-                        voice.fadeArmed = -1; // a fresh trigger restarts an armed fade
-                        voice.playing = true;
-                        voice.source = em.source;
-                    }
-                    else
-                    {
-                        voice.failed = true; // stay quiet, warn once per trigger
-                        logging::logWarning("[audio] failed to load audio_emitter source '{}'", em.source.c_str());
                     }
                 }
             }
-            // Falling edge: stop the voice.
-            else if (!want && voice.playing)
+            else
             {
-                if (voice.handle != 0)
-                    system::audio::stop(voice.handle);
-                voice.playing = false;
-            }
-            if (!want)
-            {
-                voice.failed = false; // re-arm so the next rising edge retries
-                voice.source.clear();
+
+                // A source change while the voice is still flagged as playing is a
+                // re-trigger (the Lua script swaps `source` then raises `state` in
+                // the same frame, so the falling/rising edge is never observed).
+                // Stop the old voice and let the rising-edge path reload the new
+                // source.
+                if (want && voice.playing && !em.source.empty() && em.source != voice.source)
+                {
+                    if (voice.handle != 0)
+                        system::audio::stop(voice.handle);
+                    voice.playing = false;
+                    voice.failed = false;
+                    voice.handle = 0;
+                    voice.source = em.source;
+                }
+
+                // Rising edge: load (once, cached by source path) and start.
+                if (want && !voice.playing && !voice.failed)
+                {
+                    if (!em.source.empty())
+                    {
+                        if (voice.handle == 0)
+                        {
+                            auto& cache = audioSourceCache();
+                            const auto cached = cache.find(em.source);
+                            if (cached != cache.end())
+                                voice.handle = cached->second;
+                        }
+                        if (voice.handle == 0)
+                        {
+                            // Resolve the source: a plain relative path is tried
+                            // against the game module dir first, then falls back to
+                            // the original RE2 data set (data://), mirroring the
+                            // texture loader so module-relative and data assets both
+                            // work. A bare tex name without a data:// prefix is
+                            // resolved as data://<source> for the fallback.
+                            std::vector<uint8_t> bytes;
+                            if (em.source.find("data://") != 0)
+                            {
+                                const auto path = game_module_dir() / em.source;
+                                // Probe existence first so a missing module-dir
+                                // file does not log a filesystem error (the
+                                // data:// fallback below is expected).
+                                if (system::fs::info(path.string().c_str()).kind == system::fs::FileKind::file)
+                                    bytes = system::fs::readAllBytes(path.string().c_str());
+                            }
+                            if (bytes.empty())
+                            {
+                                const auto resolved = system::fs::resolve(("data://" + em.source).c_str());
+                                if (!resolved.empty() && system::fs::info(resolved.c_str()).kind == system::fs::FileKind::file)
+                                    bytes = system::fs::readAllBytes(resolved.c_str());
+                            }
+                            if (!bytes.empty())
+                            {
+                                // Mixer slot: take any free slot of the "room"
+                                // group (2, capacity 48), the largest pool, so
+                                // many distinct emitter sources can coexist.
+                                // Allocation goes through the same unused-slot
+                                // allocator as resident sounds (which use the
+                                // "core" group) so the two can never collide on
+                                // a slot and clobber each other's buffers.
+                                voice.handle = system::audio::load_sap_unused(2, bytes.data(), static_cast<int>(bytes.size()));
+                            }
+                            if (voice.handle != 0)
+                                audioSourceCache()[em.source] = voice.handle;
+                        }
+
+                        if (voice.handle != 0)
+                        {
+                            system::audio::set_loop(voice.handle, em.loop);
+                            system::audio::play(voice.handle);
+                            voice.fadeArmed = -1; // a fresh trigger restarts an armed fade
+                            voice.playing = true;
+                            voice.source = em.source;
+                        }
+                        else
+                        {
+                            voice.failed = true; // stay quiet, warn once per trigger
+                            logging::logWarning("[audio] failed to load audio_emitter source '{}'", em.source.c_str());
+                        }
+                    }
+                }
+                // Falling edge: stop the voice.
+                else if (!want && voice.playing)
+                {
+                    if (voice.handle != 0)
+                        system::audio::stop(voice.handle);
+                    voice.playing = false;
+                }
+                if (!want)
+                {
+                    voice.failed = false; // re-arm so the next rising edge retries
+                    voice.source.clear();
+                }
             }
 
             // Push volume/pan while playing. Category volumes default to full

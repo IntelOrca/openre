@@ -345,7 +345,9 @@ function scene.addComponent(entity, name) end
 --- ("playing" starts the source, anything else stops it — see below),
 --- `source` (.sap file path relative to the game module directory),
 --- `volume` (0-100), `pan` (-100..100; 0 = centre), `loop` (boolean),
---- `fadeFrames` / `fadeTargetVolume` and the read-only `status`.
+--- `fadeFrames` / `fadeTargetVolume`, the read-only `status`, plus the
+--- resident one-shot pair `sound` / `trigger` (see the audio emitter section
+--- below for details).
 --- Scaled frame fields (`core.scaled_frame`): `source.width` / `source.height`
 --- (authored design-space size), `target.width` / `target.height`
 --- (window-pixel area to map onto), `mode` ("contain" fits the whole source
@@ -434,6 +436,15 @@ function scene.exit() end
 ---   playback: setting a new non-zero fadeFrames value starts one fade;
 ---   set it back to 0 first to run the same fade again later.
 --- * `fadeTargetVolume` — 0-100 target of the ramp.
+---
+--- Resident one-shot mode (`core.audio_emitter` + audio.loadAudio): set
+--- `sound` to a Sound handle from `audio.loadAudio` (or nil to return to
+--- source mode) and fire it by writing any new value to `trigger`. Every new
+--- trigger value plays that resident buffer once from its first sample,
+--- regardless of `state`, which makes rapid repeated input safe (each blip
+--- restarts cleanly instead of stacking or resuming). `volume`, `pan`,
+--- `fadeFrames` and `status` apply in this mode too; `source`, `state` and
+--- `loop` are ignored while `sound` is set.
 
 --[[ Scaled frames (core.scaled_frame) ]]
 
@@ -528,6 +539,37 @@ function gfx.listResources() end
 ---@param cookie integer
 ---@return { width: integer, height: integer, data: string }|nil
 function gfx.getResourceImage(cookie) end
+
+--[[ audio — resident sound effects ]]
+
+---@class Sound
+--- Opaque handle to a decoded sound kept in memory for the whole session.
+--- Created with `audio.loadAudio`. Like textures and fonts, the resource is
+--- unloaded when the last handle is garbage collected, so keep the handle
+--- referenced while an emitter's `sound` field points at it.
+local Sound = {}
+
+--- Load and decode a .sap sound file fully into memory as an always resident
+--- one-shot sound effect. Unlike an audio emitter's source mode (meant for
+--- longer sources started declaratively) a loaded sound stays in memory until
+--- shutdown and is fired through the emitter's `sound` / `trigger` fields.
+---
+--- The optional `sub` index selects one sub-sound of a multi-sound .sap
+--- container (one RIFF WAV per set bit after the 8-byte mask header), e.g.
+--- sub 0 of core22.sap is its first blip. The same module-dir-then-data://
+--- probing as textures applies. Loading the same path/sub pair again returns a
+--- handle onto the same shared sound. Returns nil when the file is missing or
+--- cannot be decoded.
+---@param path string e.g. "common/sound/core/core17.sap"
+---@param sub? integer sub-sound index of a multi-sound container (default: none)
+---@return Sound|nil
+function audio.loadAudio(path, sub) end
+
+--- Play a previously loaded sound as a one-shot, at full volume, centred.
+--- Re-triggering while it is still playing restarts it from the beginning,
+--- so rapid menu input never stacks copies of the same blip.
+---@param sound Sound
+function audio.play(sound) end
 
 --[[ core — engine services ]]
 

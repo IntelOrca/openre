@@ -131,6 +131,7 @@
     <ClCompile Include="video_decoder.cpp" />
     <ClCompile Include="video_system.cpp" />
     <ClCompile Include="scheduler.cpp" />
+    <ClCompile Include="sound_loader.cpp" />
     <ClCompile Include="texture_loader.cpp" />
     <ClCompile Include="text_layout.cpp" />
     <ClCompile Include="tim.cpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="video_decoder.h" />
     <ClInclude Include="video_system.h" />
     <ClInclude Include="systems.h" />
+    <ClInclude Include="sound_loader.h" />
     <ClInclude Include="texture_loader.h" />
     <ClInclude Include="text_layout.h" />
     <ClInclude Include="tim.h" />

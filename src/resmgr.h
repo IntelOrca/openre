@@ -57,6 +57,23 @@ namespace openre
     };
 
     /**
+     * A decoded sound owned by the system::audio mixer. The audioHandle is
+     * opaque; unloading happens in the destructor.
+     */
+    class SoundResource : public Resource
+    {
+    public:
+        uint32_t audioHandle = 0;
+
+        ~SoundResource() override;
+
+        const char* getName() const override
+        {
+            return "sound";
+        }
+    };
+
+    /**
      * Tracks loaded resources and their consumers. A resource lives as long
      * as at least one cookie points at it; release() drops a cookie and unloads
      * the resource once the last one is gone. Lua texture userdata release
