@@ -52,8 +52,17 @@ namespace openre::script
         void loadScript(const std::filesystem::path& path);
         void unloadScript(const std::string& basename);
 
+        // Tears down and recreates the game module VM so edits to game scripts
+        // (e.g. options.lua) are picked up at runtime. Deferred via a flag set by
+        // the watcher and run at the end of tick() so we never mutate _scripts
+        // while iterating it.
+        void reloadGameModule();
+
         bool _loaded{};
         bool _gameModuleLoaded{};
+        bool _gameModuleWatched{};
+        bool _pendingGameModuleReload{};
+        std::filesystem::path _gameModuleDir;
         std::vector<std::filesystem::path> _searchPaths;
         std::vector<std::unique_ptr<FileWatcher>> _watchers;
         // Key: script basename without extension.

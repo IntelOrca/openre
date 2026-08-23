@@ -1,6 +1,7 @@
 #include "script_vm.h"
 #include "logger.h"
 #include "script_bindings.h"
+#include "script_shared.h"
 #include <filesystem>
 #include <lua.hpp>
 #include <string>
@@ -139,6 +140,7 @@ namespace openre::script
         }
 
         registerBindings(_state, this);
+        installSharedTable(_state);
 
         lua_pushlightuserdata(_state, this);
         lua_newtable(_state);

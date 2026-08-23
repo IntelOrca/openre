@@ -65,27 +65,39 @@ local function showTitle()
         :fadeIn(60)
 end
 
-scheduler
-    :exec(function()
-        createSplash()
+-- Hot reload (OPENRE_FAST_RELOAD, set by the engine when the game module is
+-- reloaded at runtime): skip the splash and title movie entirely and drop
+-- straight back on the title menu. menu.lua then reopens the options overlay
+-- from the cross-VM `shared` table if it was open before the reload.
+local fastReload = re.getEnv('OPENRE_FAST_RELOAD')
+if fastReload then
+    print('[main] fast reload: skipping splash/movie')
+    scheduler:exec(function()
+        Title:new()
     end)
-    :fadeIn(60)
-    :wait(120)
-    :fadeOut(60)
-    :exec(hideSplash)
-    :holdBlack(60)
-    :exec(function()
-        if bootPrologue then
-            local ch, sc = bootPrologue:match('(%w+),(%w+)')
-            if ch and sc then
-                prologue.start({
-                    character = ch,
-                    scenario = sc,
-                    onFinished = showTitle,
-                })
-                return
+else
+    scheduler
+        :exec(function()
+            createSplash()
+        end)
+        :fadeIn(60)
+        :wait(120)
+        :fadeOut(60)
+        :exec(hideSplash)
+        :holdBlack(60)
+        :exec(function()
+            if bootPrologue then
+                local ch, sc = bootPrologue:match('(%w+),(%w+)')
+                if ch and sc then
+                    prologue.start({
+                        character = ch,
+                        scenario = sc,
+                        onFinished = showTitle,
+                    })
+                    return
+                end
             end
-        end
+end
         -- Own function frame so the intro movie's handle dies the moment the
         -- movie is over; the collect below unloads its resource before the
         -- menu loads.
@@ -99,3 +111,4 @@ scheduler
         re.collectGarbage()
         showTitle()
     end)
+end

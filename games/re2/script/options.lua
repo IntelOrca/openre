@@ -805,8 +805,11 @@ end
 -- State ----------------------------------------------------------------------
 
 -- First half of open(): read the registry and derive the navigation baseline
--- before any entity exists (the tab strips need the category list).
-local function initNavState(s)
+-- before any entity exists (the tab strips need the category list). `restore`
+-- (optional) is a previous session's { categoryIndex, subcategoryIndex,
+-- cursorRow, scrollRow } mirrored through the shared table by persistState();
+-- out-of-range values are clamped here and by the following refresh().
+local function initNavState(s, restore)
     s.open = true
     s.defs = options.list() or {}
     s.categories = uniqueField(s.defs, 'category')
@@ -820,6 +823,38 @@ local function initNavState(s)
     s.cursorMemory = {}
     -- Per-direction hold-repeat countdowns for value editing.
     s.holds = { left = { timer = 0 }, right = { timer = 0 } }
+
+    if type(restore) == 'table' then
+        if type(restore.categoryIndex) == 'number' and restore.categoryIndex >= 1
+            and restore.categoryIndex <= #s.categories then
+            s.categoryIndex = math.floor(restore.categoryIndex)
+        end
+        if type(restore.subcategoryIndex) == 'number' and restore.subcategoryIndex >= 1 then
+            s.subcategoryIndex = math.floor(restore.subcategoryIndex)
+        end
+        if type(restore.cursorRow) == 'number' and restore.cursorRow >= 1 then
+            s.cursorRow = math.floor(restore.cursorRow)
+        end
+        if type(restore.scrollRow) == 'number' and restore.scrollRow >= 1 then
+            s.scrollRow = math.floor(restore.scrollRow)
+        end
+    end
+end
+
+-- Mirror the navigation state into the cross-VM `shared` table so a hot reload
+-- of the game module can restore the overlay exactly as it was (menu.lua
+-- reopens the overlay from shared.options when OPENRE_FAST_RELOAD is set).
+local function persistState(s)
+    if shared == nil then
+        return
+    end
+    shared.options = {
+        open = true,
+        categoryIndex = s.categoryIndex,
+        subcategoryIndex = s.subcategoryIndex,
+        cursorRow = s.cursorRow,
+        scrollRow = s.scrollRow,
+    }
 end
 
 -- Recompute everything derived from the state table and redraw the dynamic
@@ -835,6 +870,7 @@ local function refresh(s)
     end
     s.rows = rebuildRows(s)
     clampScroll(s, VISIBLE_ROWS)
+    persistState(s)
 
     local ok, err = pcall(rebuildDynamic, s)
     if not ok then
@@ -1136,13 +1172,13 @@ local function buildAll(s)
         SCROLLBAR_X, LIST_TOP, SCROLLBAR_W, SCROLLBAR_BOTTOM - LIST_TOP, COLOR_TRACK)
 end
 
-function Options.open()
+function Options.open(restore)
     if state ~= nil then
         return -- already open
     end
 
     local draft = {}
-    local ok, err = pcall(initNavState, draft)
+    local ok, err = pcall(initNavState, draft, restore)
     if not ok then
         print('[options] open failed: ' .. tostring(err))
         return
@@ -1166,8 +1202,12 @@ function Options.open()
         pcall(teardown, draft)
         return
     end
-    -- Never rest the initial cursor on a group banner.
+    -- Never rest the initial cursor on a group banner (a restored cursorRow
+    -- may also exceed the rebuilt rows - clamp it first).
     local rows = state.rows
+    if state.cursorRow > #rows then
+        state.cursorRow = math.max(1, #rows)
+    end
     if rows[state.cursorRow] ~= nil and rows[state.cursorRow].type ~= 'option' then
         local target = findSelectable(rows, 1, 1)
         if target ~= nil then
@@ -1183,6 +1223,10 @@ function Options.close()
         return
     end
     state = nil -- stop the tick handler before touching the tree
+    -- Record the closed state so a hot reload does not resurrect the overlay.
+    if shared ~= nil then
+        shared.options = { open = false }
+    end
     local ok, err = pcall(teardown, s)
     if not ok then
         print('[options] close failed: ' .. tostring(err))

@@ -717,4 +717,24 @@ function options.set(id, value) end
 --- options.set changes.
 function options.flush() end
 
+--[[ shared — persistent data across script VMs ]]
+
+--- Persistent key/value storage shared by every script VM (and the game
+--- module). Values written here survive a script VM being destroyed and
+--- recreated on hot reload, so read your previous state back when the script
+--- loads to restore it:
+---
+--- ```lua
+--- local state = shared.options or {}
+--- shared.options = { open = true, page = state.page or 1 }
+--- ```
+---
+--- Keys must be strings or numbers. Values may be booleans, numbers,
+--- strings, or tables of those (copied recursively; functions and userdata
+--- are dropped). `shared` is backed by native code, so pairs()/ipairs() do
+--- not work on it — keep your own key list if you need to enumerate.
+---@class shared
+---@field [string|number] any
+shared = {}
+
 return re

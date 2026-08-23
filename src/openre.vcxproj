@@ -119,6 +119,7 @@
     <ClCompile Include="script_bindings.cpp" />
     <ClCompile Include="script_manager.cpp" />
     <ClCompile Include="script_network.cpp" />
+    <ClCompile Include="script_shared.cpp" />
     <ClCompile Include="script_vm.cpp" />
     <ClCompile Include="script_watch.cpp" />
     <ClCompile Include="stream.cpp" />
@@ -191,6 +192,7 @@
     <ClInclude Include="script_bindings.h" />
     <ClInclude Include="script_manager.h" />
     <ClInclude Include="script_network.h" />
+    <ClInclude Include="script_shared.h" />
     <ClInclude Include="script_vm.h" />
     <ClInclude Include="script_watch.h" />
     <ClInclude Include="stream.h" />

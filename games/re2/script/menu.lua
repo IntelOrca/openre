@@ -45,6 +45,10 @@ local STATE_DEMO        = 2
 local STATE_LEAVING     = 3
 local STATE_OPTIONS     = 4
 
+-- Parked/restores the menu visuals while the options overlay owns the screen.
+-- Declared here so menu item actions can call it; defined after fitLayer().
+local setMenuParked
+
 -- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
 local DEMO_TIMEOUT      = 60 * 15
 
@@ -322,6 +326,10 @@ local ROOT_MENU = {
                   print('[menu] failed to open options overlay: '
                       .. tostring(err))
                   self.state = STATE_MENU
+              else
+                  -- The overlay paints its own full-window backdrop; park the
+                  -- menu visuals off-screen so they do not show through.
+                  setMenuParked(self, true)
               end
           end },
         { label = 'Exit', tooltip = 'Quit to the desktop.',
@@ -682,6 +690,21 @@ local function fitLayer(entity, frame)
     scene.setField(frame, 'target.height', h)
 end
 
+-- Park the menu visuals far above the window while the options overlay owns
+-- the screen. Position, not scale: the scaled-frame system rewrites the
+-- transform scale of the back/front layers every frame, so a scale-based hide
+-- would be overwritten. update() skips the per-frame re-fit while parked.
+function setMenuParked(self, parked)
+    local x = gfx.screenWidth() * 0.5
+    local y = parked and -100000 or gfx.screenHeight() * 0.5
+    for _, entity in ipairs({ self.backdrop, self.back, self.front }) do
+        if entity then
+            scene.setField(entity, 'x', x)
+            scene.setField(entity, 'y', y)
+        end
+    end
+end
+
 local function update(self)
     if self.closed then
         return
@@ -692,6 +715,30 @@ local function update(self)
         return
     end
     self.ticks = self.ticks + 1
+
+    -- While the options overlay is open the menu is parked off-window: skip
+    -- the per-frame fits (which would pull it back on-screen) and all input.
+    -- The overlay's tick runs BEFORE ours within each frame. When cancel
+    -- closes the overlay on frame N, our tick that same frame sees
+    -- isOpen() == false, restores the menu and returns to STATE_MENU having
+    -- polled nothing; the cancel edge expires with frame N (input.pressed
+    -- reports per-frame rising edges), so STATE_MENU polling resumes clean on
+    -- frame N+1 with no double-handling.
+    if self.state == STATE_OPTIONS then
+        if not options.isOpen() then
+            self.state = STATE_MENU
+            setMenuParked(self, false)
+            fitLayer(self.back, self.backFrame)
+            fitLayer(self.front, self.frontFrame)
+            if self.backdrop then
+                local w = gfx.screenWidth()
+                local h = gfx.screenHeight()
+                scene.setField(self.backdrop, 'x', w * 0.5)
+                scene.setField(self.backdrop, 'y', h * 0.5)
+            end
+        end
+        return
+    end
 
     -- Re-centre the layers and refresh their targets every frame so they
     -- track window resizes.
@@ -753,23 +800,6 @@ local function update(self)
                 playSfx(self, self.sfx.back)
                 enterPressStart(self)
             end
-        end
-    elseif self.state == STATE_OPTIONS then
-        -- Input arbitration: the options overlay owns all input while open, so
-        -- this branch polls nothing (up/down/accept/cancel/tab are ignored by
-        -- the menu). Tick ordering: main.lua loads this module - and thereby
-        -- script/options.lua, whose inert tick handler subscribes at require
-        -- time - long before Title:new() subscribes our tick, so the
-        -- overlay's tick runs BEFORE ours within each frame. When cancel
-        -- closes the overlay on frame N, our tick that same frame sees
-        -- isOpen() == false, returns to STATE_MENU having polled nothing, and
-        -- the cancel edge expires with frame N (input.pressed reports
-        -- per-frame rising edges), so STATE_MENU polling resumes clean on
-        -- frame N+1 with no double-handling. Should the subscription order
-        -- ever flip, the closure is merely noticed one frame later - equally
-        -- leak-free, since this branch never reads input.
-        if not options.isOpen() then
-            self.state = STATE_MENU
         end
     elseif self.state == STATE_DEMO then
         updateDemo(self)
@@ -997,12 +1027,48 @@ function Title:new(opts)
     instance.transition = nil
     instance.gameCtx = nil
     instance.closed = false
-    if opts.mainStory then
+if opts.mainStory then
         enterMenu(instance)
         instance.menu = MAIN_STORY_MENU
         instance.selected = 2 -- Load Game
         refreshItems(instance)
         refreshTooltip(instance)
+    end
+
+    -- Hot-reload restore: after a game-module reload (OPENRE_FAST_RELOAD), if
+    -- the options overlay was open, reopen it - with the previous cursor/tab
+    -- state, which options.lua stashes in the cross-VM `shared` table - instead
+    -- of dropping the user back on the title screen. The menu parks itself and
+    -- enters STATE_OPTIONS so it does not poll input behind the overlay. The
+    -- whole block is under pcall: `shared` is user-writable, so its contents
+    -- are treated as untrusted.
+    if re.getEnv('OPENRE_FAST_RELOAD') and shared ~= nil then
+        local ok, err = pcall(function()
+            if shared.options == nil or not shared.options.open then
+                return
+            end
+            local restore = {
+                categoryIndex = shared.options.categoryIndex,
+                subcategoryIndex = shared.options.subcategoryIndex,
+                cursorRow = shared.options.cursorRow,
+                scrollRow = shared.options.scrollRow,
+            }
+            instance.state = STATE_OPTIONS
+            local okOpen, errOpen = false, 'options module unavailable'
+            if options ~= nil and type(options.open) == 'function' then
+                okOpen, errOpen = pcall(options.open, restore)
+            end
+            if okOpen then
+                setMenuParked(instance, true)
+            else
+                print('[menu] failed to restore options overlay: ' .. tostring(errOpen))
+                instance.state = STATE_PRESS_START
+            end
+        end)
+        if not ok then
+            print('[menu] options restore failed: ' .. tostring(err))
+            instance.state = STATE_PRESS_START
+        end
     end
     re.subscribe(HookKind.tick, function()
         update(instance)

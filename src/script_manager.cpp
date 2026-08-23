@@ -1,6 +1,8 @@
 #include "script_manager.h"
 
+#include "ecs_scene.h"
 #include "logger.h"
+#include "openre.h"
 
 #include <algorithm>
 #include <cctype>
@@ -52,6 +54,14 @@ namespace openre::script
             {
                 entry.second->callHooks(HookKind::tick);
             }
+        }
+
+        // A game-module change schedules a reload that mutates _scripts, so do it
+        // after the tick hooks have run to avoid invalidating the iterator above.
+        if (_pendingGameModuleReload)
+        {
+            _pendingGameModuleReload = false;
+            reloadGameModule();
         }
 
         // OPENRE_LUA_GC forces a full collect on every frame so lifetime bugs
@@ -242,15 +252,49 @@ namespace openre::script
 
     void ScriptManager::loadGameModule(const fs::path& dir)
     {
-        // Modules are loaded exactly once at boot (no hot reload for the game
-        // module itself yet).
         if (_gameModuleLoaded)
             return;
         _gameModuleLoaded = true;
+        _gameModuleDir = dir.lexically_normal();
+
+        // The game module has no top-level-script hot reload of its own, but its
+        // scripts are edited constantly while iterating on the UI. Watch its
+        // directory: any change schedules a full module reload (deferred to the
+        // end of tick()). The watcher lives here rather than watch() because the
+        // module directory is only known once the game is chosen, and only once
+        // so a reload does not stack duplicate watchers.
+        if (!_gameModuleWatched)
+        {
+            _gameModuleWatched = true;
+            auto watcher = std::make_unique<FileWatcher>(_gameModuleDir);
+            watcher->onFileChanged = [this](const fs::path&, FileEvent) { _pendingGameModuleReload = true; };
+            _watchers.push_back(std::move(watcher));
+        }
 
         auto vm = createLuaVm("game", { dir });
         vm->run(dir / "main.lua");
         _scripts[GAME_MODULE_KEY] = std::move(vm);
+    }
+
+    void ScriptManager::reloadGameModule()
+    {
+        logging::logInfo("[script] hot-reloading game module '{}'", _gameModuleDir.string());
+
+        // Tear down the current module's scene and VM. Scene::clear() removes
+        // every entity except the hidden root, so the next main.lua starts from a
+        // clean slate. The shared cross-VM table (ScriptShared) lives outside the
+        // VM, so any state stashed there (e.g. an open options overlay) survives.
+        if (auto* scene = openre::current_scene())
+        {
+            scene->clear();
+        }
+        _scripts.erase(GAME_MODULE_KEY);
+        _gameModuleLoaded = false;
+
+        // Skip the splash/movie on reload so iterating on a single script is fast.
+        _putenv("OPENRE_FAST_RELOAD=1");
+
+        loadGameModule(_gameModuleDir);
     }
 
     void ScriptManager::unloadScript(const std::string& basename)
