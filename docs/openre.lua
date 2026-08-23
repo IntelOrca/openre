@@ -302,7 +302,8 @@ function scene.setParent(child, parent) end
 --- `core.text` accepts the font (a `gfx.loadFont` value) as the component's
 --- initial value, or set it later with `scene.setField(handle, 'font', f)`.
 ---@param entity SceneEntity
----@param name string e.g. "core.sprite", "core.text" or "core.transform"
+---@param name string e.g. "core.sprite", "core.text", "core.audio_emitter"
+---  or "core.transform"
 ---@return SceneComponent|nil
 function scene.addComponent(entity, name) end
 
@@ -315,13 +316,23 @@ function scene.addComponent(entity, name) end
 --- its children (offsets and rendered sizes both scale). Sprite fields mirror the layout of the underlying C++
 --- struct: `size.width`, `size.height` (destination size in window pixels),
 --- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
---- pixels; 0-sized means "full texture"), `texture` (a Texture or nil), and
---- `flags` (a bitmask of SpriteFlags values combined with `|`). A sprite is
+--- pixels; 0-sized means "full texture"), `texture` (a Texture or nil),
+--- `flags` (a bitmask of SpriteFlags values combined with `|`), `color` (an
+--- RGBA tint/opacity table `{r, g, b, a}` with each channel 0-255; defaults
+--- to opaque white) and `opacity` (an alias for `color[4]`, 0-255). `z` is the
+--- draw priority: sprites paint back-to-front, so a higher `z` renders further
+--- behind and a lower `z` renders in front (equal `z` keeps creation order).
+--- A sprite is
 --- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
 --- place the entity where you want the centre of the sprite. Text fields:
 --- `text` (UTF-8 string; supports `<span color="#ff0">` markup), `font` (a
 --- Font or nil), `size.width` / `size.height` (bounds the text is aligned
 --- within), and `flags` (a bitmask of TextFlags values combined with `|`).
+--- Audio emitter fields: `category` ("bgm", "sfx" or "voice"), `state`
+--- ("playing" starts the source, anything else stops it — see below),
+--- `source` (.sap file path relative to the game module directory),
+--- `volume` (0-100), `pan` (-100..100; 0 = centre), `loop` (boolean),
+--- `fadeFrames` / `fadeTargetVolume` and the read-only `status`.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
@@ -331,7 +342,7 @@ function scene.setField(handle, name, value) end
 --- fields. Fields use the same names as scene.setField. The `texture` / `font`
 --- fields are returned as the numeric ResourceCookie, not an object; `flags` is
 --- returned as the numeric bitmask; the transform `name` field is returned as a
---- string.
+--- string; the sprite `color` field is returned as a `{r, g, b, a}` table.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@return any
@@ -349,8 +360,9 @@ function scene.allEntities() end
 function scene.entityFromId(id) end
 
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
---- one of "core.transform", "core.sprite", "core.text", "core.legacy" or
---- "core.video". Returns nil when the entity lacks that component.
+--- one of "core.transform", "core.sprite", "core.text", "core.legacy",
+--- "core.video" or "core.audio_emitter". Returns nil when the entity lacks
+--- that component.
 ---@param entity SceneEntity
 ---@param typeName string
 ---@return SceneComponent|nil
@@ -374,6 +386,33 @@ function scene.children(entity) end
 
 --- Request the application to exit.
 function scene.exit() end
+
+--[[ Audio emitters (core.audio_emitter) ]]
+
+--- A sound emitter mixed by the native SDL3 audio layer. Add it with
+--- `scene.addComponent(e, "core.audio_emitter")` and configure its fields
+--- with `scene.setField`. Playback is edge-triggered: writing `"playing"` to
+--- `state` starts `source`, writing anything else stops the voice (writing
+--- `"playing"` again while playing does nothing; write another value first to
+--- re-trigger). The engine writes the observed voice state back into the
+--- read-only `status` field every frame: `"stopped"`, `"playing"`, or
+--- `"finished"` for a non-looping source that played to its end.
+---
+--- Fields:
+--- * `category` — "bgm", "sfx" or "voice"; all categories mix at full volume
+---   for now (no mixer configuration yet).
+--- * `source` — a `.sap` file (RIFF WAV) resolved relative to the game module
+---   directory. Decoded sources are cached per path, so several emitters can
+---   share one file. A missing or unreadable file logs a warning and stays
+---   silent (the emitter reports status "stopped"); it never crashes.
+--- * `volume` — 0-100 (default 100).
+--- * `pan` -100..100, 0 = centre.
+--- * `loop` — whether the voice loops while state is "playing" (default true).
+--- * `fadeFrames` — length in frames of a linear volume ramp from the current
+---   effective volume to `fadeTargetVolume`. Arming is edge-triggered like
+---   playback: setting a new non-zero fadeFrames value starts one fade;
+---   set it back to 0 first to run the same fade again later.
+--- * `fadeTargetVolume` — 0-100 target of the ramp.
 
 --[[ The gfx namespace (module mode) ]]
 
@@ -439,6 +478,27 @@ function gfx.listResources() end
 ---@param cookie integer
 ---@return { width: integer, height: integer, data: string }|nil
 function gfx.getResourceImage(cookie) end
+
+--[[ core — engine services ]]
+
+---@class core
+core = {}
+
+--- Play a movie, filling the window, and block until it finishes or is
+--- skipped. Returns `true` when the movie was skipped early by user input
+--- (or a window close), `false` when it played through to the end, and
+--- nothing when it could not be started.
+---
+--- The optional `captions` argument is an array of caption entries
+--- `{ from = seconds, to = seconds, text = string }`. While the playback
+--- position (in seconds) is inside `[from, to]`, the entry's text is shown as
+--- an overlay centred near the bottom of the window; entries are evaluated in
+--- order and the first match wins. Captions need a loadable font resource to
+--- be visible; without one they are silently skipped (never a crash).
+---@param path string e.g. "pl0\\zmovie\\title_l.bin"
+---@param captions? { from: number, to: number, text: string }[]
+---@return boolean|nil
+function core.playMovie(path, captions) end
 
 --[[ input — runtime command state ]]
 

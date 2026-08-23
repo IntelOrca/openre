@@ -54,6 +54,7 @@ namespace openre::render2d
         uint8_t b = 255;
         uint8_t a = 255;
         uint32_t flags = kStretchX | kStretchY;
+        int z = 0; // draw priority; higher z = further back
     };
 
     // Full-window fade overlay set for the current frame by gfx.fade().

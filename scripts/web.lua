@@ -450,15 +450,12 @@ local function splitPath(path)
     return base, params
 end
 
--- Field schema for each component type, in display order. Keep in sync with
--- the component names returned by scene.getComponents.
-local SCENE_SCHEMA = {
-    ["core.transform"] = { "name", "x", "y", "z", "scale.x", "scale.y", "scale.z" },
-    ["core.sprite"] = { "size.width", "size.height", "src.x", "src.y", "src.width", "src.height", "texture", "flags" },
-    ["core.text"] = { "text", "size.width", "size.height", "flags", "font" },
-    ["core.legacy"] = { "enabled", "size.width", "size.height" },
-    ["core.video"] = { "status", "position", "videoWidth", "videoHeight", "resource" },
-}
+-- Field names come from the engine API (scene.getFieldNames) so the inspector
+-- always reflects the real component API instead of a hard-coded copy.
+local function componentFieldNames(comp)
+    local ok, names = pcall(scene.getFieldNames, comp)
+    return ok and names or {}
+end
 
 -- Builds the full scene-tree snapshot as a JSON-friendly table.
 local function buildScene()
@@ -479,7 +476,7 @@ local function buildScene()
                 local comp = scene.component(ent, ctype)
                 local fields = {}
                 if comp then
-                    for _, f in ipairs(SCENE_SCHEMA[ctype] or {}) do
+                    for _, f in ipairs(componentFieldNames(comp)) do
                         fields[#fields + 1] = { n = f, v = scene.getField(comp, f) }
                     end
                 end
@@ -510,6 +507,67 @@ local function respond(sock, status, contentType, body, headers)
     sock:write(header .. body)
     sock:flush()
     sock:dispose()
+end
+
+local function renderProloguePage()
+    return [[<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRE · Prologue Tester</title>
+<style>
+body{background:#0d1117;color:#c9d1d9;font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:24px;}
+h1{font-size:18px;} h2{font-size:13px;text-transform:uppercase;color:#8b949e;}
+button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:10px 16px;margin:4px;cursor:pointer;font-weight:600;}
+button:hover{background:#1c2230;border-color:#58a6ff;}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:16px;}
+.row{display:flex;gap:18px;flex-wrap:wrap;}
+.kv{font-family:ui-monospace,monospace;font-size:13px;}
+.kv b{color:#58a6ff;}
+pre{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;overflow:auto;font-size:12px;}
+</style></head>
+<body>
+<h1>Prologue Tester</h1>
+<p>Start a prologue variant, then watch the live state below. The slideshow + movies play on screen;
+this page only reports the script's internal progress so you can confirm it without frame-grabbing.</p>
+<div>
+  <button onclick="start('leon','a')">Start · Leon A</button>
+  <button onclick="start('claire','a')">Start · Claire A</button>
+  <button onclick="start('leon','b')">Start · Leon B</button>
+  <button onclick="start('claire','b')">Start · Claire B</button>
+</div>
+<div class="card"><h2>Live status</h2><div class="row">
+  <div class="kv">active: <b id="active">-</b></div>
+  <div class="kv">finished: <b id="finished">-</b></div>
+  <div class="kv">skipped: <b id="skipped">-</b></div>
+  <div class="kv">variant: <b id="variant">-</b></div>
+  <div class="kv">substate: <b id="substate">-</b></div>
+  <div class="kv">frame: <b id="frame">-</b></div>
+  <div class="kv">bgm: <b id="bgmStarted">-</b></div>
+</div>
+<div class="kv" style="margin-top:8px">voices fired: <b id="voices">-</b></div>
+<div class="kv">movies played: <pre id="movies" style="margin-top:4px">-</pre></div>
+</div>
+<script>
+function start(ch, sc){
+  fetch('/api/prologue/start?character='+ch+'&scenario='+sc).then(r=>r.json()).then(j=>{
+    console.log('start result', j);
+  });
+}
+async function refresh(){
+  try{
+    const r = await fetch('/api/prologue/status');
+    const s = await r.json();
+    const set=(id,v)=>{document.getElementById(id).textContent=v;};
+    set('active', s.active); set('finished', s.finished); set('skipped', s.skipped);
+    set('variant', s.variant); set('substate', s.substate); set('frame', s.frame);
+    set('bgmStarted', s.bgmStarted);
+    set('voices', (s.voices||[]).join(', '));
+    set('movies', (s.movies||[]).join('\n'));
+  }catch(e){}
+}
+setInterval(refresh, 500); refresh();
+</script>
+</body></html>]]
 end
 
 local function handle(sock, req)
@@ -573,6 +631,63 @@ local function handle(sock, req)
             body = '{"ok":false,"error":"re.eval is only available in debug builds"}'
         end
         respond(sock, "200 OK", "application/json", body)
+    elseif method == "GET" and base == "/api/prologue/status" then
+        -- Live prologue state from the game module vm as a JSON string.
+        local code = [[local ok,p=pcall(require,'script/prologue');
+if not ok or type(p.status)~='function' then return '{"loaded":false}' end;
+local s=p.status();
+local q=function(x)
+  if x==nil then return 'null' end
+  if type(x)=='boolean' then return tostring(x) end
+  if type(x)=='number' then return tostring(x) end
+  return '"'..tostring(x)..'"'
+end;
+local joins=function(t)
+  local a={} for i=1,#t do a[i]=q(t[i]) end
+  return table.concat(a,',')
+end;
+return '{'
+  ..'"active":'..q(s.active)
+  ..',"finished":'..q(s.finished)
+  ..',"skipped":'..q(s.skipped)
+  ..',"character":'..q(s.character)
+  ..',"scenario":'..q(s.scenario)
+  ..',"variant":'..q(s.variant)
+  ..',"substate":'..q(s.substate)
+  ..',"frame":'..q(s.frame)
+  ..',"bgmStarted":'..q(s.bgmStarted)
+  ..',"voices":['..joins(s.voices)..']'
+  ..',"movies":['..joins(s.movies)..']}']]
+        local ok, eok, val = pcall(re.evalIn, "module.game", code)
+        if eok then
+            respond(sock, "200 OK", "application/json", val)
+        else
+            respond(sock, "200 OK", "application/json", '{"loaded":false,"error":"' .. jsonEscape(tostring(val)) .. '"}')
+        end
+    elseif method == "GET" and base == "/api/prologue/start" then
+        -- Start a prologue variant in the GAME module vm (where prologue.lua
+        -- is already loaded via menu.lua) using the cross-VM debug bridge.
+        local character = params.character or "leon"
+        local scenario = params.scenario or "a"
+        local code = "local p=require('script/prologue');"
+            .. "p.start{character='" .. character .. "',scenario='" .. scenario
+            .. "',onFinished=function() end}; return 'started'"
+        local ok, eok, val = pcall(re.evalIn, "module.game", code)
+        if type(val) == "string" and (val:find("no script VM") or val:find("not found")) then
+            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"' .. jsonEscape(val) .. '"}')
+        elseif eok then
+            respond(sock, "200 OK", "application/json", '{"ok":true,"result":"' .. jsonEscape(val) .. '"}')
+        else
+            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"' .. jsonEscape(tostring(val)) .. '"}')
+        end
+    elseif method == "GET" and base == "/api/prologue/skip" then
+        local code = [[local ok,p=pcall(require,'script/prologue');
+if ok and p.skip then p.skip() return 'skipped' end
+return 'no-prologue']]
+        local ok, eok, val = pcall(re.evalIn, "module.game", code)
+        respond(sock, "200 OK", "application/json", eok and ('{"ok":true,"result":"' .. jsonEscape(val) .. '"}') or ('{"ok":false,"error":"' .. jsonEscape(tostring(val)) .. '"}'))
+    elseif method == "GET" and base == "/prologue" then
+        respond(sock, "200 OK", "text/html; charset=utf-8", renderProloguePage())
     else
         respond(sock, "404 Not Found", "text/plain", "404 not found")
     end
@@ -617,4 +732,5 @@ re.subscribe(HookKind.tick, function()
         end
     end
 end)
+
 

@@ -535,9 +535,36 @@ namespace openre::system::audio
         if (!data || size < 12)
             return 0;
 
+        // The .sap container files used by RE2 carry a short SED-style header
+        // before the actual RIFF/WAV body: u32 version/tag (1) followed by a
+        // u32 offset (usually 8) to the "RIFF" block. Skip it so the decoder
+        // sees a clean RIFF stream (bare PCM/ADPCM data stays untouched).
+        int offset = 0;
+        if (static_cast<size_t>(size) >= 12 && data[0] == 0x01 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x00
+            && std::memcmp(data + 8, "RIFF", 4) == 0)
+        {
+            // The container header is 8 bytes: a u32 tag (1) plus a u32 offset
+            // field (ignored — some files store 0 here) followed by the RIFF
+            // body at data + 8.
+            offset = 8;
+        }
+
         msadpcm::DecodedWave decoded;
-        if (!msadpcm::decode_sap(data, (size_t)size, decoded) || decoded.samples.empty())
+        logging::logInfo(
+            "system_audio: load_sap type={} sub={} size={} offset={} first={:02X} {:02X} {:02X} {:02X}",
+            type,
+            sub,
+            size,
+            offset,
+            data[0],
+            data[1],
+            data[2],
+            data[3]);
+        if (!msadpcm::decode_sap(data + offset, (size_t)(size - offset), decoded) || decoded.samples.empty())
+        {
+            logging::logInfo("system_audio: decode_sap FAILED ({} bytes after offset {})", size - offset, offset);
             return 0;
+        }
 
         // decoded.samples holds frames * channels interleaved samples.
         int frames = (int)(decoded.samples.size() / (size_t)decoded.channels);

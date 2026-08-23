@@ -92,15 +92,55 @@ namespace openre
             return false;
         }
 
+        // Copies a marni::Image (produced by tim::decodeTim) into a render2d
+        // image so the scene-tree renderer stays decoupled from marni types.
+        render2d::Image imageFromTim(const marni::Image& src)
+        {
+            render2d::Image image;
+            image.width = src.width;
+            image.height = src.height;
+            image.depth = src.depth;
+            image.palBpp = src.palBpp;
+            image.palCnt = src.palCnt;
+            image.psxFormat = src.psxFormat;
+            image.pixels = src.pixels;
+            image.palette = src.palette;
+            return image;
+        }
+
         // Builds a render2d image from the raw compressed ADT file bytes. The
         // decoded payload is a layered 256x256 + side-panel RGB555 buffer which
-        // reorgAdt restitches into a 320x240 RGB555 buffer.
-        render2d::Image imageFromAdt(std::vector<uint8_t> bytes)
+        // reorgAdt restitches into a 320x240 RGB555 buffer. Some ADT files
+        // (the intro pages common/data/open00..03) instead decode to a suite of
+        // TIM textures packed back to back; imageFromTim above handles those.
+        render2d::Image imageFromAdt(std::vector<uint8_t> bytes, int timIndex)
         {
             auto decoded = graphics::decodeAdt(bytes);
             if (decoded.empty())
             {
                 logging::logWarning("[texture_loader] ADT decode failed ({})", bytes.size());
+                return {};
+            }
+
+            // Some ADT files (e.g. the intro pages common/data/open00..03) are
+            // not a single frame: the decompressed payload is a suite of TIM
+            // textures packed back to back (detected by the "10" TIM tag). When
+            // the caller selected one of them via timIndex, decode that TIM
+            // instead of treating the buffer as one frame. Only considered when
+            // the payload is not a known single-frame size, so a regular 320x240
+            // backdrop whose first pixels happen to look like a TIM tag keeps
+            // taking the reorg path below.
+            if (decoded.size() != (size_t)kAdtFull * 2 && decoded.size() != (size_t)kAdtPage * 2 && decoded.size() >= 4
+                && decoded[0] == 0x10 && decoded[1] == 0x00 && decoded[2] == 0x00 && decoded[3] == 0x00)
+            {
+                marni::Image marniImage;
+                if (timIndex >= 0 && tim::decodeTimIndex(decoded.data(), decoded.size(), timIndex, marniImage))
+                {
+                    logging::logInfo(
+                        "[texture_loader] ADT '{}' decoded as TIM suite, selected index {}", decoded.size(), timIndex);
+                    return imageFromTim(marniImage);
+                }
+                logging::logWarning("[texture_loader] ADT TIM suite index {} failed to decode", timIndex);
                 return {};
             }
 
@@ -136,22 +176,6 @@ namespace openre
             image.pixels = std::move(reorg);
             return image;
         }
-
-        // Copies a marni::Image (produced by tim::decodeTim) into a render2d
-        // image so the scene-tree renderer stays decoupled from marni types.
-        render2d::Image imageFromTim(const marni::Image& src)
-        {
-            render2d::Image image;
-            image.width = src.width;
-            image.height = src.height;
-            image.depth = src.depth;
-            image.palBpp = src.palBpp;
-            image.palCnt = src.palCnt;
-            image.psxFormat = src.psxFormat;
-            image.pixels = src.pixels;
-            image.palette = src.palette;
-            return image;
-        }
     } // namespace
 
     ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex)
@@ -171,7 +195,7 @@ namespace openre
         render2d::Image image;
         switch (type)
         {
-        case TextureType::adt: image = imageFromAdt(std::move(bytes)); break;
+        case TextureType::adt: image = imageFromAdt(std::move(bytes), timIndex); break;
         case TextureType::tim:
         {
             marni::Image marniImage;

@@ -37,6 +37,13 @@ namespace openre::script
         // Compile and execute the script file. Errors are logged at warning level.
         void run(const std::filesystem::path& path);
 
+        // Compile and execute a Lua chunk in this VM. On success returns true
+        // with the single returned value (converted to a string when it is not
+        // already one, so callers can pass it straight back to Lua) in
+        // `outResult`; on failure returns false with the error message in
+        // `outResult`. Never raises into the caller.
+        bool runString(const std::string& code, std::string& outResult);
+
         // Invoke all hooks subscribed for `kind`, each wrapped in pcall.
         void callHooks(HookKind kind);
 

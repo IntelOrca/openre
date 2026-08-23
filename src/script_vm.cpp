@@ -176,6 +176,55 @@ namespace openre::script
         }
     }
 
+    bool LuaVm::runString(const std::string& code, std::string& outResult)
+    {
+        if (_state == nullptr)
+        {
+            outResult = "vm is closed";
+            return false;
+        }
+
+        if (luaL_loadbuffer(_state, code.data(), code.size(), _name.c_str()) != LUA_OK)
+        {
+            auto* errorString = lua_tostring(_state, -1);
+            outResult = errorString != nullptr ? errorString : "(compile error)";
+            lua_pop(_state, 1);
+            return false;
+        }
+
+        if (lua_pcall(_state, 0, 1, 0) != LUA_OK)
+        {
+            auto* errorString = lua_tostring(_state, -1);
+            outResult = errorString != nullptr ? errorString : "(runtime error)";
+            lua_pop(_state, 1);
+            return false;
+        }
+
+        // Convert the single result to a string for transport back to the
+        // caller's Lua state (the target VM is not directly reachable).
+        const int type = lua_type(_state, -1);
+        if (type == LUA_TNIL)
+        {
+            outResult.clear();
+        }
+        else if (type == LUA_TSTRING)
+        {
+            const auto len = static_cast<size_t>(lua_rawlen(_state, -1));
+            outResult.assign(lua_tostring(_state, -1), len);
+        }
+        else if (type == LUA_TNUMBER || type == LUA_TBOOLEAN)
+        {
+            auto* text = lua_tostring(_state, -1);
+            outResult = text != nullptr ? text : "";
+        }
+        else
+        {
+            outResult = "<" + std::string(lua_typename(_state, type)) + ">";
+        }
+        lua_pop(_state, 1);
+        return true;
+    }
+
     void LuaVm::callHooks(HookKind kind)
     {
         for (const auto& subscription : _subscriptions)

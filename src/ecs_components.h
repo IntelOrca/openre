@@ -75,6 +75,36 @@ namespace openre::ecs
         Rect2f src;
         uint32_t flags = static_cast<uint32_t>(SpriteFlags::StretchX) | static_cast<uint32_t>(SpriteFlags::StretchY);
         Color color{ 255, 255, 255, 255 };
+        // Draw priority: sprites are rendered back-to-front grouped by this
+        // value. Higher z sorts earlier (further back); sprites with equal z
+        // keep their creation order. The scene renderer draws the whole list
+        // in array order, so late array entries end up on top.
+        int z = 0;
+    };
+
+    /// A sound emitter mixed by the native SDL3 audio layer (AudioSystem).
+    ///
+    /// Playback is edge-triggered through `state`: setting it to "playing"
+    /// starts the source, changing it to anything else stops the voice.
+    /// `source` is a `.sap` file (RIFF WAV container) resolved relative to the
+    /// game module directory. `volume` (0-100), `pan` (-100..100),
+    /// `fadeFrames` / `fadeTargetVolume` are pushed to the voice every frame
+    /// while playing; a fade runs once per distinct fadeFrames value. The
+    /// system writes the observed playback state back into `status`
+    /// ("stopped", "playing" or "finished"). `category` groups emitters for
+    /// future mixer configuration ("bgm", "sfx", "voice"; all full volume for
+    /// now).
+    struct AudioEmitterComponent
+    {
+        std::string category = "sfx";
+        std::string state = "stopped";
+        std::string source;
+        float volume = 100.0f;
+        float pan = 0.0f;
+        bool loop = true;
+        std::string status = "stopped";
+        int fadeFrames = 0;
+        float fadeTargetVolume = 100.0f;
     };
 
     /// Horizontal alignment of a TextComponent within its size bounds.

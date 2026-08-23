@@ -78,6 +78,17 @@ namespace openre::script
             it->second->callHooks(HookKind::tick);
     }
 
+    bool ScriptManager::evalIn(const std::string& name, const std::string& code, std::string& outResult)
+    {
+        auto it = _scripts.find(name);
+        if (it == _scripts.end() || !it->second)
+        {
+            outResult = "no script VM registered under '" + name + "'";
+            return false;
+        }
+        return it->second->runString(code, outResult);
+    }
+
     void ScriptManager::loadScripts()
     {
         const char* env = std::getenv("OPENRE_SCRIPTS");

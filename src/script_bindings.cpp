@@ -12,8 +12,10 @@
 #include "resmgr.h"
 #include "sce.h"
 #include "script.h"
+#include "script_manager.h"
 #include "script_network.h"
 #include "script_vm.h"
+#include "system_audio.h"
 #include "system_input.h"
 #include "system_window.h"
 #include "systems.h"
@@ -435,6 +437,7 @@ namespace openre::script
             constexpr int32_t text = 3;
             constexpr int32_t legacy = 4;
             constexpr int32_t video = 5;
+            constexpr int32_t audio_emitter = 6;
         }
 
         struct SceneEntityHandle
@@ -528,6 +531,19 @@ namespace openre::script
             return 0;
         }
 
+        // Destroys an entity and its whole subtree. Safe to call on an already-
+        // destroyed handle (no-op). Scripts use this to remove whole scenes
+        // when transitioning between them (e.g. splash -> menu -> prologue).
+        int sceneDestroy(lua_State* L)
+        {
+            auto* handle = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* scene = current_scene();
+            if (scene == nullptr || !scene->isValid(handle->entity) || handle->entity == scene->root())
+                return 0;
+            scene->destroyEntity(handle->entity);
+            return 0;
+        }
+
         int sceneAddComponent(lua_State* L)
         {
             auto* handle = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
@@ -565,6 +581,14 @@ namespace openre::script
                 }
                 kind = ComponentKind::text;
             }
+            else if (strcmp(name, "core.audio_emitter") == 0)
+            {
+                if (scene->tryGetComponent<ecs::AudioEmitterComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::AudioEmitterComponent>(handle->entity);
+                }
+                kind = ComponentKind::audio_emitter;
+            }
             else
             {
                 return luaL_error(L, "scene.addComponent: unknown component '%s'", name);
@@ -576,6 +600,18 @@ namespace openre::script
             luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
             lua_setmetatable(L, -2);
             return 1;
+        }
+
+        // Reads an integer at stack index `index` and clamps it into the
+        // 0-255 range used by ecs::Color channels.
+        uint8_t readByteChannel(lua_State* L, int index)
+        {
+            auto value = luaL_checkinteger(L, index);
+            if (value < 0)
+                value = 0;
+            if (value > 255)
+                value = 255;
+            return static_cast<uint8_t>(value);
         }
 
         int sceneSetField(lua_State* L)
@@ -666,6 +702,23 @@ namespace openre::script
                     }
                     sprite->flags = static_cast<uint32_t>(value);
                 }
+                else if (strcmp(name, "color") == 0)
+                {
+                    // {r, g, b, a}, each 0-255.
+                    luaL_checktype(L, 3, LUA_TTABLE);
+                    uint8_t channels[4];
+                    for (int i = 0; i < 4; i++)
+                    {
+                        lua_rawgeti(L, 3, i + 1);
+                        channels[i] = readByteChannel(L, -1);
+                        lua_pop(L, 1);
+                    }
+                    sprite->color = ecs::Color{ channels[0], channels[1], channels[2], channels[3] };
+                }
+                else if (strcmp(name, "opacity") == 0)
+                    sprite->color.a = readByteChannel(L, 3);
+                else if (strcmp(name, "z") == 0)
+                    sprite->z = static_cast<int>(luaL_checkinteger(L, 3));
                 else
                     return luaL_error(L, "scene.setField: unknown sprite field '%s'", name);
                 return 0;
@@ -752,6 +805,32 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::audio_emitter)
+            {
+                auto* emitter = scene->tryGetComponent<ecs::AudioEmitterComponent>(entity);
+                if (emitter == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no audio_emitter component");
+                if (strcmp(name, "category") == 0)
+                    emitter->category = luaL_checkstring(L, 3);
+                else if (strcmp(name, "state") == 0)
+                    emitter->state = luaL_checkstring(L, 3);
+                else if (strcmp(name, "source") == 0)
+                    emitter->source = luaL_checkstring(L, 3);
+                else if (strcmp(name, "volume") == 0)
+                    emitter->volume = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "pan") == 0)
+                    emitter->pan = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "loop") == 0)
+                    emitter->loop = lua_toboolean(L, 3);
+                else if (strcmp(name, "fadeFrames") == 0)
+                    emitter->fadeFrames = static_cast<int>(luaL_checkinteger(L, 3));
+                else if (strcmp(name, "fadeTargetVolume") == 0)
+                    emitter->fadeTargetVolume = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown audio_emitter field '%s'", name);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -821,6 +900,19 @@ namespace openre::script
                     lua_pushinteger(L, sprite->texture);
                 else if (strcmp(name, "flags") == 0)
                     lua_pushinteger(L, sprite->flags);
+                else if (strcmp(name, "color") == 0)
+                {
+                    lua_newtable(L);
+                    for (int i = 0; i < 4; i++)
+                    {
+                        lua_pushinteger(L, (&sprite->color.r)[i]);
+                        lua_rawseti(L, -2, i + 1);
+                    }
+                }
+                else if (strcmp(name, "opacity") == 0)
+                    lua_pushinteger(L, sprite->color.a);
+                else if (strcmp(name, "z") == 0)
+                    lua_pushinteger(L, sprite->z);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -886,6 +978,37 @@ namespace openre::script
                     lua_pushinteger(L, video->videoHeight);
                 else if (strcmp(name, "resource") == 0)
                     lua_pushlstring(L, video->resource.data(), video->resource.size());
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::audio_emitter)
+            {
+                auto* emitter = scene->tryGetComponent<ecs::AudioEmitterComponent>(entity);
+                if (emitter == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "category") == 0)
+                    lua_pushlstring(L, emitter->category.data(), emitter->category.size());
+                else if (strcmp(name, "state") == 0)
+                    lua_pushlstring(L, emitter->state.data(), emitter->state.size());
+                else if (strcmp(name, "source") == 0)
+                    lua_pushlstring(L, emitter->source.data(), emitter->source.size());
+                else if (strcmp(name, "volume") == 0)
+                    lua_pushnumber(L, emitter->volume);
+                else if (strcmp(name, "pan") == 0)
+                    lua_pushnumber(L, emitter->pan);
+                else if (strcmp(name, "loop") == 0)
+                    lua_pushboolean(L, emitter->loop);
+                else if (strcmp(name, "status") == 0)
+                    lua_pushlstring(L, emitter->status.data(), emitter->status.size());
+                else if (strcmp(name, "fadeFrames") == 0)
+                    lua_pushinteger(L, emitter->fadeFrames);
+                else if (strcmp(name, "fadeTargetVolume") == 0)
+                    lua_pushnumber(L, emitter->fadeTargetVolume);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -979,6 +1102,8 @@ namespace openre::script
                 return ComponentKind::legacy;
             if (strcmp(name, "core.video") == 0)
                 return ComponentKind::video;
+            if (strcmp(name, "core.audio_emitter") == 0)
+                return ComponentKind::audio_emitter;
             return 0;
         }
 
@@ -1042,6 +1167,7 @@ namespace openre::script
             case ComponentKind::text: present = scene->hasComponent<ecs::TextComponent>(h->entity); break;
             case ComponentKind::legacy: present = scene->hasComponent<ecs::LegacyGameComponent>(h->entity); break;
             case ComponentKind::video: present = scene->hasComponent<ecs::VideoComponent>(h->entity); break;
+            case ComponentKind::audio_emitter: present = scene->hasComponent<ecs::AudioEmitterComponent>(h->entity); break;
             }
             if (!present)
             {
@@ -1079,6 +1205,80 @@ namespace openre::script
                 push("core.legacy");
             if (scene->hasComponent<ecs::VideoComponent>(h->entity))
                 push("core.video");
+            if (scene->hasComponent<ecs::AudioEmitterComponent>(h->entity))
+                push("core.audio_emitter");
+            return 1;
+        }
+
+        // Returns the writable/readable field names for a component, so the
+        // web inspector can render fields from the actual API rather than a
+        // hard-coded schema.
+        int sceneGetFieldNames(lua_State* L)
+        {
+            auto* comp = static_cast<SceneComponentHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_COMPONENT));
+            lua_newtable(L);
+            int n = 0;
+            auto push = [&](const char* name) {
+                n++;
+                lua_pushlstring(L, name, strlen(name));
+                lua_rawseti(L, -2, n);
+            };
+            switch (comp->kind)
+            {
+            case ComponentKind::transform:
+                push("name");
+                push("x");
+                push("y");
+                push("z");
+                push("scale.x");
+                push("scale.y");
+                push("scale.z");
+                break;
+            case ComponentKind::sprite:
+                push("size.width");
+                push("size.height");
+                push("src.x");
+                push("src.y");
+                push("src.width");
+                push("src.height");
+                push("texture");
+                push("flags");
+                push("color");
+                push("opacity");
+                push("z");
+                break;
+            case ComponentKind::text:
+                push("text");
+                push("size.width");
+                push("size.height");
+                push("flags");
+                push("font");
+                break;
+            case ComponentKind::legacy:
+                push("enabled");
+                push("size.width");
+                push("size.height");
+                break;
+            case ComponentKind::video:
+                push("status");
+                push("position");
+                push("videoWidth");
+                push("videoHeight");
+                push("resource");
+                break;
+            case ComponentKind::audio_emitter:
+                push("category");
+                push("state");
+                push("source");
+                push("volume");
+                push("pan");
+                push("loop");
+                push("status");
+                push("fadeFrames");
+                push("fadeTargetVolume");
+                break;
+            default: break;
+            }
             return 1;
         }
 
@@ -1206,17 +1406,57 @@ namespace openre::script
             return inputCommandState(L, openre::input::command_edge());
         }
 
-        // core.playMovie(path) - plays a movie, blocking until it finishes or
-        // any input skips it. The video entity is created automatically to fill
-        // the window; rendering is driven here because this call runs inside a
-        // Lua tick hook and the rest of the frame pipeline is suspended until
-        // it returns.
+        // core.playMovie(path [, captions]) - plays a movie, blocking until it
+        // finishes or any input skips it. The video entity is created
+        // automatically to fill the window; rendering is driven here because
+        // this call runs inside a Lua tick hook and the rest of the frame
+        // pipeline is suspended until it returns.
+        //
+        // The optional `captions` argument is an array of
+        // { from = seconds, to = seconds, text = string } entries shown as a
+        // bottom-centre overlay while the playback position is inside their
+        // range. Returns true when the movie was skipped early, false when it
+        // played through; nil/nothing when it could not be started.
         int apiPlayMovie(lua_State* L)
         {
             const char* path = luaL_checkstring(L, 1);
             auto* app = openre::current_app();
             if (app == nullptr)
                 return 0;
+
+            // Optional caption list: { {from=..., to=..., text=...}, ... }.
+            struct Caption
+            {
+                float from;
+                float to;
+                std::string text;
+            };
+            std::vector<Caption> captions;
+            if (lua_gettop(L) >= 2 && !lua_isnil(L, 2))
+            {
+                luaL_checktype(L, 2, LUA_TTABLE);
+                const int count = static_cast<int>(luaL_len(L, 2));
+                captions.reserve(count);
+                for (int i = 1; i <= count; i++)
+                {
+                    lua_rawgeti(L, 2, i);
+                    if (lua_istable(L, -1))
+                    {
+                        Caption c{};
+                        lua_getfield(L, -1, "from");
+                        c.from = static_cast<float>(luaL_optnumber(L, -1, 0.0));
+                        lua_pop(L, 1);
+                        lua_getfield(L, -1, "to");
+                        c.to = static_cast<float>(luaL_optnumber(L, -1, c.from));
+                        lua_pop(L, 1);
+                        lua_getfield(L, -1, "text");
+                        c.text = luaL_optstring(L, -1, "");
+                        lua_pop(L, 1);
+                        captions.push_back(std::move(c));
+                    }
+                    lua_pop(L, 1);
+                }
+            }
 
             ecs::Entity entity = video_play(*app, path);
             if (entity == ecs::NullEntity)
@@ -1225,8 +1465,39 @@ namespace openre::script
                 return 0;
             }
 
-            // Reveal the video: clear any full-screen fade left by the splash.
+            // Movies take over the soundtrack: silence every emitter voice so
+            // BGM/narration does not bleed into the film. The movie playback
+            // loop below drives the video/render systems itself and never runs
+            // AudioSystem, so stopping the mix here is the only effective point.
+            system::audio::stop_all();
             render2d::SpriteRenderer::get().setFade({});
+
+            // One caption entity for the whole movie, created up front and its
+            // string swapped as playback advances. Without a usable font the
+            // layout pass simply draws nothing (never a crash).
+            ecs::Entity captionEntity = ecs::NullEntity;
+            if (!captions.empty())
+            {
+                auto* scene = openre::current_scene();
+                if (scene != nullptr)
+                {
+                    captionEntity = scene->createEntity(scene->getRoot(ecs::Scene::RootKind::Overlay));
+                    auto& transform = scene->getComponent<ecs::TransformComponent>(captionEntity);
+                    transform.name = "movie_captions";
+                    // Sprites are centred on their transform (see render2d), so
+                    // anchor the caption strip at the bottom-centre of the
+                    // window.
+                    transform.position.x = static_cast<float>(render2d::SpriteRenderer::get().screenWidth()) * 0.5f;
+                    transform.position.y = static_cast<float>(render2d::SpriteRenderer::get().screenHeight()) - 20.0f;
+                    auto& captionText = scene->addComponent<ecs::TextComponent>(captionEntity);
+                    captionText.size = { static_cast<float>(render2d::SpriteRenderer::get().screenWidth()), 24.0f };
+                    captionText.flags
+                        = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
+                    captionText.font = loadFontResource("common/data/font0:small");
+                }
+            }
+
+            bool skipped = false;
 
             // Edge-detect input so a key already held from the splash does not
             // skip the movie immediately. Seed the previous state with the
@@ -1272,6 +1543,7 @@ namespace openre::script
 
                 if (skip)
                 {
+                    skipped = true;
                     video_stop(*app, entity);
                     break;
                 }
@@ -1280,6 +1552,31 @@ namespace openre::script
                 // so RenderSystem performs the present this pass.
                 app->frameActive = true;
                 VideoSystem(*app);
+
+                // Show whichever caption covers the current playback position
+                // (VideoSystem has just refreshed video.position). Relayout
+                // only when the string actually changed.
+                if (captionEntity != ecs::NullEntity && scene != nullptr)
+                {
+                    const char* activeText = nullptr;
+                    const auto& video = scene->getComponent<ecs::VideoComponent>(entity);
+                    for (const auto& caption : captions)
+                    {
+                        if (video.position >= caption.from && video.position <= caption.to)
+                        {
+                            activeText = caption.text.c_str();
+                            break;
+                        }
+                    }
+                    const std::string_view desired(activeText != nullptr ? activeText : "");
+                    auto* captionText = scene->tryGetComponent<ecs::TextComponent>(captionEntity);
+                    if (captionText != nullptr && captionText->text != desired)
+                    {
+                        captionText->text.assign(desired);
+                        TextLayoutSystem(*app); // lay out the glyphs before presenting
+                    }
+                }
+
                 RenderSystem(*app);
 
                 // Keep the web inspector responsive while this blocking loop
@@ -1290,13 +1587,20 @@ namespace openre::script
                 system::window::delay(8);
             }
 
-            // Tear down the video entity.
+            // Tear down the video entity (and the caption entity with it).
             video_stop(*app, entity);
             auto* scene = openre::current_scene();
-            if (scene != nullptr && scene->isValid(entity))
-                scene->destroyEntity(entity);
+            if (scene != nullptr)
+            {
+                if (scene->isValid(entity))
+                    scene->destroyEntity(entity);
+                if (captionEntity != ecs::NullEntity && scene->isValid(captionEntity))
+                    scene->destroyEntity(captionEntity);
+            }
             app->frameActive = false;
-            return 0;
+
+            lua_pushboolean(L, skipped ? 1 : 0);
+            return 1;
         }
 
 #ifdef DEBUG
@@ -1322,6 +1626,19 @@ namespace openre::script
 
             lua_pushboolean(L, 1);
             lua_insert(L, -2);
+            return 2;
+        }
+
+        int apiEvalIn(lua_State* L)
+        {
+            auto* name = luaL_checkstring(L, 1);
+            size_t length = 0;
+            auto* code = luaL_checklstring(L, 2, &length);
+
+            std::string result;
+            const bool ok = script::ScriptManager::get().evalIn(name, std::string(code, length), result);
+            lua_pushboolean(L, ok ? 1 : 0);
+            lua_pushlstring(L, result.data(), result.size());
             return 2;
         }
 
@@ -1384,6 +1701,7 @@ namespace openre::script
         setGlobal(L, "re.getEnv", apiGetEnv);
 #ifdef DEBUG
         setGlobal(L, "re.eval", apiEval);
+        setGlobal(L, "re.evalIn", apiEvalIn);
         setGlobal(L, "re.unsafe.read", unsafeRead);
         setGlobal(L, "re.unsafe.write", unsafeWrite);
 #endif
@@ -1420,6 +1738,7 @@ namespace openre::script
         setGlobal(L, "scene.createEntity", sceneCreateEntity);
         setGlobal(L, "scene.getRoot", sceneGetRoot);
         setGlobal(L, "scene.setParent", sceneSetParent);
+        setGlobal(L, "scene.destroy", sceneDestroy);
         setGlobal(L, "scene.addComponent", sceneAddComponent);
         setGlobal(L, "scene.setField", sceneSetField);
         setGlobal(L, "scene.getField", sceneGetField);
@@ -1428,6 +1747,7 @@ namespace openre::script
         setGlobal(L, "scene.entityFromId", sceneEntityFromId);
         setGlobal(L, "scene.component", sceneComponent);
         setGlobal(L, "scene.getComponents", sceneGetComponents);
+        setGlobal(L, "scene.getFieldNames", sceneGetFieldNames);
         setGlobal(L, "scene.parent", sceneParent);
         setGlobal(L, "scene.children", sceneChildren);
 

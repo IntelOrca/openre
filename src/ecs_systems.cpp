@@ -4,17 +4,24 @@
 #include "ecs_components.h"
 #include "game_module.h"
 #include "input.h"
+#include "logger.h"
 #include "marni_renderer.h"
 #include "openre.h"
 #include "render2d.h"
 #include "resmgr.h"
 #include "script.h"
+#include "system_audio.h"
 #include "system_config.h"
+#include "system_filesystem.h"
 #include "system_window.h"
 #include "text_layout.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace openre
@@ -210,6 +217,205 @@ namespace openre
         });
     }
 
+    namespace
+    {
+        // Per-emitter mixer state mirrored from AudioEmitterComponent.
+        struct AudioVoiceState
+        {
+            uint32_t handle = 0;            // system::audio voice (0 = none loaded)
+            bool playing = false;           // last frame's want-to-play edge state
+            bool failed = false;            // source failed to load (no retry until re-trigger)
+            std::string source;             // source path currently loaded
+            float fadeStartVolume = 100.0f; // effective volume the fade started from
+            int fadeFramesLeft = 0;         // frames remaining in the active fade
+            float fadeTotal = 0.0f;         // fade length in frames
+            int fadeArmed = -1;             // fadeFrames value the current fade was armed for
+        };
+
+        // Source path -> decoded voice handle, so several emitters (or a
+        // re-triggered emitter) share one decoded .sap.
+        std::unordered_map<std::string, uint32_t>& audioSourceCache()
+        {
+            static std::unordered_map<std::string, uint32_t> cache;
+            return cache;
+        }
+    }
+
+    // Native audio bring-up for module mode: mirrors every
+    // ecs::AudioEmitterComponent onto a voice of the SDL3 software mixer.
+    // Playback is edge-triggered on the `state` field ("playing" vs anything
+    // else); volume/pan are pushed each frame while playing and the observed
+    // playback state is written back into `status`.
+    void AudioSystem(AppContext& app)
+    {
+        auto* scene = openre::current_scene();
+        if (scene == nullptr || !game_module_active())
+            return;
+
+        static std::unordered_map<ecs::Entity, AudioVoiceState> s_voices;
+        static std::unordered_map<std::string, int> s_sourceSubs;
+        static int s_nextSub = 0;
+
+        // Retire voices whose emitter entity/component is gone so destroyed
+        // entities do not keep sounding.
+        for (auto it = s_voices.begin(); it != s_voices.end();)
+        {
+            if (!scene->hasComponent<ecs::AudioEmitterComponent>(it->first))
+            {
+                if (it->second.handle != 0 && it->second.playing)
+                    system::audio::stop(it->second.handle);
+                it = s_voices.erase(it);
+            }
+            else
+                ++it;
+        }
+
+        app.scene.each<ecs::AudioEmitterComponent>([&](ecs::Entity entity, ecs::AudioEmitterComponent& em) {
+            AudioVoiceState& voice = s_voices[entity];
+            const bool want = em.state == "playing";
+
+            // A source change while the voice is still flagged as playing is a
+            // re-trigger (the Lua script swaps `source` then raises `state` in
+            // the same frame, so the falling/rising edge is never observed).
+            // Stop the old voice and let the rising-edge path reload the new
+            // source.
+            if (want && voice.playing && !em.source.empty() && em.source != voice.source)
+            {
+                if (voice.handle != 0)
+                    system::audio::stop(voice.handle);
+                voice.playing = false;
+                voice.failed = false;
+                voice.handle = 0;
+                voice.source = em.source;
+            }
+
+            // Rising edge: load (once, cached by source path) and start.
+            if (want && !voice.playing && !voice.failed)
+            {
+                if (!em.source.empty())
+                {
+                    if (voice.handle == 0)
+                    {
+                        auto& cache = audioSourceCache();
+                        const auto cached = cache.find(em.source);
+                        if (cached != cache.end())
+                            voice.handle = cached->second;
+                    }
+                    if (voice.handle == 0)
+                    {
+                        // Resolve the source: a plain relative path is tried
+                        // against the game module dir first, then falls back to
+                        // the original RE2 data set (data://), mirroring the
+                        // texture loader so module-relative and data assets both
+                        // work. A bare tex name without a data:// prefix is
+                        // resolved as data://<source> for the fallback.
+                        std::vector<uint8_t> bytes;
+                        if (em.source.find("data://") != 0)
+                        {
+                            const auto path = game_module_dir() / em.source;
+                            // Probe existence first so a missing module-dir
+                            // file does not log a filesystem error (the
+                            // data:// fallback below is expected).
+                            if (system::fs::info(path.string().c_str()).kind == system::fs::FileKind::file)
+                                bytes = system::fs::readAllBytes(path.string().c_str());
+                        }
+                        if (bytes.empty())
+                        {
+                            const auto resolved = system::fs::resolve(("data://" + em.source).c_str());
+                            if (!resolved.empty() && system::fs::info(resolved.c_str()).kind == system::fs::FileKind::file)
+                                bytes = system::fs::readAllBytes(resolved.c_str());
+                        }
+                        if (!bytes.empty())
+                        {
+                            // Mixer slot: the 8 fixed groups (door/weapon/room/
+                            // enemy/core/bgm/sbgm/voice) take a small type; use
+                            // the "core" group (4, capacity 22) so many distinct
+                            // emitter sources can coexist. A per-source sub keeps
+                            // each unique path on its own slot.
+                            const auto& srcRef = em.source;
+                            auto subIt = s_sourceSubs.find(srcRef);
+                            if (subIt == s_sourceSubs.end())
+                            {
+                                subIt = s_sourceSubs.emplace(srcRef, s_nextSub).first;
+                                s_nextSub = (s_nextSub + 1) % 22;
+                            }
+                            const int type = 4; // core group
+                            const int sub = subIt->second;
+                            voice.handle = system::audio::load_sap(bytes.data(), static_cast<int>(bytes.size()), type, sub);
+                        }
+                        if (voice.handle != 0)
+                            audioSourceCache()[em.source] = voice.handle;
+                    }
+
+                    if (voice.handle != 0)
+                    {
+                        system::audio::set_loop(voice.handle, em.loop);
+                        system::audio::play(voice.handle);
+                        voice.fadeArmed = -1; // a fresh trigger restarts an armed fade
+                        voice.playing = true;
+                        voice.source = em.source;
+                    }
+                    else
+                    {
+                        voice.failed = true; // stay quiet, warn once per trigger
+                        logging::logWarning("[audio] failed to load audio_emitter source '{}'", em.source.c_str());
+                    }
+                }
+            }
+            // Falling edge: stop the voice.
+            else if (!want && voice.playing)
+            {
+                if (voice.handle != 0)
+                    system::audio::stop(voice.handle);
+                voice.playing = false;
+            }
+            if (!want)
+            {
+                voice.failed = false; // re-arm so the next rising edge retries
+                voice.source.clear();
+            }
+
+            // Push volume/pan while playing. Category volumes default to full
+            // until a mixer configuration exists.
+            constexpr float categoryVolume = 100.0f;
+            if (voice.playing && voice.handle != 0)
+            {
+                const float base = (em.volume / 100.0f) * (categoryVolume / 100.0f);
+                float eff = base * 100.0f;
+                if (em.fadeFrames > 0)
+                {
+                    if (voice.fadeArmed != em.fadeFrames)
+                    {
+                        voice.fadeArmed = em.fadeFrames;
+                        voice.fadeStartVolume = base * 100.0f;
+                        voice.fadeTotal = static_cast<float>(em.fadeFrames);
+                        voice.fadeFramesLeft = em.fadeFrames;
+                    }
+                    const float t = 1.0f - static_cast<float>(voice.fadeFramesLeft) / voice.fadeTotal;
+                    eff = voice.fadeStartVolume + (em.fadeTargetVolume - voice.fadeStartVolume) * t;
+                    if (voice.fadeFramesLeft > 0)
+                        voice.fadeFramesLeft--;
+                }
+
+                const float gain = eff / 100.0f;
+                const int centibel = gain <= 0.0f ? -10000 : static_cast<int>(std::round(2000.0 * std::log10(gain)));
+                system::audio::set_vol(voice.handle, centibel);
+                int panDs = static_cast<int>(em.pan);
+                panDs = panDs < -100 ? -100 : (panDs > 100 ? 100 : panDs);
+                system::audio::set_pan(voice.handle, panDs * 100);
+            }
+
+            // Observed playback state, written back for scripts to read. A
+            // non-looping one-shot that ran to its end reports "finished".
+            if (!voice.playing || voice.handle == 0)
+                em.status = "stopped";
+            else if (!system::audio::get_status(voice.handle))
+                em.status = em.loop ? "stopped" : "finished";
+            else
+                em.status = "playing";
+        });
+    }
+
     void RenderSystem(AppContext& app)
     {
         if (app.closing())
@@ -264,7 +470,16 @@ namespace openre
                 d.g = sprite.color.g;
                 d.b = sprite.color.b;
                 d.a = sprite.color.a;
+                d.z = sprite.z;
                 draws.push_back(d);
+            });
+
+            // Sprites draw back-to-front by z (higher z first / further back).
+            // The stable sort keeps equal-z entities in creation order, so the
+            // painter's-algorithm pass below mirrors the original ordering
+            // table (primitives were sorted by their z the same way).
+            std::stable_sort(draws.begin(), draws.end(), [](const render2d::SpriteDraw& a, const render2d::SpriteDraw& b) {
+                return a.z > b.z;
             });
 
             // Video entities: letterbox the decoded frame into the entity

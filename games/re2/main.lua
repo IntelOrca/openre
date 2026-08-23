@@ -32,15 +32,22 @@ local function createSplash()
 end
 
 -- Hides the splash after the menu takes over so it doesn't linger behind it.
+-- The canvas entity is destroyed so it is fully removed from the scene.
 local function hideSplash()
-    if splash.sprite then
-        scene.setField(splash.sprite, 'size.width', 0)
-        scene.setField(splash.sprite, 'size.height', 0)
+    if splash.entity then
+        scene.destroy(splash.entity)
     end
     splash.entity = nil
     splash.sprite = nil
     splash.texture = nil
 end
+
+-- Optional boot override for testing: set OPENRE_PROLOGUE="leon,a" (or
+-- claire/b etc.) to skip the title screen and start straight into the prologue
+-- once the splash has faded in. Used by automated testing so no menu navigation
+-- or movie skipping is required to exercise the intro.
+local prologue = require('script/prologue')
+local bootPrologue = re.getEnv('OPENRE_PROLOGUE')
 
 local scheduler = Scheduler:new()
 
@@ -53,6 +60,17 @@ scheduler
     :fadeOut(60)
     :exec(function()
         hideSplash()
+        if bootPrologue then
+            local ch, sc = bootPrologue:match('(%w+),(%w+)')
+            if ch and sc then
+                prologue.start({
+                    character = ch,
+                    scenario = sc,
+                    onFinished = function() Title:new() end,
+                })
+                return
+            end
+        end
         core.playMovie("pl0\\zmovie\\title_l.bin")
         Title:new()
     end)

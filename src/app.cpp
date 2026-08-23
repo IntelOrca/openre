@@ -6,6 +6,7 @@
 #include "marni.h"
 #include "marni_renderer.h"
 #include "openre.h"
+#include "system_audio.h"
 #include "system_window.h"
 #include "systems.h"
 
@@ -33,7 +34,7 @@ namespace openre
     // ModuleSystem drives the loaded game module when OPENRE_GAME is set;
     // otherwise it is a no-op and LegacyGameSystem drives the original game.
     const SystemFn gAppSystems[] = {
-        system_window, system_input, ModuleSystem, LegacyGameSystem, TextLayoutSystem, VideoSystem, RenderSystem,
+        system_window, system_input, ModuleSystem, LegacyGameSystem, TextLayoutSystem, VideoSystem, AudioSystem, RenderSystem,
     };
 
     // The resolved game module directory (set once at boot below).
@@ -201,6 +202,13 @@ namespace openre
         if (game_module_active())
         {
             logging::logInfo("[app] game module active: {}", game_module_dir().string());
+
+            // Bring up the SDL3 audio device for module-mode emitters. Voices
+            // may already have been created; they start mixing once open.
+            if (!system::audio::init())
+            {
+                logging::logWarning("[app] audio init failed; running without sound");
+            }
         }
 
         // Boot the scene tree: hidden root + LegacyGame child (skipped when a

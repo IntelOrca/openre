@@ -36,6 +36,12 @@ namespace openre::script
         // loaded.
         void loadGameModule(const std::filesystem::path& dir);
 
+        // Runs a Lua chunk inside the VM registered under `name` (a script
+        // basename or "module.game"). Returns true and the single result string
+        // on success, false with an error message on failure. Used by the debug
+        // web plugin to reach the game module VM.
+        bool evalIn(const std::string& name, const std::string& code, std::string& outResult);
+
     private:
         ScriptManager() = default;
 

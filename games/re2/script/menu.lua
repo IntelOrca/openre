@@ -14,6 +14,7 @@
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
 local util              = require("script/util")
+local prologue          = require("script/prologue")
 
 local Title             = {}
 local titleMethods      = {}
@@ -57,6 +58,13 @@ local function refreshItem(self, index)
         .. (index == self.selected and COLOR_GOLD or COLOR_GREY)
         .. '">' .. MENU_ITEMS[index] .. '</span>'
     scene.setField(self.itemComponents[index], 'text', text)
+end
+
+-- Convert a top-left-style vertical band (top fraction of the canvas height,
+-- height fraction) into the band's centre in the canvas's centred coordinate
+-- space, where (0,0) is the canvas centre.
+local function bandCenterY(topFrac, heightFrac)
+    return CANVAS_H * (topFrac - 0.5) + CANVAS_H * heightFrac * 0.5
 end
 
 local function moveCursor(self, delta)
@@ -139,10 +147,33 @@ local function playDemo(self)
 end
 
 local function selectItem(self)
-    print('[title] selected: ' .. MENU_ITEMS[self.selected])
+    local item = MENU_ITEMS[self.selected]
+    print('[title] selected: ' .. item)
+    self.closed = true
+    local canvas = self.canvas
+    self.canvas = nil
+    if canvas then
+        scene.destroy(canvas)
+    end
+    if item == 'ORIGINAL MODE' then
+        -- Leon A: play the prologue, then return to the title.
+        prologue.start({
+            character = 'leon', scenario = 'a',
+            onFinished = function() Title:new() end,
+        })
+    elseif item == 'ARRANGE MODE' then
+        -- Claire B: play the prologue, then return to the title.
+        prologue.start({
+            character = 'claire', scenario = 'b',
+            onFinished = function() Title:new() end,
+        })
+    end
 end
 
 local function update(self)
+    if self.closed then
+        return
+    end
     self.ticks = self.ticks + 1
 
     -- Re-fit and re-centre the canvas every frame so it tracks window resizes.
@@ -196,13 +227,6 @@ titleMethods = {
     playDemo = playDemo,
     selectItem = selectItem,
 }
-
--- Convert a top-left-style vertical band (top fraction of the canvas height,
--- height fraction) into the band's centre in the canvas's centred coordinate
--- space, where (0,0) is the canvas centre.
-local function bandCenterY(topFrac, heightFrac)
-    return CANVAS_H * (topFrac - 0.5) + CANVAS_H * heightFrac * 0.5
-end
 
 -- Creates one line of text parented under the 320x240 canvas so it scales and
 -- centres with everything else. `centerX`/`centerY` are the desired CENTRE of
