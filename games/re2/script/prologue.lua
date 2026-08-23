@@ -920,12 +920,19 @@ local function skipPressed(c)
     if c.phase ~= 'slides' and c.phase ~= 'wait' then return end
     if c.phase == 'wait' then return end
     if c.phase == 'slides' and not c.skipped then
-        -- Accelerate: fade out, then drop straight into the movie wait. The
-        -- movie still plays; skipping only interrupts the slideshow itself.
+        -- Accelerate: fade out (visuals AND music), then drop straight into
+        -- the movie wait. The movie still plays; skipping only interrupts the
+        -- slideshow itself.
         c.skipped = true
         if c.fade.mode ~= 'out' then
             c.fade.mode = 'out'
-                    c.fade.n = 0
+            c.fade.n = 0
+        end
+        if c.bgm then
+            -- Fade the BGM out over the same length as the visual fade so
+            -- both end together on the black hold.
+            scene.setField(c.bgm, 'fadeFrames', FADE_OUT_FRAMES)
+            scene.setField(c.bgm, 'fadeTargetVolume', 0)
         end
     end
 end

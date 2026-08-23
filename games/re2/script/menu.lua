@@ -13,9 +13,9 @@
 --                level fades in; input is locked during the transition.
 --   DEMO         fade out to black, run the demo stub, then fade back in to the
 --                PRESS START screen.
---   LEAVING      difficulty start sequence: play the BIOHAZARD soundbite
---                behind a white flash, fade to black, destroy the menu and
---                hand over to the prologue.
+--   LEAVING      difficulty start sequence: play the 'RESIDENT EVIL 2' voice
+--                bite behind a white flash, fade to black, hold solid black,
+--                destroy the menu and hand over to the prologue.
 
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
@@ -112,8 +112,8 @@ end
 -- Difficulty / start helpers -------------------------------------------------
 -------------------------------------------------------------------------------
 
--- Start the game at the chosen difficulty: play the BIOHAZARD soundbite
--- behind a white flash, fade to black, destroy the menu, then the prologue.
+-- Start the game at the chosen difficulty: play the 'RESIDENT EVIL 2' voice
+-- bite behind a white flash, fade to black, destroy the menu, then the prologue.
 local function startGame(self)
     local ctx = self.gameCtx
     self.state = STATE_LEAVING
@@ -440,7 +440,8 @@ local function goBack(self)
     end)
 end
 
--- Item chosen: drill into a submenu, fire a leaf action, or (locked) nothing.
+-- Item chosen: drill into a submenu, fire a leaf action, or buzz when the
+-- entry cannot do anything (locked '???' or an unimplemented placeholder).
 local function selectItem(self)
     local item = self.menu.items[self.selected]
     if item == nil then
@@ -529,9 +530,9 @@ local function updateDemo(self)
     end
 end
 
--- Difficulty start sequence: white flash in, hold (over the soundbite), white
--- flash out, then fade to black. On full black, destroy the menu and hand over
--- to the prologue.
+-- Difficulty start sequence: white flash in, hold (over the voice bite), white
+-- flash out, then fade to black. After a second of solid black, destroy the
+-- menu and hand over to the prologue.
 local function updateLeaving(self)
     self.leaveTimer = self.leaveTimer + 1
     if self.leavePhase == 0 then -- flash in
@@ -554,11 +555,17 @@ local function updateLeaving(self)
             self.leavePhase = 3
             self.leaveTimer = 0
         end
-    else -- fade to black, then hand over
-        local t = math.min(self.leaveTimer / 30, 1)
+    elseif self.leavePhase == 3 then -- fade to black
+        local t = math.min(self.leaveTimer / 240, 1)
         gfx.fade(0, 0, 0, math.floor(t * 255))
         if t >= 1 then
             gfx.fade(0, 0, 0, 255)
+            self.leavePhase = 4
+            self.leaveTimer = 0
+        end
+    else -- hold solid black for a second, then hand over
+        gfx.fade(0, 0, 0, 255)
+        if self.leaveTimer >= 60 then
             self.closed = true
             if self.front then
                 scene.destroy(self.front)
@@ -575,6 +582,17 @@ local function updateLeaving(self)
                 self.backdrop = nil
                 self.backdropSprite = nil
             end
+            -- The menu's resources (sounds, fonts, textures) belong to this
+            -- screen: drop every handle and collect so they unload before the
+            -- prologue takes over.
+            if self.emitterEntity then
+                scene.destroy(self.emitterEntity)
+                self.emitterEntity = nil
+            end
+            self.emitter = nil
+            self.sfx = nil
+            self.assets = nil
+            re.collectGarbage()
             self:launchPrologue()
         end
     end
