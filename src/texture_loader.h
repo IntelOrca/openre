@@ -23,5 +23,5 @@ namespace openre
      * `timIndex` selects which TIM to decode when the file packs several TIMs
      * back to back (e.g. tmoji.bin); 0 decodes the first.
      */
-    ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex = 0);
+    ResourceCookie loadTextureResource(std::string_view path, int width, int height, int timIndex = -1);
 }

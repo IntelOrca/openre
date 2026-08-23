@@ -505,14 +505,15 @@ local SPRITE_ENTITY_NAMES = {
     'prologue.sprite.25', 'prologue.sprite.26', 'prologue.sprite.27', 'prologue.sprite.28',
 }
 
--- Load a texture once and cache it for the lifetime of the module (the intro
--- assets are shared by every variant).
+-- Load a texture once and cache it for the lifetime of one prologue run
+-- (beginMovie clears the cache, so the assets unload with the slideshow).
+-- `tim` selects a sub-TIM of a multi-TIM file; nil decodes the whole file.
 local texCache = {}
 local function texture(file, w, h, tim)
-    local key = file .. '#' .. (tim or 0)
+    local key = file .. '#' .. (tim or 'auto')
     local t = texCache[key]
     if t == nil then
-        t = gfx.loadTexture(file, w or 0, h or 0, tim or 0)
+        t = gfx.loadTexture(file, w or 0, h or 0, tim)
         texCache[key] = t
     end
     return t

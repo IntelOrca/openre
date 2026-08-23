@@ -1159,8 +1159,9 @@ namespace openre::script
             auto width = static_cast<int>(luaL_optinteger(L, 2, 0));
             auto height = static_cast<int>(luaL_optinteger(L, 3, 0));
             // Optional 4th arg: which TIM to decode when the file packs several
-            // TIMs back to back (e.g. tmoji.bin). 0 (default) = the first.
-            auto timIndex = static_cast<int>(luaL_optinteger(L, 4, 0));
+            // TIMs back to back (e.g. tmoji.bin). Non-negative selects one TIM
+            // (0 = the first); omitted or negative decodes the whole file.
+            auto timIndex = static_cast<int>(luaL_optinteger(L, 4, -1));
 
             auto cookie = loadTextureResource(path, width, height, timIndex);
             if (cookie == 0)

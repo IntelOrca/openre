@@ -481,13 +481,14 @@ local gfx = {}
 --- are hints for ADT files missing an intrinsic size.
 ---
 --- When a `.tim` file packs several TIMs back to back (e.g. tmoji.bin), pass
---- `timIndex` to select which one to decode; 0 (the default) decodes the
---- first. Each entry's block-length headers let the loader walk from one TIM
---- to the next.
+--- `timIndex` to select which one to decode: 0 is the first, 1 the second,
+--- and so on. Omitting it (or passing a negative value) decodes the whole
+--- file / ADT frame. Each entry's block-length headers let the loader walk
+--- from one TIM to the next.
 ---@param path string e.g. "common/data/gw2"
 ---@param width? integer
 ---@param height? integer
----@param timIndex? integer Which TIM in the file to load (default 0).
+---@param timIndex? integer Which TIM in the file to load; nil = whole file.
 ---@return Texture|nil
 function gfx.loadTexture(path, width, height, timIndex) end
 

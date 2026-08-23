@@ -183,6 +183,13 @@ namespace openre
         (void)width;
         (void)height;
 
+        // A non-negative timIndex selects one TIM of a multi-TIM file (0 =
+        // first) and keys the resource as "path#N"; a negative index decodes
+        // the whole file / ADT frame and uses the bare path as key.
+        std::string key(path);
+        if (timIndex >= 0)
+            key += "#" + std::to_string(timIndex);
+
         std::vector<uint8_t> bytes;
         TextureType type = TextureType::none;
         std::string label;
@@ -199,11 +206,11 @@ namespace openre
         case TextureType::tim:
         {
             marni::Image marniImage;
-            bool ok = timIndex > 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
-                                   : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
+            bool ok = timIndex >= 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
+                                    : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
             if (!ok)
             {
-                if (timIndex > 0)
+                if (timIndex >= 0)
                     logging::logError("[texture_loader] failed to decode TIM index {} of '{}'", timIndex, label);
                 else
                     logging::logError("[texture_loader] failed to decode TIM '{}'", label);
@@ -219,8 +226,8 @@ namespace openre
             if (bytes.size() >= 4 && (uint8_t)bytes[0] == 0x10 && bytes[1] == 0x00 && bytes[2] == 0x00 && bytes[3] == 0x00)
             {
                 marni::Image marniImage;
-                bool ok = timIndex > 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
-                                       : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
+                bool ok = timIndex >= 0 ? tim::decodeTimIndex(bytes.data(), bytes.size(), timIndex, marniImage)
+                                        : tim::decodeTim(bytes.data(), bytes.size(), marniImage);
                 if (ok)
                 {
                     image = imageFromTim(marniImage);
@@ -260,9 +267,6 @@ namespace openre
         const int textureHandle = resource->textureHandle;
         const int textureWidth = resource->width;
         const int textureHeight = resource->height;
-        // Key the resource by path plus (when an indexed TIM is selected) the
-        // index, so different TIMs from the same multi-TIM file stay separate.
-        const std::string key = timIndex > 0 ? (std::string(path) + "#tim" + std::to_string(timIndex)) : std::string(path);
         auto cookie = resmgr.addFirstRef<TextureResource>(key, std::move(resource));
         logging::logInfo(
             "[texture_loader] loaded '{}' -> cookie {}, handle {}, {}x{}",

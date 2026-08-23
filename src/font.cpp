@@ -144,7 +144,7 @@ namespace openre
             }
             outWidth = image.width;
             outHeight = image.height;
-            return resmgr.addFirstRef<TextureResource>(name + "#atlas", std::move(atlasResource));
+            return resmgr.addFirstRef<TextureResource>(name, std::move(atlasResource));
         }
 
         // Minimal bounds-checked reader over a .fnt file buffer.
