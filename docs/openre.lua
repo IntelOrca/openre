@@ -325,7 +325,9 @@ function scene.addComponent(entity, name) end
 --- A sprite is
 --- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
 --- place the entity where you want the centre of the sprite. Text fields:
---- `text` (UTF-8 string; supports `<span color="#ff0">` markup), `font` (a
+--- `text` (UTF-8 string; supports `<span color="#ff0">` markup plus the
+--- `#rrggbb` and `#rrggbbaa` forms — the last two hex digits are the alpha
+--- channel, 0-255), `font` (a
 --- Font or nil), `size.width` / `size.height` (bounds the text is aligned
 --- within), and `flags` (a bitmask of TextFlags values combined with `|`).
 --- Audio emitter fields: `category` ("bgm", "sfx" or "voice"), `state`

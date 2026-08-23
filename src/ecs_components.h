@@ -143,7 +143,7 @@ namespace openre::ecs
     /// relayouts only when the fingerprinted inputs change.
     struct TextComponent
     {
-        std::string text;        // UTF-8; supports <span color="#rrggbb"> markup
+        std::string text;        // UTF-8; supports <span color="#rrggbbaa"> markup
         Size2f size;             // bounds within which the text is aligned
         uint32_t flags = 0;      // TextFlags alignment bits
         ResourceCookie font = 0; // FontResource cookie from gfx.loadFont

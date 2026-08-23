@@ -102,7 +102,7 @@ namespace openre::text
             return true;
         }
 
-        // Parses a #rgb or #rrggbb hex colour.
+        // Parses a #rgb, #rrggbb or #rrggbbaa hex colour.
         bool parseHexColor(std::string_view s, ecs::Color& out)
         {
             if (s.empty() || s[0] != '#')
@@ -133,6 +133,13 @@ namespace openre::text
             if (vals.size() == 6)
             {
                 out = ecs::Color{ byte(vals[0], vals[1]), byte(vals[2], vals[3]), byte(vals[4], vals[5]), 255 };
+                return true;
+            }
+            if (vals.size() == 8)
+            {
+                out = ecs::Color{
+                    byte(vals[0], vals[1]), byte(vals[2], vals[3]), byte(vals[4], vals[5]), byte(vals[6], vals[7])
+                };
                 return true;
             }
             return false;
