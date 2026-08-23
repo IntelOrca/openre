@@ -86,6 +86,16 @@ scheduler
                 return
             end
         end
-        core.playMovie("pl0\\zmovie\\title_l.bin")
+        -- Own function frame so the intro movie's handle dies the moment the
+        -- movie is over; the collect below unloads its resource before the
+        -- menu loads.
+        local function playIntroMovie()
+            local intro = core.loadMovie("pl0\\zmovie\\title_l.bin")
+            if intro ~= nil then
+                core.playMovie(intro)
+            end
+        end
+        playIntroMovie()
+        re.collectGarbage()
         showTitle()
     end)

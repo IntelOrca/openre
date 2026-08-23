@@ -71,9 +71,10 @@ header .sub{color:var(--muted);font-size:12px;}
 .res-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(48,54,61,.5);cursor:pointer;font-size:12px;}
 .res-row:hover{background:var(--panel2);}
 .res-row.selected{background:rgba(88,166,255,.15);}
-.res-cookie{font-family:ui-monospace,monospace;color:var(--accent);flex:0 0 48px;}
+.res-cookie{font-family:ui-monospace,monospace;color:var(--accent);flex:0 0 44px;}
 .res-type{color:var(--accent2);flex:0 0 56px;text-transform:uppercase;font-size:11px;}
 .res-path{flex:1;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.res-cookies{flex:0 0 auto;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-family:ui-monospace,monospace;font-size:10px;}
 .preview{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:10px;background:repeating-conic-gradient(#1b212b 0% 25%, #11151c 0% 50%) 50% / 24px 24px;}
 .preview canvas{max-width:100%;height:auto;border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.5);image-rendering:pixelated;}
 .img-info{color:var(--muted);font-family:ui-monospace,monospace;font-size:12px;}
@@ -139,7 +140,7 @@ function treeHash(){
 }
 function resHash(){
   if(!resources) return 'none';
-  return (resources.resources||[]).map(r=>r.cookie+':'+r.type+':'+r.path).join(';');
+  return (resources.resources||[]).map(r=>r.resource+':'+r.type+':'+r.path+':'+(r.cookies||[]).join(',')).join(';');
 }
 function inspectorKey(e){
   if(!e) return 'none';
@@ -222,23 +223,40 @@ function updateInspectorValues(e){
     }
   }
 }
+function selectedResource(){
+  if(!resources) return null;
+  for(const r of resources.resources){ if(r.resource===state.resSelected) return r; }
+  return null;
+}
 function buildResList(){
   const el=document.getElementById('reslist'); el.innerHTML='';
   for(const r of (resources?resources.resources:[])){
-    const row=document.createElement('div'); row.className='res-row'+(state.resSelected===r.cookie?' selected':'');
-    row.innerHTML='<span class="res-cookie">#'+r.cookie+'</span><span class="res-type">'+escapeHtml(r.type)+'</span><span class="res-path">'+escapeHtml(r.path)+'</span>';
-    row.onclick=()=>{ state.resSelected=r.cookie; previewCookie=null; saveState(); buildResList(); renderPreview(); };
+    const row=document.createElement('div'); row.className='res-row'+(state.resSelected===r.resource?' selected':'');
+    let html='<span class="res-cookie">#'+r.resource+'</span>'
+      +'<span class="res-type" title="'+(r.streaming?'streamed from disk':'fully loaded')+'">'+escapeHtml(r.type)+'</span>'
+      +'<span class="res-path" title="'+escapeHtml(r.path)+'">'+escapeHtml(r.path)+'</span>';
+    if(r.cookies&&r.cookies.length>0){
+      html+='<span class="res-cookies" title="consumer cookies: '+r.cookies.map(c=>'#'+c).join(', ')+'">'
+        +r.cookies.map(c=>'#'+c).join(' ')+'</span>';
+    }
+    row.innerHTML=html;
+    row.onclick=()=>{ state.resSelected=r.resource; previewCookie=null; saveState(); buildResList(); renderPreview(); };
     el.appendChild(row);
   }
 }
 async function renderPreview(){
   const el=document.getElementById('preview');
-  if(state.resSelected==null){ el.innerHTML='<div class="empty">Select a resource to preview.</div>'; previewCookie=null; return; }
+  const r=selectedResource();
+  if(!r){ el.innerHTML='<div class="empty">Select a resource to preview.</div>'; previewCookie=null; return; }
   if(state.resSelected===previewCookie) return;
   previewCookie=state.resSelected;
+  // The image endpoint is keyed by consumer cookie; any live one resolves to
+  // the same resource.
+  const cookie=(r.cookies&&r.cookies.length>0)?r.cookies[0]:null;
+  if(cookie==null){ el.innerHTML='<div class="empty">No image available.</div>'; return; }
   el.innerHTML='<div class="empty">loading...</div>';
   try{
-    const resp=await fetch('/api/resource/image?cookie='+state.resSelected);
+    const resp=await fetch('/api/resource/image?cookie='+cookie);
     if(!resp.ok){ el.innerHTML='<div class="empty">No image available.</div>'; return; }
     const w=parseInt(resp.headers.get('X-Width'),10), h=parseInt(resp.headers.get('X-Height'),10);
     const buf=new Uint8ClampedArray(await resp.arrayBuffer());

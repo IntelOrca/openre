@@ -58,18 +58,38 @@ namespace openre
 
     /**
      * A decoded sound owned by the system::audio mixer. The audioHandle is
-     * opaque; unloading happens in the destructor.
+     * opaque; unloading happens in the destructor. Large sources are backed
+     * by a streaming voice instead of a resident PCM buffer, but both share
+     * the same handle-based API.
      */
     class SoundResource : public Resource
     {
     public:
         uint32_t audioHandle = 0;
+        bool streaming = false; // true when the source is read from disk on demand
 
         ~SoundResource() override;
 
         const char* getName() const override
         {
-            return "sound";
+            return streaming ? "sound (stream)" : "sound";
+        }
+    };
+
+    /**
+     * A movie played back by streaming: nothing but its resolved location is
+     * held in memory at load time; the decoder opens the file when playback
+     * starts and reads it incrementally.
+     */
+    class MovieResource : public Resource
+    {
+    public:
+        // Resolved OS path handed to the decoder on play.
+        std::string path;
+
+        const char* getName() const override
+        {
+            return "movie";
         }
     };
 
@@ -125,11 +145,13 @@ namespace openre
         /// A snapshot of a single resource, used for enumeration/debugging.
         struct ResourceInfo
         {
-            ResourceCookie cookie = 0;
-            std::string type; // e.g. "texture", "font"
-            std::string path; // resource key
+            ResourceHandle resource = 0;         // resource number
+            std::vector<ResourceCookie> cookies; // every live consumer cookie
+            std::string type;                    // e.g. "texture", "font"
+            std::string path;                    // resource key
             int width = 0;
             int height = 0;
+            bool streaming = false; // sound resources: decoded on demand from disk
         };
 
         /// Enumerates every live resource, in cookie order.

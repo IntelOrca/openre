@@ -28,6 +28,7 @@ namespace openre
             int texture = 0;      // render2d dynamic-texture handle (0 = none)
             bool stop = false;    // a skip/end was requested
             bool started = false; // logged first frame forwarded
+            std::string label;    // source file (for logs)
         };
 
         std::unordered_map<ecs::Entity, VideoState> s_videoStates;
@@ -89,18 +90,42 @@ namespace openre
         }
     }
 
-    ecs::Entity video_play(AppContext& app, const std::string& path)
+    ResourceCookie loadMovieResource(const std::string& path)
+    {
+        auto& resmgr = ResourceManager::get();
+
+        // Reuse an already-registered movie instead of resolving it again.
+        const ResourceCookie existing = resmgr.addRef<MovieResource>(path);
+        if (existing != 0)
+            return existing;
+
+        // Streaming means nothing but the resolved location is kept: validate
+        // the file exists now so failures surface at loadMovie() time rather
+        // than when playback starts.
+        const std::string resolved = resolveMoviePath(path);
+        if (resolved.empty())
+            return 0;
+
+        auto resource = std::make_unique<MovieResource>();
+        resource->path = resolved;
+        const ResourceCookie cookie = resmgr.addFirstRef<MovieResource>(path, std::move(resource));
+        logging::logInfo("[video] registered movie '{}' -> cookie {}, file '{}'", path, cookie, resolved);
+        return cookie;
+    }
+
+    ecs::Entity video_play(AppContext& app, ResourceCookie movie)
     {
         if (!game_module_active())
             return ecs::NullEntity;
 
-        const std::string resolved = resolveMoviePath(path);
-        if (resolved.empty())
+        auto* resource = ResourceManager::get().fromCookie<MovieResource>(movie);
+        if (resource == nullptr || resource->path.empty())
         {
-            logging::logWarning("[video] failed to resolve movie path: {}", path.c_str());
+            logging::logWarning("[video] video_play: cookie {} is not a loaded movie", movie);
             return ecs::NullEntity;
         }
 
+        const std::string& resolved = resource->path;
         auto& scene = app.scene;
         ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
         const auto ws = system::config::get_window_size();
@@ -111,7 +136,7 @@ namespace openre
         videoTransform.position.x = ws.width * 0.5f;
         videoTransform.position.y = ws.height * 0.5f;
         auto& video = scene.addComponent<ecs::VideoComponent>(entity);
-        video.resource = path;
+        video.movie = movie;
         video.status = ecs::VideoStatus::Playing;
 
         video.size = { static_cast<float>(ws.width), static_cast<float>(ws.height) };
@@ -141,6 +166,7 @@ namespace openre
         VideoState state;
         state.decoder = decoder;
         state.texture = tex;
+        state.label = resolved;
         s_videoStates[entity] = std::move(state);
         video.texture = tex;
         return entity;
@@ -220,7 +246,7 @@ namespace openre
                 if (!st.started)
                 {
                     st.started = true;
-                    logging::logInfo("[video] playing movie: {}x{} ({})", w, h, video.resource.c_str());
+                    logging::logInfo("[video] playing movie: {}x{} ({})", w, h, st.label.c_str());
                 }
             }
 

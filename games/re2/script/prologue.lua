@@ -519,6 +519,21 @@ local function texture(file, w, h, tim)
     return t
 end
 
+-- Load a sound once via audio.loadAudio and keep the handle referenced for
+-- the run: emitter components only borrow a resource cookie, so dropping the
+-- handle would unload the sound under them. Large sources (the BGM tracks)
+-- stream from disk instead of decoding into memory. Like texCache, this is
+-- cleared before the opening movie starts.
+local audioCache = {}
+local function sound(file)
+    local s = audioCache[file]
+    if s == nil then
+        s = audio.loadAudio(file)
+        audioCache[file] = s
+    end
+    return s
+end
+
 -- Build one 320x240 canvas holding the backdrop, all sprite entities and the
 -- two sound emitters. Returns the instance's scene roots.
 local function buildScene(c)
@@ -592,7 +607,9 @@ local function buildScene(c)
                 c.sprs[i] = entry
     end
 
-    -- BGM (looping) and narration emitters; both silent until used.
+    -- BGM (looping) and narration emitters; both silent until used. The
+    -- sounds come from audio.loadAudio cookies — the BGM track is large and
+    -- streams from disk rather than being decoded into memory.
     local me = scene.createEntity(canvas)
     scene.setField(me, 'name', 'prologue.bgm')
     local bgm = scene.addComponent(me, 'core.audio_emitter')
@@ -600,7 +617,7 @@ local function buildScene(c)
     scene.setField(bgm, 'volume', BGM_VOLUME)
     scene.setField(bgm, 'pan', 0)
     scene.setField(bgm, 'loop', true)
-    scene.setField(bgm, 'source', 'common/sound/bgm/' .. c.def.bgm)
+    scene.setField(bgm, 'sound', sound('common/sound/bgm/' .. c.def.bgm))
     scene.setField(bgm, 'state', 'playing')
     c.bgm = bgm
     c.bgmStarted = true
@@ -612,7 +629,6 @@ local function buildScene(c)
     scene.setField(voice, 'volume', 100)
     scene.setField(voice, 'pan', 0)
     scene.setField(voice, 'loop', false)
-    scene.setField(voice, 'source', '')
     scene.setField(voice, 'state', 'stopped')
     c.voice = voice
 end
@@ -676,7 +692,7 @@ local function applyAction(c, a)
         local no = a.a or a[2]
         local path = c.def.voice .. 'v' .. string.format('%03d', no) .. '.sap'
         c.voices[#c.voices + 1] = no
-        scene.setField(c.voice, 'source', path)
+        scene.setField(c.voice, 'sound', sound(path))
         scene.setField(c.voice, 'state', 'stopped')
         scene.setField(c.voice, 'state', 'playing')
     elseif k == 'bgmFade' then
@@ -878,6 +894,17 @@ local function destroyScene(c)
         c.surf = nil
     end
 
+-- Plays one opening movie in its own function frame: the handle dies when the
+-- function returns (i.e. the moment the movie is over), so the caller's
+-- re.collectGarbage() unloads the streamed resource straight away.
+local function playMovieAndRecord(c, path)
+    local handle = core.loadMovie(path)
+    if handle ~= nil then
+        core.playMovie(handle)
+    end
+    c.movies[#c.movies + 1] = path
+end
+
 local function beginMovie(c)
     c.phase = 'movie'
     local def = c.def
@@ -886,16 +913,20 @@ local function beginMovie(c)
     -- sequence and interrupting one skips only that one.
     stopAudio(c)
     destroyScene(c)
-    -- The slideshow's assets belong to this screen only: drop the texture
-    -- cache and collect so everything is unloaded before the movie starts.
+    -- The slideshow's assets belong to this screen only: drop the texture and
+    -- audio caches and collect so everything is unloaded before the movies
+    -- start. Each movie below is collected again as soon as it ends.
     for k in pairs(texCache) do
         texCache[k] = nil
     end
+    for k in pairs(audioCache) do
+        audioCache[k] = nil
+    end
     re.collectGarbage()
-    core.playMovie(def.movie)
-    c.movies[#c.movies + 1] = def.movie
-    core.playMovie(def.movieAlt)
-    c.movies[#c.movies + 1] = def.movieAlt
+    playMovieAndRecord(c, def.movie)
+    re.collectGarbage()
+    playMovieAndRecord(c, def.movieAlt)
+    re.collectGarbage()
 end
 
 -- End of the run: hush the audio, remove the intro and hand back.

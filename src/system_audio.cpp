@@ -75,6 +75,18 @@ namespace openre::system::audio
             float gain = 1.0f; // linear volume, 0..1
             float panL = kPanCenter;
             float panR = kPanCenter;
+
+            // Streaming playback (large sources kept on disk): `data` holds
+            // only a decoded-ahead window and more PCM is pulled from `file`
+            // whenever playback approaches its end. Every access happens under
+            // gMutex (mixer callback or game thread), so no extra locking is
+            // needed.
+            bool streaming = false;
+            std::ifstream file;
+            uint64_t dataOffset = 0; // file offset of the WAV data chunk
+            int64_t dataSize = 0;    // byte size of the data chunk
+            int64_t dataLeft = 0;    // encoded bytes not decoded yet
+            msadpcm::WaveFormat format;
         };
 
         SDL_AudioStream* gStream = nullptr;
@@ -265,6 +277,95 @@ namespace openre::system::audio
             return kGroupBase[type] + sub;
         }
 
+        // A voice slot is occupied while a buffer is registered in it: resident
+        // voices keep their PCM and streaming voices keep their open file.
+        bool voice_slot_used(const Voice& v)
+        {
+            return !v.data.empty() || v.streaming;
+        }
+
+        // ----------------------------------------------------- streaming voices
+        // Streaming voices keep only a decoded-ahead window of PCM in memory
+        // and pull encoded blocks from the open file as playback consumes it.
+        constexpr double kStreamAheadSeconds = 0.25;   // decoded lead over playback
+        constexpr int64_t kStreamMaxRead = 256 * 1024; // per-refill read cap
+
+        // Reads and decodes the next batch of encoded bytes into the voice's
+        // window. Returns false when the file is exhausted or undecodable.
+        bool stream_decode_more(Voice& v)
+        {
+            if (v.dataLeft <= 0)
+                return false;
+
+            int64_t want = std::min(kStreamMaxRead, v.dataLeft);
+            if (v.format.blockAlign > 0)
+                want -= want % v.format.blockAlign; // whole blocks/frames only
+            if (want <= 0)
+                return false;
+
+            std::vector<uint8_t> encoded((size_t)want);
+            v.file.read(reinterpret_cast<char*>(encoded.data()), (std::streamsize)want);
+            const auto got = v.file.gcount();
+            if (got <= 0)
+            {
+                v.dataLeft = 0;
+                return false;
+            }
+
+            std::vector<int16_t> decoded;
+            if (v.format.formatTag == 2)
+                decoded = msadpcm::decode_adpcm(encoded.data(), (size_t)got, v.format);
+            else
+                decoded = msadpcm::decode_pcm(encoded.data(), (size_t)got, v.format);
+            v.dataLeft -= got;
+            if (decoded.empty())
+                return false;
+
+            v.data.insert(v.data.end(), decoded.begin(), decoded.end());
+            v.total = (int)(v.data.size() / (size_t)std::max(1, v.channels));
+            return true;
+        }
+
+        // Keeps kStreamAheadSeconds of audio decoded ahead of the play
+        // position, compacting consumed frames off the front of the window so
+        // its memory footprint stays small regardless of track length.
+        void stream_refill(Voice& v)
+        {
+            const int ch = std::max(1, v.channels);
+            const double targetAhead = (double)v.frequency * kStreamAheadSeconds;
+            while (((double)v.data.size() / ch - v.pos) < targetAhead)
+            {
+                // Drop fully-consumed WHOLE frames off the front: erasing a
+                // partial frame would desync the interleaved channels. At
+                // end-of-stream the final frame is retained so the mixer sees
+                // a defined position to stop (or wrap) on.
+                const size_t frames = v.data.size() / (size_t)ch;
+                const size_t consumed = (size_t)std::min<double>(std::floor(std::max(0.0, v.pos)), (double)frames);
+                if (consumed > (v.dataLeft > 0 ? (size_t)0 : (size_t)1))
+                {
+                    v.data.erase(v.data.begin(), v.data.begin() + (std::ptrdiff_t)(consumed * (size_t)ch));
+                    v.total -= (int)consumed;
+                    v.pos -= (double)consumed;
+                }
+                if (!stream_decode_more(v))
+                    break;
+            }
+            v.pos = std::min(std::max(0.0, v.pos), (double)std::max(0, v.total));
+        }
+
+        // Rewinds a streaming voice to the start of its data chunk and primes
+        // the window again.
+        void stream_reset(Voice& v)
+        {
+            v.data.clear();
+            v.total = 0;
+            v.pos = 0.0;
+            v.file.clear();
+            v.file.seekg((std::streamoff)v.dataOffset, std::ios::beg);
+            v.dataLeft = v.dataSize;
+            stream_refill(v);
+        }
+
         // --------------------------------------------------------------- mixing
         static void SDLCALL mix_callback(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
@@ -278,7 +379,15 @@ namespace openre::system::audio
                 float acc[2] = { 0.0f, 0.0f };
                 for (Voice& v : gVoices)
                 {
-                    if (!v.playing || v.total <= 0 || v.data.empty())
+                    if (!v.playing)
+                        continue;
+
+                    // Streaming voices top up their decoded window before any
+                    // position/end-of-stream decisions are made.
+                    if (v.streaming)
+                        stream_refill(v);
+
+                    if (v.total <= 0 || v.data.empty())
                         continue;
 
                     // Advance/wrap the source position; non-looping voices that
@@ -288,6 +397,13 @@ namespace openre::system::audio
                         if (!v.loop)
                         {
                             v.playing = false;
+                            continue;
+                        }
+                        if (v.streaming)
+                        {
+                            // Looping a stream means re-reading the file from
+                            // the start of its data chunk.
+                            stream_reset(v);
                             continue;
                         }
                         v.pos = std::fmod(v.pos, (double)v.total);
@@ -727,10 +843,9 @@ namespace openre::system::audio
         const int base = kGroupBase[type];
         for (int sub = 0; sub < kGroupCapacity[type]; sub++)
         {
-            // An empty voice is a free slot: data is only ever non-empty while
-            // a buffer is registered in it.
+            // An unused slot holds neither a buffer nor a stream.
             Voice& v = gVoices[base + sub];
-            if (!v.data.empty())
+            if (voice_slot_used(v))
                 continue;
             v = Voice();
             v.data.assign(src, src + (size_t)num_samples);
@@ -738,6 +853,119 @@ namespace openre::system::audio
             v.frequency = frequency;
             v.channels = channels;
             v.loop = false;
+            return (uint32_t)(base + sub + 1);
+        }
+        logging::logWarning("system_audio: buffer group {} is full", type);
+        return 0;
+    }
+
+    uint32_t create_stream_unused(int type, const char* path)
+    {
+        if (type < 0 || type >= kGroupCount || path == nullptr)
+            return 0;
+
+        std::ifstream file(path, std::ios::binary);
+        if (!file)
+        {
+            logging::logWarning("system_audio: cannot open '{}' for streaming", path);
+            return 0;
+        }
+
+        // Parse the RIFF header without reading any sample bytes: locate the
+        // fmt chunk body (to parse the wave format) and the data chunk's
+        // offset/size (where streamed reads start).
+        char header[12] = {};
+        file.read(header, sizeof(header));
+        if (file.gcount() != (std::streamsize)sizeof(header) || std::memcmp(header, "RIFF", 4) != 0
+            || std::memcmp(header + 8, "WAVE", 4) != 0)
+        {
+            logging::logWarning("system_audio: '{}' is not a RIFF WAV file", path);
+            return 0;
+        }
+
+        bool haveFmt = false;
+        bool haveData = false;
+        uint64_t dataOffset = 0;
+        uint32_t dataSizeField = 0;
+        msadpcm::WaveFormat fmt;
+        while (!haveFmt || !haveData)
+        {
+            char ck[8] = {};
+            file.read(ck, sizeof(ck));
+            if (file.gcount() != (std::streamsize)sizeof(ck))
+                break;
+            const uint32_t ckSize = read_le32(reinterpret_cast<const uint8_t*>(ck) + 4);
+            const auto bodyOffset = (uint64_t)file.tellg();
+            if (std::memcmp(ck, "fmt ", 4) == 0 && !haveFmt)
+            {
+                std::vector<char> fmtBuf(std::min<uint32_t>(ckSize, 4096));
+                file.read(fmtBuf.data(), (std::streamsize)fmtBuf.size());
+                if (file.gcount() != (std::streamsize)fmtBuf.size()
+                    || !msadpcm::parse_wave_fmt(reinterpret_cast<const uint8_t*>(fmtBuf.data()), fmtBuf.size(), fmt))
+                {
+                    logging::logWarning("system_audio: '{}' has an unsupported wave format", path);
+                    return 0;
+                }
+                haveFmt = true;
+            }
+            else if (std::memcmp(ck, "data", 4) == 0 && !haveData)
+            {
+                dataOffset = bodyOffset;
+                dataSizeField = ckSize;
+                haveData = true;
+            }
+            // Skip past this chunk's body (and pad byte) to the next header.
+            file.seekg((std::streamoff)((uint64_t)bodyOffset + ckSize + (ckSize & 1)), std::ios::beg);
+            if (!file)
+                break;
+        }
+        if (!haveFmt || !haveData)
+        {
+            logging::logWarning("system_audio: '{}' is missing a fmt/data chunk", path);
+            return 0;
+        }
+
+        // Some tools emit a bogus data size; clamp it to the real file size.
+        // The position ends up at EOF after this, so park it back on the data
+        // chunk where streamed reads start.
+        file.seekg(0, std::ios::end);
+        const auto fileSize = (uint64_t)file.tellg();
+        int64_t dataSize = (dataSizeField == 0xFFFFFFFFu || dataOffset + (uint64_t)dataSizeField > fileSize)
+            ? (int64_t)(fileSize - dataOffset)
+            : (int64_t)dataSizeField;
+        file.seekg((std::streamoff)dataOffset, std::ios::beg);
+        if (!file)
+        {
+            logging::logWarning("system_audio: cannot seek to data chunk of '{}'", path);
+            return 0;
+        }
+
+        ScopedLock lock(get_mutex());
+        const int base = kGroupBase[type];
+        for (int sub = 0; sub < kGroupCapacity[type]; sub++)
+        {
+            Voice& v = gVoices[base + sub];
+            if (voice_slot_used(v))
+                continue;
+            v = Voice();
+            v.streaming = true;
+            v.file = std::move(file);
+            v.dataOffset = dataOffset;
+            v.dataSize = dataSize;
+            v.dataLeft = dataSize;
+            v.format = fmt;
+            v.frequency = fmt.samplesPerSec;
+            v.channels = fmt.channels;
+            v.loop = false;
+            stream_refill(v); // prime the decoded window (~250 ms of audio)
+            if (v.total <= 0)
+            {
+                logging::logWarning("system_audio: failed to decode '{}' for streaming", path);
+                v = Voice();
+                return 0;
+            }
+            logging::logInfo(
+                "system_audio: streaming sap from '{}' (group {}, {} Hz, {} ch)", path, type, v.frequency, v.channels);
             return (uint32_t)(base + sub + 1);
         }
         logging::logWarning("system_audio: buffer group {} is full", type);
@@ -755,7 +983,12 @@ namespace openre::system::audio
             // Resume a paused voice; rewind a voice that already played to the
             // end so re-triggered one-shots sound again.
             if (v->pos >= (double)v->total)
-                v->pos = 0.0;
+            {
+                if (v->streaming)
+                    stream_reset(*v); // re-reads from the start of the file
+                else
+                    v->pos = 0.0;
+            }
             v->playing = true;
         }
         else if (!v->loop)
@@ -777,7 +1010,10 @@ namespace openre::system::audio
         Voice* v = voice_at(handle);
         if (!v || v->data.empty() || v->total <= 0)
             return false;
-        v->pos = 0.0;
+        if (v->streaming)
+            stream_reset(*v);
+        else
+            v->pos = 0.0;
         v->playing = true;
         return true;
     }
@@ -886,6 +1122,12 @@ namespace openre::system::audio
         if (!v)
             return;
         v->playing = false;
+        if (v->streaming)
+        {
+            v->streaming = false;
+            if (v->file.is_open())
+                v->file.close();
+        }
         v->data.clear();
         v->data.shrink_to_fit();
         v->total = 0;

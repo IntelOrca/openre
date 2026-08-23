@@ -42,6 +42,7 @@ namespace openre::script
         constexpr const char* METATABLE_TEXTURE = "meta_texture";
         constexpr const char* METATABLE_FONT = "meta_font";
         constexpr const char* METATABLE_SOUND = "meta_sound";
+        constexpr const char* METATABLE_MOVIE = "meta_movie";
 
         namespace LogLevel
         {
@@ -484,9 +485,14 @@ namespace openre::script
             ResourceCookie cookie;
         };
 
-        // __gc for TextureHandle/FontHandle/SoundHandle: returns the handle's
-        // resource-manager reference. Safe after releaseAll() (the empty
-        // registry makes release a no-op).
+        struct MovieHandle
+        {
+            ResourceCookie cookie;
+        };
+
+        // __gc for TextureHandle/FontHandle/SoundHandle/MovieHandle: returns
+        // the handle's resource-manager reference. Safe after releaseAll()
+        // (the empty registry makes release a no-op).
         template<typename T> int resourceHandleGC(lua_State* L)
         {
             auto* handle = static_cast<T*>(lua_touserdata(L, 1));
@@ -843,8 +849,17 @@ namespace openre::script
                     video->videoWidth = static_cast<int>(luaL_checkinteger(L, 3));
                 else if (strcmp(name, "videoHeight") == 0)
                     video->videoHeight = static_cast<int>(luaL_checkinteger(L, 3));
-                else if (strcmp(name, "resource") == 0)
-                    video->resource = luaL_checkstring(L, 3);
+                else if (strcmp(name, "movie") == 0)
+                {
+                    // A Movie from core.loadMovie() selects what the component
+                    // plays; nil clears it.
+                    if (lua_isnoneornil(L, 3))
+                        video->movie = 0;
+                    else if (auto* movie = static_cast<MovieHandle*>(luaL_testudata(L, 3, METATABLE_MOVIE)))
+                        video->movie = movie->cookie;
+                    else
+                        return luaL_error(L, "scene.setField: expected a movie or nil for video field 'movie'");
+                }
                 else
                     return luaL_error(L, "scene.setField: unknown video field '%s'", name);
                 return 0;
@@ -859,8 +874,6 @@ namespace openre::script
                     emitter->category = luaL_checkstring(L, 3);
                 else if (strcmp(name, "state") == 0)
                     emitter->state = luaL_checkstring(L, 3);
-                else if (strcmp(name, "source") == 0)
-                    emitter->source = luaL_checkstring(L, 3);
                 else if (strcmp(name, "volume") == 0)
                     emitter->volume = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "pan") == 0)
@@ -873,8 +886,8 @@ namespace openre::script
                     emitter->fadeTargetVolume = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "sound") == 0)
                 {
-                    // A Sound from audio.loadAudio() switches the emitter into
-                    // resident one-shot mode; nil clears it back to source mode.
+                    // A Sound from audio.loadAudio() selects what the emitter
+                    // plays; nil detaches it (the emitter goes silent).
                     if (lua_isnil(L, 3))
                         emitter->sound = 0;
                     else if (auto* snd = static_cast<SoundHandle*>(luaL_testudata(L, 3, METATABLE_SOUND)))
@@ -1064,8 +1077,8 @@ namespace openre::script
                     lua_pushinteger(L, video->videoWidth);
                 else if (strcmp(name, "videoHeight") == 0)
                     lua_pushinteger(L, video->videoHeight);
-                else if (strcmp(name, "resource") == 0)
-                    lua_pushlstring(L, video->resource.data(), video->resource.size());
+                else if (strcmp(name, "movie") == 0)
+                    lua_pushinteger(L, video->movie);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1083,8 +1096,6 @@ namespace openre::script
                     lua_pushlstring(L, emitter->category.data(), emitter->category.size());
                 else if (strcmp(name, "state") == 0)
                     lua_pushlstring(L, emitter->state.data(), emitter->state.size());
-                else if (strcmp(name, "source") == 0)
-                    lua_pushlstring(L, emitter->source.data(), emitter->source.size());
                 else if (strcmp(name, "volume") == 0)
                     lua_pushnumber(L, emitter->volume);
                 else if (strcmp(name, "pan") == 0)
@@ -1441,12 +1452,11 @@ namespace openre::script
                 push("position");
                 push("videoWidth");
                 push("videoHeight");
-                push("resource");
+                push("movie");
                 break;
             case ComponentKind::audio_emitter:
                 push("category");
                 push("state");
-                push("source");
                 push("volume");
                 push("pan");
                 push("loop");
@@ -1508,7 +1518,11 @@ namespace openre::script
 
         // ── gfx resource inspection (used by the debug web UI) ──────────────
 
-        // Returns a table of every live resource: { cookie, type, path, width, height }.
+        // Returns a table of every live resource:
+        // { resource, type, path, width, height, streaming, cookies } where
+        // `resource` is the resource number, `cookies` the list of live
+        // consumer cookies and `streaming` marks sources read from disk on
+        // demand (movies and large sounds).
         int gfxListResources(lua_State* L)
         {
             auto& rm = ResourceManager::get();
@@ -1519,8 +1533,8 @@ namespace openre::script
             {
                 n++;
                 lua_newtable(L);
-                lua_pushinteger(L, info.cookie);
-                lua_setfield(L, -2, "cookie");
+                lua_pushinteger(L, info.resource);
+                lua_setfield(L, -2, "resource");
                 lua_pushlstring(L, info.type.data(), info.type.size());
                 lua_setfield(L, -2, "type");
                 lua_pushlstring(L, info.path.data(), info.path.size());
@@ -1529,6 +1543,15 @@ namespace openre::script
                 lua_setfield(L, -2, "width");
                 lua_pushinteger(L, info.height);
                 lua_setfield(L, -2, "height");
+                lua_pushboolean(L, info.streaming);
+                lua_setfield(L, -2, "streaming");
+                lua_newtable(L);
+                for (size_t i = 0; i < info.cookies.size(); i++)
+                {
+                    lua_pushinteger(L, info.cookies[i]);
+                    lua_rawseti(L, -2, (int)i + 1);
+                }
+                lua_setfield(L, -2, "cookies");
                 lua_rawseti(L, -2, n);
             }
             return 1;
@@ -1591,11 +1614,33 @@ namespace openre::script
             return inputCommandState(L, openre::input::command_edge());
         }
 
-        // core.playMovie(path [, captions]) - plays a movie, blocking until it
-        // finishes or any input skips it. The video entity is created
-        // automatically to fill the window; rendering is driven here because
-        // this call runs inside a Lua tick hook and the rest of the frame
-        // pipeline is suspended until it returns.
+        // core.loadMovie(path) - registers a movie as a streamed resource and
+        // returns a Movie handle, or nil when the file cannot be resolved.
+        // Nothing is read beyond validating that the file exists; playback
+        // streams it from disk. Loading the same path twice returns a handle
+        // onto the same shared resource.
+        int coreLoadMovie(lua_State* L)
+        {
+            auto* path = luaL_checkstring(L, 1);
+            const auto cookie = loadMovieResource(path);
+            if (cookie == 0)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            auto* movie = static_cast<MovieHandle*>(lua_newuserdata(L, sizeof(MovieHandle)));
+            movie->cookie = cookie;
+            luaL_getmetatable(L, METATABLE_MOVIE);
+            lua_setmetatable(L, -2);
+            return 1;
+        }
+
+        // core.playMovie(movie [, captions]) - plays a movie previously
+        // registered with core.loadMovie(), blocking until it finishes or any
+        // input skips it. The video entity is created automatically to fill
+        // the window; rendering is driven here because this call runs inside a
+        // Lua tick hook and the rest of the frame pipeline is suspended until
+        // it returns.
         //
         // The optional `captions` argument is an array of
         // { from = seconds, to = seconds, text = string } entries shown as a
@@ -1604,7 +1649,10 @@ namespace openre::script
         // played through; nil/nothing when it could not be started.
         int apiPlayMovie(lua_State* L)
         {
-            const char* path = luaL_checkstring(L, 1);
+            auto* movieHandle = static_cast<MovieHandle*>(luaL_checkudata(L, 1, METATABLE_MOVIE));
+            if (movieHandle == nullptr)
+                return luaL_argerror(L, 1, "expected a movie from core.loadMovie");
+            const auto cookie = movieHandle->cookie;
             auto* app = openre::current_app();
             if (app == nullptr)
                 return 0;
@@ -1643,10 +1691,10 @@ namespace openre::script
                 }
             }
 
-            ecs::Entity entity = video_play(*app, path);
+            ecs::Entity entity = video_play(*app, cookie);
             if (entity == ecs::NullEntity)
             {
-                logging::logWarning("[core] playMovie failed to start: {}", path);
+                logging::logWarning("[core] playMovie failed to start movie cookie {}", cookie);
                 return 0;
             }
 
@@ -1950,6 +1998,7 @@ namespace openre::script
         setGlobal(L, "audio.play", audioPlay);
 
         // core.* - engine services available to game scripts.
+        setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
 
         // input.* - runtime command state for menu / title-screen navigation.
@@ -1970,6 +2019,10 @@ namespace openre::script
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_SOUND);
         lua_pushcfunction(L, resourceHandleGC<SoundHandle>);
+        lua_setfield(L, -2, "__gc");
+        lua_pop(L, 1);
+        luaL_newmetatable(L, METATABLE_MOVIE);
+        lua_pushcfunction(L, resourceHandleGC<MovieHandle>);
         lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 

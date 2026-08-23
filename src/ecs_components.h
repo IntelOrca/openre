@@ -84,36 +84,38 @@ namespace openre::ecs
 
     /// A sound emitter mixed by the native SDL3 audio layer (AudioSystem).
     ///
-    /// Two playback modes:
+    /// The emitter always plays the sound resource referenced by `sound`, a
+    /// Sound cookie from audio.loadAudio() (small sources are resident PCM,
+    /// large ones stream from disk). Two playback controls coexist on the one
+    /// voice:
     ///
-    /// Source mode (default): playback is edge-triggered through `state` —
-    /// setting it to "playing" starts `source`, changing it to anything else
-    /// stops the voice. `source` is a `.sap` file (RIFF WAV container)
-    /// resolved relative to the game module directory.
+    /// State mode: playback is edge-triggered through `state` — setting it to
+    /// "playing" starts the resource (honouring `loop`), changing it to
+    /// anything else stops the voice. Suited to music and narration.
     ///
-    /// Resident mode: when `sound` holds a Sound cookie from
-    /// audio.loadAudio(), `source`/`state` are ignored. Writing any new value
-    /// to `trigger` plays that resident buffer once from its first sample,
-    /// making it suitable for rapid-fire UI sound effects.
+    /// Trigger mode: writing any new value to `trigger` plays the resource
+    /// once from its first sample regardless of `state`, making it suitable
+    /// for rapid-fire UI sound effects.
     ///
     /// `volume` (0-100), `pan` (-100..100), `fadeFrames` / `fadeTargetVolume`
     /// are pushed to the voice every frame while playing; a fade runs once per
     /// distinct fadeFrames value. The system writes the observed playback
     /// state back into `status` ("stopped", "playing" or "finished").
     /// `category` groups emitters for future mixer configuration ("bgm",
-    /// "sfx", "voice"; all full volume for now).
+    /// "sfx", "voice"; all full volume for now). Scripts must keep the Sound
+    /// handle alive while `sound` points at it — components only borrow its
+    /// cookie.
     struct AudioEmitterComponent
     {
         std::string category = "sfx";
         std::string state = "stopped";
-        std::string source;
         float volume = 100.0f;
         float pan = 0.0f;
         bool loop = true;
         std::string status = "stopped";
         int fadeFrames = 0;
         float fadeTargetVolume = 100.0f;
-        uint32_t sound = 0; // resident Sound cookie; 0 = source mode
+        uint32_t sound = 0; // Sound cookie from audio.loadAudio(); 0 = silent
         int32_t trigger = 0;
     };
 
@@ -202,17 +204,18 @@ namespace openre::ecs
 
     /// A video clip drawn into the window by the scene-tree render path.
     ///
-    /// `resource` is the source movie path (set by core.playMovie). `size` is
-    /// the entity bounds in window pixels (top-left at the world transform
-    /// position); the decoded video is letterboxed inside these bounds while
-    /// preserving its aspect ratio. `status` and `position` (playback time in
-    /// seconds) are advanced by the VideoSystem. `texture` is the render2d
+    /// `movie` is a MovieResource cookie from core.loadMovie; the movie file
+    /// itself is streamed from disk while playing. `size` is the entity bounds
+    /// in window pixels (top-left at the world transform position); the
+    /// decoded video is letterboxed inside these bounds while preserving its
+    /// aspect ratio. `status` and `position` (playback time in seconds) are
+    /// advanced by the VideoSystem. `texture` is the render2d
     /// dynamic-texture handle for the latest decoded frame (0 when none), and
     /// `videoWidth`/`videoHeight` are the native decoded frame size used to
     /// compute the aspect-preserving draw rectangle.
     struct VideoComponent
     {
-        std::string resource;
+        ResourceCookie movie = 0;
         Size2f size;
         VideoStatus status = VideoStatus::Stopped;
         float position = 0.0f;

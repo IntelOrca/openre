@@ -414,20 +414,30 @@ function scene.exit() end
 
 --- A sound emitter mixed by the native SDL3 audio layer. Add it with
 --- `scene.addComponent(e, "core.audio_emitter")` and configure its fields
---- with `scene.setField`. Playback is edge-triggered: writing `"playing"` to
---- `state` starts `source`, writing anything else stops the voice (writing
---- `"playing"` again while playing does nothing; write another value first to
---- re-trigger). The engine writes the observed voice state back into the
---- read-only `status` field every frame: `"stopped"`, `"playing"`, or
---- `"finished"` for a non-looping source that played to its end.
+--- with `scene.setField`. The emitter plays the sound resource referenced by
+--- its `sound` field, a Sound handle from `audio.loadAudio` (small sources
+--- are decoded fully into memory, large ones such as BGM tracks stream from
+--- disk). Keep the Sound handle alive while `sound` points at it — the
+--- component only borrows the resource.
+---
+--- Two playback controls coexist on the one voice:
+---
+--- * State mode: writing `"playing"` to `state` starts the resource
+---   (honouring `loop`), writing anything else stops the voice (writing
+---   `"playing"` again while playing does nothing; write another value first
+---   to re-trigger). Suited to music and narration.
+--- * Trigger mode: writing any new value to `trigger` plays the resource once
+---   from its first sample regardless of `state`, which makes rapid repeated
+---   input safe (each blip restarts cleanly instead of stacking or resuming).
+---
+--- The engine writes the observed voice state back into the read-only
+--- `status` field every frame: `"stopped"`, `"playing"`, or `"finished"` for
+--- a non-looping source that played to its end.
 ---
 --- Fields:
 --- * `category` — "bgm", "sfx" or "voice"; all categories mix at full volume
 ---   for now (no mixer configuration yet).
---- * `source` — a `.sap` file (RIFF WAV) resolved relative to the game module
----   directory. Decoded sources are cached per path, so several emitters can
----   share one file. A missing or unreadable file logs a warning and stays
----   silent (the emitter reports status "stopped"); it never crashes.
+--- * `sound` — a Sound handle from `audio.loadAudio`, or nil for silence.
 --- * `volume` — 0-100 (default 100).
 --- * `pan` -100..100, 0 = centre.
 --- * `loop` — whether the voice loops while state is "playing" (default true).
@@ -436,15 +446,6 @@ function scene.exit() end
 ---   playback: setting a new non-zero fadeFrames value starts one fade;
 ---   set it back to 0 first to run the same fade again later.
 --- * `fadeTargetVolume` — 0-100 target of the ramp.
----
---- Resident one-shot mode (`core.audio_emitter` + audio.loadAudio): set
---- `sound` to a Sound handle from `audio.loadAudio` (or nil to return to
---- source mode) and fire it by writing any new value to `trigger`. Every new
---- trigger value plays that resident buffer once from its first sample,
---- regardless of `state`, which makes rapid repeated input safe (each blip
---- restarts cleanly instead of stacking or resuming). `volume`, `pan`,
---- `fadeFrames` and `status` apply in this mode too; `source`, `state` and
---- `loop` are ignored while `sound` is set.
 
 --[[ Scaled frames (core.scaled_frame) ]]
 
@@ -527,10 +528,13 @@ function gfx.screenHeight() end
 ---@param a integer 0-255 alpha
 function gfx.fade(r, g, b, a) end
 
---- Enumerate every live resource in the engine ResourceManager. Returns a table
---- (array) of `{ cookie, type, path, width, height }` where `type` is
---- "texture", "font" or "unknown".
----@return { cookie: integer, type: string, path: string, width: integer, height: integer }[]
+--- Enumerate every live resource in the engine ResourceManager. Returns a
+--- table (array) of `{ resource, type, path, width, height, streaming,
+--- cookies }` where `resource` is the resource number, `type` is "texture",
+--- "font", "sound" or "movie", `streaming` marks sources read from disk on
+--- demand (movies and large sounds), and `cookies` lists the consumer cookie
+--- numbers currently referencing the resource.
+---@return { resource: integer, type: string, path: string, width: integer, height: integer, streaming: boolean, cookies: integer[] }[]
 function gfx.listResources() end
 
 --- Return the decoded RGBA pixels of a resource's texture as
@@ -550,17 +554,19 @@ function gfx.getResourceImage(cookie) end
 --- referenced while an emitter's `sound` field points at it.
 local Sound = {}
 
---- Load and decode a .sap sound file fully into memory as an always resident
---- one-shot sound effect. Unlike an audio emitter's source mode (meant for
---- longer sources started declaratively) a loaded sound stays in memory until
---- shutdown and is fired through the emitter's `sound` / `trigger` fields.
+--- Load and decode a .sap sound file and return a resident one-shot Sound
+--- handle. Small files are decoded fully into memory; large whole-file
+--- sources (>= 1 MiB, e.g. BGM tracks) are streamed from disk instead — the
+--- file is read incrementally during playback rather than being expanded to
+--- PCM in memory, so the handle costs almost nothing to keep around.
 ---
 --- The optional `sub` index selects one sub-sound of a multi-sound .sap
 --- container (one RIFF WAV per set bit after the 8-byte mask header), e.g.
---- sub 0 of core22.sap is its first blip. The same module-dir-then-data://
---- probing as textures applies. Loading the same path/sub pair again returns a
---- handle onto the same shared sound. Returns nil when the file is missing or
---- cannot be decoded.
+--- sub 0 of core22.sap is its first blip; sub-selected sounds always decode
+--- fully into memory. The same module-dir-then-data:// probing as textures
+--- applies. Loading the same path/sub pair again returns a handle onto the
+--- same shared sound. Returns nil when the file is missing or cannot be
+--- decoded.
 ---@param path string e.g. "common/sound/core/core17.sap"
 ---@param sub? integer sub-sound index of a multi-sound container (default: none)
 ---@return Sound|nil
@@ -577,10 +583,25 @@ function audio.play(sound) end
 ---@class core
 core = {}
 
---- Play a movie, filling the window, and block until it finishes or is
---- skipped. Returns `true` when the movie was skipped early by user input
---- (or a window close), `false` when it played through to the end, and
---- nothing when it could not be started.
+---@class Movie
+--- Opaque handle to a streamed movie resource. Created with `core.loadMovie`.
+--- Like textures and sounds, the resource is unloaded when the last handle is
+--- garbage collected, so keep the handle referenced while playing.
+local Movie = {}
+
+--- Register a movie as a streamed resource and return a Movie handle, or nil
+--- when the file cannot be resolved. Movies are always streamed: nothing but
+--- the resolved location is kept at load time; the decoder opens the file when
+--- playback starts and reads it incrementally. Loading the same path twice
+--- returns a handle onto the same shared resource.
+---@param path string e.g. "pl0\\zmovie\\opn1stl.bin"
+---@return Movie|nil
+function core.loadMovie(path) end
+
+--- Play a previously loaded movie, filling the window, and block until it
+--- finishes or is skipped. Returns `true` when the movie was skipped early by
+--- user input (or a window close), `false` when it played through to the end,
+--- and nothing when it could not be started.
 ---
 --- The optional `captions` argument is an array of caption entries
 --- `{ from = seconds, to = seconds, text = string }`. While the playback
@@ -588,10 +609,10 @@ core = {}
 --- an overlay centred near the bottom of the window; entries are evaluated in
 --- order and the first match wins. Captions need a loadable font resource to
 --- be visible; without one they are silently skipped (never a crash).
----@param path string e.g. "pl0\\zmovie\\title_l.bin"
+---@param movie Movie a movie from core.loadMovie
 ---@param captions? { from: number, to: number, text: string }[]
 ---@return boolean|nil
-function core.playMovie(path, captions) end
+function core.playMovie(movie, captions) end
 
 --[[ input — runtime command state ]]
 

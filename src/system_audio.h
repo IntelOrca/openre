@@ -61,6 +61,14 @@ namespace openre::system::audio
     // PCM is invalid. The voice starts non-looping; toggle with set_loop().
     uint32_t create_buffer_unused(int type, const void* pcm, int num_samples, int frequency, int channels);
 
+    // Opens a .sap file (RIFF WAV) for streamed playback: the file stays on
+    // disk and is decoded incrementally into a small read-ahead window instead
+    // of being expanded to PCM in memory. Picks the first unused slot of
+    // buffer group `type` like create_buffer_unused(). Returns 0 when the
+    // group is full or the file is missing/malformed. The voice starts
+    // non-looping; toggle with set_loop().
+    uint32_t create_stream_unused(int type, const char* path);
+
     // Starts or resumes playback. If the voice had already reached the end of
     // a non-looping buffer it is rewound to the start so re-triggered one-shots
     // play again. Already-playing voices are left untouched.

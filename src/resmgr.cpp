@@ -27,8 +27,8 @@ namespace openre
     {
         // One entry per live RESOURCE (not per cookie): several cookies may
         // reference the same resource, and reporting each would list the same
-        // asset repeatedly. The reported cookie is the first live one, usable
-        // with fromCookie()/preview endpoints.
+        // asset repeatedly. All live cookies are reported so callers can use
+        // any of them with fromCookie()/preview endpoints.
         std::vector<ResourceInfo> result;
         for (ResourceHandle handle = 1; handle <= this->resources.size(); handle++)
         {
@@ -36,18 +36,14 @@ namespace openre
             if (!entry.resource)
                 continue;
 
-            ResourceCookie firstCookie = 0;
+            ResourceInfo info;
+            info.resource = handle;
             for (size_t i = 0; i < this->cookies.size(); i++)
             {
                 if (this->cookies[i] == handle)
-                {
-                    firstCookie = static_cast<ResourceCookie>(i + 1);
-                    break;
-                }
+                    info.cookies.push_back(static_cast<ResourceCookie>(i + 1));
             }
 
-            ResourceInfo info;
-            info.cookie = firstCookie;
             info.path = entry.path;
             if (entry.typeIndex == std::type_index(typeid(TextureResource)))
             {
@@ -70,6 +66,12 @@ namespace openre
             else if (entry.typeIndex == std::type_index(typeid(SoundResource)))
             {
                 info.type = "sound";
+                info.streaming = static_cast<SoundResource*>(entry.resource.get())->streaming;
+            }
+            else if (entry.typeIndex == std::type_index(typeid(MovieResource)))
+            {
+                info.type = "movie";
+                info.streaming = true;
             }
             else
             {

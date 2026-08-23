@@ -15,23 +15,36 @@ namespace openre
 {
     namespace
     {
-        // Reads the first candidate that exists: module dir first, then the
-        // original RE2 data set via data://, mirroring the audio emitter's
-        // source resolution so both see the same files.
-        bool readSoundBytes(const std::string& path, std::vector<uint8_t>& outBytes)
+        // Whole-file sources at or above this size are streamed from disk
+        // instead of being decoded into a resident PCM buffer (a decoded BGM
+        // track would otherwise occupy several times its encoded size for the
+        // whole session). Sub-sound selection requires the whole container, so
+        // those always take the in-memory path.
+        constexpr uint64_t kStreamFileThreshold = 1024 * 1024;
+
+        // Returns the absolute path of the first candidate that exists: module
+        // dir first, then the original RE2 data set via data://, mirroring the
+        // audio emitter's source resolution so both see the same files.
+        std::string resolveSoundPath(std::string_view path)
         {
             if (!path.empty() && path.find("data://") != 0)
             {
                 const auto modulePath = game_module_dir() / path;
                 if (system::fs::info(modulePath.string().c_str()).kind == system::fs::FileKind::file)
-                    outBytes = system::fs::readAllBytes(modulePath.string().c_str());
+                    return modulePath.string();
             }
-            if (outBytes.empty())
-            {
-                const auto resolved = system::fs::resolve(("data://" + path).c_str());
-                if (!resolved.empty() && system::fs::info(resolved.c_str()).kind == system::fs::FileKind::file)
-                    outBytes = system::fs::readAllBytes(resolved.c_str());
-            }
+            const auto resolved = system::fs::resolve(("data://" + std::string(path)).c_str());
+            if (!resolved.empty() && system::fs::info(resolved.c_str()).kind == system::fs::FileKind::file)
+                return resolved;
+            return {};
+        }
+
+        // Reads the first candidate that exists: module dir first, then the
+        // original RE2 data set via data://, mirroring the audio emitter's
+        // source resolution so both see the same files.
+        bool readSoundBytes(const std::string& path, std::vector<uint8_t>& outBytes)
+        {
+            outBytes = system::fs::readAllBytes(path.c_str());
             return !outBytes.empty();
         }
     }
@@ -49,10 +62,45 @@ namespace openre
         if (existing != 0)
             return existing;
 
-        std::vector<uint8_t> bytes;
-        if (!readSoundBytes(std::string(path), bytes))
+        const auto absolutePath = resolveSoundPath(path);
+        if (absolutePath.empty())
         {
             logging::logError("[sound_loader] sound '{}' not found (module dir or data://)", path);
+            return 0;
+        }
+
+        // Large whole-file sounds stay on disk: register a streaming voice
+        // that decodes blocks on demand rather than holding megabytes of PCM.
+        if (sub < 0)
+        {
+            const auto info = system::fs::info(absolutePath.c_str());
+            if (info.kind == system::fs::FileKind::file && info.size >= kStreamFileThreshold)
+            {
+                // Group 5 ("bgm") keeps streamed music away from the resident
+                // one-shots in group 4 ("core").
+                const uint32_t handle = system::audio::create_stream_unused(5, absolutePath.c_str());
+                if (handle != 0)
+                {
+                    auto resource = std::make_unique<SoundResource>();
+                    resource->audioHandle = handle;
+                    resource->streaming = true;
+                    const ResourceCookie cookie = resmgr.addFirstRef<SoundResource>(key, std::move(resource));
+                    logging::logInfo(
+                        "[sound_loader] streaming '{}' -> cookie {}, handle {}, {} bytes on disk",
+                        key,
+                        cookie,
+                        handle,
+                        info.size);
+                    return cookie;
+                }
+                logging::logWarning("[sound_loader] streaming failed for '{}', falling back to memory decode", key);
+            }
+        }
+
+        std::vector<uint8_t> bytes;
+        if (!readSoundBytes(absolutePath, bytes))
+        {
+            logging::logError("[sound_loader] failed to read sound '{}'", key);
             return 0;
         }
 
