@@ -51,6 +51,18 @@ local bootPrologue = re.getEnv('OPENRE_PROLOGUE')
 
 local scheduler = Scheduler:new()
 
+-- Shows the title menu after a movie or the prologue: hold solid black for a
+-- second, create the menu behind a full-screen overlay, then lift the overlay
+-- so the menu fades in.
+local function showTitle()
+    scheduler
+        :holdBlack(60)
+        :exec(function()
+            Title:new()
+        end)
+        :fadeIn(60)
+end
+
 scheduler
     :exec(function()
         createSplash()
@@ -58,19 +70,20 @@ scheduler
     :fadeIn(60)
     :wait(120)
     :fadeOut(60)
+    :exec(hideSplash)
+    :holdBlack(60)
     :exec(function()
-        hideSplash()
         if bootPrologue then
             local ch, sc = bootPrologue:match('(%w+),(%w+)')
             if ch and sc then
                 prologue.start({
                     character = ch,
                     scenario = sc,
-                    onFinished = function() Title:new() end,
+                    onFinished = showTitle,
                 })
                 return
             end
         end
         core.playMovie("pl0\\zmovie\\title_l.bin")
-        Title:new()
+        showTitle()
     end)

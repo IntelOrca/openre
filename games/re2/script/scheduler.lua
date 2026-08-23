@@ -80,6 +80,19 @@ local function fadeOut(self, time)
     return self
 end
 
+-- Holds a solid black screen for `time` ticks after a fade out. gfx.fade only
+-- lasts a single frame, so the overlay must be re-issued every tick while
+-- waiting or the faded-out scene pops back visible.
+local function holdBlack(self, time)
+    local timer = time
+    self:run(function()
+        gfx.fade(0, 0, 0, 255)
+        timer = timer - 1
+        return timer > 0
+    end)
+    return self
+end
+
 SCHEDULER_METHODS = {
     update = update,
     wait = wait,
@@ -87,6 +100,7 @@ SCHEDULER_METHODS = {
     run = run,
     fadeIn = fadeIn,
     fadeOut = fadeOut,
+    holdBlack = holdBlack,
 }
 
 function Scheduler:new()
