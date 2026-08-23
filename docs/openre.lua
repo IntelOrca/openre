@@ -578,6 +578,29 @@ function audio.loadAudio(path, sub) end
 ---@param sound Sound
 function audio.play(sound) end
 
+--[[ save — saved-game listing ]]
+
+---@class save
+local save = {}
+
+--- List the saved games in the save folder, sorted newest first. Each entry is
+--- a table:
+--- ```
+--- {
+---     name       = "SAVE00",            -- filename without extension
+---     character  = "leon" | "claire",   -- from the saved player id
+---     scenario   = "a" | "b",           -- from the saved status flags
+---     difficulty = "casual" | "standard", -- easy flag; no hardcore marker yet
+---     room       = "Waiting Room",      -- English name for the saved room id
+---     numSaves   = 3,                   -- times saved in that game
+--- }
+--- ```
+--- Files qualify when named `*.BIOHAZARD2` (or containing RESIDENT2) and
+--- carrying the save magic; unreadable or corrupt files are skipped silently.
+--- With no save folder (or an empty one) the result is an empty table.
+---@return { name: string, character: string, scenario: string, difficulty: string, room: string, numSaves: integer }[]
+function save.list() end
+
 --[[ core — engine services ]]
 
 ---@class core

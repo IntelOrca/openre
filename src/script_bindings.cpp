@@ -17,11 +17,14 @@
 #include "script_vm.h"
 #include "sound_loader.h"
 #include "system_audio.h"
+#include "system_filesystem.h"
 #include "system_input.h"
 #include "system_window.h"
 #include "systems.h"
 #include "texture_loader.h"
 #include "video_system.h"
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -1228,6 +1231,131 @@ namespace openre::script
             return 0;
         }
 
+        // ── save.* ──────────────────────────────────────────────────────────
+        // Saved-game listing for the Lua load/save screens.
+
+        // English room names for the save screen info line, indexed by the
+        // room id stored in the save image (the same index the original save
+        // name builder feeds into its Japanese room-name table).
+        constexpr const char* const SAVE_ROOM_NAMES[] = {
+            "Waiting Room",
+            "Main Hall",
+            "Darkroom",
+            "Plant Left Storage",
+            "Plant Right Storage",
+            "Sewers Control Room 1",
+            "Sewers Control Room 2",
+            "Sewers Treatment Pool",
+            "Factory Panel Room",
+            "Lab Pump Room",
+            "Lab Security Room",
+            "Lab Monitor Room",
+            "Gun Shop",
+            "Station Storage Shed",
+            "Lab Cable Car",
+            "Scenario 1st",
+        };
+
+        struct ListedSave
+        {
+            std::string name;
+            std::string character;
+            std::string scenario;
+            std::string difficulty;
+            std::string room;
+            int32_t numSaves;
+            uint64_t lastModified;
+        };
+
+        // A file qualifies when its uppercased name carries a .BIOHAZARD2
+        // extension or contains RESIDENT2 (same rule as the original card
+        // validation) and starts with the 'SC' save magic.
+        bool is_valid_save_file(const std::string& entry, const std::vector<uint8_t>& data)
+        {
+            std::string lower;
+            lower.reserve(entry.size());
+            for (char c : entry)
+                lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (lower.find(".biohazard2") == std::string::npos && lower.find("resident2") == std::string::npos)
+                return false;
+            return data.size() >= 0x224 && data[0] == 'S' && data[1] == 'C';
+        }
+
+        // save.list() - enumerates the save folder and returns an array of
+        // tables sorted newest first:
+        //   { name       = filename without extension,
+        //     character  = 'leon' | 'claire',
+        //     scenario   = 'a' | 'b',
+        //     difficulty = 'casual' | 'standard',  (no hardcore marker exists yet)
+        //     room       = English room name,
+        //     numSaves   = times saved }
+        // Fields come from the save image copied from gGameTable.table_start:
+        //   0x20A plId (bit0: leon/claire), 0x20B room id,
+        //   0x214 fg_status copy (bit mask 0x40000000 scenario B,
+        //   0x04000000 easy), 0x220 save count.
+        // Unreadable or corrupt files are skipped; with no save folder the
+        // result is an empty table. Never raises.
+        int saveList(lua_State* L)
+        {
+            std::vector<ListedSave> saves;
+            auto entries = system::fs::getDirectoryContents("save://", "*");
+            for (const auto& entry : entries)
+            {
+                if (!entry.empty() && entry[0] == '.')
+                    continue;
+
+                auto data = system::fs::readAllBytes(("save://" + entry).c_str());
+                if (!is_valid_save_file(entry, data))
+                    continue;
+
+                auto info = system::fs::info(("save://" + entry).c_str());
+
+                uint32_t status
+                    = data[0x214] | (data[0x215] << 8) | (data[0x216] << 16) | (static_cast<uint32_t>(data[0x217]) << 24);
+
+                auto name = entry;
+                auto dot = name.rfind('.');
+                if (dot != std::string::npos)
+                    name.resize(dot);
+
+                auto roomId = data[0x20B];
+                saves.push_back(
+                    {
+                        name,
+                        (data[0x20A] & 1) ? "claire" : "leon",
+                        (status & 0x40000000) ? "b" : "a",
+                        (status & 0x04000000) ? "casual" : "standard",
+                        roomId < std::size(SAVE_ROOM_NAMES) ? SAVE_ROOM_NAMES[roomId] : "",
+                        static_cast<int32_t>(data[0x220] | (data[0x221] << 8)),
+                        info.lastModified,
+                    });
+            }
+
+            std::sort(saves.begin(), saves.end(), [](const ListedSave& a, const ListedSave& b) {
+                return a.lastModified > b.lastModified;
+            });
+
+            lua_newtable(L);
+            for (size_t i = 0; i < saves.size(); i++)
+            {
+                lua_createtable(L, 0, 6);
+                lua_pushstring(L, saves[i].name.c_str());
+                lua_setfield(L, -2, "name");
+                lua_pushstring(L, saves[i].character.c_str());
+                lua_setfield(L, -2, "character");
+                lua_pushstring(L, saves[i].scenario.c_str());
+                lua_setfield(L, -2, "scenario");
+                lua_pushstring(L, saves[i].difficulty.c_str());
+                lua_setfield(L, -2, "difficulty");
+                lua_pushstring(L, saves[i].room.c_str());
+                lua_setfield(L, -2, "room");
+                lua_pushinteger(L, saves[i].numSaves);
+                lua_setfield(L, -2, "numSaves");
+                lua_rawseti(L, -2, static_cast<int>(i + 1));
+            }
+            return 1;
+        }
+
         // ── audio.* ─────────────────────────────────────────────────────────
         // Resident sound effects. Sounds are decoded fully into memory at load
         // time (unlike audio emitters, which are meant for longer sources) and
@@ -1996,6 +2124,9 @@ namespace openre::script
 
         setGlobal(L, "audio.loadAudio", audioLoadAudio);
         setGlobal(L, "audio.play", audioPlay);
+
+        // save.* - saved-game listing for the Lua load/save screens.
+        setGlobal(L, "save.list", saveList);
 
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);

@@ -20,6 +20,8 @@
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
 local prologue          = require("script/prologue")
+local LoadScreen        = require("script/load")
+require("script/scheduler") -- Scheduler (global) for the handoff chains
 
 local Title             = {}
 local titleMethods      = {}
@@ -40,6 +42,11 @@ local STATE_LEAVING     = 3
 
 -- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
 local DEMO_TIMEOUT      = 60 * 15
+
+-- Handoff timing when the menu hands over to another screen: fade out to
+-- black, destroy, hold solid black (~1s), then let the new screen fade in.
+local SCREEN_FADE_FRAMES = 60
+local SCREEN_HOLD_FRAMES = 60
 
 -- Item layout: the menu is left-aligned to the screen. All item text shares a
 -- single x position; each row gets a y band centre from the item top + step.
@@ -106,6 +113,59 @@ local function playSfx(self, sound)
     self.sfxTrigger = self.sfxTrigger + 1
     scene.setField(self.emitter, 'sound', sound)
     scene.setField(self.emitter, 'trigger', self.sfxTrigger)
+end
+
+-------------------------------------------------------------------------------
+-- Screen teardown / handoffs ---------------------------------------------------
+-------------------------------------------------------------------------------
+
+-- Destroys every entity this menu created, drops all resource handles and
+-- collects so they unload before the next screen takes over.
+local function closeMenu(self)
+    self.closed = true
+    if self.front then
+        scene.destroy(self.front)
+        self.front = nil
+        self.frontFrame = nil
+    end
+    if self.back then
+        scene.destroy(self.back)
+        self.back = nil
+        self.backFrame = nil
+    end
+    if self.backdrop then
+        scene.destroy(self.backdrop)
+        self.backdrop = nil
+        self.backdropSprite = nil
+    end
+    -- The menu's resources (sounds, fonts, textures) belong to this
+    -- screen: drop every handle and collect so they unload.
+    if self.emitterEntity then
+        scene.destroy(self.emitterEntity)
+        self.emitterEntity = nil
+    end
+    self.emitter = nil
+    self.sfx = nil
+    self.assets = nil
+    re.collectGarbage()
+end
+
+-- Load Game handoff: fade the menu out to black, destroy it, hold black for
+-- about a second, then create the load screen behind a fade in.
+local function openLoadScreen(self)
+    if self.handoff then
+        return
+    end
+    self.handoff = true
+    playSfx(self, self.sfx.accept)
+    Scheduler:new()
+        :fadeOut(SCREEN_FADE_FRAMES)
+        :exec(function()
+            closeMenu(self)
+            LoadScreen:new()
+        end)
+        :holdBlack(SCREEN_HOLD_FRAMES)
+        :fadeIn(SCREEN_FADE_FRAMES)
 end
 
 -------------------------------------------------------------------------------
@@ -207,7 +267,8 @@ end
 local MAIN_STORY_MENU = {
     items = {
         { label = 'Continue',  tooltip = 'Continue from your most recent save.', action = noop },
-        { label = 'Load Game', tooltip = 'Load a previously saved game.',        action = noop },
+        { label = 'Load Game', tooltip = 'Load a previously saved game.',
+          action = function(self) openLoadScreen(self) end },
         { label = 'New Game (JPN)', tooltip = 'Start a new game in the original Japanese arrangement.',
           sub = createCharacterMenu('jpn') },
         { label = 'New Game (UE)', tooltip = 'Start a new game in the USA/Europe arrangement.',
@@ -566,33 +627,7 @@ local function updateLeaving(self)
     else -- hold solid black for a second, then hand over
         gfx.fade(0, 0, 0, 255)
         if self.leaveTimer >= 60 then
-            self.closed = true
-            if self.front then
-                scene.destroy(self.front)
-                self.front = nil
-                self.frontFrame = nil
-            end
-            if self.back then
-                scene.destroy(self.back)
-                self.back = nil
-                self.backFrame = nil
-            end
-            if self.backdrop then
-                scene.destroy(self.backdrop)
-                self.backdrop = nil
-                self.backdropSprite = nil
-            end
-            -- The menu's resources (sounds, fonts, textures) belong to this
-            -- screen: drop every handle and collect so they unload before the
-            -- prologue takes over.
-            if self.emitterEntity then
-                scene.destroy(self.emitterEntity)
-                self.emitterEntity = nil
-            end
-            self.emitter = nil
-            self.sfx = nil
-            self.assets = nil
-            re.collectGarbage()
+            closeMenu(self)
             self:launchPrologue()
         end
     end
@@ -627,6 +662,11 @@ end
 
 local function update(self)
     if self.closed then
+        return
+    end
+    -- A handoff chain (e.g. Load Game) owns everything from here on; freeze
+    -- input and redraws until the screen is destroyed.
+    if self.handoff then
         return
     end
     self.ticks = self.ticks + 1
@@ -720,7 +760,8 @@ titleMethods = {
     launchPrologue = launchPrologue,
 }
 
-function Title:new()
+function Title:new(opts)
+    opts = opts or {}
     local instance = {}
     for name, fn in pairs(titleMethods) do
         instance[name] = fn
@@ -733,6 +774,7 @@ function Title:new()
         instance.itemX = {}
         instance.itemXTarget = {}
     instance.itemCount = 10 -- enough rows for the deepest list (character menu)
+    instance.handoff = false
 
     -- Logo vertical positions, expressed as offsets from the layer centre
     -- (each layer's local origin is its centre, which maps to the window
@@ -907,7 +949,8 @@ function Title:new()
             TextFlags.xLeft | TextFlags.yMiddle)
         instance.tooltipComponent = tt
 
-    -- Begin on the PRESS START screen.
+    -- Begin on the PRESS START screen (default), or straight in the Main
+    -- Story menu when returning from a sub-screen (e.g. the load screen).
     instance.state = STATE_PRESS_START
     instance.fade = 1
     instance.menu = ROOT_MENU
@@ -915,6 +958,13 @@ function Title:new()
     instance.transition = nil
     instance.gameCtx = nil
     instance.closed = false
+    if opts.mainStory then
+        enterMenu(instance)
+        instance.menu = MAIN_STORY_MENU
+        instance.selected = 2 -- Load Game
+        refreshItems(instance)
+        refreshTooltip(instance)
+    end
     re.subscribe(HookKind.tick, function()
         update(instance)
     end)
