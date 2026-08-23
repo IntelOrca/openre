@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include "ecs_systems.h"
+#include "game_create.h"
 #include "game_module.h"
 #include "logger.h"
 #include "marni.h"
@@ -170,6 +171,10 @@ namespace openre
 
     int appMain(const char** args, int argc)
     {
+        // Subcommands short-circuit before any engine subsystem comes up.
+        if (game_create_requested(args, argc))
+            return game_create_main(args, argc);
+
         marni::out();
         config_read();
 

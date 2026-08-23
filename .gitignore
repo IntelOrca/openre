@@ -409,3 +409,10 @@ FodyWeavers.xsd
 /.cursor/rules/byterover-rules.mdc
 
 dump/
+
+# Imported game pack assets, produced by `openre.exe create-game` from an
+# original game installation; only authored files are tracked.
+games/*/movie/
+games/*/sound/
+games/*/texture/
+

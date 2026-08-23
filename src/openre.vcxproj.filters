@@ -45,7 +45,13 @@
     <ClCompile Include="file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="game_create.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="gfxadt.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gfx_bmp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="hud.cpp">
@@ -156,6 +162,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="audio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="game_create.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gfx_bmp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ecs.h">

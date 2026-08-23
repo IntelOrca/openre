@@ -86,7 +86,9 @@
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="file.cpp" />
     <ClCompile Include="font.cpp" />
+    <ClCompile Include="game_create.cpp" />
     <ClCompile Include="gfxadt.cpp" />
+    <ClCompile Include="gfx_bmp.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="hud.cpp" />
     <ClCompile Include="input.cpp" />
@@ -151,8 +153,10 @@
     <ClInclude Include="entity.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="file.h" />
+    <ClInclude Include="game_create.h" />
     <ClInclude Include="game_module.h" />
     <ClInclude Include="gfx.h" />
+    <ClInclude Include="gfx_bmp.h" />
     <ClInclude Include="font.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="input.h" />
