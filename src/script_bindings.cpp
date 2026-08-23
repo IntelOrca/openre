@@ -438,6 +438,7 @@ namespace openre::script
             constexpr int32_t legacy = 4;
             constexpr int32_t video = 5;
             constexpr int32_t audio_emitter = 6;
+            constexpr int32_t scaled_frame = 7;
         }
 
         struct SceneEntityHandle
@@ -588,6 +589,14 @@ namespace openre::script
                     scene->addComponent<ecs::AudioEmitterComponent>(handle->entity);
                 }
                 kind = ComponentKind::audio_emitter;
+            }
+            else if (strcmp(name, "core.scaled_frame") == 0)
+            {
+                if (scene->tryGetComponent<ecs::ScaledFrameComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::ScaledFrameComponent>(handle->entity);
+                }
+                kind = ComponentKind::scaled_frame;
             }
             else
             {
@@ -831,6 +840,36 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::scaled_frame)
+            {
+                auto* frame = scene->tryGetComponent<ecs::ScaledFrameComponent>(entity);
+                if (frame == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no scaled_frame component");
+                if (strcmp(name, "source.width") == 0)
+                    frame->source.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "source.height") == 0)
+                    frame->source.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "target.width") == 0)
+                    frame->target.width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "target.height") == 0)
+                    frame->target.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "mode") == 0)
+                {
+                    auto* value = luaL_checkstring(L, 3);
+                    if (strcmp(value, "contain") == 0)
+                        frame->mode = ecs::ScaledFrameMode::Contain;
+                    else if (strcmp(value, "cover") == 0)
+                        frame->mode = ecs::ScaledFrameMode::Cover;
+                    else
+                        return luaL_error(L, "scene.setField: unknown scaled_frame mode '%s'", value);
+                }
+                else if (strcmp(name, "increment") == 0)
+                    frame->increment = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown scaled_frame field '%s'", name);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -1014,6 +1053,31 @@ namespace openre::script
                 return 1;
             }
 
+            if (comp->kind == ComponentKind::scaled_frame)
+            {
+                auto* frame = scene->tryGetComponent<ecs::ScaledFrameComponent>(entity);
+                if (frame == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "source.width") == 0)
+                    lua_pushnumber(L, frame->source.width);
+                else if (strcmp(name, "source.height") == 0)
+                    lua_pushnumber(L, frame->source.height);
+                else if (strcmp(name, "target.width") == 0)
+                    lua_pushnumber(L, frame->target.width);
+                else if (strcmp(name, "target.height") == 0)
+                    lua_pushnumber(L, frame->target.height);
+                else if (strcmp(name, "mode") == 0)
+                    lua_pushstring(L, frame->mode == ecs::ScaledFrameMode::Cover ? "cover" : "contain");
+                else if (strcmp(name, "increment") == 0)
+                    lua_pushnumber(L, frame->increment);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
             lua_pushnil(L);
             return 1;
         }
@@ -1104,6 +1168,8 @@ namespace openre::script
                 return ComponentKind::video;
             if (strcmp(name, "core.audio_emitter") == 0)
                 return ComponentKind::audio_emitter;
+            if (strcmp(name, "core.scaled_frame") == 0)
+                return ComponentKind::scaled_frame;
             return 0;
         }
 
@@ -1168,6 +1234,7 @@ namespace openre::script
             case ComponentKind::legacy: present = scene->hasComponent<ecs::LegacyGameComponent>(h->entity); break;
             case ComponentKind::video: present = scene->hasComponent<ecs::VideoComponent>(h->entity); break;
             case ComponentKind::audio_emitter: present = scene->hasComponent<ecs::AudioEmitterComponent>(h->entity); break;
+            case ComponentKind::scaled_frame: present = scene->hasComponent<ecs::ScaledFrameComponent>(h->entity); break;
             }
             if (!present)
             {
@@ -1207,6 +1274,8 @@ namespace openre::script
                 push("core.video");
             if (scene->hasComponent<ecs::AudioEmitterComponent>(h->entity))
                 push("core.audio_emitter");
+            if (scene->hasComponent<ecs::ScaledFrameComponent>(h->entity))
+                push("core.scaled_frame");
             return 1;
         }
 
@@ -1276,6 +1345,14 @@ namespace openre::script
                 push("status");
                 push("fadeFrames");
                 push("fadeTargetVolume");
+                break;
+            case ComponentKind::scaled_frame:
+                push("source.width");
+                push("source.height");
+                push("target.width");
+                push("target.height");
+                push("mode");
+                push("increment");
                 break;
             default: break;
             }

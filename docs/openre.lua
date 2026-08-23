@@ -335,6 +335,14 @@ function scene.addComponent(entity, name) end
 --- `source` (.sap file path relative to the game module directory),
 --- `volume` (0-100), `pan` (-100..100; 0 = centre), `loop` (boolean),
 --- `fadeFrames` / `fadeTargetVolume` and the read-only `status`.
+--- Scaled frame fields (`core.scaled_frame`): `source.width` / `source.height`
+--- (authored design-space size), `target.width` / `target.height`
+--- (window-pixel area to map onto), `mode` ("contain" fits the whole source
+--- inside the target with letterbox margins, "cover" fills the target and
+--- crops overflow) and `increment` (0 = exact fit scale; a positive value
+--- snaps the scale DOWN to whole multiples of itself, e.g. 0.5 allows only
+--- 0.5, 1.0, 1.5, ...). The engine writes the computed uniform scale to the
+--- entity's transform every frame; position the entity yourself.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
@@ -363,8 +371,8 @@ function scene.entityFromId(id) end
 
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
 --- one of "core.transform", "core.sprite", "core.text", "core.legacy",
---- "core.video" or "core.audio_emitter". Returns nil when the entity lacks
---- that component.
+--- "core.video", "core.audio_emitter" or "core.scaled_frame". Returns nil when
+--- the entity lacks that component.
 ---@param entity SceneEntity
 ---@param typeName string
 ---@return SceneComponent|nil
@@ -415,6 +423,29 @@ function scene.exit() end
 ---   playback: setting a new non-zero fadeFrames value starts one fade;
 ---   set it back to 0 first to run the same fade again later.
 --- * `fadeTargetVolume` — 0-100 target of the ramp.
+
+--[[ Scaled frames (core.scaled_frame) ]]
+
+--- Declarative window-fit scaling. Add it with
+--- `scene.addComponent(e, "core.scaled_frame")`; every frame the engine
+--- computes a uniform scale mapping `source` onto `target` and writes it to
+--- the entity's transform scale, so children laid out in the source's design
+--- space track the target (typically the window). The entity position is not
+--- touched — place it yourself (e.g. at the window centre) and refresh
+--- `target.width`/`target.height` when the window resizes.
+---
+--- Fields:
+--- * `source.width` / `source.height` — authored size of the content,
+---   e.g. 320x240.
+--- * `target.width` / `target.height` — area in window pixels to scale onto,
+---   usually gfx.screenWidth() x gfx.screenHeight().
+--- * `mode` — "contain" scales so the whole source fits inside the target
+---   (aspect ratio preserved, letterbox margins); "cover" scales so it fills
+---   the target (overflow is cropped). Default "contain".
+--- * `increment` — 0 uses the exact fit scale. A positive value snaps the
+---   scale DOWN to whole multiples of itself (e.g. 0.5 allows only 0.5, 1.0,
+---   1.5, ...) so UI art never renders at arbitrary fractions; the minimum
+---   applied scale is one increment.
 
 --[[ The gfx namespace (module mode) ]]
 

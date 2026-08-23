@@ -107,6 +107,30 @@ namespace openre::ecs
         float fadeTargetVolume = 100.0f;
     };
 
+    /// Fit mode of a ScaledFrameComponent.
+    enum class ScaledFrameMode : uint32_t
+    {
+        Contain = 0, // uniform scale so the whole source fits inside the target (letterbox)
+        Cover = 1,   // uniform scale so the source covers the whole target (crops overflow)
+    };
+
+    /// Declarative fit-scaling: maps content authored at `source` width/height
+    /// onto a `target` width/height area (typically the window) by writing a
+    /// uniform scale to the entity's transform every frame (ScaledFrameSystem).
+    ///
+    /// `mode` picks contain (fit inside, may letterbox) or cover (fill, may
+    /// crop). `increment` quantises the scale: 0 uses the exact fit factor,
+    /// while e.g. 0.5 snaps the scale down to whole 0.5 steps so UI art only
+    /// ever renders at crisp zoom levels (0.5, 1.0, 1.5, ...). The entity's
+    /// position is left alone - callers place it (e.g. at the window centre).
+    struct ScaledFrameComponent
+    {
+        Size2f source;
+        Size2f target;
+        ScaledFrameMode mode = ScaledFrameMode::Contain;
+        float increment = 0.0f;
+    };
+
     /// Horizontal alignment of a TextComponent within its size bounds.
     enum class TextAlignX : uint32_t
     {

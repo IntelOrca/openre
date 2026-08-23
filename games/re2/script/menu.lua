@@ -19,17 +19,19 @@
 
 -- The sandboxed VM removes setmetatable, so each Title instance carries its
 -- methods directly instead of sharing them through a class metatable.
-local util              = require("script/util")
 local prologue          = require("script/prologue")
 
 local Title             = {}
 local titleMethods      = {}
 
--- Design space for the title screen: all content (background, logo, text) is
--- laid out in this fixed 320x240 coordinate space, then a single "canvas"
--- entity is scaled to fit and centred in the window (preserving aspect ratio).
+-- Design space for the title screen: content is authored in this fixed
+-- 320x240 coordinate space. Two sibling layers under the user root map it
+-- onto the window via native ScaledFrameComponents (see Title:new): "back"
+-- holds only the background and contains-fits it exactly; "front" holds the
+-- UI (logo + text) and snaps its scale down to whole SCALE_STEP increments.
 local CANVAS_W          = 320
 local CANVAS_H          = 240
+local SCALE_STEP        = 0.5                   -- UI scale quantum (front layer)
 
 local STATE_PRESS_START = 0
 local STATE_MENU        = 1
@@ -328,11 +330,11 @@ local function refreshTooltip(self)
     scene.setField(self.tooltipComponent, 'text', text)
 end
 
--- Create one line of text parented under the 320x240 canvas. `centerX` is the
+-- Create one line of text parented under the front layer (320x240 space). `centerX` is the
 -- desired CENTRE of the text box; with TextFlags.xLeft the glyphs are flush to
 -- the box's left edge, so pass centerX = (desired left edge) + bandW/2.
-local function createLine(canvas, font, centerX, centerY, bandW, bandH, text, name, flags)
-    local e = scene.createEntity(canvas)
+local function createLine(parent, font, centerX, centerY, bandW, bandH, text, name, flags)
+    local e = scene.createEntity(parent)
     scene.setField(e, 'name', name)
     scene.setField(e, 'x', centerX)
     scene.setField(e, 'y', centerY)
@@ -535,10 +537,20 @@ local function updateLeaving(self)
         if t >= 1 then
             gfx.fade(0, 0, 0, 255)
             self.closed = true
-            local canvas = self.canvas
-            self.canvas = nil
-            if canvas then
-                scene.destroy(canvas)
+            if self.front then
+                scene.destroy(self.front)
+                self.front = nil
+                self.frontFrame = nil
+            end
+            if self.back then
+                scene.destroy(self.back)
+                self.back = nil
+                self.backFrame = nil
+            end
+            if self.backdrop then
+                scene.destroy(self.backdrop)
+                self.backdrop = nil
+                self.backdropSprite = nil
             end
             self:launchPrologue()
         end
@@ -560,14 +572,38 @@ local function playDemo(self)
     print('[title] playing demo (stub)')
 end
 
+-- Keep one scaled-frame layer tracking the window: recentre it and refresh
+-- its target to the current window size so ScaledFrameSystem recomputes the
+-- scale (exact fit for back, snapped to SCALE_STEP steps for front).
+local function fitLayer(entity, frame)
+    local w = gfx.screenWidth()
+    local h = gfx.screenHeight()
+    scene.setField(entity, 'x', w * 0.5)
+    scene.setField(entity, 'y', h * 0.5)
+    scene.setField(frame, 'target.width', w)
+    scene.setField(frame, 'target.height', h)
+end
+
 local function update(self)
     if self.closed then
         return
     end
     self.ticks = self.ticks + 1
 
-    -- Re-fit and re-centre the canvas every frame so it tracks window resizes.
-    util.fitCanvas(self.canvas)
+    -- Re-centre the layers and refresh their targets every frame so they
+    -- track window resizes.
+    fitLayer(self.back, self.backFrame)
+    fitLayer(self.front, self.frontFrame)
+
+    -- Keep the solid backdrop covering the whole window behind everything.
+    if self.backdrop then
+        local w = gfx.screenWidth()
+        local h = gfx.screenHeight()
+        scene.setField(self.backdrop, 'x', w * 0.5)
+        scene.setField(self.backdrop, 'y', h * 0.5)
+        scene.setField(self.backdropSprite, 'size.width', w)
+        scene.setField(self.backdropSprite, 'size.height', h)
+    end
 
     -- Smoothly animate the logo toward its target position.
     local ly = self.logoY + (self.logoTargetY - self.logoY) * 0.15
@@ -655,33 +691,61 @@ function Title:new()
         instance.itemXTarget = {}
     instance.itemCount = 10 -- enough rows for the deepest list (character menu)
 
-    -- Logo vertical positions, expressed as offsets from the canvas centre
-    -- (the canvas's local origin is its centre, which maps to the window
+    -- Logo vertical positions, expressed as offsets from the layer centre
+    -- (each layer's local origin is its centre, which maps to the window
     -- centre). Negative = above centre.
     instance.pressLogoY = CANVAS_H * (0.34 - 0.5)
     instance.menuLogoY = CANVAS_H * (0.18 - 0.5)
 
-    -- Root entity for things that must outlive the menu canvas.
+    -- Root entity for things that must outlive the menu layers.
     instance.userRoot = scene.getRoot("user")
 
-    -- Everything (background, logo, text) lives inside a single 320x240
-    -- "canvas" entity. The canvas root is placed at the window centre and
-    -- scaled to fit each frame (see update()); its children are laid out in a
-    -- coordinate space centred on (0,0), and each piece of content is centred
-    -- on its own local origin.
-    local canvas = scene.createEntity(scene.getRoot("user"))
-    scene.setField(canvas, 'name', 'menu.canvas')
-    instance.canvas = canvas
-    util.fitCanvas(canvas)
+    -- Two sibling layers under the user root, each mapping the 320x240 design
+    -- space onto the window through a native scaled-frame component (the
+    -- ScaledFrameSystem applies the actual scale every frame):
+    --   back  — the background only; contains-fits the window exactly.
+    --   front — the UI (logo + text); same fit, but the scale snaps DOWN to
+    --           whole SCALE_STEP increments so art never renders at odd
+    --           fractions. Both roots are placed at the window centre by
+    --           fitLayer(); children live in a coordinate space centred on
+    --           (0,0) and each piece of content is centred on its own origin.
+    local function createLayer(name, increment)
+        local entity = scene.createEntity(instance.userRoot)
+        scene.setField(entity, 'name', name)
+        local frame = scene.addComponent(entity, 'core.scaled_frame')
+        scene.setField(frame, 'source.width', CANVAS_W)
+        scene.setField(frame, 'source.height', CANVAS_H)
+        scene.setField(frame, 'mode', 'contain')
+        scene.setField(frame, 'increment', increment)
+        return entity, frame
+    end
+
+    -- Solid dark-red backdrop filling the whole window. Created before the
+    -- layers so it paints behind them (equal z keeps creation order); a
+    -- texture-less sprite draws as a solid colour quad (see render2d).
+    local backdrop = scene.createEntity(instance.userRoot)
+    scene.setField(backdrop, 'name', 'menu.backdrop')
+    local backdropSprite = scene.addComponent(backdrop, 'core.sprite')
+    scene.setField(backdropSprite, 'color', { 8, 0, 0, 255 })
+    scene.setField(backdropSprite, 'size.width', gfx.screenWidth())
+    scene.setField(backdropSprite, 'size.height', gfx.screenHeight())
+    scene.setField(backdrop, 'x', gfx.screenWidth() * 0.5)
+    scene.setField(backdrop, 'y', gfx.screenHeight() * 0.5)
+    instance.backdrop = backdrop
+    instance.backdropSprite = backdropSprite
+
+    instance.back, instance.backFrame = createLayer('menu.back', 0)
+    instance.front, instance.frontFrame = createLayer('menu.front', SCALE_STEP)
 
     local bigFont = gfx.loadFont('common/data/font0')
     local smallFont = gfx.loadFont('common/data/font0:small')
 
-    -- Original RE2 title background (data://), authored at 320x240. It is
-    -- centred on the canvas origin (0,0) so it fills the window-centred canvas.
+    -- Original RE2 title background (data://), authored at 320x240. It lives
+    -- under the back layer, centred on the layer origin (0,0) = window centre,
+    -- so it tracks the window smoothly while the front UI snaps between steps.
     local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
     if bgTex then
-        local e = scene.createEntity(canvas)
+        local e = scene.createEntity(instance.back)
         scene.setField(e, 'name', 'menu.background')
         scene.setField(e, 'x', 0)
         scene.setField(e, 'y', 0)
@@ -693,7 +757,7 @@ function Title:new()
     end
 
     -- RE2 title logo: assembled from TIM index 1 and TIM index 2 of tmoji.bin.
-    -- The logo root sits at the canvas centre (0,0); each tile is a static
+    -- The logo root sits at the front layer centre (0,0); each tile is a static
     -- relative offset from that root, chosen so the assembled logo is centred.
     -- (The right-hand TIM is mostly empty, so the offsets are biased left of the
     -- raw source-rectangle centre to keep the visible logo centred.)
@@ -704,9 +768,9 @@ function Title:new()
         { 2, 0, 32, 128, 80, 180,   0 },
     }
 
-    local logoRoot = scene.createEntity(canvas)
+    local logoRoot = scene.createEntity(instance.front)
     scene.setField(logoRoot, 'name', 'menu.logo')
-    -- Centred on the canvas origin (0,0) = window centre; the tiles below are
+    -- Centred on the front layer origin (0,0) = window centre; the tiles below are
     -- static offsets from this root already chosen to centre the assembled logo.
     scene.setField(logoRoot, 'x', 0)
     scene.setField(logoRoot, 'y', instance.pressLogoY)
@@ -735,7 +799,7 @@ function Title:new()
 
     -- START GAME prompt (just above the menu band).
         local _, pt = createLine(
-            canvas,
+            instance.front,
             bigFont,
             0 + 0, bandCenterY(0.56, 0.07), CANVAS_W, CANVAS_H * 0.07,
             whiteSpan('START GAME', ALPHA_PEAK),
@@ -748,7 +812,7 @@ function Title:new()
         instance.itemStepY = CANVAS_H * ITEM_STEP
         for i = 1, instance.itemCount do
             local e, t = createLine(
-                canvas,
+                instance.front,
                 bigFont,
                 ITEM_LEFT + CANVAS_W * 0.5, instance.itemTopY + (i - 1) * instance.itemStepY,
                 CANVAS_W, CANVAS_H * 0.05,
@@ -763,7 +827,7 @@ function Title:new()
 
         -- Tooltip line along the bottom edge (replaces the version disclaimer).
         local _, tt = createLine(
-            canvas,
+            instance.front,
                 smallFont or bigFont,
             4, bandCenterY(TOOLTIP_FRAC, 0.06), CANVAS_W, CANVAS_H * 0.06,
             '',

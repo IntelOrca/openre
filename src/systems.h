@@ -15,6 +15,7 @@ namespace openre
     // ECS systems (implemented in ecs_systems.cpp).
     void ModuleSystem(AppContext& app);
     void LegacyGameSystem(AppContext& app);
+    void ScaledFrameSystem(AppContext& app);
     void TextLayoutSystem(AppContext& app);
     void VideoSystem(AppContext& app);
     void AudioSystem(AppContext& app);

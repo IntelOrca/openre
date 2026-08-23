@@ -217,6 +217,44 @@ namespace openre
         });
     }
 
+    // Applies every ScaledFrameComponent: computes the uniform scale that maps
+    // the component's source size onto its target size (contain = fit inside,
+    // cover = fill), optionally snapped down to `increment` steps, then writes
+    // it to the entity's transform scale. The position is untouched - callers
+    // place the entity (e.g. at the window centre). Runs after the script tick
+    // so Lua-written inputs are honoured, before rendering reads transforms.
+    void ScaledFrameSystem(AppContext& app)
+    {
+        if (app.closing() || !app.running())
+            return;
+        if (!game_module_active())
+            return;
+        if (!app.frameActive)
+            return;
+
+        app.scene.each<ecs::ScaledFrameComponent>([&](ecs::Entity entity, ecs::ScaledFrameComponent& frame) {
+            const float sw = frame.source.width;
+            const float sh = frame.source.height;
+            const float tw = frame.target.width;
+            const float th = frame.target.height;
+            if (sw <= 0 || sh <= 0 || tw <= 0 || th <= 0)
+                return;
+
+            const bool cover = frame.mode == ecs::ScaledFrameMode::Cover;
+            float scale = cover ? std::max(tw / sw, th / sh) : std::min(tw / sw, th / sh);
+            if (frame.increment > 0)
+            {
+                // Snap DOWN to whole increments so the content never exceeds
+                // the target; never go below one increment.
+                scale = std::floor(scale / frame.increment + 1e-4f) * frame.increment;
+                scale = std::max(scale, frame.increment);
+            }
+            auto& transform = app.scene.getComponent<ecs::TransformComponent>(entity);
+            transform.scale.x = scale;
+            transform.scale.y = scale;
+        });
+    }
+
     namespace
     {
         // Per-emitter mixer state mirrored from AudioEmitterComponent.
