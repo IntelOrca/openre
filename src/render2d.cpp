@@ -238,18 +238,17 @@ namespace openre::render2d
         Uint32 captureHeight = 0;
 
         // Backbuffer readback. The requester (Lua script tick, main thread)
-        // only flags the request here; the download is performed on the same
-        // thread inside the frame's own submit. Acquiring and submitting a
-        // second command buffer from another thread while frames are being
-        // presented failed D3D12 command list close (E_INVALIDARG), so the
-        // transfer piggybacks on the present frame and the result is polled
-        // on a later tick.
+        // only flags the request here; the download is recorded into the
+        // frame's present command buffer right after the render pass (so it
+        // runs in-order with the presented frame and never blocks the main
+        // thread) and the result is polled on a later tick once the fence
+        // signals.
         bool captureRequested = false;
-        bool captureSucceeded = false;
         SDL_GPUTransferBuffer* captureTransferBuffer = nullptr;
         SDL_GPUFence* captureFence = nullptr;
         Uint32 captureResultWidth = 0;
         Uint32 captureResultHeight = 0;
+        bool captureSucceeded = false;
 
         bool ensureCaptureTexture(SDL_GPUDevice* dev, SDL_Window* win, Uint32 w, Uint32 h)
         {
@@ -1038,23 +1037,25 @@ namespace openre::render2d
         const bool captureThisFrame = impl->captureRequested;
         impl->captureRequested = false;
 
-        SDL_GPUFence* captureFence = nullptr;
         SDL_GPUTransferBuffer* captureBuffer = nullptr;
         bool downloadRecorded = false;
         if (captureThisFrame)
         {
-            captureBuffer = nullptr;
             SDL_GPUTransferBufferCreateInfo tbInfo{};
             tbInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
             tbInfo.size = impl->captureWidth * impl->captureHeight * 4;
             captureBuffer = SDL_CreateGPUTransferBuffer(dev, &tbInfo);
-
             if (captureBuffer)
             {
                 SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
                 if (cp)
                 {
-                    SDL_GPUTextureRegion region{ impl->captureTexture, 0, 0, 0, impl->captureWidth, impl->captureHeight, 1 };
+                    // Region is 9 fields: texture, mip_level, layer, x, y, z, w, h, d.
+                    SDL_GPUTextureRegion region{};
+                    region.texture = impl->captureTexture;
+                    region.w = impl->captureWidth;
+                    region.h = impl->captureHeight;
+                    region.d = 1;
                     SDL_GPUTextureTransferInfo loc{};
                     loc.transfer_buffer = captureBuffer;
                     loc.pixels_per_row = impl->captureWidth;
@@ -1067,7 +1068,11 @@ namespace openre::render2d
                 {
                     logging::logError("[render2d] capture: begin copy pass failed: {}", SDL_GetError());
                 }
-                captureFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+                impl->captureTransferBuffer = captureBuffer;
+                impl->captureFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+                impl->captureResultWidth = impl->captureWidth;
+                impl->captureResultHeight = impl->captureHeight;
+                impl->captureSucceeded = downloadRecorded && impl->captureFence != nullptr;
             }
             else
             {
@@ -1078,15 +1083,6 @@ namespace openre::render2d
         else
         {
             SDL_SubmitGPUCommandBuffer(cmd);
-        }
-
-        if (captureThisFrame)
-        {
-            impl->captureTransferBuffer = captureBuffer;
-            impl->captureFence = captureFence;
-            impl->captureResultWidth = impl->captureWidth;
-            impl->captureResultHeight = impl->captureHeight;
-            impl->captureSucceeded = downloadRecorded && captureBuffer != nullptr && captureFence != nullptr;
         }
     }
 
@@ -1141,26 +1137,26 @@ namespace openre::render2d
 
     bool SpriteRenderer::requestCapture()
     {
-        if (!impl->captureTexture || impl->captureWidth == 0 || impl->captureHeight == 0)
-            return false;
-
         SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
-        if (!dev)
+        if (!dev || !impl->captureTexture || impl->captureWidth == 0 || impl->captureHeight == 0)
             return false;
 
-        // Drop an earlier request the requester never polled.
-        if (impl->captureTransferBuffer)
-        {
-            SDL_ReleaseGPUTransferBuffer(dev, impl->captureTransferBuffer);
-            impl->captureTransferBuffer = nullptr;
-        }
+        // Drop an earlier result the requester never polled.
         if (impl->captureFence)
         {
             SDL_ReleaseGPUFence(dev, impl->captureFence);
             impl->captureFence = nullptr;
         }
-        impl->captureRequested = true;
+        if (impl->captureTransferBuffer)
+        {
+            SDL_ReleaseGPUTransferBuffer(dev, impl->captureTransferBuffer);
+            impl->captureTransferBuffer = nullptr;
+        }
         impl->captureSucceeded = false;
+
+        // The next present() records the download into its own command buffer
+        // so it runs in-order with the frame.
+        impl->captureRequested = true;
         return true;
     }
 
@@ -1178,8 +1174,8 @@ namespace openre::render2d
         if (!tbuf || !fence)
             return false;
 
-        // The download was recorded in a present command buffer; wait until
-        // the GPU has finished it before mapping the transfer buffer.
+        // Wait until the GPU has finished the download before mapping the
+        // transfer buffer.
         SDL_WaitForGPUFences(dev, true, &fence, 1);
         SDL_ReleaseGPUFence(dev, fence);
 

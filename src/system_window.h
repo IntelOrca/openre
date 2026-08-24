@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 
 namespace openre::system::window
 {
@@ -71,12 +70,6 @@ namespace openre::system::window
     // GetClientRect + ClientToScreen). Returns false when the window is not
     // available.
     bool get_client_rect(int& left, int& top, int& right, int& bottom);
-
-    // Captures the game window's client area as an uncompressed 24bpp BMP
-    // (bottom-up rows). Used for the debug web UI screenshot endpoint; reads
-    // the composed window content rather than the GPU backbuffer. Returns
-    // false when the window is unavailable or the capture fails.
-    bool capture_window(std::vector<uint8_t>& outBmp, int& outWidth, int& outHeight);
 
     // Polls the next window event; returns false when the queue is empty.
     bool poll_event(Event& event);

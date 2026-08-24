@@ -622,8 +622,11 @@ end
 
 -- A socket awaiting the screenshot requested on a previous tick (the grab
 -- completes inside the next present, handled on a later tick). Declared
--- before handle() so the route can park its socket in it.
+-- before handle() so the route can park its socket in it. The grab takes one
+-- full frame, so deferring the response lets the download land before we
+-- respond; give up after a few frames if no present ever serviced it.
 local pendingShot = nil
+local pendingShotTicks = 0
 
 local function handle(sock, req)
     sock.noDelay = true
@@ -666,9 +669,10 @@ local function handle(sock, req)
             if ok == false then
                 respond(sock, "503 Service Unavailable", "text/plain", "no frame has been presented yet")
             else
-                -- The grab completes inside the next present; respond from a
-                -- later tick once the renderer has produced the frame.
+                -- The grab completes inside the next present; poll for it on
+                -- the next few ticks once the renderer has produced a frame.
                 pendingShot = sock
+                pendingShotTicks = 0
             end
         end
     elseif method == "POST" and base == "/api/scene/set" then
@@ -767,16 +771,23 @@ end
 local inflight = {}
 
 re.subscribe(HookKind.tick, function()
-    -- Serve a requested screenshot now the renderer has grabbed the frame.
+    -- Serve a requested screenshot once the renderer has grabbed the frame.
     if pendingShot and gfx.takeScreenshot then
-        local sock = pendingShot
-        pendingShot = nil
         local ok, shot = pcall(gfx.takeScreenshot)
         if ok and type(shot) == "table" and type(shot.data) == "string" then
+            local sock = pendingShot
+            pendingShot = nil
+            pendingShotTicks = 0
             respond(sock, "200 OK", "image/bmp", shot.data,
                 { "X-Width: " .. tostring(shot.width), "X-Height: " .. tostring(shot.height) })
         else
-            respond(sock, "500 Internal Server Error", "text/plain", "screenshot failed: " .. tostring(shot))
+            pendingShotTicks = pendingShotTicks + 1
+            if pendingShotTicks >= 8 then
+                local sock = pendingShot
+                pendingShot = nil
+                pendingShotTicks = 0
+                respond(sock, "503 Service Unavailable", "text/plain", "no frame has been presented")
+            end
         end
     end
 

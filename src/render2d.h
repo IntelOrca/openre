@@ -103,15 +103,15 @@ namespace openre::render2d
         int screenWidth() const;
         int screenHeight() const;
 
-        // Requests the next presented frame be copied into an internal
-        // buffer; the download runs on the render thread inside that frame's
-        // submit, so pair this with pollCapture() on a later tick. Returns
-        // false when no frame is capturable (nothing presented yet).
+        // Asks the renderer to grab the next presented frame: the download is
+        // recorded inside the next present's command buffer so it runs in-order
+        // with the frame, and is collected with pollCapture() on a later tick.
+        // Returns false only when no frame can ever be captured.
         bool requestCapture();
 
         // Returns the BMP encoded from the most recent requestCapture() that
-        // the render thread has serviced, or false while none is ready.
-        // Consumes the result; each request yields one BMP.
+        // a present has serviced, or false while none is ready. Consumes the
+        // result; each request yields one BMP.
         bool pollCapture(std::vector<uint8_t>& outBmp, int* outWidth = nullptr, int* outHeight = nullptr);
 
         // Per-frame fade overlay (set by the Lua gfx.fade binding).

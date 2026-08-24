@@ -1226,16 +1226,13 @@ namespace openre::script
 
         // gfx.takeScreenshot() - returns { width = w, height = h, data =
         // <BMP bytes> } for the frame grabbed by the most recent
-        // gfx.requestScreenshot(), or nil while none is ready. Falls back to
-        // capturing the window content when the GPU grab is unavailable (e.g.
-        // while the legacy game renders outside the ECS renderer).
+        // gfx.requestScreenshot(), or nil while none is ready.
         int gfxTakeScreenshot(lua_State* L)
         {
             std::vector<uint8_t> bmp;
             int width = 0;
             int height = 0;
-            const bool ok = render2d::SpriteRenderer::get().pollCapture(bmp, &width, &height)
-                || system::window::capture_window(bmp, width, height);
+            const bool ok = render2d::SpriteRenderer::get().pollCapture(bmp, &width, &height);
             if (!ok)
             {
                 lua_pushnil(L);
