@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -52,6 +53,15 @@ namespace openre::render2d
             v.g = (uint8_t)((packedColor >> 8) & 0xFF);
             v.r = (uint8_t)((packedColor >> 16) & 0xFF);
             v.a = (uint8_t)((packedColor >> 24) & 0xFF);
+        }
+
+        // Rounds a window-space coordinate to the nearest whole pixel. The
+        // scene viewport maps window space onto device pixels 1:1 from the
+        // origin (see the gViewport uniform in present()), so an integral
+        // coordinate is exactly a device pixel corner.
+        float snapToPixel(float v)
+        {
+            return std::floor(v + 0.5f);
         }
     } // namespace
 
@@ -536,10 +546,21 @@ namespace openre::render2d
             // (x, y) is the centre of the drawn quad, not the top-left.
             const float halfW = s.dst.width * 0.5f;
             const float halfH = s.dst.height * 0.5f;
-            const float x0 = s.dst.x - halfW;
-            const float y0 = s.dst.y - halfH;
-            const float x1 = s.dst.x + halfW;
-            const float y1 = s.dst.y + halfH;
+            float x0 = s.dst.x - halfW;
+            float y0 = s.dst.y - halfH;
+            float x1 = s.dst.x + halfW;
+            float y1 = s.dst.y + halfH;
+
+            // These are the final transformed positions, so snap every vertex
+            // onto whole window (= device) pixels. Quads are axis aligned, so
+            // rounding each corner puts all four edges exactly on device pixel
+            // boundaries: nearest sampling stays crisp and quads sharing a
+            // fractional edge round to the same coordinate instead of gapping
+            // or overlapping by a sub-pixel sliver.
+            x0 = snapToPixel(x0);
+            y0 = snapToPixel(y0);
+            x1 = snapToPixel(x1);
+            y1 = snapToPixel(y1);
 
             out[0].sx = x0;
             out[0].sy = y0;
