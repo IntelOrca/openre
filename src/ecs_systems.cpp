@@ -203,88 +203,557 @@ namespace openre
 
     // ── Input hints ─────────────────────────────────────────────────────
     //
-    // The button atlas (texture/input_keys.bmp) is a grid of 16x16 keycap
-    // cells: row 0 holds A-P, row 1 Q-Z then 0-5, row 2 6-9 plus the special
-    // keys and arrows, row 3 the mouse buttons. Gamepad themes will extend
-    // the atlas once input device detection exists.
-    constexpr float kInputKeyCell = 16.0f;
-    constexpr int kInputKeyCellsPerRow = 16;
-    // Space between the key icon's right edge and where the label starts.
-    constexpr float kHintGap = 4.0f;
+    // Two shared atlases (32x32 cells, 16 per row) live in the core asset
+    // dir: texture/input_kbm.bmp is a full keyboard + numpad + mouse layout,
+    // texture/input_pad.bmp packs the PlayStation, Xbox and Nintendo sets.
+    constexpr float kInputCell = 32.0f;
+    constexpr int kInputCellsPerRow = 16;
+    // Space between the icon's right edge and where the label starts.
+    constexpr float kHintGap = 6.0f;
 
-    enum InputKeyCells
+    // Cell index in the atlases: row-major, 16 columns.
+    constexpr int cellAt(int col, int row)
     {
-        kCellKeyA = 0,
-        kCellDigit0 = 26,
-        kCellEsc = 36,
-        kCellTab = 37,
-        kCellCtrl = 38,
-        kCellAlt = 39,
-        kCellShift = 40,
-        kCellEnter = 41,
-        kCellSpace = 42,
-        kCellUp = 43,
-        kCellDown = 44,
-        kCellLeft = 45,
-        kCellRight = 46,
-        kCellMouseLeft = 48,
-        kCellMouseMiddle = 49,
-        kCellMouseRight = 50,
+        return row * kInputCellsPerRow + col;
+    }
+
+    // texture/input_kbm.bmp cells. The keyboard mirrors a physical QWERTY
+    // layout (rows 0-5), with mouse buttons on row 7.
+    enum InputKbmCells
+    {
+        kKbmEscape = cellAt(0, 0),
+        kKbmF1 = cellAt(1, 0),
+        kKbmPrintscreen = cellAt(13, 0),
+        kKbmScroll = cellAt(14, 0),
+        kKbmPause = cellAt(15, 0),
+        kKbmTilde = cellAt(0, 1),
+        kKbmDigit1 = cellAt(1, 1),
+        kKbmMinus = cellAt(11, 1),
+        kKbmEqual = cellAt(12, 1),
+        kKbmBackspace = cellAt(13, 1),
+        kKbmInsert = cellAt(14, 1),
+        kKbmHome = cellAt(15, 1),
+        kKbmTab = cellAt(0, 2),
+        kKbmKeyQ = cellAt(1, 2),
+        kKbmBracketL = cellAt(11, 2),
+        kKbmBracketR = cellAt(12, 2),
+        kKbmBackslash = cellAt(13, 2),
+        kKbmDel = cellAt(14, 2),
+        kKbmEnd = cellAt(15, 2),
+        kKbmCaps = cellAt(0, 3),
+        kKbmKeyA = cellAt(1, 3),
+        kKbmSemicolon = cellAt(10, 3),
+        kKbmQuote = cellAt(11, 3),
+        kKbmEnter = cellAt(12, 3),
+        kKbmArrowUp = cellAt(13, 3),
+        kKbmPageUp = cellAt(14, 3),
+        kKbmPageDown = cellAt(15, 3),
+        kKbmShift = cellAt(0, 4),
+        kKbmKeyZ = cellAt(1, 4),
+        kKbmComma = cellAt(8, 4),
+        kKbmPeriod = cellAt(9, 4),
+        kKbmSlash = cellAt(10, 4),
+        kKbmShiftLeft = cellAt(11, 4),
+        kKbmShiftRight = cellAt(12, 4),
+        kKbmArrowLeft = cellAt(13, 4),
+        kKbmArrowDown = cellAt(14, 4),
+        kKbmArrowRight = cellAt(15, 4),
+        kKbmCtrl = cellAt(0, 5),
+        kKbmAlt = cellAt(1, 5),
+        kKbmSpace = cellAt(2, 5),
+        kKbmAltLeft = cellAt(3, 5),
+        kKbmCtrlLeft = cellAt(4, 5),
+        kKbmAltRight = cellAt(5, 5),
+        kKbmCtrlRight = cellAt(6, 5),
+        kKbmMouseLeft = cellAt(0, 7),
+        kKbmMouseRight = cellAt(1, 7),
+        kKbmMouseMiddle = cellAt(2, 7),
+        kKbmMouseWheelUp = cellAt(3, 7),
+        kKbmMouseWheelDown = cellAt(4, 7),
+        kKbmMouse4 = cellAt(5, 7),
+        kKbmMouse5 = cellAt(6, 7),
+        kKbmMouse6 = cellAt(7, 7),
     };
 
-    struct InputCommandKey
+    // texture/input_pad.bmp cells. Xbox occupies rows 0-1 (+ dpad directions
+    // on row 2 cols 0-3), PlayStation rows 3-5 (+ row 2 cols 8-11) and
+    // Nintendo rows 5-7 (+ row 2 cols 4-7).
+    enum InputPadCells
+    {
+        // Xbox
+        kXbA = cellAt(0, 0),
+        kXbB = cellAt(1, 0),
+        kXbStart = cellAt(2, 0),
+        kXbDpad = cellAt(3, 0),
+        kXbDpadUpdown = cellAt(4, 0),
+        kXbLt = cellAt(5, 0),
+        kXbRt = cellAt(6, 0),
+        kXbLs = cellAt(7, 0),
+        kXbRs = cellAt(8, 0),
+        kXbLsUpdown = cellAt(9, 0),
+        kXbRsUpdown = cellAt(10, 0),
+        kXb360Start = cellAt(12, 0),
+        kXbX = cellAt(0, 1),
+        kXbY = cellAt(1, 1),
+        kXbSelect = cellAt(2, 1),
+        kXbDpadLeftright = cellAt(3, 1),
+        kXbDpadAll = cellAt(4, 1),
+        kXbLb = cellAt(5, 1),
+        kXbRb = cellAt(6, 1),
+        kXbLsClick = cellAt(7, 1),
+        kXbRsClick = cellAt(8, 1),
+        kXbLsLeftright = cellAt(9, 1),
+        kXbRsLeftright = cellAt(10, 1),
+        kXb360Select = cellAt(12, 1),
+        kXbDpadLeft = cellAt(0, 2),
+        kXbDpadRight = cellAt(1, 2),
+        kXbDpadUp = cellAt(2, 2),
+        kXbDpadDown = cellAt(3, 2),
+
+        // PlayStation
+        kPsCross = cellAt(0, 3),
+        kPsCircle = cellAt(1, 3),
+        kPsStart = cellAt(2, 3),
+        kPsDpad = cellAt(3, 3),
+        kPsDpadUpdown = cellAt(4, 3),
+        kPsLb = cellAt(5, 3),
+        kPsRb = cellAt(6, 3),
+        kPsLs = cellAt(7, 3),
+        kPsRs = cellAt(8, 3),
+        kPsLsUpdown = cellAt(9, 3),
+        kPsRsUpdown = cellAt(10, 3),
+        kPsTouchpad = cellAt(11, 3),
+        kPsTouchpadLeft = cellAt(12, 3),
+        kPsTouchpadRight = cellAt(13, 3),
+        kPsSquare = cellAt(0, 4),
+        kPsTriangle = cellAt(1, 4),
+        kPsSelect = cellAt(2, 4),
+        kPsDpadLeftright = cellAt(3, 4),
+        kPsDpadAll = cellAt(4, 4),
+        kPsLt = cellAt(5, 4),
+        kPsRt = cellAt(6, 4),
+        kPsLsClick = cellAt(7, 4),
+        kPsRsClick = cellAt(8, 4),
+        kPsLsLeftright = cellAt(9, 4),
+        kPsRsLeftright = cellAt(10, 4),
+        kPsDs5Select = cellAt(0, 5),
+        kPsDs5Start = cellAt(1, 5),
+        kPs5Cross = cellAt(2, 5),
+        kPs5Circle = cellAt(3, 5),
+        kPs5Square = cellAt(4, 5),
+        kPs5Triangle = cellAt(5, 5),
+        kPsDpadLeft = cellAt(8, 2),
+        kPsDpadRight = cellAt(9, 2),
+        kPsDpadUp = cellAt(10, 2),
+        kPsDpadDown = cellAt(11, 2),
+
+        // Nintendo
+        kNSwitchB = cellAt(0, 6),
+        kNSwitchA = cellAt(1, 6),
+        kNStart = cellAt(2, 6),
+        kNDpad = cellAt(3, 6),
+        kNDpadUpdown = cellAt(4, 6),
+        kNLb = cellAt(5, 6),
+        kNRb = cellAt(6, 6),
+        kNLs = cellAt(7, 6),
+        kNRs = cellAt(8, 6),
+        kNLsUpdown = cellAt(9, 6),
+        kNRsUpdown = cellAt(10, 6),
+        kNJcDpad = cellAt(11, 6),
+        kNJcDpadUpdown = cellAt(12, 6),
+        kNHome = cellAt(13, 6),
+        kNY = cellAt(0, 7),
+        kNX = cellAt(1, 7),
+        kNSelect = cellAt(2, 7),
+        kNDpadLeftright = cellAt(3, 7),
+        kNDpadAll = cellAt(4, 7),
+        kNLt = cellAt(5, 7),
+        kNRt = cellAt(6, 7),
+        kNLsClick = cellAt(7, 7),
+        kNRsClick = cellAt(8, 7),
+        kNLsLeftright = cellAt(9, 7),
+        kNRsLeftright = cellAt(10, 7),
+        kNProSelect = cellAt(12, 5),
+        kNProStart = cellAt(13, 5),
+        kNDpadLeft = cellAt(4, 2),
+        kNDpadRight = cellAt(5, 2),
+        kNDpadUp = cellAt(6, 2),
+        kNDpadDown = cellAt(7, 2),
+    };
+
+    struct InputCommandIcon
     {
         const char* command;
         int cell;
     };
 
-    // Keyboard bindings for named commands. A command that is a single letter
-    // or digit ("p") resolves to its own key cell without an entry here.
-    constexpr InputCommandKey kKeyboardCommands[] = {
-        { "accept", kCellEnter },
-        { "cancel", kCellEsc },
-        { "pause", kCellKeyA + ('P' - 'A') },
-        { "inventory", kCellKeyA + ('I' - 'A') },
-        { "map", kCellKeyA + ('M' - 'A') },
-        { "run", kCellShift },
-        { "ready", kCellSpace },
+    // Keyboard/mouse bindings for named commands. A command that is a single
+    // letter ("p") or digit ("5") resolves to its own key cell without an
+    // entry here; unknown names fall through to the direct alias table below.
+    constexpr InputCommandIcon kKbmCommands[] = {
+        { "accept", kKbmEnter },
+        { "cancel", kKbmEscape },
+        { "pause", kKbmKeyA + ('P' - 'A') },
+        { "inventory", kKbmKeyA + ('I' - 'A') },
+        { "map", kKbmKeyA + ('M' - 'A') },
+        { "run", kKbmShift },
+        { "ready", kKbmSpace },
+        { "up", kKbmArrowUp },
+        { "down", kKbmArrowDown },
+        { "left", kKbmArrowLeft },
+        { "right", kKbmArrowRight },
     };
 
-    bool lookupInputKeyCell(const std::string& command, int& outCell)
+    // Direct icon aliases (matched after the command tables): the icon name
+    // itself selects its cell. Names follow the kb:/gp:/mu: binding tokens so
+    // a binding can be shown directly (plus friendlier aliases).
+    constexpr InputCommandIcon kKbmAliases[] = {
+        { "escape", kKbmEscape },
+        { "esc", kKbmEscape },
+        { "enter", kKbmEnter },
+        { "return", kKbmEnter },
+        { "space", kKbmSpace },
+        { "tab", kKbmTab },
+        { "capslock", kKbmCaps },
+        { "caps", kKbmCaps },
+        { "backspace", kKbmBackspace },
+        { "insert", kKbmInsert },
+        { "delete", kKbmDel },
+        { "home", kKbmHome },
+        { "end", kKbmEnd },
+        { "pageup", kKbmPageUp },
+        { "pagedown", kKbmPageDown },
+        { "printscreen", kKbmPrintscreen },
+        { "scroll", kKbmScroll },
+        { "pause_break", kKbmPause },
+        { "f1", kKbmF1 },
+        { "f2", kKbmF1 + 1 },
+        { "f3", kKbmF1 + 2 },
+        { "f4", kKbmF1 + 3 },
+        { "f5", kKbmF1 + 4 },
+        { "f6", kKbmF1 + 5 },
+        { "f7", kKbmF1 + 6 },
+        { "f8", kKbmF1 + 7 },
+        { "f9", kKbmF1 + 8 },
+        { "f10", kKbmF1 + 9 },
+        { "f11", kKbmF1 + 10 },
+        { "f12", kKbmF1 + 11 },
+        { "`", kKbmTilde },
+        { "-", kKbmMinus },
+        { "=", kKbmEqual },
+        { "[", kKbmBracketL },
+        { "]", kKbmBracketR },
+        { "\\", kKbmBackslash },
+        { ";", kKbmSemicolon },
+        { "'", kKbmQuote },
+        { ",", kKbmComma },
+        { ".", kKbmPeriod },
+        { "/", kKbmSlash },
+        { "shift", kKbmShift },
+        { "lshift", kKbmShiftLeft },
+        { "rshift", kKbmShiftRight },
+        { "ctrl", kKbmCtrl },
+        { "lctrl", kKbmCtrlLeft },
+        { "rctrl", kKbmCtrlRight },
+        { "alt", kKbmAlt },
+        { "lalt", kKbmAltLeft },
+        { "ralt", kKbmAltRight },
+        { "arrow_up", kKbmArrowUp },
+        { "arrow_down", kKbmArrowDown },
+        { "arrow_left", kKbmArrowLeft },
+        { "arrow_right", kKbmArrowRight },
+        { "mouse_left", kKbmMouseLeft },
+        { "mouse_right", kKbmMouseRight },
+        { "mouse_middle", kKbmMouseMiddle },
+        { "wheel_up", kKbmMouseWheelUp },
+        { "wheel_down", kKbmMouseWheelDown },
+        { "mouse_4", kKbmMouse4 },
+        { "mouse_5", kKbmMouse5 },
+        { "mouse_6", kKbmMouse6 },
+    };
+
+    bool lookupCommandCell(const InputCommandIcon* table, size_t count, const std::string& command, int& outCell)
     {
-        if (command.size() == 1)
+        for (size_t i = 0; i < count; i++)
         {
-            const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(command[0])));
-            if (c >= 'A' && c <= 'Z')
+            // Trailing zero-filled entries (nullptr) never match.
+            if (table[i].command != nullptr && command == table[i].command)
             {
-                outCell = kCellKeyA + (c - 'A');
-                return true;
-            }
-            if (c >= '0' && c <= '9')
-            {
-                outCell = kCellDigit0 + (c - '0');
-                return true;
-            }
-            return false;
-        }
-        for (const auto& entry : kKeyboardCommands)
-        {
-            if (command == entry.command)
-            {
-                outCell = entry.cell;
+                outCell = table[i].cell;
                 return true;
             }
         }
         return false;
     }
 
+    // Resolves a hint command to a cell in texture/input_kbm.bmp. Single
+    // letters map onto their key (QWERTY rows); digits 1-0 sit on row 1.
+    bool lookupKbmCell(const std::string& command, int& outCell)
+    {
+        if (command.size() == 1)
+        {
+            const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(command[0])));
+            if (c >= 'A' && c <= 'Z')
+            {
+                // Letter keys: QWERTY keyboard rows (see kKbmCells above).
+                static constexpr int kLetterCells[26] = {
+                    cellAt(1, 3),  // A
+                    cellAt(5, 4),  // B
+                    cellAt(3, 4),  // C
+                    cellAt(3, 3),  // D
+                    cellAt(3, 2),  // E
+                    cellAt(4, 3),  // F
+                    cellAt(5, 3),  // G
+                    cellAt(6, 3),  // H
+                    cellAt(8, 2),  // I
+                    cellAt(7, 3),  // J
+                    cellAt(8, 3),  // K
+                    cellAt(9, 3),  // L
+                    cellAt(7, 4),  // M
+                    cellAt(6, 4),  // N
+                    cellAt(9, 2),  // O
+                    cellAt(10, 2), // P
+                    cellAt(1, 2),  // Q
+                    cellAt(4, 2),  // R
+                    cellAt(2, 3),  // S
+                    cellAt(5, 2),  // T
+                    cellAt(7, 2),  // U
+                    cellAt(6, 2),  // V
+                    cellAt(2, 2),  // W
+                    cellAt(2, 4),  // X
+                    cellAt(6, 2),  // Y
+                    cellAt(1, 4),  // Z
+                };
+                outCell = kLetterCells[c - 'A'];
+                return true;
+            }
+            if (c >= '1' && c <= '9')
+            {
+                outCell = kKbmDigit1 + (c - '1');
+                return true;
+            }
+            if (c == '0')
+            {
+                outCell = kKbmDigit1 + 9;
+                return true;
+            }
+            return false;
+        }
+        return lookupCommandCell(kKbmCommands, std::size(kKbmCommands), command, outCell)
+            || lookupCommandCell(kKbmAliases, std::size(kKbmAliases), command, outCell);
+    }
+
+    // Resolves a hint command to a cell in texture/input_pad.bmp for the
+    // given device family. Gameplay commands map onto the conventional face
+    // button of each layout (accept = south: A / cross / B, cancel = east:
+    // B / circle / A); icon aliases ("dpad_up", "ls_click", ...) and the raw
+    // gamepad source names used by command bindings ("south", "l_trigger",
+    // "axis_left_y-", ...) select glyphs directly.
+    bool lookupPadCell(ecs::InputHintDevice device, const std::string& command, int& outCell)
+    {
+        constexpr size_t kStyleCount = 3; // ps, xbox, nintendo
+
+        struct DeviceTable
+        {
+            InputCommandIcon commands[12];
+            InputCommandIcon sources[20]; // GamepadSource names (input.h)
+            int dpadLeft, dpadRight, dpadUp, dpadDown;
+        };
+
+        static constexpr DeviceTable kTables[kStyleCount] = {
+            // PlayStation
+            {
+                {
+                    { "accept", kPsCross },
+                    { "cancel", kPsCircle },
+                    { "pause", kPsStart },
+                    { "inventory", kPsTriangle },
+                    { "map", kPsSquare },
+                    { "run", kPsRt },
+                    { "ready", kPsLt },
+                    { "start", kPsStart },
+                    { "select", kPsSelect },
+                    { "l1", kPsLb },
+                    { "r1", kPsRb },
+                    { "touchpad", kPsTouchpad },
+                },
+                {
+                    { "south", kPsCross },
+                    { "east", kPsCircle },
+                    { "north", kPsTriangle },
+                    { "west", kPsSquare },
+                    { "l_trigger", kPsLt },
+                    { "r_trigger", kPsRt },
+                    { "l_shoulder", kPsLb },
+                    { "r_shoulder", kPsRb },
+                    { "start", kPsStart },
+                    { "mode", kPsTouchpad }, // no PS logo glyph; touchpad is nearest
+                    { "l3", kPsLsClick },
+                    { "r3", kPsRsClick },
+                    { "dpad_up", kPsDpadUp },
+                    { "dpad_down", kPsDpadDown },
+                    { "dpad_left", kPsDpadLeft },
+                    { "dpad_right", kPsDpadRight },
+                    { "axis_left_y-", kPsLs },
+                    { "axis_left_y+", kPsLs },
+                    { "axis_left_x-", kPsLs },
+                    { "axis_left_x+", kPsLs },
+                },
+                kPsDpadLeft,
+                kPsDpadRight,
+                kPsDpadUp,
+                kPsDpadDown,
+            },
+            // Xbox
+            {
+                {
+                    { "accept", kXbA },
+                    { "cancel", kXbB },
+                    { "pause", kXbStart },
+                    { "inventory", kXbY },
+                    { "map", kXbX },
+                    { "run", kXbRt },
+                    { "ready", kXbLt },
+                    { "start", kXbStart },
+                    { "select", kXbSelect },
+                    { "l1", kXbLb },
+                    { "r1", kXbRb },
+                    { "", 0 },
+                },
+                {
+                    { "south", kXbA },
+                    { "east", kXbB },
+                    { "north", kXbY },
+                    { "west", kXbX },
+                    { "l_trigger", kXbLt },
+                    { "r_trigger", kXbRt },
+                    { "l_shoulder", kXbLb },
+                    { "r_shoulder", kXbRb },
+                    { "start", kXbStart },
+                    // No guide/logo glyph in the atlas; "mode" drops the icon.
+                    { "l3", kXbLsClick },
+                    { "r3", kXbRsClick },
+                    { "dpad_up", kXbDpadUp },
+                    { "dpad_down", kXbDpadDown },
+                    { "dpad_left", kXbDpadLeft },
+                    { "dpad_right", kXbDpadRight },
+                    { "axis_left_y-", kXbLs },
+                    { "axis_left_y+", kXbLs },
+                    { "axis_left_x-", kXbLs },
+                    { "axis_left_x+", kXbLs },
+                },
+                kXbDpadLeft,
+                kXbDpadRight,
+                kXbDpadUp,
+                kXbDpadDown,
+            },
+            // Nintendo
+            {
+                {
+                    { "accept", kNSwitchA },
+                    { "cancel", kNSwitchB },
+                    { "pause", kNProStart },
+                    { "inventory", kNY },
+                    { "map", kNX },
+                    { "run", kNRt },
+                    { "ready", kNLt },
+                    { "start", kNProStart },
+                    { "select", kNProSelect },
+                    { "l1", kNLb },
+                    { "r1", kNRb },
+                    { "home", kNHome },
+                },
+                {
+                    { "south", kNSwitchB },
+                    { "east", kNSwitchA },
+                    { "north", kNX },
+                    { "west", kNY },
+                    { "l_trigger", kNLt },
+                    { "r_trigger", kNRt },
+                    { "l_shoulder", kNLb },
+                    { "r_shoulder", kNRb },
+                    { "start", kNProStart },
+                    { "mode", kNHome },
+                    { "l3", kNLsClick },
+                    { "r3", kNRsClick },
+                    { "dpad_up", kNDpadUp },
+                    { "dpad_down", kNDpadDown },
+                    { "dpad_left", kNDpadLeft },
+                    { "dpad_right", kNDpadRight },
+                    { "axis_left_y-", kNLs },
+                    { "axis_left_y+", kNLs },
+                    { "axis_left_x-", kNLs },
+                    { "axis_left_x+", kNLs },
+                },
+                kNDpadLeft,
+                kNDpadRight,
+                kNDpadUp,
+                kNDpadDown,
+            },
+        };
+
+        const size_t index = static_cast<size_t>(device) - static_cast<size_t>(ecs::InputHintDevice::PlayStation);
+        if (index >= kStyleCount)
+            return false;
+        const DeviceTable& table = kTables[index];
+
+        if (lookupCommandCell(table.commands, std::size(table.commands), command, outCell))
+            return true;
+        if (lookupCommandCell(table.sources, std::size(table.sources), command, outCell))
+            return true;
+
+        // Shared pad aliases: directions plus stick/shoulder glyph names.
+        if (command == "up")
+            outCell = table.dpadUp;
+        else if (command == "down")
+            outCell = table.dpadDown;
+        else if (command == "left")
+            outCell = table.dpadLeft;
+        else if (command == "right")
+            outCell = table.dpadRight;
+        else if (command == "dpad")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsDpad
+                : device == ecs::InputHintDevice::Xbox            ? kXbDpad
+                                                                  : kNDpad;
+        else if (command == "ls")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsLs : device == ecs::InputHintDevice::Xbox ? kXbLs : kNLs;
+        else if (command == "rs")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsRs : device == ecs::InputHintDevice::Xbox ? kXbRs : kNRs;
+        else if (command == "ls_click")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsLsClick
+                : device == ecs::InputHintDevice::Xbox            ? kXbLsClick
+                                                                  : kNLsClick;
+        else if (command == "rs_click")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsRsClick
+                : device == ecs::InputHintDevice::Xbox            ? kXbRsClick
+                                                                  : kNRsClick;
+        else if (command == "lt")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsLt : device == ecs::InputHintDevice::Xbox ? kXbLt : kNLt;
+        else if (command == "rt")
+            outCell = device == ecs::InputHintDevice::PlayStation ? kPsRt : device == ecs::InputHintDevice::Xbox ? kXbRt : kNRt;
+        else
+            return false;
+        return true;
+    }
+
     // Engine-owned shared resources for hint icons/labels. The cookies are
     // held forever so the atlas/font outlives every component that borrows
     // them; both loaders cache the decoded file on disk, not in the manager.
-    ResourceCookie inputHintAtlas()
+    ResourceCookie inputHintAtlas(ecs::InputHintDevice device)
     {
-        static ResourceCookie cookie = loadTextureResource("texture/input_keys", 0, 0);
-        return cookie;
+        switch (device)
+        {
+        case ecs::InputHintDevice::KeyboardMouse:
+        {
+            static ResourceCookie cookie = loadTextureResource("texture/input_kbm", 0, 0);
+            return cookie;
+        }
+        default:
+        {
+            static ResourceCookie cookie = loadTextureResource("texture/input_pad", 0, 0);
+            return cookie;
+        }
+        }
     }
 
     ResourceCookie inputHintFont()
@@ -293,12 +762,53 @@ namespace openre
         return cookie;
     }
 
-    // Materialises InputHintComponents into child entities: a 16x16 key icon
-    // sprite centred on the entity origin and the optional text label to its
-    // right, centred on its own position. Runs before TextLayoutSystem so
-    // freshly created labels get laid out in the same frame; only rebuilds
-    // when the fingerprinted inputs change. Scale the hint entity's transform
-    // to resize the whole hint.
+    // Resolves a hint to a list of atlas cells (one per icon). A registered
+    // input command renders one cell per binding that matches the hint's
+    // device family, so hints follow the [input] bindings automatically;
+    // anything else is treated as a direct key name / icon alias.
+    void resolveHintCells(const ecs::InputHintComponent& hint, std::vector<int>& outCells)
+    {
+        const auto cmd = openre::input::command_from_name(hint.command);
+        if (cmd != openre::input::COMMAND_COUNT)
+        {
+            for (const auto& b : openre::input::command_bindings(cmd))
+            {
+                int cell = -1;
+                bool ok = false;
+                switch (b.device)
+                {
+                case openre::input::BindingDevice::Keyboard:
+                    ok = hint.device == ecs::InputHintDevice::KeyboardMouse && lookupKbmCell(b.name, cell);
+                    break;
+                case openre::input::BindingDevice::Mouse:
+                    // Mouse buttons live on the kbm atlas under mouse_* names.
+                    ok = hint.device == ecs::InputHintDevice::KeyboardMouse && lookupKbmCell("mouse_" + b.name, cell);
+                    break;
+                case openre::input::BindingDevice::Gamepad:
+                    ok = hint.device != ecs::InputHintDevice::KeyboardMouse && lookupPadCell(hint.device, b.name, cell);
+                    break;
+                }
+                if (ok && cell >= 0)
+                    outCells.push_back(cell);
+            }
+            return;
+        }
+
+        // Not a registered command: a single direct key ("p"), icon alias
+        // ("mouse_left", "dpad") or unknown name (no icon).
+        int cell = -1;
+        const bool found = hint.device == ecs::InputHintDevice::KeyboardMouse ? lookupKbmCell(hint.command, cell)
+                                                                            : lookupPadCell(hint.device, hint.command, cell);
+        if (found)
+            outCells.push_back(cell);
+    }
+
+    // Materialises InputHintComponents into child entities: one 32x32 icon
+    // sprite per binding of `command` on `device` (laid out left to right),
+    // then the optional text label to the right of the last icon. Runs
+    // before TextLayoutSystem so freshly created labels get laid out in the
+    // same frame; only rebuilds when the fields or the command bindings
+    // change. Scale the hint entity's transform to resize the whole hint.
     void InputHintSystem(AppContext& app)
     {
         if (app.closing() || !app.running())
@@ -308,47 +818,54 @@ namespace openre
         if (!app.frameActive)
             return;
 
+        const uint32_t revision = openre::input::bindings_revision();
+
         app.scene.each<ecs::InputHintComponent>([&](ecs::Entity entity, ecs::InputHintComponent& hint) {
-            std::string fingerprint = hint.command + "|" + hint.text;
-            const bool entitiesValid = (hint.iconEntity == ecs::NullEntity || app.scene.isValid(hint.iconEntity))
-                && (hint.labelEntity == ecs::NullEntity || app.scene.isValid(hint.labelEntity));
+            std::string fingerprint = hint.command + "|" + hint.text + "|" + std::to_string(static_cast<uint32_t>(hint.device))
+                + "|" + std::to_string(hint.font) + "|" + std::to_string(revision);
+            bool entitiesValid = hint.labelEntity == ecs::NullEntity || app.scene.isValid(hint.labelEntity);
+            for (const ecs::Entity icon : hint.icons)
+                entitiesValid = entitiesValid && app.scene.isValid(icon);
             if (fingerprint == hint.fingerprint && entitiesValid)
                 return;
             hint.fingerprint = fingerprint;
 
             // Rebuild from scratch: drop the previous children first.
-            for (ecs::Entity child : { hint.iconEntity, hint.labelEntity })
+            for (const ecs::Entity child : hint.icons)
             {
                 if (child != ecs::NullEntity && app.scene.isValid(child))
                     app.scene.destroyEntity(child);
             }
-            hint.iconEntity = ecs::NullEntity;
+            hint.icons.clear();
+            if (hint.labelEntity != ecs::NullEntity && app.scene.isValid(hint.labelEntity))
+                app.scene.destroyEntity(hint.labelEntity);
             hint.labelEntity = ecs::NullEntity;
 
-            // Resolve the key glyph before touching the scene so an unknown
-            // command simply drops the icon instead of corrupting the layout.
-            int cell = -1;
-            const bool hasIcon = lookupInputKeyCell(hint.command, cell);
-            const ResourceCookie atlas = inputHintAtlas();
+            // Resolve the glyphs before touching the scene so an unknown
+            // command simply drops its icons instead of corrupting layout.
+            std::vector<int> cells;
+            resolveHintCells(hint, cells);
+            const ResourceCookie atlas = inputHintAtlas(hint.device);
 
-            float nextX = 0.0f; // left edge of the content after the icon
-            if (hasIcon && atlas != 0)
+            float nextX = 0.0f; // left edge of the content after the icons
+            for (size_t i = 0; i < cells.size() && atlas != 0; i++)
             {
+                const int cell = cells[i];
                 ecs::Entity icon = app.scene.createEntity(entity);
-                hint.iconEntity = icon;
+                hint.icons.push_back(icon);
                 auto& transform = app.scene.getComponent<ecs::TransformComponent>(icon);
-                transform.position = { 0.0f, 0.0f, 0.0f }; // sprites draw centred on their position
+                transform.position = { static_cast<float>(i) * (kInputCell + kHintGap), 0.0f, 0.0f };
 
                 auto& sprite = app.scene.addComponent<ecs::SpriteComponent>(icon);
-                sprite.size = { kInputKeyCell, kInputKeyCell };
+                sprite.size = { kInputCell, kInputCell };
                 sprite.texture = atlas;
                 sprite.src = {
-                    static_cast<float>(cell % kInputKeyCellsPerRow) * kInputKeyCell,
-                    static_cast<float>(cell / kInputKeyCellsPerRow) * kInputKeyCell,
-                    kInputKeyCell,
-                    kInputKeyCell,
+                    static_cast<float>(cell % kInputCellsPerRow) * kInputCell,
+                    static_cast<float>(cell / kInputCellsPerRow) * kInputCell,
+                    kInputCell,
+                    kInputCell,
                 };
-                nextX = kInputKeyCell * 0.5f + kHintGap;
+                nextX = static_cast<float>(i) * (kInputCell + kHintGap) + kInputCell * 0.5f + kHintGap;
             }
 
             if (hint.text.empty())
@@ -356,10 +873,11 @@ namespace openre
 
             // Measure the label so it can be centred on its own position,
             // keeping glyph offsets small relative to the text entity.
-            auto* fontResource = ResourceManager::get().fromCookie<FontResource>(inputHintFont());
+            const ResourceCookie font = hint.font != 0 ? hint.font : inputHintFont();
+            auto* fontResource = ResourceManager::get().fromCookie<FontResource>(font);
             const float lineHeight = fontResource != nullptr && fontResource->fromFnt
                 ? static_cast<float>(fontResource->lineHeight())
-                : kInputKeyCell;
+                : kInputCell;
             const float textWidth = fontResource != nullptr
                 ? text::measureWidth(text::decodeText(hint.text, fontResource, lineHeight, lineHeight))
                 : 0.0f;
@@ -375,7 +893,7 @@ namespace openre
             text.text = hint.text;
             text.size = { std::max(textWidth, 1.0f), lineHeight };
             text.flags = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
-            text.font = inputHintFont();
+            text.font = font;
         });
     }
 

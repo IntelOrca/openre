@@ -954,6 +954,35 @@ namespace openre::script
                     hint->command = luaL_checkstring(L, 3);
                 else if (strcmp(name, "text") == 0)
                     hint->text = luaL_checkstring(L, 3);
+                else if (strcmp(name, "device") == 0)
+                {
+                    auto* value = luaL_checkstring(L, 3);
+                    if (strcmp(value, "kbm") == 0)
+                        hint->device = ecs::InputHintDevice::KeyboardMouse;
+                    else if (strcmp(value, "ps") == 0)
+                        hint->device = ecs::InputHintDevice::PlayStation;
+                    else if (strcmp(value, "x") == 0)
+                        hint->device = ecs::InputHintDevice::Xbox;
+                    else if (strcmp(value, "n") == 0)
+                        hint->device = ecs::InputHintDevice::Nintendo;
+                    else
+                        return luaL_error(
+                            L, "scene.setField: unknown input_hint device '%s' (expected kbm, ps, x or n)", value);
+                }
+                else if (strcmp(name, "font") == 0)
+                {
+                    if (lua_isnoneornil(L, 3))
+                    {
+                        hint->font = 0; // engine default
+                    }
+                    else
+                    {
+                        auto* font = static_cast<FontHandle*>(luaL_testudata(L, 3, METATABLE_FONT));
+                        if (font == nullptr)
+                            return luaL_error(L, "scene.setField: font must be a gfx.loadFont value");
+                        hint->font = font->cookie;
+                    }
+                }
                 else
                     return luaL_error(L, "scene.setField: unknown input_hint field '%s'", name);
                 return 0;
@@ -1193,6 +1222,18 @@ namespace openre::script
                     lua_pushlstring(L, hint->command.data(), hint->command.size());
                 else if (strcmp(name, "text") == 0)
                     lua_pushlstring(L, hint->text.data(), hint->text.size());
+                else if (strcmp(name, "device") == 0)
+                {
+                    switch (hint->device)
+                    {
+                    case ecs::InputHintDevice::PlayStation: lua_pushstring(L, "ps"); break;
+                    case ecs::InputHintDevice::Xbox: lua_pushstring(L, "x"); break;
+                    case ecs::InputHintDevice::Nintendo: lua_pushstring(L, "n"); break;
+                    default: lua_pushstring(L, "kbm"); break;
+                    }
+                }
+                else if (strcmp(name, "font") == 0)
+                    lua_pushinteger(L, hint->font);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1683,7 +1724,9 @@ namespace openre::script
                 break;
             case ComponentKind::input_hint:
                 push("command");
+                push("device");
                 push("text");
+                push("font");
                 break;
             default: break;
             }
@@ -1827,7 +1870,57 @@ namespace openre::script
             return inputCommandState(L, openre::input::command_edge());
         }
 
-// core.loadMovie(path) - registers a movie as a streamed resource and
+        // input.commands() - the registered command INI names in engine order
+        // ("cancel", "accept", "up", ...).
+        int inputCommands(lua_State* L)
+        {
+            lua_newtable(L);
+            const auto count = openre::input::command_count();
+            for (int32_t i = 0; i < count; i++)
+            {
+                lua_pushstring(L, openre::input::command_name(static_cast<openre::input::Command>(i)));
+                lua_rawseti(L, -2, i + 1);
+            }
+            return 1;
+        }
+
+        // input.bindings(name) - the current bindings of a command as an
+        // array of { device = "kb" | "gp" | "mu", key = <name> } tables,
+        // where key is a keyboard key name ("escape", "w"), a gamepad source
+        // name ("south", "dpad_up") or a mouse button name ("left").
+        int inputBindings(lua_State* L)
+        {
+            auto resolve = [&L]() -> openre::input::Command {
+                if (lua_type(L, 1) == LUA_TSTRING)
+                    return openre::input::command_from_name(lua_tostring(L, 1));
+                return static_cast<openre::input::Command>(luaL_checkinteger(L, 1));
+            };
+            const auto cmd = resolve();
+            if (cmd < 0 || cmd >= openre::input::COMMAND_COUNT)
+                return luaL_error(L, "input.bindings: unknown command");
+
+            lua_newtable(L);
+            const auto bindings = openre::input::command_bindings(cmd);
+            for (size_t i = 0; i < bindings.size(); i++)
+            {
+                lua_newtable(L);
+                const char* device;
+                switch (bindings[i].device)
+                {
+                case openre::input::BindingDevice::Keyboard: device = "kb"; break;
+                case openre::input::BindingDevice::Gamepad: device = "gp"; break;
+                default: device = "mu"; break;
+                }
+                lua_pushstring(L, device);
+                lua_setfield(L, -2, "device");
+                lua_pushstring(L, bindings[i].name.c_str());
+                lua_setfield(L, -2, "key");
+                lua_rawseti(L, -2, static_cast<int>(i + 1));
+            }
+            return 1;
+        }
+
+        // core.loadMovie(path) - registers a movie as a streamed resource and
         // returns a Movie handle, or nil when the file cannot be resolved.
         // Nothing is read beyond validating that the file exists; playback
         // streams it from disk. Loading the same path twice returns a handle
@@ -2340,6 +2433,8 @@ namespace openre::script
         // input.* - runtime command state for menu / title-screen navigation.
         setGlobal(L, "input.down", inputCommandDown);
         setGlobal(L, "input.pressed", inputCommandPressed);
+        setGlobal(L, "input.commands", inputCommands);
+        setGlobal(L, "input.bindings", inputBindings);
 
         // options.* - engine-wide settings registry (menu screens).
         setGlobal(L, "options.list", optionsList);

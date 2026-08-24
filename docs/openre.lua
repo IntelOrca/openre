@@ -356,10 +356,12 @@ function scene.addComponent(entity, name) end
 --- snaps the scale DOWN to whole multiples of itself, e.g. 0.5 allows only
 --- 0.5, 1.0, 1.5, ...). The engine writes the computed uniform scale to the
 --- entity's transform every frame; position the entity yourself.
---- Input hint fields (`core.input_hint`): `command` (the action name, e.g.
---- "pause"; a single key name like "p" also works) and `text` (optional label
---- drawn right of the icon). The icon is a fixed 16x16 sprite; scale the
---- entity's transform to resize the whole hint.
+--- Input hint fields (`core.input_hint`): `command` (a registered input
+--- command name like "pause" — its current bindings are shown as icons; a
+--- single key name like "p" or an icon alias also works), `device` ("kbm",
+--- "ps", "x" or "n"), `text` (optional label drawn right of the icons) and
+--- `font` (optional label font). The icons are fixed 32x32 sprites; scale
+--- the entity's transform to resize the whole hint.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
@@ -475,31 +477,46 @@ function scene.exit() end
 ---   applied scale is one increment.
 
 --[[ Input hints (core.input_hint) ]]
-
---- Declarative input hint: an icon for a command's current binding on the
---- active input device plus an optional text label. Add it with
+--- Declarative input hint: the icon(s) for a command's current binding on a
+--- chosen input device plus an optional text label. Add it with
 --- `scene.addComponent(e, "core.input_hint")`; every frame the engine
---- materialises the icon and label as child entities and relayouts only when
---- the fields change. The icon is drawn centred on the entity's `(x, y)`
---- origin with the label centred to its right.
+--- materialises the icons and label as child entities and relayouts only
+--- when the fields or the command bindings change. The first icon is drawn
+--- centred on the entity's `(x, y)` origin, further icons continue to the
+--- right, and the label is centred after the last icon.
 ---
---- The icon is a fixed 16x16 sprite (the native atlas cell); scale the hint
---- entity's transform (`scale.x` / `scale.y`) to resize the whole hint —
---- icon and label scale together.
+--- Each icon is a fixed 32x32 sprite (the native atlas cell); scale the
+--- hint entity's transform (`scale.x` / `scale.y`) to resize the whole
+--- hint - icons and label scale together.
 ---
---- Keyboard is the only supported device for now; gamepad themes
---- (PlayStation/Xbox/Nintendo) will follow once device detection exists.
+--- Icons come from two shared atlases in the core asset directory
+--- (`games/core`, searched by the engine after the game module directory):
+--- `texture/input_kbm.bmp` holds a full keyboard + numpad + mouse layout and
+--- `texture/input_pad.bmp` packs PlayStation, Xbox and Nintendo sets.
 ---
 --- Fields:
---- * `command` — the action name. Known commands ("accept" = Enter,
----   "cancel" = Esc, "pause" = P, "inventory" = I, "map" = M, "run" = Shift,
----   "ready" = Space) resolve to their key; any single letter or digit
----   ("a", "5") resolves to that key. Unknown commands drop the icon but
----   still show the label.
+--- * `command` — what to show:
+---   - A registered input command name ("accept", "cancel", "fire",
+---     "inventory", "map", "run", "up", ...) renders one icon per binding
+---     that command currently has on the hint's device, straight from the
+---     [input] INI section (see input.bindings). Rebinds update hints live;
+---     a command with no binding on the device shows no icon.
+---   - A single letter or digit ("a", "5") shows that key (kbm only).
+---   - Icon aliases pick a glyph directly, e.g. "esc", "enter", "space",
+---     "lshift", "arrow_up", "mouse_left", "wheel_up" (kbm) or "dpad",
+---     "dpad_up", "ls", "rs_click", "lt", "rt", "l1", "select" (pads).
+---   - Unknown commands drop the icons but still show the label.
+---   - Unknown commands drop the icons but still show the label.
+--- * `device` — which atlas / button set: "kbm" (default), "ps", "x" or
+---   "n". Writing it relayouts the hint in place.
 --- * `text` — optional label string, e.g. "Pause".
+--- * `font` — a Font from `gfx.loadFont` used for the label, or nil to use
+---   the engine default (`fonts/std.fnt` from the core asset directory).
 ---
---- Example: `hint.command = "pause"; hint.text = "Pause"` renders
---- `[P] Pause`.
+--- Examples: `hint.command = "pause"; hint.text = "Pause"` renders
+--- `[P] Pause`; with `hint.device = "ps"` the same command renders the
+--- Options button; `hint.command = "accept"` renders Enter, cross, A or B
+--- depending on the device.
 
 --[[ The gfx namespace (module mode) ]]
 
@@ -507,10 +524,11 @@ function scene.exit() end
 local gfx = {}
 
 --- Load a texture resource and return a Texture handle, or nil on failure.
---- The path is probed relative to the game module directory first, then
---- falls back to the original game data (`data://`). `.adt` and `.tim`
---- extensions are appended automatically when not present. Width and height
---- are hints for ADT files missing an intrinsic size.
+--- The path is probed relative to the game module directory first, then the
+--- shared core asset directory (`games/core`), then falls back to the
+--- original game data (`data://`). `.adt` and `.tim` extensions are appended
+--- automatically when not present. Width and height are hints for ADT files
+--- missing an intrinsic size.
 ---
 --- When a `.tim` file packs several TIMs back to back (e.g. tmoji.bin), pass
 --- `timIndex` to select which one to decode: 0 is the first, 1 the second,
@@ -700,6 +718,22 @@ function input.down(name) end
 ---@param name string|integer INI command name or numeric Command index.
 ---@return boolean
 function input.pressed(name) end
+
+--- The registered command names in engine order ("cancel", "accept", "up",
+--- ...). Combined with input.bindings this drives binding UIs and hint
+--- displays (see the hints-demo game module for a full example).
+---@return string[]
+function input.commands() end
+
+--- The current bindings of a command, loaded from the [input] INI section.
+--- Each entry is `{ device = "kb" | "gp" | "mu", key = <name> }` where `key`
+--- is a keyboard key name ("escape", "w"), a gamepad source name ("south",
+--- "dpad_up", "l_trigger", "axis_left_y-", ...) or a mouse button name
+--- ("left"). Keyboard/mouse names are accepted directly as input_hint
+--- commands; gamepad source names resolve per style on the ps/x/n devices.
+---@param name string|integer INI command name or numeric Command index.
+---@return table[]
+function input.bindings(name) end
 
 --[[ options — engine-wide settings registry ]]
 

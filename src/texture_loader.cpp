@@ -48,21 +48,22 @@ namespace openre
             return TextureType::none;
         }
 
-        // Reads the first candidate (module dir, then data://) that exists,
-        // probing "", ".tim", ".adt" and ".bmp" extensions (raw TIM preferred,
-        // matching font.cpp). Returns the bytes and the detected type.
+        // Reads the first candidate (module dir, then the shared core dir,
+        // then data://) that exists, probing "", ".tim", ".adt" and ".bmp"
+        // extensions (raw TIM preferred, matching font.cpp). Returns the
+        // bytes and the detected type.
         bool findAndRead(
             std::string_view logicalPath, const std::filesystem::path& moduleDir, std::vector<uint8_t>& outBytes,
             TextureType& outType, std::string& outLabel)
         {
             const std::vector<std::string> extensions = { "", ".tim", ".adt", ".bmp" };
 
-            // 1. Module directory first.
-            if (!moduleDir.empty())
-            {
+            auto tryDir = [&](const std::filesystem::path& dir) -> bool {
+                if (dir.empty())
+                    return false;
                 for (const auto& ext : extensions)
                 {
-                    auto path = moduleDir / std::string(logicalPath);
+                    auto path = dir / std::string(logicalPath);
                     if (!ext.empty())
                         path += ext;
                     if (system::fs::info(path.string().c_str()).kind != system::fs::FileKind::file)
@@ -75,9 +76,18 @@ namespace openre
                         return true;
                     }
                 }
-            }
+                return false;
+            };
 
-            // 2. data:// fallback (original game data).
+            // 1. Module directory first.
+            if (tryDir(moduleDir))
+                return true;
+
+            // 2. Shared core asset directory.
+            if (tryDir(game_core_dir()))
+                return true;
+
+            // 3. data:// fallback (original game data).
             {
                 const std::string dataPrefix = std::string("data://") + std::string(logicalPath);
                 for (const auto& ext : extensions)
@@ -196,11 +206,36 @@ namespace openre
             return (uint32_t)b[off] | ((uint32_t)b[off + 1] << 8) | ((uint32_t)b[off + 2] << 16) | ((uint32_t)b[off + 3] << 24);
         }
 
-        // Minimal uncompressed 8bpp BMP decoder (BITMAPINFOHEADER, BI_RGB only).
-        // Bottom-up rows are flipped to top-down; the palette may hold fewer
-        // than 256 entries (its size derives from the pixel data offset). Pure
-        // magenta palette entries map to fully transparent pixels. Produces a
-        // 32bpp image whose pixels are native-endian 0xAARRGGBB values, which
+        // Counts the set bits of a 32-bit channel mask.
+        constexpr int popc32(uint32_t v)
+        {
+            int n = 0;
+            while (v != 0)
+            {
+                v &= v - 1;
+                n++;
+            }
+            return n;
+        }
+
+        // Byte offset (little-endian) of a channel's mask within a pixel
+        // dword, e.g. mask 0x00FF0000 lives at byte 2. 0 when the mask is 0.
+        int maskShift(uint32_t mask)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                if ((mask & (0xFFu << (8 * i))) != 0)
+                    return i;
+            }
+            return -1;
+        }
+
+        // Minimal uncompressed BMP decoder (BITMAPINFOHEADER or larger,
+        // BI_RGB / BI_BITFIELDS only). Bottom-up rows are flipped to top-down.
+        // 8bpp palettes map pure magenta to fully transparent; 32bpp honours
+        // the header's channel masks when present and falls back to opaque
+        // (magenta rule) when no alpha mask is defined. Produces a 32bpp
+        // image whose pixels are native-endian 0xAARRGGBB values, which
         // render2d::decodeImageToRgba uploads directly.
         render2d::Image imageFromBmp(const std::vector<uint8_t>& bytes)
         {
@@ -224,13 +259,30 @@ namespace openre
 
             if (width <= 0 || storedHeight < 0)
                 return fail("top-down/negative height not supported");
-            if (bpp != 8)
+            if (bpp != 8 && bpp != 32)
             {
-                logging::logWarning("[texture_loader] BMP rejected: {}bpp not supported (only 8bpp)", bpp);
+                logging::logWarning("[texture_loader] BMP rejected: {}bpp not supported (only 8bpp / 32bpp)", bpp);
                 return {};
             }
-            if (compression != 0)
+            if (compression != 0 && !(bpp == 32 && compression == 3))
                 return fail("compressed BMP (e.g. RLE) not supported");
+
+            // Channel masks (BI_BITFIELDS): stored right after the info
+            // header on V2+ headers; default to standard BGRA byte order.
+            uint32_t maskR = 0x00FF0000, maskG = 0x0000FF00, maskB = 0x000000FF, maskA = 0;
+            if (bpp == 32)
+            {
+                if (compression == 3 && headerSize >= 52)
+                {
+                    maskR = readU32Le(bytes, 54);
+                    maskG = readU32Le(bytes, 58);
+                    maskB = readU32Le(bytes, 62);
+                    // The alpha mask only exists on V4+ headers.
+                    maskA = headerSize >= 108 ? readU32Le(bytes, 66) : 0;
+                }
+                if (popc32(maskR) != 8 || popc32(maskG) != 8 || popc32(maskB) != 8 || (maskA != 0 && popc32(maskA) != 8))
+                    return fail("unsupported 32bpp channel masks");
+            }
 
             // The palette sits between the info header and the pixel data;
             // its entry count follows from the pixel data offset.
@@ -238,14 +290,17 @@ namespace openre
             size_t palEntries = dataOffset > palOffset ? ((size_t)dataOffset - palOffset) / 4 : 0;
             if (palEntries > 256)
                 palEntries = 256;
-            if (palEntries == 0)
+            if (bpp == 8 && palEntries == 0)
                 return fail("no palette");
 
             const int32_t height = storedHeight;
-            const size_t stride = (((size_t)width + 3) / 4) * 4;
+            const size_t stride = (((size_t)width * bpp / 8) + 3) / 4 * 4;
             const size_t neededPixels = stride * (size_t)height;
             if ((size_t)dataOffset > bytes.size() || bytes.size() - (size_t)dataOffset < neededPixels)
                 return fail("truncated pixel data");
+
+            const int shiftR = maskShift(maskR), shiftG = maskShift(maskG), shiftB = maskShift(maskB),
+                      shiftA = maskShift(maskA);
 
             render2d::Image image;
             image.width = width;
@@ -261,16 +316,29 @@ namespace openre
                 uint8_t* dst = image.pixels.data() + (size_t)y * width * 4;
                 for (int32_t x = 0; x < width; x++)
                 {
-                    const uint8_t index = src[x];
                     uint8_t r = 0, g = 0, b = 0;
-                    if (index < palEntries)
+                    uint8_t a = 255;
+                    if (bpp == 8)
                     {
-                        const size_t po = palOffset + (size_t)index * 4;
-                        b = bytes[po + 0];
-                        g = bytes[po + 1];
-                        r = bytes[po + 2];
+                        const uint8_t index = src[x];
+                        if (index < palEntries)
+                        {
+                            const size_t po = palOffset + (size_t)index * 4;
+                            b = bytes[po + 0];
+                            g = bytes[po + 1];
+                            r = bytes[po + 2];
+                        }
+                        // Pure magenta is the legacy transparency key.
+                        a = (r == 255 && g == 0 && b == 255) ? 0 : 255;
                     }
-                    const uint8_t a = (r == 255 && g == 0 && b == 255) ? 0 : 255;
+                    else
+                    {
+                        const uint8_t* px = src + (size_t)x * 4;
+                        r = px[shiftR];
+                        g = px[shiftG];
+                        b = px[shiftB];
+                        a = shiftA >= 0 ? px[shiftA] : ((r == 255 && g == 0 && b == 255) ? 0 : 255);
+                    }
                     // Little-endian byte order of 0xAARRGGBB, matching how
                     // decodeImageToRgba reads depth-32 pixels.
                     dst[0] = b;

@@ -16,9 +16,17 @@ namespace openre
     /// The resolved module directory for this run (empty when no module).
     const std::filesystem::path& game_module_dir();
 
+    /// The shared "core" asset directory (e.g. `<games>/core`), searched
+    /// after the module directory by the asset loaders. Holds engine-owned
+    /// assets every game module can use, such as UI icon atlases and fonts.
+    const std::filesystem::path& game_core_dir();
+
     /// Whether a game module is active for this run.
     bool game_module_active();
 
     /// Sets the active module directory at boot (from resolve_game_module_dir).
     void set_game_module_dir(std::filesystem::path dir);
+
+    /// Sets the shared core asset directory at boot.
+    void set_game_core_dir(std::filesystem::path dir);
 }

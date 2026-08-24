@@ -415,4 +415,6 @@ dump/
 games/*/movie/
 games/*/sound/
 games/*/texture/
+# ...except games/core: authored shared engine assets, not an import.
+!games/core/texture/
 

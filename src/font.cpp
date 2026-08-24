@@ -39,8 +39,9 @@ namespace openre
     }
     namespace
     {
-        // Reads the font file from the module dir then the data:// fallback,
-        // probing "" / ".adt" / ".tim". Returns false when nothing exists.
+        // Reads the font file from the module dir, then the shared core dir,
+        // then the data:// fallback, probing "" / ".adt" / ".tim". Returns
+        // false when nothing exists.
         bool
         findAndReadFont(std::string_view logicalPath, const std::filesystem::path& moduleDir, std::vector<uint8_t>& outBytes)
         {
@@ -49,11 +50,12 @@ namespace openre
             // format, not a raw TIM).
             const std::vector<std::string> extensions = { "", ".tim", ".adt" };
 
-            if (!moduleDir.empty())
-            {
+            auto tryDir = [&](const std::filesystem::path& dir) -> bool {
+                if (dir.empty())
+                    return false;
                 for (const auto& ext : extensions)
                 {
-                    auto path = moduleDir / std::string(logicalPath);
+                    auto path = dir / std::string(logicalPath);
                     if (!ext.empty())
                         path += ext;
                     if (system::fs::info(path.string().c_str()).kind != system::fs::FileKind::file)
@@ -62,7 +64,13 @@ namespace openre
                     if (!outBytes.empty())
                         return true;
                 }
-            }
+                return false;
+            };
+
+            if (tryDir(moduleDir))
+                return true;
+            if (tryDir(game_core_dir()))
+                return true;
 
             {
                 const std::string dataPrefix = std::string("data://") + std::string(logicalPath);

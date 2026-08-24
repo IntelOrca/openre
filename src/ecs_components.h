@@ -226,28 +226,47 @@ namespace openre::ecs
         int videoHeight = 0;
     };
 
-    /// Declarative input hint: an icon for `command`'s current binding on the
-    /// active input device, with an optional `text` label drawn to its right
-    /// (e.g. command "pause", text "Pause" -> [P] Pause). The icon is a fixed
-    /// 16x16 sprite centred on the entity's origin; scale the entity's
-    /// transform to resize the whole hint (icon and text scale together).
+    /// Input device family an input hint's icon is drawn from.
+    enum class InputHintDevice : uint32_t
+    {
+        KeyboardMouse = 0, // keyboard + mouse atlas ("kbm")
+        PlayStation,       // DualShock / DualSense icons ("ps")
+        Xbox,              // Xbox One / 360 pad icons ("x")
+        Nintendo,          // Switch Pro / Joy-Con icons ("n")
+    };
+
+    /// Declarative input hint: the icon(s) for `command`'s current bindings
+    /// on `device`, with an optional `text` label drawn to their right (e.g.
+    /// command "pause" on kbm -> [P] Pause). A registered command renders
+    /// one 32x32 icon per binding it has on the device; unregistered names
+    /// fall back to direct key/alias lookups. Icons are centred on the
+    /// entity's origin and continue rightwards; scale the entity's transform
+    /// to resize the whole hint (icons and text scale together).
     ///
     /// An InputHintSystem materialises the icon and label as child entities
     /// beneath this one and relayouts only when the fingerprinted inputs
-    /// change. The icon comes from a shared button atlas (keyboard keys for
-    /// now; gamepad themes later), so only keyboard hints are supported yet.
+    /// change. Icons come from the shared atlases in the core asset dir:
+    /// texture/input_kbm.bmp (keyboard + mouse) and texture/input_pad.bmp
+    /// (PlayStation / Xbox / Nintendo).
     struct InputHintComponent
     {
-        std::string command; // e.g. "pause", "accept" or a single key "p"
+        std::string command; // e.g. "accept", "dpad_up" or a single key "p"
         std::string text;    // optional label drawn to the right of the icon
+        InputHintDevice device = InputHintDevice::KeyboardMouse;
+
+        // Font used for `text` (FontResource cookie from gfx.loadFont).
+        // 0 selects the engine default (fonts/std.fnt from the core dir).
+        ResourceCookie font = 0;
 
         // Mirror of the inputs used for relayout detection (filled by the
         // InputHintSystem; not set directly).
         std::string fingerprint;
 
         // The child entities created by the last layout (NullEntity when the
-        // hint has no icon/label). Owned here so they can be rebuilt in place.
-        Entity iconEntity = NullEntity;
+        // hint has no icon/label). A command with several bindings on the
+        // hint's device renders one icon child per binding. Owned here so
+        // they can be rebuilt in place.
+        std::vector<Entity> icons;
         Entity labelEntity = NullEntity;
     };
 

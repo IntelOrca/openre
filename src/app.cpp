@@ -43,6 +43,7 @@ namespace openre
     namespace
     {
         std::filesystem::path s_gameModuleDir;
+        std::filesystem::path s_gameCoreDir;
         AppContext* s_currentApp = nullptr;
     }
 
@@ -82,6 +83,38 @@ namespace openre
     void set_game_module_dir(std::filesystem::path dir)
     {
         s_gameModuleDir = std::move(dir);
+    }
+
+    // The shared asset directory sits next to the game module directories
+    // (<games>/core); fall back to the same roots resolve_game_module_dir
+    // uses when there is no module or the sibling does not exist.
+    static std::filesystem::path resolve_game_core_dir()
+    {
+        std::filesystem::path candidates[3];
+        if (game_module_active())
+            candidates[0] = s_gameModuleDir.parent_path() / "core";
+        candidates[1] = std::filesystem::current_path() / "games" / "core";
+        candidates[2] = std::filesystem::path(SDL_GetBasePath()) / "games" / "core";
+
+        for (const auto& dir : candidates)
+        {
+            if (dir.empty())
+                continue;
+            std::error_code ec;
+            if (std::filesystem::is_directory(dir, ec))
+                return dir;
+        }
+        return {};
+    }
+
+    const std::filesystem::path& game_core_dir()
+    {
+        return s_gameCoreDir;
+    }
+
+    void set_game_core_dir(std::filesystem::path dir)
+    {
+        s_gameCoreDir = std::move(dir);
     }
 
     void app_request_close()
@@ -205,9 +238,12 @@ namespace openre
         // Resolve the game module (OPENRE_GAME) so the boot-scene and the
         // module-driven systems know whether to skip the legacy game.
         set_game_module_dir(resolve_game_module_dir());
+        set_game_core_dir(resolve_game_core_dir());
         if (game_module_active())
         {
             logging::logInfo("[app] game module active: {}", game_module_dir().string());
+            if (!game_core_dir().empty())
+                logging::logInfo("[app] core asset dir: {}", game_core_dir().string());
 
             // Bring up the SDL3 audio device for module-mode emitters. Voices
             // may already have been created; they start mixing once open.

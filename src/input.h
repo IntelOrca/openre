@@ -3,6 +3,7 @@
 #include "openre.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -138,4 +139,24 @@ namespace openre::input
     // Maps an INI command name ("up", "accept", "menu", ...) to its Command,
     // or COMMAND_COUNT when the name is unknown.
     [[nodiscard]] Command command_from_name(std::string_view name);
+
+    // ---- binding enumeration (UI / script consumers) ----
+    // Number of registered commands.
+    [[nodiscard]] int32_t command_count();
+    // The INI name of a command ("cancel", "accept", ...), or nullptr when
+    // out of range.
+    [[nodiscard]] const char* command_name(Command command);
+    // One binding of a command, with `name` set to the canonical token name:
+    // a keyboard key name ("escape", "w"), a gamepad source name ("south",
+    // "dpad_up") or a mouse button name ("left").
+    struct NamedBinding
+    {
+        BindingDevice device;
+        std::string name;
+    };
+    [[nodiscard]] std::vector<NamedBinding> command_bindings(Command command);
+
+    // Monotonically incremented whenever the command bindings change (boot
+    // load or a config-screen rebind). UI can key relayouts off it.
+    [[nodiscard]] uint32_t bindings_revision();
 };

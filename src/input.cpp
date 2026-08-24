@@ -268,6 +268,9 @@ namespace openre::input
         CommandBindings s_commandBindings;
         uint32_t s_commandState = 0;
         uint32_t s_commandEdge = 0;
+        // Bumped whenever s_commandBindings is (re)loaded so consumers can
+        // detect changes without diffing every binding.
+        uint32_t s_bindingsRevision = 0;
         bool s_rebindLockout = false;
 
         // SDL instance ID of the pad behind each legacy joystick slot, so a
@@ -486,6 +489,7 @@ namespace openre::input
                 pos = comma + 1;
             }
         }
+        s_bindingsRevision++;
     }
 
     void save_bindings()
@@ -1093,6 +1097,7 @@ namespace openre::input
             binds.push_back(Binding{ BindingDevice::Keyboard, data[sc.slot] });
         }
         save_bindings();
+        s_bindingsRevision++;
     }
 
     void input_init_hooks()
@@ -1113,6 +1118,11 @@ namespace openre::input
         return s_commandEdge;
     }
 
+    uint32_t bindings_revision()
+    {
+        return s_bindingsRevision;
+    }
+
     Command command_from_name(std::string_view name)
     {
         for (int i = 0; i < COMMAND_COUNT; i++)
@@ -1121,5 +1131,46 @@ namespace openre::input
                 return static_cast<Command>(i);
         }
         return COMMAND_COUNT;
+    }
+
+    int32_t command_count()
+    {
+        return COMMAND_COUNT;
+    }
+
+    const char* command_name(Command command)
+    {
+        if (command < 0 || command >= COMMAND_COUNT)
+            return nullptr;
+        return kCommandIniNames[command];
+    }
+
+    std::vector<NamedBinding> command_bindings(Command command)
+    {
+        std::vector<NamedBinding> out;
+        if (command < 0 || command >= COMMAND_COUNT)
+            return out;
+        for (const auto& b : s_commandBindings.bindings[command])
+        {
+            switch (b.device)
+            {
+            case BindingDevice::Keyboard: out.push_back({ b.device, key_name_from_vk(b.key) }); break;
+            case BindingDevice::Gamepad:
+                for (const auto& gs : kGamepadSourceNames)
+                {
+                    if (static_cast<uint8_t>(gs.source) == b.key)
+                    {
+                        out.push_back({ b.device, gs.name });
+                        break;
+                    }
+                }
+                break;
+            case BindingDevice::Mouse:
+                if (b.key < 3)
+                    out.push_back({ b.device, kMouseButtonNames[b.key] });
+                break;
+            }
+        }
+        return out;
     }
 };
