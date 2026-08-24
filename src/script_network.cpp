@@ -262,13 +262,14 @@ namespace openre::script
                 if (socket->closed || socket->handle == INVALID_SOCKET)
                     return;
                 // Drain the whole send buffer before returning: the caller
-                // (respond) disposes the socket straight after, so a partial
+                // (respond) disposes this socket right after, so a partial
                 // flush would truncate the response. Wait briefly for
                 // writability when the local send buffer fills, giving up
                 // after a bounded time so a stalled reader cannot wedge the
-                // server; the background thread finishes the rest.
+                // game loop (this runs on the main thread). Anything left in
+                // the buffer is dropped with the socket.
                 constexpr long kFlushWaitUs = 50000;
-                constexpr int kMaxFlushWaits = 200;
+                constexpr int kMaxFlushWaits = 40;
                 int waits = 0;
                 while (!socket->sendBuf.empty() && waits < kMaxFlushWaits)
                 {

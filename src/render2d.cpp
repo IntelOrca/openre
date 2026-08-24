@@ -250,9 +250,8 @@ namespace openre::render2d
         Uint32 captureResultHeight = 0;
         bool captureSucceeded = false;
 
-        bool ensureCaptureTexture(SDL_GPUDevice* dev, SDL_Window* win, Uint32 w, Uint32 h)
+        bool ensureCaptureTexture(SDL_GPUDevice* dev, Uint32 w, Uint32 h)
         {
-            (void)win;
             if (captureTexture && captureWidth == w && captureHeight == h)
                 return true;
             if (captureTexture)
@@ -865,7 +864,7 @@ namespace openre::render2d
         // blit destination), so it must never be sampled or copied from -
         // keeping a renderable copy also gives the screenshot endpoint
         // something to download.
-        if (!impl->ensureCaptureTexture(dev, win, winW, winH))
+        if (!impl->ensureCaptureTexture(dev, winW, winH))
         {
             SDL_CancelGPUCommandBuffer(cmd);
             return;
@@ -1034,50 +1033,58 @@ namespace openre::render2d
         // Screenshot request: if one is outstanding, download the frame we
         // just rendered in this same command buffer and keep the transfer
         // buffer for the requester to map once the fence signals.
-        const bool captureThisFrame = impl->captureRequested;
-        impl->captureRequested = false;
-
-        SDL_GPUTransferBuffer* captureBuffer = nullptr;
-        bool downloadRecorded = false;
-        if (captureThisFrame)
+        if (impl->captureRequested)
         {
             SDL_GPUTransferBufferCreateInfo tbInfo{};
             tbInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
             tbInfo.size = impl->captureWidth * impl->captureHeight * 4;
-            captureBuffer = SDL_CreateGPUTransferBuffer(dev, &tbInfo);
-            if (captureBuffer)
+            SDL_GPUTransferBuffer* captureBuffer = SDL_CreateGPUTransferBuffer(dev, &tbInfo);
+            if (!captureBuffer)
             {
-                SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
-                if (cp)
-                {
-                    // Region is 9 fields: texture, mip_level, layer, x, y, z, w, h, d.
-                    SDL_GPUTextureRegion region{};
-                    region.texture = impl->captureTexture;
-                    region.w = impl->captureWidth;
-                    region.h = impl->captureHeight;
-                    region.d = 1;
-                    SDL_GPUTextureTransferInfo loc{};
-                    loc.transfer_buffer = captureBuffer;
-                    loc.pixels_per_row = impl->captureWidth;
-                    loc.rows_per_layer = impl->captureHeight;
-                    SDL_DownloadFromGPUTexture(cp, &region, &loc);
-                    SDL_EndGPUCopyPass(cp);
-                    downloadRecorded = true;
-                }
-                else
-                {
-                    logging::logError("[render2d] capture: begin copy pass failed: {}", SDL_GetError());
-                }
-                impl->captureTransferBuffer = captureBuffer;
-                impl->captureFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+                // Keep the request pending so the next present retries.
+                logging::logError("[render2d] capture: transfer buffer alloc failed: {}", SDL_GetError());
+                SDL_SubmitGPUCommandBuffer(cmd);
+                return;
+            }
+
+            SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+            if (!cp)
+            {
+                logging::logError("[render2d] capture: begin copy pass failed: {}", SDL_GetError());
+                SDL_ReleaseGPUTransferBuffer(dev, captureBuffer);
+                SDL_SubmitGPUCommandBuffer(cmd);
+                return;
+            }
+            SDL_GPUTextureRegion region{};
+            region.texture = impl->captureTexture;
+            region.w = impl->captureWidth;
+            region.h = impl->captureHeight;
+            region.d = 1;
+            SDL_GPUTextureTransferInfo loc{};
+            loc.transfer_buffer = captureBuffer;
+            loc.pixels_per_row = impl->captureWidth;
+            loc.rows_per_layer = impl->captureHeight;
+            SDL_DownloadFromGPUTexture(cp, &region, &loc);
+            SDL_EndGPUCopyPass(cp);
+
+            impl->captureTransferBuffer = captureBuffer;
+            impl->captureFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+            if (impl->captureFence)
+            {
+                impl->captureRequested = false;
                 impl->captureResultWidth = impl->captureWidth;
                 impl->captureResultHeight = impl->captureHeight;
-                impl->captureSucceeded = downloadRecorded && impl->captureFence != nullptr;
+                impl->captureSucceeded = true;
             }
             else
             {
-                logging::logError("[render2d] capture: transfer buffer alloc failed: {}", SDL_GetError());
-                SDL_SubmitGPUCommandBuffer(cmd);
+                // Submit failed, so nothing was queued: drop the buffer and
+                // let the next present retry the request.
+                logging::logError("[render2d] capture: submit failed: {}", SDL_GetError());
+                SDL_ReleaseGPUTransferBuffer(dev, captureBuffer);
+                impl->captureTransferBuffer = nullptr;
+                impl->captureFence = nullptr;
+                impl->captureSucceeded = false;
             }
         }
         else
@@ -1090,7 +1097,7 @@ namespace openre::render2d
     {
         // Packs tightly-packed 32bpp R,G,B,A pixels (the capture texture
         // format) into an uncompressed bottom-up 24bpp BMP.
-        bool encodeBmp24(const uint8_t* pixels, int width, int height, std::vector<uint8_t>& out)
+        void encodeBmp24(const uint8_t* pixels, int width, int height, std::vector<uint8_t>& out)
         {
             const size_t stride = (((size_t)width * 3) + 3) / 4 * 4;
             const size_t dataOffset = 14 + 40;
@@ -1131,7 +1138,6 @@ namespace openre::render2d
                     dst[x * 3 + 2] = src[x * 4 + 0];
                 }
             }
-            return true;
         }
     } // namespace
 
@@ -1168,14 +1174,14 @@ namespace openre::render2d
 
         SDL_GPUTransferBuffer* tbuf = impl->captureTransferBuffer;
         SDL_GPUFence* fence = impl->captureFence;
-        impl->captureTransferBuffer = nullptr;
-        impl->captureFence = nullptr;
-        impl->captureSucceeded = false;
         if (!tbuf || !fence)
             return false;
 
-        // Wait until the GPU has finished the download before mapping the
-        // transfer buffer.
+        // Don't stall the game loop if the GPU hasn't finished the download
+        // yet: report "not ready" and let the caller poll again on a later
+        // tick (web.lua retries within its response budget).
+        if (!SDL_QueryGPUFence(dev, fence))
+            return false;
         SDL_WaitForGPUFences(dev, true, &fence, 1);
         SDL_ReleaseGPUFence(dev, fence);
 
@@ -1184,19 +1190,24 @@ namespace openre::render2d
         {
             logging::logError("[render2d] capture: SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
             SDL_ReleaseGPUTransferBuffer(dev, tbuf);
+            impl->captureTransferBuffer = nullptr;
+            impl->captureFence = nullptr;
+            impl->captureSucceeded = false;
             return false;
         }
 
-        const bool ok
-            = encodeBmp24((const uint8_t*)mapped, (int)impl->captureResultWidth, (int)impl->captureResultHeight, outBmp);
+        encodeBmp24((const uint8_t*)mapped, (int)impl->captureResultWidth, (int)impl->captureResultHeight, outBmp);
         SDL_UnmapGPUTransferBuffer(dev, tbuf);
         SDL_ReleaseGPUTransferBuffer(dev, tbuf);
+        impl->captureTransferBuffer = nullptr;
+        impl->captureFence = nullptr;
+        impl->captureSucceeded = false;
 
-        if (ok && outWidth)
+        if (outWidth)
             *outWidth = (int)impl->captureResultWidth;
-        if (ok && outHeight)
+        if (outHeight)
             *outHeight = (int)impl->captureResultHeight;
-        return ok;
+        return true;
     }
 
     int SpriteRenderer::screenWidth() const

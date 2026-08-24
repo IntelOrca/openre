@@ -664,6 +664,10 @@ local function handle(sock, req)
     elseif method == "GET" and base == "/api/screenshot" then
         if not gfx.requestScreenshot then
             respond(sock, "501 Not Implemented", "text/plain", "screenshot is not available")
+        elseif pendingShot ~= nil then
+            -- One grab per present; a second request while one is already
+            -- pending would silently orphan the parked socket.
+            respond(sock, "503 Service Unavailable", "text/plain", "a screenshot request is already in progress")
         else
             local ok = gfx.requestScreenshot()
             if ok == false then
