@@ -430,15 +430,17 @@ local function addTextBox(parent, font, name, left, top, bandW, bandH, text, fla
 end
 
 -- Keycap hint box: dark fill, four 1px border rects, centred label.
-local function createKeycap(parent, font, name, cx, cy, label)
-    local l = cx - KEYCAP_W * 0.5
-    local t = cy - KEYCAP_H * 0.5
-    addQuad(parent, name .. '.fill', cx, cy, KEYCAP_W, KEYCAP_H, COLOR_KEYCAP_FILL)
+-- (dx, dy) is the design-space centre of the box.
+local function createKeycap(parent, font, name, dx, dy, label)
+    local l = dx - KEYCAP_W * 0.5
+    local t = dy - KEYCAP_H * 0.5
+    addQuadAt(parent, name .. '.fill', l, t, KEYCAP_W, KEYCAP_H, COLOR_KEYCAP_FILL)
     addQuadAt(parent, name .. '.edgeT', l, t, KEYCAP_W, KEYCAP_EDGE, COLOR_KEYCAP_EDGE)
     addQuadAt(parent, name .. '.edgeB', l, t + KEYCAP_H - KEYCAP_EDGE, KEYCAP_W, KEYCAP_EDGE, COLOR_KEYCAP_EDGE)
     addQuadAt(parent, name .. '.edgeL', l, t, KEYCAP_EDGE, KEYCAP_H, COLOR_KEYCAP_EDGE)
     addQuadAt(parent, name .. '.edgeR', l + KEYCAP_W - KEYCAP_EDGE, t, KEYCAP_EDGE, KEYCAP_H, COLOR_KEYCAP_EDGE)
-    addText(parent, font, name .. '.label', cx, cy, KEYCAP_W, KEYCAP_H,
+    addText(parent, font, name .. '.label',
+        dx - DESIGN_W * 0.5, dy - DESIGN_H * 0.5, KEYCAP_W, KEYCAP_H,
         whiteSpan(label, 0.95), TextFlags.xCenter | TextFlags.yMiddle)
 end
 
@@ -484,6 +486,7 @@ end
 -- per-item records ({ text }) for the later navigation step.
 local function createStrip(parent, font, name, cy, labels, selectedIndex, gap, withSeparators, leftCap, rightCap)
     local items = {}
+    local rowCy = cy - DESIGN_H * 0.5
 
     -- LB/RB or LT/RT keycap hints hugging the page margins.
     createKeycap(parent, font, name .. '.keyL',
@@ -505,9 +508,9 @@ local function createStrip(parent, font, name, cy, labels, selectedIndex, gap, w
             local cx = STRIP_LEFT - DESIGN_W * 0.5 + slot.x + widths[i] * 0.5
             local selected = i == selectedIndex
             if selected then
-                createGlow(parent, name .. '.' .. i .. '.glow', cx, cy, widths[i])
+                createGlow(parent, name .. '.' .. i .. '.glow', cx, rowCy, widths[i])
             end
-            local _, t = addText(parent, font, name .. '.' .. i, cx, cy,
+            local _, t = addText(parent, font, name .. '.' .. i, cx, rowCy,
                 widths[i], SMALL_CELL,
                 selected and whiteSpan(labels[i], 1.0) or greySpan(labels[i], 0.75),
                 TextFlags.xCenter | TextFlags.yMiddle)
@@ -522,7 +525,7 @@ local function createStrip(parent, font, name, cy, labels, selectedIndex, gap, w
             if slots[i].visible and slots[i + 1].visible then
                 local sepCx = STRIP_LEFT - DESIGN_W * 0.5
                     + slots[i].x + widths[i] + gap * 0.5 - SEP_W * 0.5
-                addQuad(parent, name .. '.sep' .. i, sepCx, cy, SEP_W, SEP_H, COLOR_SEPARATOR)
+                addQuad(parent, name .. '.sep' .. i, sepCx, rowCy, SEP_W, SEP_H, COLOR_SEPARATOR)
             end
         end
     end
