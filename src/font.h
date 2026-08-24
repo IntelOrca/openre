@@ -82,6 +82,43 @@ namespace openre
         // True when this resource was parsed from a .fnt file.
         bool fromFnt = false;
 
+        // ---- TTF-backed fonts (fromTtf == true) ----
+        // One CPU mirror + packing cursor per atlas page. `textures[i]` holds
+        // the matching TextureResource cookie; the pixel buffer mirrors the
+        // GPU texture so freshly rasterized glyphs can be blitted in and
+        // re-uploaded without ever downloading pixels.
+        struct TtfPage
+        {
+            std::vector<uint8_t> pixels;
+            int cursorX = 0;
+            int cursorY = 0;
+            int rowH = 0;
+        };
+        // True when this resource was created from a TTF/OTF/TTC file.
+        bool fromTtf = false;
+        // The open TTF_Font* (SDL3_ttf). Opaque here so font.h does not drag
+        // SDL_ttf headers into every translation unit.
+        void* ttfFont = nullptr;
+        // The raw font file bytes. SDL3_ttf reads glyph data lazily through
+        // the SDL_IOStream it was opened with, so the source buffer must stay
+        // alive for the whole lifetime of the font (not just the loader call).
+        std::vector<uint8_t> ttfData;
+        // Point/pixel size the font was opened at (SDL3_ttf defaults to 72 DPI
+        // so 1pt == 1px).
+        int pixelSize = 0;
+        // Font-wide vertical metrics at this size (TTF only); also expressed
+        // via defaultTop/defaultBottom below.
+        int ascent = 0;
+        int descent = 0;
+        std::vector<TtfPage> ttfPages;
+
+        // Rasterizes `codepoint` into the TTF glyph atlas on first use,
+        // creating its FontGlyph record so layout can resolve it like any
+        // other explicit glyph. Missing/blank glyphs still get an
+        // advance-only record. Returns the record, or nullptr when the font
+        // is not TTF-backed or has no usable rasterizer.
+        const FontGlyph* ensureGlyph(uint32_t codepoint);
+
         // Default metrics for characters without an explicit record.
         int32_t defaultLeft = 0;
         int32_t defaultRight = 0;
@@ -108,18 +145,25 @@ namespace openre
             auto it = this->glyphs.find(codepoint);
             return it != this->glyphs.end() ? &it->second : nullptr;
         }
+
+        // Pair kerning (pixels to subtract from the pen advance between two
+        // glyphs) for TTF-backed fonts. Returns 0 for non-TTF fonts.
+        int kerning(uint32_t previous, uint32_t current) const;
     };
 
     /**
-     * Loads a RE2 font (.fnt file or raw font0/font1 atlas) and registers it
-     * with the resource manager, returning a ResourceCookie holding one
-     * reference (0 on failure).
+     * Loads a RE2 font (.fnt file, raw font0/font1 atlas, or a TTF/OTF/TTC
+     * font) and registers it with the resource manager, returning a
+     * ResourceCookie holding one reference (0 on failure).
      *
      * For an atlas path like "common/data/font0" the extension is probed
      * ("" / ".tim" / ".adt") via data://. The ":small" suffix selects the
      * compact ASCII sub-font of the same atlas. A path ending in ".fnt" is
      * parsed as the binary OpenRE font format; texture paths inside it are
-     * resolved like any other logical asset path.
+     * resolved like any other logical asset path. A path ending in
+     * ".ttf"/".otf"/".ttc" is loaded through SDL3_ttf at `size` pixels
+     * (default 16; the size is also part of the resource key, so the same
+     * file at different sizes registers separately).
      */
-    ResourceCookie loadFontResource(std::string_view path);
+    ResourceCookie loadFontResource(std::string_view path, int size = 0);
 }

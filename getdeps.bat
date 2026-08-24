@@ -4,6 +4,7 @@ setlocal enabledelayedexpansion
 set "ROOT=%~dp0"
 set "LIB=%ROOT%lib"
 set "SDL_VERSION=3.4.12"
+set "SDL_TTF_VERSION=3.2.2"
 set "LUA_VERSION=5.4.2"
 set "CACHE=%TEMP%\openre-deps"
 
@@ -50,6 +51,37 @@ copy /y "%CACHE%\SDL3-%SDL_VERSION%\lib\x86\SDL3.dll" "%LIB%\bin\x86\" >nul
 echo SDL3 %SDL_VERSION% installed.
 
 :sdl_done
+
+rem ---------------------------------------------------------------------------
+rem SDL3_ttf (font library; bundles FreeType + HarfBuzz)
+rem ---------------------------------------------------------------------------
+if exist "%LIB%\include\SDL3_ttf\SDL_ttf.h" if exist "%LIB%\lib\x86\SDL3_ttf.lib" if exist "%LIB%\bin\x86\SDL3_ttf.dll" goto ttf_done
+
+set "TTF_ZIP=%CACHE%\SDL3_ttf-devel-%SDL_TTF_VERSION%-VC.zip"
+if not exist "%TTF_ZIP%" (
+    echo Downloading SDL3_ttf %SDL_TTF_VERSION%...
+    curl -fL -o "%TTF_ZIP%" "https://github.com/libsdl-org/SDL_ttf/releases/download/release-%SDL_TTF_VERSION%/SDL3_ttf-devel-%SDL_TTF_VERSION%-VC.zip"
+    if errorlevel 1 (
+        echo error: failed to download SDL3_ttf
+        exit /b 1
+    )
+)
+
+echo Extracting SDL3_ttf %SDL_TTF_VERSION%...
+tar -xf "%TTF_ZIP%" -C "%CACHE%" 2>nul
+if errorlevel 1 (
+    echo error: failed to extract %TTF_ZIP%
+    exit /b 1
+)
+
+mkdir "%LIB%\include\SDL3_ttf" 2>nul
+copy /y "%CACHE%\SDL3_ttf-%SDL_TTF_VERSION%\include\SDL3_ttf\*.h" "%LIB%\include\SDL3_ttf\" >nul
+copy /y "%CACHE%\SDL3_ttf-%SDL_TTF_VERSION%\lib\x86\SDL3_ttf.lib" "%LIB%\lib\x86\" >nul
+rem The VC devel package keeps the DLL under lib\x86 (no bin folder).
+copy /y "%CACHE%\SDL3_ttf-%SDL_TTF_VERSION%\lib\x86\SDL3_ttf.dll" "%LIB%\bin\x86\" >nul
+echo SDL3_ttf %SDL_TTF_VERSION% installed.
+
+:ttf_done
 
 rem ---------------------------------------------------------------------------
 rem Lua

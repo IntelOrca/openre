@@ -353,21 +353,24 @@ namespace openre::text
         return -1;
     }
 
-    std::vector<GlyphRun>
-    decodeText(std::string_view text, const FontResource* font, float fallbackAdvanceX, float fallbackAdvanceY)
+    std::vector<GlyphRun> decodeText(std::string_view text, FontResource* font, float fallbackAdvanceX, float fallbackAdvanceY)
     {
         std::vector<GlyphRun> runs;
         runs.reserve(text.size());
 
         ecs::Color color{ 255, 255, 255, 255 };
         int page = 0;
+        uint32_t prevCp = 0;
 
         const char* p = text.data();
         const char* end = text.data() + text.size();
         while (p < end)
         {
-            // Markup: <span ...>
-            if (*p == '<')
+            // Markup: <span ...>. A '<' that does not start an actual <span>
+            // tag is a literal character, so code snippets and math render
+            // normally instead of being swallowed as a tag.
+            const bool isSpanTag = p + 5 <= end && (std::strncmp(p, "<span", 5) == 0 || std::strncmp(p, "<SPAN", 5) == 0);
+            if (isSpanTag)
             {
                 const char* close = std::strchr(p, '>');
                 if (close != nullptr)
@@ -394,14 +397,37 @@ namespace openre::text
             uint32_t cp = 0;
             decodeUtf8(p, end, cp);
 
+            // Hard line breaks split the text into stacked lines. '\n' emits
+            // a lineBreak marker run; a lone '\r' (or the CR of a CRLF pair)
+            // is skipped so "a\r\nb" produces exactly one new line.
+            if (cp == 0x0A)
+            {
+                GlyphRun g;
+                g.color = color;
+                g.blank = true;
+                g.lineBreak = true;
+                g.advanceY = fallbackAdvanceY;
+                runs.push_back(g);
+                prevCp = 0;
+                continue;
+            }
+            if (cp == 0x0D)
+                continue;
+
             GlyphRun g;
             g.color = color;
             g.advanceY = fallbackAdvanceY;
 
-            const FontGlyph* glyph = font != nullptr && font->fromFnt ? font->findGlyph(cp) : nullptr;
-            if (glyph != nullptr && cp != 0x20)
+            const bool explicitFont = font != nullptr && (font->fromFnt || font->fromTtf);
+            const FontGlyph* glyph = nullptr;
+            if (font != nullptr && font->fromTtf)
+                glyph = font->ensureGlyph(cp); // rasterize on first use
+            else if (font != nullptr && font->fromFnt)
+                glyph = font->findGlyph(cp);
+
+            if (glyph != nullptr && cp != 0x20 && glyph->srcW > 0 && glyph->srcH > 0)
             {
-                // Explicit .fnt record: kerning-aware metrics and source rect.
+                // Explicit glyph: kerning-aware metrics and source rect.
                 g.hasSrc = true;
                 g.srcX = glyph->srcX;
                 g.srcY = glyph->srcY;
@@ -410,12 +436,13 @@ namespace openre::text
                 g.texture = font->textures[glyph->textureIndex].atlas;
                 g.advanceX = static_cast<float>(glyph->left + glyph->right);
                 g.leftBearing = static_cast<float>(glyph->left);
+                g.topBearing = static_cast<float>(glyph->top);
             }
-            else if (font != nullptr && font->fromFnt)
+            else if (explicitFont)
             {
-                // Spaces and characters missing from the map draw nothing but
-                // still advance the pen, by their recorded metrics or the
-                // header defaults.
+                // Spaces, withdrawn glyphs and characters missing from the map
+                // draw nothing but still advance the pen, by their recorded
+                // metrics or the header defaults.
                 g.blank = true;
                 const int32_t left = glyph != nullptr ? glyph->left : font->defaultLeft;
                 const int32_t right = glyph != nullptr ? glyph->right : font->defaultRight;
@@ -435,6 +462,13 @@ namespace openre::text
                 g.blank = cp == 0x20 || cell < 0;
                 g.advanceX = fallbackAdvanceX > 0 ? fallbackAdvanceX : kCellSize;
             }
+
+            // Pair kerning for TTF fonts: tighten the pen advance between
+            // adjacent glyphs (e.g. "AV", "To"). The glyph shapes stay put;
+            // only the gap shrinks.
+            if (explicitFont && font->fromTtf && prevCp != 0 && !runs.empty())
+                g.advanceX -= static_cast<float>(font->kerning(prevCp, cp));
+            prevCp = cp;
             runs.push_back(g);
         }
         return runs;
@@ -443,9 +477,18 @@ namespace openre::text
     float measureWidth(const std::vector<GlyphRun>& runs)
     {
         float w = 0;
+        float longest = 0;
         for (const auto& g : runs)
+        {
+            if (g.lineBreak)
+            {
+                longest = std::max(longest, w);
+                w = 0;
+                continue;
+            }
             w += g.advanceX;
-        return w;
+        }
+        return std::max(longest, w);
     }
 
     void fingerprint(ecs::Scene& scene, ecs::Entity entity, const ecs::TextComponent& text, std::string& outFingerprint)
@@ -472,7 +515,7 @@ namespace openre::text
     void layoutEntity(ecs::Scene& scene, ecs::Entity entity, ecs::TextComponent& text)
     {
         // Resolve the font resource to find its atlas texture cookie.
-        const FontResource* font = nullptr;
+        FontResource* font = nullptr;
         ResourceCookie atlas = 0;
         bool small = false;
         if (text.font != 0)
@@ -494,10 +537,18 @@ namespace openre::text
         }
 
         const float cellSize = small ? kSmallCellSize : kCellSize;
-        auto runs = decodeText(text.text, font, cellSize, cellSize);
+        const float lineH = (font->fromFnt || font->fromTtf) ? static_cast<float>(font->lineHeight()) : cellSize;
+        auto runs = decodeText(text.text, font, cellSize, lineH);
+        if (runs.empty())
+            return;
 
         const float totalW = measureWidth(runs);
-        const float totalH = font->fromFnt ? static_cast<float>(font->lineHeight()) : cellSize;
+        // Stacked line breaks: the box height is lineH per line.
+        int lineCount = 1;
+        for (const auto& r : runs)
+            if (r.lineBreak)
+                ++lineCount;
+        const float totalH = lineH * static_cast<float>(lineCount);
 
         // The text entity's transform is the centre of its bounding box, and
         // glyphs are rendered centred on their own transforms (see render2d), so
@@ -548,6 +599,15 @@ namespace openre::text
         size_t glyphIndex = 0;
         for (auto& run : runs)
         {
+            // Hard line break: start a new line at the origin, one line
+            // height lower. No sprite is produced.
+            if (run.lineBreak)
+            {
+                x = originX;
+                y += lineH;
+                continue;
+            }
+
             // Blank glyphs (spaces) advance the pen but draw nothing.
             if (run.blank)
             {
@@ -561,10 +621,15 @@ namespace openre::text
             // fill the full cell; .fnt glyphs sit at pen_x - leftBearing and
             // are centred on their own source rectangle.
             if (run.hasSrc)
+            {
                 transform.position.x = x - run.leftBearing + run.srcW * 0.5f;
+                transform.position.y = y - run.topBearing + run.srcH * 0.5f;
+            }
             else
+            {
                 transform.position.x = x + run.advanceX * 0.5f;
-            transform.position.y = y + run.advanceY * 0.5f;
+                transform.position.y = y + run.advanceY * 0.5f;
+            }
 
             auto* sprite = scene.tryGetComponent<SpriteComponent>(g);
             if (sprite == nullptr)

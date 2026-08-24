@@ -1664,7 +1664,11 @@ namespace openre::script
         int gfxLoadFont(lua_State* L)
         {
             auto* path = luaL_checkstring(L, 1);
-            auto cookie = loadFontResource(path);
+            // Optional point/pixel size (TTF fonts only).
+            int size = 0;
+            if (lua_gettop(L) >= 2 && !lua_isnil(L, 2))
+                size = static_cast<int>(luaL_checkinteger(L, 2));
+            auto cookie = loadFontResource(path, size);
             if (cookie == 0)
             {
                 lua_pushnil(L);

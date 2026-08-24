@@ -639,13 +639,22 @@ function gfx.loadTexture(path, width, height, timIndex) end
 --- e.g. `gfx.loadFont("fonts/std.fnt")` (normal font) or
 --- `gfx.loadFont("fonts/sm.fnt")` (small font).
 ---
+--- A path ending in `.ttf`, `.otf` or `.ttc` selects an SDL3_ttf font. Glyphs
+--- are rasterized on demand at `size` pixels (default 16) into a shared atlas;
+--- the size is part of the resource key, so loading the same file at different
+--- sizes yields separate font handles. Non-Latin scripts (kana/kanji, accents)
+--- work as long as the font covers them, e.g.
+--- `gfx.loadFont("fonts/Barlow-Regular.ttf", 24)` or
+--- `gfx.loadFont("fonts/msgothic.ttc:20")`.
+---
 --- Otherwise the path names a raw RE2 atlas (font0.tim / font1.tim). A
 --- `:variant` suffix selects a virtual sub-font of the same atlas. Only
 --- `:small` is supported for now - the compact ASCII set (0x20-0x7F) in an
 --- 8px-cell grid (32 per row) on font0, e.g. `gfx.loadFont("common/data/font0:small")`.
 ---@param path string e.g. "fonts/std.fnt"
+---@param size? integer Point/pixel size for TTF/OTF/TTC fonts (default 16).
 ---@return Font|nil
-function gfx.loadFont(path) end
+function gfx.loadFont(path, size) end
 
 --- Measure a string exactly the way the engine will lay it out, so UI code can
 --- size and centre labels before creating entities. The sandbox has no io,

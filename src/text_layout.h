@@ -55,6 +55,9 @@ namespace openre::text
         float advanceY = 0;
         // The glyph is drawn at pen_x - leftBearing (.fnt kerning).
         float leftBearing = 0;
+        // The glyph is drawn at pen_y - topBearing (vertical counterpart of
+        // leftBearing; 0 for legacy fonts, see FontGlyph::top).
+        float topBearing = 0;
 
         // Colour resolved from <span> markup.
         ecs::Color color;
@@ -62,6 +65,11 @@ namespace openre::text
         // True for characters that occupy horizontal advance but draw no
         // glyph (e.g. the space). No sprite is created, but x still advances.
         bool blank = false;
+
+        // True for a hard line break ('\n'). No sprite is created and no
+        // horizontal advance occurs; the layout pass starts a new line at
+        // the origin's x with y advanced by one line height.
+        bool lineBreak = false;
     };
 
     /// Resolves a UTF-8 codepoint to a legacy font-atlas cell index + page.
@@ -73,12 +81,11 @@ namespace openre::text
 
     /// Decodes `text` (with optional <span> markup) into a flat list of
     /// glyphs, measuring line width as it goes. Glyphs are resolved against
-    /// `font`: .fnt fonts provide explicit records with kerning, legacy
-    /// atlas fonts use grid cells at `fallbackAdvanceX`. `fallbackAdvanceY`
-    /// is the line height used for either flavour when the font does not
-    /// override it.
-    std::vector<GlyphRun>
-    decodeText(std::string_view text, const FontResource* font, float fallbackAdvanceX, float fallbackAdvanceY);
+    /// `font`: .fnt fonts provide explicit records with kerning, TTF fonts
+    /// rasterize on demand via FontResource::ensureGlyph, legacy atlas fonts
+    /// use grid cells at `fallbackAdvanceX`. `fallbackAdvanceY` is the line
+    /// height used for either flavour when the font does not override it.
+    std::vector<GlyphRun> decodeText(std::string_view text, FontResource* font, float fallbackAdvanceX, float fallbackAdvanceY);
 
     /// Width of the longest (single) line in `runs`.
     float measureWidth(const std::vector<GlyphRun>& runs);

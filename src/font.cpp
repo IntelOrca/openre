@@ -8,6 +8,11 @@
 #include "system_filesystem.h"
 #include "tim.h"
 
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
+
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <set>
@@ -36,6 +41,12 @@ namespace openre
         }
         for (const ResourceCookie cookie : cookies)
             resmgr.release(cookie);
+
+        // Close the TTF_Font handle for TTF-backed fonts. Must happen after
+        // the page releases because (in the current SDL3_ttf) the font does
+        // not own the page textures.
+        if (this->ttfFont != nullptr)
+            TTF_CloseFont(static_cast<TTF_Font*>(this->ttfFont));
     }
     namespace
     {
@@ -366,9 +377,355 @@ namespace openre
                 lineHeight);
             return cookie;
         }
+
+        // ------------------------------------------------------------------
+        // TTF/OTF fonts (SDL3_ttf)
+        // ------------------------------------------------------------------
+
+        // One-time SDL3_ttf init (idempotent).
+        bool ensureTtfInitialised()
+        {
+            if (TTF_WasInit() != 0)
+                return true;
+            if (!TTF_Init()) // TTF_Init returns bool: true on success
+            {
+                logging::logError("[font] TTF_Init failed: {}", SDL_GetError());
+                return false;
+            }
+            return true;
+        }
+
+        // Strips a trailing ":NN" point/pixel-size suffix from a logical path.
+        // Returns false when there is no numeric suffix (so ":small" and plain
+        // paths are left alone).
+        bool splitSizeSuffix(std::string& path, int& outSize)
+        {
+            const auto colon = path.rfind(':');
+            if (colon == std::string::npos || colon + 1 >= path.size())
+                return false;
+            const char* s = path.c_str() + colon + 1;
+            const char* q = s;
+            int value = 0;
+            for (; *q != '\0'; q++)
+            {
+                if (*q < '0' || *q > '9')
+                    return false;
+                value = value * 10 + (*q - '0');
+            }
+            outSize = value;
+            path.erase(colon);
+            return true;
+        }
+
+        bool hasTtfExtension(std::string_view path)
+        {
+            auto lower = std::string(path);
+            for (auto& c : lower)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return lower.size() >= 4
+                && (lower.compare(lower.size() - 4, 4, ".ttf") == 0 || lower.compare(lower.size() - 4, 4, ".otf") == 0
+                    || lower.compare(lower.size() - 4, 4, ".ttc") == 0);
+        }
+
+        constexpr int kTtfPageW = 512;
+        constexpr int kTtfPageH = 512;
+        constexpr int kTtfPad = 1; // padding between glyphs to stop bleed
+
+        // Appends a new atlas page (GPU dynamic texture + CPU mirror) to
+        // `font` and returns its TextureResource cookie (0 on failure).
+        ResourceCookie ttfAddPage(FontResource& font)
+        {
+            auto& renderer = render2d::SpriteRenderer::get();
+            const int handle = renderer.createDynamicTexture(kTtfPageW, kTtfPageH);
+            if (handle == 0)
+            {
+                logging::logError("[font] ttf page allocation failed (createDynamicTexture)");
+                return 0;
+            }
+
+            auto tex = std::make_unique<TextureResource>();
+            tex->textureHandle = handle;
+            tex->width = kTtfPageW;
+            tex->height = kTtfPageH;
+
+            auto& resmgr = ResourceManager::get();
+            const std::string name = "font:ttf page " + std::to_string(reinterpret_cast<uintptr_t>(&font)) + ":"
+                + std::to_string(font.textures.size());
+            const auto cookie = resmgr.addFirstRef<TextureResource>(name, std::move(tex));
+            if (cookie == 0)
+            {
+                renderer.unloadTexture(handle);
+                return 0;
+            }
+
+            FontResource::FntTexture ft;
+            ft.width = kTtfPageW;
+            ft.height = kTtfPageH;
+            ft.atlas = cookie;
+            font.textures.push_back(std::move(ft));
+
+            FontResource::TtfPage page;
+            page.pixels.assign(static_cast<size_t>(kTtfPageW) * kTtfPageH * 4, 0);
+            page.cursorX = kTtfPad;
+            page.cursorY = kTtfPad;
+            page.rowH = 0;
+            font.ttfPages.push_back(std::move(page));
+
+            if (font.atlas == 0)
+            {
+                font.atlas = cookie;
+                font.width = kTtfPageW;
+                font.height = kTtfPageH;
+            }
+            logging::logInfo(
+                "[font] ttf atlas page {} ({}x{}) allocated for cookie {}",
+                font.textures.size() - 1,
+                kTtfPageW,
+                kTtfPageH,
+                cookie);
+            return cookie;
+        }
+
+        // Re-uploads a page's CPU pixels to its GPU dynamic texture and keeps
+        // the debug-preview rgba in sync.
+        void ttfUploadPage(FontResource& font, size_t pageIndex)
+        {
+            auto& renderer = render2d::SpriteRenderer::get();
+            auto* tex = ResourceManager::get().fromCookie<TextureResource>(font.textures[pageIndex].atlas);
+            if (tex == nullptr)
+                return;
+            const auto& page = font.ttfPages[pageIndex];
+            renderer.updateDynamicTexture(tex->textureHandle, page.pixels.data(), tex->width, tex->height);
+            tex->rgba = page.pixels;
+            tex->rgbaWidth = tex->width;
+            tex->rgbaHeight = tex->height;
+        }
+
+        // Copies one glyph surface into a page's CPU buffer starting at (x, y).
+        // SDL_ttf blended surfaces come back premultiplied; we un-premultiply
+        // so the sprite-tinting shader (which multiplies texture * vertex
+        // color under src-alpha blending) does not double-darken glyph edges.
+        void blitGlyphToPage(FontResource::TtfPage& page, int pageW, int pageH, SDL_Surface* surf, int x, int y)
+        {
+            const SDL_PixelFormatDetails* fmt = SDL_GetPixelFormatDetails(surf->format);
+            const uint8_t* src = static_cast<const uint8_t*>(surf->pixels);
+            uint8_t* dstBase = page.pixels.data();
+            for (int row = 0; row < surf->h && (y + row) < pageH; row++)
+            {
+                const uint8_t* sRow = src + static_cast<size_t>(row) * surf->pitch;
+                uint8_t* dRow = dstBase + (static_cast<size_t>(y + row) * pageW + static_cast<size_t>(x)) * 4;
+                for (int col = 0; col < surf->w && (x + col) < pageW; col++)
+                {
+                    Uint32 pixel = 0;
+                    std::memcpy(&pixel, sRow + static_cast<size_t>(col) * fmt->bytes_per_pixel, fmt->bytes_per_pixel);
+                    Uint8 r = 0, g = 0, b = 0, a = 0;
+                    SDL_GetRGBA(pixel, fmt, nullptr, &r, &g, &b, &a);
+                    if (a != 0)
+                    {
+                        r = static_cast<Uint8>(std::min(255, (r * 255) / a));
+                        g = static_cast<Uint8>(std::min(255, (g * 255) / a));
+                        b = static_cast<Uint8>(std::min(255, (b * 255) / a));
+                    }
+                    uint8_t* d = dRow + static_cast<size_t>(col) * 4;
+                    d[0] = r;
+                    d[1] = g;
+                    d[2] = b;
+                    d[3] = a;
+                }
+            }
+        }
+
+        // Loads a TTF/OTF/TTC font file into a FontResource and registers it,
+        // returning a ResourceCookie (0 on failure). `logicalPath` may carry a
+        // ":NN" size suffix (default 16px). Glyphs are rasterized lazily by
+        // FontResource::ensureGlyph.
+        ResourceCookie loadTtfFont(std::string logicalPath)
+        {
+            int pixelSize = 16;
+            splitSizeSuffix(logicalPath, pixelSize);
+            if (pixelSize <= 0)
+                pixelSize = 16;
+
+            std::vector<uint8_t> bytes;
+            if (!findAndReadFont(logicalPath, game_module_dir(), bytes))
+            {
+                logging::logError("[font] TTF font '{}' not found (module dir or data://)", logicalPath);
+                return 0;
+            }
+            if (!ensureTtfInitialised())
+                return 0;
+
+            auto font = std::make_unique<FontResource>();
+            font->fromTtf = true;
+            // Keep the raw bytes alive: SDL3_ttf resolves glyphs lazily from
+            // the IO stream, so the buffer must outlive the loader.
+            font->ttfData = std::move(bytes);
+            font->ttfFont = [&]() -> void* {
+                auto* io = SDL_IOFromConstMem(font->ttfData.data(), font->ttfData.size());
+                if (io == nullptr)
+                {
+                    logging::logError("[font] SDL_IOFromConstMem failed: {}", SDL_GetError());
+                    return nullptr;
+                }
+                // closeio=true: SDL_ttf owns the (non-owning) mem stream and
+                // closes it in TTF_CloseFont; the bytes themselves are owned
+                // by ttfData.
+                auto* f = TTF_OpenFontIO(io, true, static_cast<float>(pixelSize));
+                if (f == nullptr)
+                {
+                    logging::logError("[font] TTF_OpenFontIO '{}' ({}px) failed: {}", logicalPath, pixelSize, SDL_GetError());
+                    SDL_CloseIO(io);
+                }
+                return f;
+            }();
+            if (font->ttfFont == nullptr)
+                return 0;
+
+            font->pixelSize = pixelSize;
+            auto* ttf = static_cast<TTF_Font*>(font->ttfFont);
+            font->ascent = TTF_GetFontAscent(ttf);
+            font->descent = TTF_GetFontDescent(ttf);
+            // Line box: defaultTop is negative (ascent above the line top),
+            // defaultBottom is descent below it, so lineHeight() = ascent -
+            // descent (matches TTF's lineSkip, the height of every blended
+            // glyph surface). left/right are filled in per-glyph by
+            // ensureGlyph.
+            font->defaultLeft = 0;
+            font->defaultRight = 0;
+            font->defaultTop = -font->ascent;
+            font->defaultBottom = -font->descent;
+
+            if (ttfAddPage(*font) == 0)
+            {
+                TTF_CloseFont(ttf);
+                return 0;
+            }
+
+            auto& resmgr = ResourceManager::get();
+            const int ascent = font->ascent;
+            const int descent = font->descent;
+            const int lineHeight = font->lineHeight();
+            const std::string resourceName = logicalPath + ":" + std::to_string(pixelSize);
+            const auto cookie = resmgr.addFirstRef<FontResource>(resourceName, std::move(font));
+            logging::logInfo(
+                "[font] loaded TTF '{}' ({}px) -> cookie {}, ascent {} descent {} lineHeight {}",
+                logicalPath,
+                pixelSize,
+                cookie,
+                ascent,
+                descent,
+                lineHeight);
+            return cookie;
+        }
     } // namespace
 
-    ResourceCookie loadFontResource(std::string_view path)
+    const FontGlyph* FontResource::ensureGlyph(uint32_t codepoint)
+    {
+        if (!this->fromTtf || this->ttfFont == nullptr)
+            return nullptr;
+
+        auto it = this->glyphs.find(codepoint);
+        if (it != this->glyphs.end())
+            return &it->second;
+
+        auto* ttf = static_cast<TTF_Font*>(this->ttfFont);
+        FontGlyph g;
+        g.textureIndex = 0;
+
+        int minx = 0, maxx = 0, miny = 0, maxy = 0, advance = 0;
+        const bool haveMetrics = TTF_GetGlyphMetrics(ttf, codepoint, &minx, &maxx, &miny, &maxy, &advance);
+        if (haveMetrics)
+        {
+            // Horizontal: glyph bitmap left edge sits at pen_x + minx, so
+            // left = -minx and right = advance - left (pen advances by
+            // left + right).
+            g.left = -minx;
+            g.right = advance - g.left;
+            // Vertical: SDL3_ttf blended glyph surfaces are always lineSkip
+            // tall with the baseline at row `ascent` (ink top at ascent -
+            // maxy), so the source rect already encodes the correct vertical
+            // position. top = 0 places every glyph's surface top on the line
+            // top, giving every glyph the same baseline (pen_y + ascent).
+            // Using maxy - ascent here would shift each glyph's baseline by
+            // maxy, misaligning glyphs within a line.
+            g.top = 0;
+        }
+
+        if (haveMetrics && codepoint != 0x20 && TTF_FontHasGlyph(ttf, codepoint))
+        {
+            // Render opaque white; the per-glyph sprite color tints the final
+            // output, so the atlas only ever holds coverage.
+            SDL_Surface* surf = TTF_RenderGlyph_Blended(ttf, codepoint, SDL_Color{ 255, 255, 255, 255 });
+            if (surf != nullptr)
+            {
+                const int gw = surf->w;
+                const int gh = surf->h;
+                if (gw > 0 && gh > 0 && gw + kTtfPad <= kTtfPageW && gh + kTtfPad <= kTtfPageH)
+                {
+                    bool packed = false;
+                    for (size_t i = 0; i < this->ttfPages.size() && !packed; i++)
+                    {
+                        auto& page = this->ttfPages[i];
+                        if (page.cursorX + gw + kTtfPad > kTtfPageW)
+                        {
+                            // Row full: drop to the next line if it fits.
+                            if (page.cursorY + page.rowH + kTtfPad + gh + kTtfPad <= kTtfPageH)
+                            {
+                                page.cursorY += page.rowH + kTtfPad;
+                                page.cursorX = kTtfPad;
+                                page.rowH = 0;
+                            }
+                            else
+                            {
+                                continue; // try the next page
+                            }
+                        }
+                        blitGlyphToPage(page, kTtfPageW, kTtfPageH, surf, page.cursorX, page.cursorY);
+                        g.textureIndex = static_cast<uint16_t>(i);
+                        g.srcX = static_cast<float>(page.cursorX);
+                        g.srcY = static_cast<float>(page.cursorY);
+                        g.srcW = static_cast<float>(gw);
+                        g.srcH = static_cast<float>(gh);
+                        page.rowH = std::max(page.rowH, gh);
+                        page.cursorX += gw + kTtfPad;
+                        ttfUploadPage(*this, i);
+                        packed = true;
+                    }
+                    if (!packed && ttfAddPage(*this) != 0)
+                    {
+                        auto& page = this->ttfPages.back();
+                        blitGlyphToPage(page, kTtfPageW, kTtfPageH, surf, page.cursorX, page.cursorY);
+                        g.textureIndex = static_cast<uint16_t>(this->ttfPages.size() - 1);
+                        g.srcX = static_cast<float>(page.cursorX);
+                        g.srcY = static_cast<float>(page.cursorY);
+                        g.srcW = static_cast<float>(gw);
+                        g.srcH = static_cast<float>(gh);
+                        page.rowH = std::max(page.rowH, gh);
+                        page.cursorX += gw + kTtfPad;
+                        ttfUploadPage(*this, this->ttfPages.size() - 1);
+                    }
+                }
+                SDL_DestroySurface(surf);
+            }
+        }
+
+        // Blank/missing glyphs keep srcW/srcH = 0; layout advances the pen by
+        // left+right (or its fallback advance) but draws nothing.
+        auto result = this->glyphs.emplace(codepoint, g);
+        return &result.first->second;
+    }
+
+    int FontResource::kerning(uint32_t previous, uint32_t current) const
+    {
+        if (!this->fromTtf || this->ttfFont == nullptr)
+            return 0;
+        int value = 0;
+        if (TTF_GetGlyphKerning(static_cast<TTF_Font*>(this->ttfFont), previous, current, &value))
+            return value;
+        return 0;
+    }
+
+    ResourceCookie loadFontResource(std::string_view path, int size)
     {
         // A ".fnt" path selects the binary OpenRE font format with explicit
         // per-character metrics and kerning. The ":small" variant suffix only
@@ -376,6 +733,20 @@ namespace openre
         std::string filePath(path);
         if (filePath.size() >= 4 && filePath.compare(filePath.size() - 4, 4, ".fnt") == 0)
             return loadFntFont(filePath);
+
+        // A ".ttf"/".otf"/".ttc" path (optionally with a ":NN" point-size
+        // suffix) selects the SDL3_ttf backend. `size` (when > 0) is
+        // appended as that suffix, and both feed the resource key.
+        std::string ttfProbe = filePath;
+        int unusedSize = 0;
+        splitSizeSuffix(ttfProbe, unusedSize);
+        if (hasTtfExtension(ttfProbe))
+        {
+            std::string request = filePath;
+            if (size > 0)
+                request += ":" + std::to_string(size);
+            return loadTtfFont(request);
+        }
 
         // A ":variant" suffix selects a virtual sub-font of the same atlas
         // (only ":small" is supported for now - the compact ASCII 0x20-0x7F
