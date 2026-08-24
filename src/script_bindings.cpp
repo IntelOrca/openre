@@ -1213,6 +1213,44 @@ namespace openre::script
             return 1;
         }
 
+        // gfx.requestScreenshot() - asks the renderer to grab the next
+        // presented frame (the download runs on the render thread inside that
+        // frame's submit, so the result is available from a later tick).
+        // Returns false only when no frame can ever be captured. Pair with
+        // gfx.takeScreenshot().
+        int gfxRequestScreenshot(lua_State* L)
+        {
+            lua_pushboolean(L, render2d::SpriteRenderer::get().requestCapture());
+            return 1;
+        }
+
+        // gfx.takeScreenshot() - returns { width = w, height = h, data =
+        // <BMP bytes> } for the frame grabbed by the most recent
+        // gfx.requestScreenshot(), or nil while none is ready. Falls back to
+        // capturing the window content when the GPU grab is unavailable (e.g.
+        // while the legacy game renders outside the ECS renderer).
+        int gfxTakeScreenshot(lua_State* L)
+        {
+            std::vector<uint8_t> bmp;
+            int width = 0;
+            int height = 0;
+            const bool ok = render2d::SpriteRenderer::get().pollCapture(bmp, &width, &height)
+                || system::window::capture_window(bmp, width, height);
+            if (!ok)
+            {
+                lua_pushnil(L);
+                return 1;
+            }
+            lua_createtable(L, 0, 3);
+            lua_pushinteger(L, width);
+            lua_setfield(L, -2, "width");
+            lua_pushinteger(L, height);
+            lua_setfield(L, -2, "height");
+            lua_pushlstring(L, (const char*)bmp.data(), bmp.size());
+            lua_setfield(L, -2, "data");
+            return 1;
+        }
+
         int gfxScreenHeight(lua_State* L)
         {
             lua_pushinteger(L, render2d::SpriteRenderer::get().screenHeight());
@@ -2118,6 +2156,8 @@ namespace openre::script
         setGlobal(L, "gfx.loadFont", gfxLoadFont);
         setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
+        setGlobal(L, "gfx.requestScreenshot", gfxRequestScreenshot);
+        setGlobal(L, "gfx.takeScreenshot", gfxTakeScreenshot);
         setGlobal(L, "gfx.fade", gfxFade);
         setGlobal(L, "gfx.listResources", gfxListResources);
         setGlobal(L, "gfx.getResourceImage", gfxGetResourceImage);

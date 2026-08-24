@@ -15,6 +15,7 @@
 #include "systems.h"
 #include "vk_codes.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #ifdef _WIN32
@@ -250,6 +251,126 @@ namespace openre::system::window
     {
         return get_window_rect(left, top, right, bottom);
     }
+
+#ifdef _WIN32
+    bool capture_window(std::vector<uint8_t>& outBmp, int& outWidth, int& outHeight)
+    {
+        const HWND hwnd = (HWND)get_hwnd();
+        if (!hwnd)
+            return false;
+
+        RECT rc{};
+        if (!GetClientRect(hwnd, &rc))
+            return false;
+        const int width = rc.right - rc.left;
+        const int height = rc.bottom - rc.top;
+        if (width <= 0 || height <= 0)
+            return false;
+
+        // PW_RENDERFULLCONTENT (2) captures DirectComposition/GPU content,
+        // which a plain WM_PRINT would render black for.
+        HWND src = hwnd;
+        HDC windowDc = GetDC(src);
+        if (!windowDc)
+            return false;
+        HDC memDc = CreateCompatibleDC(windowDc);
+        HBITMAP bitmap = CreateCompatibleBitmap(windowDc, width, height);
+        HGDIOBJ old = SelectObject(memDc, bitmap);
+        BOOL printed = PrintWindow(src, memDc, 2 /* PW_RENDERFULLCONTENT */);
+
+        // Some GPU windows still print black; fall back to a screen grab of
+        // the client rect when every pixel came back empty.
+        if (printed)
+        {
+            bool allBlack = true;
+            for (int y = 0; y < height && allBlack; y += std::max(1, height / 32))
+            {
+                for (int x = 0; x < width && allBlack; x += std::max(1, width / 32))
+                {
+                    const COLORREF c = GetPixel(memDc, x, y);
+                    if (c != 0)
+                        allBlack = false;
+                }
+            }
+            if (allBlack)
+                printed = FALSE;
+        }
+        if (!printed)
+        {
+            POINT pt{ rc.left, rc.top };
+            ClientToScreen(hwnd, &pt);
+            HDC screenDc = GetDC(nullptr);
+            BitBlt(memDc, 0, 0, width, height, screenDc, pt.x, pt.y, SRCCOPY | CAPTUREBLT);
+            ReleaseDC(nullptr, screenDc);
+        }
+
+        // Read the pixels and pack an uncompressed bottom-up 24bpp BMP.
+        std::vector<uint8_t> pixels((size_t)width * height * 4);
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height; // top-down
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        const int got = GetDIBits(memDc, bitmap, 0, height, pixels.data(), &info, DIB_RGB_COLORS);
+
+        SelectObject(memDc, old);
+        DeleteObject(bitmap);
+        DeleteDC(memDc);
+        ReleaseDC(src, windowDc);
+        if (got != height)
+            return false;
+
+        const size_t stride24 = (((size_t)width * 3) + 3) / 4 * 4;
+        const size_t dataOffset = 14 + 40;
+        const size_t fileSize = dataOffset + stride24 * (size_t)height;
+        outBmp.assign(fileSize, 0);
+        auto put16 = [&](size_t off, uint32_t v) {
+            outBmp[off] = (uint8_t)(v & 0xFF);
+            outBmp[off + 1] = (uint8_t)((v >> 8) & 0xFF);
+        };
+        auto put32 = [&](size_t off, uint32_t v) {
+            outBmp[off] = (uint8_t)(v & 0xFF);
+            outBmp[off + 1] = (uint8_t)((v >> 8) & 0xFF);
+            outBmp[off + 2] = (uint8_t)((v >> 16) & 0xFF);
+            outBmp[off + 3] = (uint8_t)((v >> 24) & 0xFF);
+        };
+        outBmp[0] = 'B';
+        outBmp[1] = 'M';
+        put32(2, (uint32_t)fileSize);
+        put32(10, (uint32_t)dataOffset);
+        put32(14, 40); // BITMAPINFOHEADER
+        put32(18, (uint32_t)width);
+        put32(22, (uint32_t)height);
+        put16(26, 1);
+        put16(28, 24);
+        put32(34, (uint32_t)(stride24 * (size_t)height));
+        for (int y = 0; y < height; y++)
+        {
+            // GetDIBits gave top-down BGRA rows; BMP wants bottom-up BGR.
+            const uint8_t* srcRow = pixels.data() + (size_t)y * width * 4;
+            uint8_t* dst = outBmp.data() + dataOffset + (size_t)(height - 1 - y) * stride24;
+            for (int x = 0; x < width; x++)
+            {
+                dst[x * 3 + 0] = srcRow[x * 4 + 0];
+                dst[x * 3 + 1] = srcRow[x * 4 + 1];
+                dst[x * 3 + 2] = srcRow[x * 4 + 2];
+            }
+        }
+        outWidth = width;
+        outHeight = height;
+        return true;
+    }
+#else
+    bool capture_window(std::vector<uint8_t>& outBmp, int& outWidth, int& outHeight)
+    {
+        (void)outBmp;
+        (void)outWidth;
+        (void)outHeight;
+        return false;
+    }
+#endif
 
     bool poll_event(Event& event)
     {

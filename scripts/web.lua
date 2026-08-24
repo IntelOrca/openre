@@ -92,6 +92,7 @@ header .sub{color:var(--muted);font-size:12px;}
   <nav class="sidebar">
     <div class="menu-item active" data-view="scene"><span class="dot"></span>Scene</div>
     <div class="menu-item" data-view="resources"><span class="dot"></span>Resources</div>
+    <div class="menu-item" data-view="shot"><span class="dot"></span>Screenshot</div>
     <div class="foot">poll: <span id="pollLabel"></span>ms</div>
   </nav>
   <section class="view active" id="sceneView">
@@ -101,6 +102,16 @@ header .sub{color:var(--muted);font-size:12px;}
   <section class="view" id="resourcesView">
     <div class="reslist-panel"><h2>Resources</h2><div id="reslist"></div></div>
     <div class="preview" id="preview"><div class="empty">Select a resource to preview.</div></div>
+  </section>
+  <section class="view" id="shotView">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border);">
+      <button id="shotRefresh">Refresh</button>
+      <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;">
+        <input type="checkbox" id="shotAuto"> auto-refresh
+      </label>
+      <span id="shotInfo" class="img-info"></span>
+    </div>
+    <div class="preview" style="flex:1;" id="shotPanel"><div class="empty">No screenshot yet.</div></div>
   </section>
 </div>
 <script>
@@ -123,7 +134,9 @@ function switchView(v){
   document.querySelectorAll('.menu-item').forEach(e=>e.classList.toggle('active', e.dataset.view===v));
   document.getElementById('sceneView').classList.toggle('active', v==='scene');
   document.getElementById('resourcesView').classList.toggle('active', v==='resources');
+  document.getElementById('shotView').classList.toggle('active', v==='shot');
   if (v==='resources') previewCookie=null;
+  if (v==='shot') refreshShot();
 }
 document.querySelectorAll('.menu-item').forEach(m=>m.onclick=()=>switchView(m.dataset.view));
 if (state.view!=='scene') switchView(state.view);
@@ -268,6 +281,25 @@ async function renderPreview(){
     el.appendChild(info);
   }catch(e){ el.innerHTML='<div class="empty">Error loading image.</div>'; }
 }
+async function refreshShot(){
+  const panel=document.getElementById('shotPanel');
+  try{
+    const resp=await fetch('/api/screenshot');
+    if(!resp.ok){ panel.innerHTML='<div class="empty">Screenshot unavailable.</div>'; return; }
+    const w=parseInt(resp.headers.get('X-Width'),10), h=parseInt(resp.headers.get('X-Height'),10);
+    const url=URL.createObjectURL(await resp.blob());
+    let img=panel.querySelector('img');
+    if(!img){
+      panel.innerHTML='';
+      img=document.createElement('img'); panel.appendChild(img);
+    }
+    img.src=url;
+    img.onload=()=>{ URL.revokeObjectURL(url); };
+    document.getElementById('shotInfo').textContent=w+' x '+h+'  '+new Date().toLocaleTimeString();
+  }catch(e){}
+}
+document.getElementById('shotRefresh').onclick=refreshShot;
+setInterval(()=>{ if(state.view==='shot' && document.getElementById('shotAuto').checked) refreshShot(); }, POLL_MS);
 async function poll(){
   try{
     if(state.view==='scene'){
@@ -588,6 +620,11 @@ setInterval(refresh, 500); refresh();
 </body></html>]]
 end
 
+-- A socket awaiting the screenshot requested on a previous tick (the grab
+-- completes inside the next present, handled on a later tick). Declared
+-- before handle() so the route can park its socket in it.
+local pendingShot = nil
+
 local function handle(sock, req)
     sock.noDelay = true
 
@@ -621,6 +658,19 @@ local function handle(sock, req)
         end
         respond(sock, "200 OK", "application/octet-stream", img.data,
             { "X-Width: " .. img.width, "X-Height: " .. img.height })
+    elseif method == "GET" and base == "/api/screenshot" then
+        if not gfx.requestScreenshot then
+            respond(sock, "501 Not Implemented", "text/plain", "screenshot is not available")
+        else
+            local ok = gfx.requestScreenshot()
+            if ok == false then
+                respond(sock, "503 Service Unavailable", "text/plain", "no frame has been presented yet")
+            else
+                -- The grab completes inside the next present; respond from a
+                -- later tick once the renderer has produced the frame.
+                pendingShot = sock
+            end
+        end
     elseif method == "POST" and base == "/api/scene/set" then
         local body = requestBody(req)
         local ok, reqj = pcall(jsonDecode, body)
@@ -717,6 +767,19 @@ end
 local inflight = {}
 
 re.subscribe(HookKind.tick, function()
+    -- Serve a requested screenshot now the renderer has grabbed the frame.
+    if pendingShot and gfx.takeScreenshot then
+        local sock = pendingShot
+        pendingShot = nil
+        local ok, shot = pcall(gfx.takeScreenshot)
+        if ok and type(shot) == "table" and type(shot.data) == "string" then
+            respond(sock, "200 OK", "image/bmp", shot.data,
+                { "X-Width: " .. tostring(shot.width), "X-Height: " .. tostring(shot.height) })
+        else
+            respond(sock, "500 Internal Server Error", "text/plain", "screenshot failed: " .. tostring(shot))
+        end
+    end
+
     -- Accept any new connections.
     while true do
         local sock = listener:pop()

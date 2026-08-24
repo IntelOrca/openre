@@ -261,7 +261,16 @@ namespace openre::script
                 std::lock_guard<std::mutex> lock(_mutex);
                 if (socket->closed || socket->handle == INVALID_SOCKET)
                     return;
-                while (!socket->sendBuf.empty())
+                // Drain the whole send buffer before returning: the caller
+                // (respond) disposes the socket straight after, so a partial
+                // flush would truncate the response. Wait briefly for
+                // writability when the local send buffer fills, giving up
+                // after a bounded time so a stalled reader cannot wedge the
+                // server; the background thread finishes the rest.
+                constexpr long kFlushWaitUs = 50000;
+                constexpr int kMaxFlushWaits = 200;
+                int waits = 0;
+                while (!socket->sendBuf.empty() && waits < kMaxFlushWaits)
                 {
                     int sent = send(socket->handle, socket->sendBuf.data(), static_cast<int>(socket->sendBuf.size()), 0);
                     if (sent > 0)
@@ -270,8 +279,20 @@ namespace openre::script
                         continue;
                     }
                     int error = WSAGetLastError();
-                    if (error == WSAEWOULDBLOCK)
+                    if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS)
+                    {
+                        fd_set wset;
+                        FD_ZERO(&wset);
+                        FD_SET(socket->handle, &wset);
+                        timeval tv{ 0, kFlushWaitUs };
+                        const int ready = select(0, nullptr, &wset, nullptr, &tv);
+                        if (ready > 0)
+                        {
+                            ++waits;
+                            continue;
+                        }
                         break;
+                    }
                     if (error == WSAENOTSOCK)
                         break;
                     openre::logging::logDebug("network: flush failed: {}", error);

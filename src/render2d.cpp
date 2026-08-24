@@ -208,7 +208,12 @@ namespace openre::render2d
 
         SDL_GPUGraphicsPipeline* texturedPipeline = nullptr;
         SDL_GPUGraphicsPipeline* solidPipeline = nullptr;
+        // The scene renders into our own RGBA texture, while presentation
+        // draws that texture onto the swapchain - one pipeline set per
+        // target format.
+        SDL_GPUGraphicsPipeline* presentPipeline = nullptr;
         SDL_GPUTextureFormat pipelineFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+        SDL_GPUTextureFormat sceneFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
         struct TexEntry
         {
@@ -224,6 +229,56 @@ namespace openre::render2d
         size_t vertexCapacity = 0;
 
         FadeState fade;
+
+        // Offscreen copy of the last presented frame. The scene renders
+        // directly into this texture (the swapchain is write-only), and the
+        // screenshot endpoint downloads from it.
+        SDL_GPUTexture* captureTexture = nullptr;
+        Uint32 captureWidth = 0;
+        Uint32 captureHeight = 0;
+
+        // Backbuffer readback. The requester (Lua script tick, main thread)
+        // only flags the request here; the download is performed on the same
+        // thread inside the frame's own submit. Acquiring and submitting a
+        // second command buffer from another thread while frames are being
+        // presented failed D3D12 command list close (E_INVALIDARG), so the
+        // transfer piggybacks on the present frame and the result is polled
+        // on a later tick.
+        bool captureRequested = false;
+        bool captureSucceeded = false;
+        SDL_GPUTransferBuffer* captureTransferBuffer = nullptr;
+        SDL_GPUFence* captureFence = nullptr;
+        Uint32 captureResultWidth = 0;
+        Uint32 captureResultHeight = 0;
+
+        bool ensureCaptureTexture(SDL_GPUDevice* dev, SDL_Window* win, Uint32 w, Uint32 h)
+        {
+            (void)win;
+            if (captureTexture && captureWidth == w && captureHeight == h)
+                return true;
+            if (captureTexture)
+            {
+                SDL_ReleaseGPUTexture(dev, captureTexture);
+                captureTexture = nullptr;
+            }
+            // Always RGBA so downloads are format-stable regardless of the
+            // swapchain format; the present pass converts on output.
+            SDL_GPUTextureCreateInfo info{};
+            info.type = SDL_GPU_TEXTURETYPE_2D;
+            info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            info.width = w;
+            info.height = h;
+            info.layer_count_or_depth = 1;
+            info.num_levels = 1;
+            captureTexture = SDL_CreateGPUTexture(dev, &info);
+            if (!captureTexture)
+                return false;
+            SDL_SetGPUTextureName(dev, captureTexture, "render2d.capture");
+            captureWidth = w;
+            captureHeight = h;
+            return true;
+        }
 
         bool ensureShadersAndSampler(SDL_GPUDevice* dev)
         {
@@ -403,23 +458,114 @@ namespace openre::render2d
                 return false;
 
             const SDL_GPUTextureFormat format = (SDL_GPUTextureFormat)system::gpu::swapchain_format();
-            if (texturedPipeline && solidPipeline && pipelineFormat == format)
+            if (texturedPipeline && solidPipeline && presentPipeline && pipelineFormat == format
+                && sceneFormat == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM)
                 return true;
 
             if (texturedPipeline)
                 SDL_ReleaseGPUGraphicsPipeline(dev, texturedPipeline);
             if (solidPipeline)
                 SDL_ReleaseGPUGraphicsPipeline(dev, solidPipeline);
+            if (presentPipeline)
+                SDL_ReleaseGPUGraphicsPipeline(dev, presentPipeline);
             texturedPipeline = nullptr;
             solidPipeline = nullptr;
+            presentPipeline = nullptr;
 
-            texturedPipeline = createPipeline(dev, texturedFrag, format);
-            solidPipeline = createPipeline(dev, solidFrag, format);
-            if (!texturedPipeline || !solidPipeline)
+            // Scene pipelines render into the RGBA capture texture; the
+            // presentation pipeline draws that texture onto the swapchain.
+            texturedPipeline = createPipeline(dev, texturedFrag, sceneFormat);
+            solidPipeline = createPipeline(dev, solidFrag, sceneFormat);
+            presentPipeline = createPipeline(dev, texturedFrag, format);
+            if (!texturedPipeline || !solidPipeline || !presentPipeline)
                 return false;
 
             pipelineFormat = format;
             return true;
+        }
+
+        const TexEntry* findTexture(int handle) const
+        {
+            if (handle <= 0)
+                return nullptr;
+            const auto it = textures.find(handle);
+            return it != textures.end() ? &it->second : nullptr;
+        }
+
+        // Fills `out` with the four corners of `s`'s quad (centred on the
+        // sprite position, textured from the sprite's source rectangle).
+        void buildSpriteQuad(Vertex* out, const SpriteDraw& s) const
+        {
+            const TexEntry* entry = findTexture(s.textureHandle);
+
+            // Source rect: default to the full texture.
+            float sw = s.src.width;
+            float sh = s.src.height;
+            const float sx = s.src.x;
+            const float sy = s.src.y;
+            const float texW = entry ? (float)entry->width : 1.0f;
+            const float texH = entry ? (float)entry->height : 1.0f;
+            if (entry)
+            {
+                if (sw <= 0.0f)
+                    sw = texW;
+                if (sh <= 0.0f)
+                    sh = texH;
+            }
+
+            // UV range across the source rect.
+            const float u0 = texW > 0.0f ? sx / texW : 0.0f;
+            const float v0 = texH > 0.0f ? sy / texH : 0.0f;
+            float uSpan = 0.0f;
+            float vSpan = 0.0f;
+            if (entry)
+            {
+                const float srcUW = texW > 0.0f ? sw / texW : 0.0f;
+                const float srcVH = texH > 0.0f ? sh / texH : 0.0f;
+                if (s.flags & kRepeatX)
+                    uSpan = s.dst.width / texW; // tile the texture across the dst
+                else
+                    uSpan = srcUW; // stretch: map the src region across the dst
+                if (s.flags & kRepeatY)
+                    vSpan = s.dst.height / texH;
+                else
+                    vSpan = srcVH;
+            }
+            const float u1 = u0 + uSpan;
+            const float v1 = v0 + vSpan;
+
+            // The sprite is centred on its transform position: the entity's
+            // (x, y) is the centre of the drawn quad, not the top-left.
+            const float halfW = s.dst.width * 0.5f;
+            const float halfH = s.dst.height * 0.5f;
+            const float x0 = s.dst.x - halfW;
+            const float y0 = s.dst.y - halfH;
+            const float x1 = s.dst.x + halfW;
+            const float y1 = s.dst.y + halfH;
+
+            out[0].sx = x0;
+            out[0].sy = y0;
+            out[0].tu = u0;
+            out[0].tv = v0;
+            out[1].sx = x1;
+            out[1].sy = y0;
+            out[1].tu = u1;
+            out[1].tv = v0;
+            out[2].sx = x0;
+            out[2].sy = y1;
+            out[2].tu = u0;
+            out[2].tv = v1;
+            out[3].sx = x1;
+            out[3].sy = y1;
+            out[3].tu = u1;
+            out[3].tv = v1;
+            const uint32_t packed = (uint32_t)s.b | ((uint32_t)s.g << 8) | ((uint32_t)s.r << 16) | ((uint32_t)s.a << 24);
+            for (size_t vi = 0; vi < 4; vi++)
+            {
+                out[vi].sz = 0.5f;
+                out[vi].rhw = 1.0f;
+                setColor(out[vi], packed);
+            }
         }
 
         bool ensureVertexBuffer(SDL_GPUDevice* dev, size_t vertexCount)
@@ -715,11 +861,50 @@ namespace openre::render2d
             return;
         }
 
+        // The scene renders into our own RGBA texture, which is then blitted
+        // to the swapchain. The swapchain is write-only (render target /
+        // blit destination), so it must never be sampled or copied from -
+        // keeping a renderable copy also gives the screenshot endpoint
+        // something to download.
+        if (!impl->ensureCaptureTexture(dev, win, winW, winH))
+        {
+            SDL_CancelGPUCommandBuffer(cmd);
+            return;
+        }
+
         const size_t vertexCount = count * 4;
         if (vertexCount > 0 && !impl->ensureVertexBuffer(dev, vertexCount))
         {
             SDL_CancelGPUCommandBuffer(cmd);
             return;
+        }
+
+        // Upload every sprite's quad up front: a copy pass may not open while
+        // the render pass below is active.
+        if (vertexCount > 0)
+        {
+            void* mappedQuads = SDL_MapGPUTransferBuffer(dev, impl->vertexTransfer, true);
+            if (!mappedQuads)
+            {
+                logging::logError("[render2d] SDL_MapGPUTransferBuffer(vertices) failed: {}", SDL_GetError());
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            auto* quads = (Vertex*)mappedQuads;
+            for (size_t i = 0; i < count; i++)
+                impl->buildSpriteQuad(&quads[i * 4], sprites[i]);
+            SDL_UnmapGPUTransferBuffer(dev, impl->vertexTransfer);
+
+            SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+            if (!cp)
+            {
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            SDL_GPUTransferBufferLocation srcLoc{ impl->vertexTransfer, 0 };
+            SDL_GPUBufferRegion dstLoc{ impl->vertexBuffer, 0, (Uint32)(vertexCount * sizeof(Vertex)) };
+            SDL_UploadToGPUBuffer(cp, &srcLoc, &dstLoc, true);
+            SDL_EndGPUCopyPass(cp);
         }
 
         SDL_GPUViewport vp{};
@@ -731,7 +916,7 @@ namespace openre::render2d
         vp.max_depth = 1.0f;
 
         SDL_GPUColorTargetInfo target{};
-        target.texture = swapTex;
+        target.texture = impl->captureTexture;
         target.mip_level = 0;
         target.layer_or_depth_plane = 0;
         target.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -754,107 +939,10 @@ namespace openre::render2d
         {
             const SpriteDraw& s = sprites[i];
 
-            const Impl::TexEntry* entry = nullptr;
-            SDL_GPUGraphicsPipeline* pipeline = impl->solidPipeline;
-            if (s.textureHandle > 0)
-            {
-                auto it = impl->textures.find(s.textureHandle);
-                if (it == impl->textures.end())
-                    continue; // texture was released underneath us - skip
-                entry = &it->second;
-                pipeline = impl->texturedPipeline;
-            }
-
-            // Source rect: default to the full texture.
-            float sw = s.src.width;
-            float sh = s.src.height;
-            float sx = s.src.x;
-            float sy = s.src.y;
-            float texW = entry ? (float)entry->width : 1.0f;
-            float texH = entry ? (float)entry->height : 1.0f;
-            if (entry)
-            {
-                if (sw <= 0.0f)
-                    sw = texW;
-                if (sh <= 0.0f)
-                    sh = texH;
-            }
-
-            // UV range across the source rect.
-            float u0 = texW > 0.0f ? sx / texW : 0.0f;
-            float v0 = texH > 0.0f ? sy / texH : 0.0f;
-            float uSpan = 0.0f;
-            float vSpan = 0.0f;
-            if (entry)
-            {
-                const float srcUW = texW > 0.0f ? sw / texW : 0.0f;
-                const float srcVH = texH > 0.0f ? sh / texH : 0.0f;
-                if (s.flags & kRepeatX)
-                    uSpan = s.dst.width / texW; // tile the texture across the dst
-                else
-                    uSpan = srcUW; // stretch: map the src region across the dst
-                if (s.flags & kRepeatY)
-                    vSpan = s.dst.height / texH;
-                else
-                    vSpan = srcVH;
-            }
-            const float u1 = u0 + uSpan;
-            const float v1 = v0 + vSpan;
-
-            // The sprite is centred on its transform position: the entity's
-            // (x, y) is the centre of the drawn quad, not the top-left.
-            const float halfW = s.dst.width * 0.5f;
-            const float halfH = s.dst.height * 0.5f;
-            const float x0 = s.dst.x - halfW;
-            const float y0 = s.dst.y - halfH;
-            const float x1 = s.dst.x + halfW;
-            const float y1 = s.dst.y + halfH;
-
-            Vertex verts[4]{};
-            verts[0].sx = x0;
-            verts[0].sy = y0;
-            verts[0].tu = u0;
-            verts[0].tv = v0;
-            verts[1].sx = x1;
-            verts[1].sy = y0;
-            verts[1].tu = u1;
-            verts[1].tv = v0;
-            verts[2].sx = x0;
-            verts[2].sy = y1;
-            verts[2].tu = u0;
-            verts[2].tv = v1;
-            verts[3].sx = x1;
-            verts[3].sy = y1;
-            verts[3].tu = u1;
-            verts[3].tv = v1;
-            for (auto& vert : verts)
-            {
-                vert.sz = 0.5f;
-                vert.rhw = 1.0f;
-                const uint32_t packed = (uint32_t)s.b | ((uint32_t)s.g << 8) | ((uint32_t)s.r << 16) | ((uint32_t)s.a << 24);
-                setColor(vert, packed);
-            }
-
-            void* mapped = SDL_MapGPUTransferBuffer(dev, impl->vertexTransfer, true);
-            if (!mapped)
-            {
-                logging::logError("[render2d] SDL_MapGPUTransferBuffer(vertices) failed: {}", SDL_GetError());
-                continue;
-            }
-            std::memcpy(mapped, verts, sizeof(verts));
-            SDL_UnmapGPUTransferBuffer(dev, impl->vertexTransfer);
-
-            SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
-            if (cp)
-            {
-                SDL_GPUTransferBufferLocation srcLoc{};
-                srcLoc.transfer_buffer = impl->vertexTransfer;
-                SDL_GPUBufferRegion dstLoc{};
-                dstLoc.buffer = impl->vertexBuffer;
-                dstLoc.size = sizeof(verts);
-                SDL_UploadToGPUBuffer(cp, &srcLoc, &dstLoc, true);
-                SDL_EndGPUCopyPass(cp);
-            }
+            const Impl::TexEntry* entry = impl->findTexture(s.textureHandle);
+            SDL_GPUGraphicsPipeline* pipeline = entry ? impl->texturedPipeline : impl->solidPipeline;
+            if (s.textureHandle > 0 && !entry)
+                continue; // texture was released underneath us - skip
 
             SDL_BindGPUGraphicsPipeline(pass, pipeline);
 
@@ -868,14 +956,251 @@ namespace openre::render2d
 
             SDL_GPUBufferBinding vbBind{};
             vbBind.buffer = impl->vertexBuffer;
-            vbBind.offset = 0;
+            vbBind.offset = i * 4 * sizeof(Vertex);
             SDL_BindGPUVertexBuffers(pass, 0, &vbBind, 1);
 
             SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
         }
 
         SDL_EndGPURenderPass(pass);
-        SDL_SubmitGPUCommandBuffer(cmd);
+
+        // Upload the fullscreen presentation quad. This happens AFTER the
+        // scene render pass closes - passes cannot nest on one command buffer.
+        if (!impl->ensureVertexBuffer(dev, 4))
+        {
+            SDL_CancelGPUCommandBuffer(cmd);
+            return;
+        }
+        {
+            Vertex quad[4]{};
+            quad[0] = { 0.0f, 0.0f, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 0.0f };
+            quad[1] = { vp.w, 0.0f, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 0.0f };
+            quad[2] = { 0.0f, vp.h, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 1.0f };
+            quad[3] = { vp.w, vp.h, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 1.0f };
+            void* mappedQuad = SDL_MapGPUTransferBuffer(dev, impl->vertexTransfer, true);
+            if (!mappedQuad)
+            {
+                logging::logError("[render2d] present: map quad vertices failed: {}", SDL_GetError());
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            std::memcpy(mappedQuad, quad, sizeof(quad));
+            SDL_UnmapGPUTransferBuffer(dev, impl->vertexTransfer);
+
+            SDL_GPUCopyPass* quadCopy = SDL_BeginGPUCopyPass(cmd);
+            if (!quadCopy)
+            {
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            SDL_GPUTransferBufferLocation quadSrc{ impl->vertexTransfer, 0 };
+            SDL_GPUBufferRegion quadDst{ impl->vertexBuffer, 0, sizeof(quad) };
+            SDL_UploadToGPUBuffer(quadCopy, &quadSrc, &quadDst, true);
+            SDL_EndGPUCopyPass(quadCopy);
+        }
+
+        // Present: draw the rendered frame onto the swapchain as a fullscreen
+        // textured quad. The swapchain is only ever written here (never
+        // sampled or copied from), which is all it supports.
+        {
+            SDL_GPUColorTargetInfo swapTarget{};
+            swapTarget.texture = swapTex;
+            swapTarget.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            swapTarget.load_op = SDL_GPU_LOADOP_DONT_CARE;
+            swapTarget.store_op = SDL_GPU_STOREOP_STORE;
+
+            SDL_GPURenderPass* presentPass = SDL_BeginGPURenderPass(cmd, &swapTarget, 1, nullptr);
+            if (!presentPass)
+            {
+                logging::logError("[render2d] present: begin present pass failed: {}", SDL_GetError());
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            SDL_SetGPUViewport(presentPass, &vp);
+            SDL_PushGPUVertexUniformData(cmd, 0, viewportData, sizeof(viewportData));
+            SDL_BindGPUGraphicsPipeline(presentPass, impl->presentPipeline);
+
+            SDL_GPUTextureSamplerBinding captureBinding{};
+            captureBinding.texture = impl->captureTexture;
+            captureBinding.sampler = impl->sampler;
+            SDL_BindGPUFragmentSamplers(presentPass, 0, &captureBinding, 1);
+
+            SDL_GPUBufferBinding quadBinding{ impl->vertexBuffer, 0 };
+            SDL_BindGPUVertexBuffers(presentPass, 0, &quadBinding, 1);
+            SDL_DrawGPUPrimitives(presentPass, 4, 1, 0, 0);
+
+            SDL_EndGPURenderPass(presentPass);
+        }
+
+        // Screenshot request: if one is outstanding, download the frame we
+        // just rendered in this same command buffer and keep the transfer
+        // buffer for the requester to map once the fence signals.
+        const bool captureThisFrame = impl->captureRequested;
+        impl->captureRequested = false;
+
+        SDL_GPUFence* captureFence = nullptr;
+        SDL_GPUTransferBuffer* captureBuffer = nullptr;
+        bool downloadRecorded = false;
+        if (captureThisFrame)
+        {
+            captureBuffer = nullptr;
+            SDL_GPUTransferBufferCreateInfo tbInfo{};
+            tbInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+            tbInfo.size = impl->captureWidth * impl->captureHeight * 4;
+            captureBuffer = SDL_CreateGPUTransferBuffer(dev, &tbInfo);
+
+            if (captureBuffer)
+            {
+                SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+                if (cp)
+                {
+                    SDL_GPUTextureRegion region{ impl->captureTexture, 0, 0, 0, impl->captureWidth, impl->captureHeight, 1 };
+                    SDL_GPUTextureTransferInfo loc{};
+                    loc.transfer_buffer = captureBuffer;
+                    loc.pixels_per_row = impl->captureWidth;
+                    loc.rows_per_layer = impl->captureHeight;
+                    SDL_DownloadFromGPUTexture(cp, &region, &loc);
+                    SDL_EndGPUCopyPass(cp);
+                    downloadRecorded = true;
+                }
+                else
+                {
+                    logging::logError("[render2d] capture: begin copy pass failed: {}", SDL_GetError());
+                }
+                captureFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+            }
+            else
+            {
+                logging::logError("[render2d] capture: transfer buffer alloc failed: {}", SDL_GetError());
+                SDL_SubmitGPUCommandBuffer(cmd);
+            }
+        }
+        else
+        {
+            SDL_SubmitGPUCommandBuffer(cmd);
+        }
+
+        if (captureThisFrame)
+        {
+            impl->captureTransferBuffer = captureBuffer;
+            impl->captureFence = captureFence;
+            impl->captureResultWidth = impl->captureWidth;
+            impl->captureResultHeight = impl->captureHeight;
+            impl->captureSucceeded = downloadRecorded && captureBuffer != nullptr && captureFence != nullptr;
+        }
+    }
+
+    namespace
+    {
+        // Packs tightly-packed 32bpp R,G,B,A pixels (the capture texture
+        // format) into an uncompressed bottom-up 24bpp BMP.
+        bool encodeBmp24(const uint8_t* pixels, int width, int height, std::vector<uint8_t>& out)
+        {
+            const size_t stride = (((size_t)width * 3) + 3) / 4 * 4;
+            const size_t dataOffset = 14 + 40;
+            const size_t fileSize = dataOffset + stride * (size_t)height;
+
+            out.assign(fileSize, 0);
+            auto put16 = [&](size_t off, uint32_t v) {
+                out[off] = (uint8_t)(v & 0xFF);
+                out[off + 1] = (uint8_t)((v >> 8) & 0xFF);
+            };
+            auto put32 = [&](size_t off, uint32_t v) {
+                out[off] = (uint8_t)(v & 0xFF);
+                out[off + 1] = (uint8_t)((v >> 8) & 0xFF);
+                out[off + 2] = (uint8_t)((v >> 16) & 0xFF);
+                out[off + 3] = (uint8_t)((v >> 24) & 0xFF);
+            };
+
+            out[0] = 'B';
+            out[1] = 'M';
+            put32(2, (uint32_t)fileSize);
+            put32(10, (uint32_t)dataOffset);
+            put32(14, 40); // BITMAPINFOHEADER
+            put32(18, (uint32_t)width);
+            put32(22, (uint32_t)height);
+            put16(26, 1);  // planes
+            put16(28, 24); // bpp
+            put32(34, (uint32_t)(stride * (size_t)height));
+
+            for (int y = 0; y < height; y++)
+            {
+                // BMP rows are stored bottom-up.
+                const uint8_t* src = pixels + (size_t)y * width * 4;
+                uint8_t* dst = out.data() + dataOffset + (size_t)(height - 1 - y) * stride;
+                for (int x = 0; x < width; x++)
+                {
+                    dst[x * 3 + 0] = src[x * 4 + 2];
+                    dst[x * 3 + 1] = src[x * 4 + 1];
+                    dst[x * 3 + 2] = src[x * 4 + 0];
+                }
+            }
+            return true;
+        }
+    } // namespace
+
+    bool SpriteRenderer::requestCapture()
+    {
+        if (!impl->captureTexture || impl->captureWidth == 0 || impl->captureHeight == 0)
+            return false;
+
+        SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
+        if (!dev)
+            return false;
+
+        // Drop an earlier request the requester never polled.
+        if (impl->captureTransferBuffer)
+        {
+            SDL_ReleaseGPUTransferBuffer(dev, impl->captureTransferBuffer);
+            impl->captureTransferBuffer = nullptr;
+        }
+        if (impl->captureFence)
+        {
+            SDL_ReleaseGPUFence(dev, impl->captureFence);
+            impl->captureFence = nullptr;
+        }
+        impl->captureRequested = true;
+        impl->captureSucceeded = false;
+        return true;
+    }
+
+    bool SpriteRenderer::pollCapture(std::vector<uint8_t>& outBmp, int* outWidth, int* outHeight)
+    {
+        SDL_GPUDevice* dev = (SDL_GPUDevice*)system::gpu::device();
+        if (!dev || !impl->captureSucceeded)
+            return false;
+
+        SDL_GPUTransferBuffer* tbuf = impl->captureTransferBuffer;
+        SDL_GPUFence* fence = impl->captureFence;
+        impl->captureTransferBuffer = nullptr;
+        impl->captureFence = nullptr;
+        impl->captureSucceeded = false;
+        if (!tbuf || !fence)
+            return false;
+
+        // The download was recorded in a present command buffer; wait until
+        // the GPU has finished it before mapping the transfer buffer.
+        SDL_WaitForGPUFences(dev, true, &fence, 1);
+        SDL_ReleaseGPUFence(dev, fence);
+
+        void* mapped = SDL_MapGPUTransferBuffer(dev, tbuf, false);
+        if (!mapped)
+        {
+            logging::logError("[render2d] capture: SDL_MapGPUTransferBuffer failed: {}", SDL_GetError());
+            SDL_ReleaseGPUTransferBuffer(dev, tbuf);
+            return false;
+        }
+
+        const bool ok
+            = encodeBmp24((const uint8_t*)mapped, (int)impl->captureResultWidth, (int)impl->captureResultHeight, outBmp);
+        SDL_UnmapGPUTransferBuffer(dev, tbuf);
+        SDL_ReleaseGPUTransferBuffer(dev, tbuf);
+
+        if (ok && outWidth)
+            *outWidth = (int)impl->captureResultWidth;
+        if (ok && outHeight)
+            *outHeight = (int)impl->captureResultHeight;
+        return ok;
     }
 
     int SpriteRenderer::screenWidth() const
@@ -920,6 +1245,25 @@ namespace openre::render2d
 
         SDL_WaitForGPUIdle(dev);
 
+        if (impl->captureTexture)
+        {
+            SDL_ReleaseGPUTexture(dev, impl->captureTexture);
+            impl->captureTexture = nullptr;
+        }
+        impl->captureWidth = 0;
+        impl->captureHeight = 0;
+        if (impl->captureTransferBuffer)
+        {
+            SDL_ReleaseGPUTransferBuffer(dev, impl->captureTransferBuffer);
+            impl->captureTransferBuffer = nullptr;
+        }
+        if (impl->captureFence)
+        {
+            SDL_ReleaseGPUFence(dev, impl->captureFence);
+            impl->captureFence = nullptr;
+        }
+        impl->captureSucceeded = false;
+
         for (auto& [handle, entry] : impl->textures)
         {
             (void)handle;
@@ -941,6 +1285,9 @@ namespace openre::render2d
         if (impl->solidPipeline)
             SDL_ReleaseGPUGraphicsPipeline(dev, impl->solidPipeline);
         impl->solidPipeline = nullptr;
+        if (impl->presentPipeline)
+            SDL_ReleaseGPUGraphicsPipeline(dev, impl->presentPipeline);
+        impl->presentPipeline = nullptr;
 
         if (impl->vertexShader)
             SDL_ReleaseGPUShader(dev, impl->vertexShader);

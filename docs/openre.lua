@@ -528,6 +528,19 @@ function gfx.screenHeight() end
 ---@param a integer 0-255 alpha
 function gfx.fade(r, g, b, a) end
 
+--- Ask the renderer to grab the next presented frame. The download runs on
+--- the render thread inside that frame's submit, so call this from a tick
+--- and collect the result with gfx.takeScreenshot() on a later tick. The
+--- web inspector's Screenshot tab uses this pair.
+---@return boolean false only when no frame can ever be captured
+function gfx.requestScreenshot() end
+
+--- Return the frame grabbed by the most recent gfx.requestScreenshot() as an
+--- uncompressed BMP: `{ width = w, height = h, data = <binary BMP bytes> }`,
+--- or nil while no grabbed frame is ready yet.
+---@return { width: integer, height: integer, data: string }|nil
+function gfx.takeScreenshot() end
+
 --- Enumerate every live resource in the engine ResourceManager. Returns a
 --- table (array) of `{ resource, type, path, width, height, streaming,
 --- cookies }` where `resource` is the resource number, `type` is "texture",
