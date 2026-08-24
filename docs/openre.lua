@@ -356,6 +356,10 @@ function scene.addComponent(entity, name) end
 --- snaps the scale DOWN to whole multiples of itself, e.g. 0.5 allows only
 --- 0.5, 1.0, 1.5, ...). The engine writes the computed uniform scale to the
 --- entity's transform every frame; position the entity yourself.
+--- Input hint fields (`core.input_hint`): `command` (the action name, e.g.
+--- "pause"; a single key name like "p" also works) and `text` (optional label
+--- drawn right of the icon). The icon is a fixed 16x16 sprite; scale the
+--- entity's transform to resize the whole hint.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
@@ -384,8 +388,8 @@ function scene.entityFromId(id) end
 
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
 --- one of "core.transform", "core.sprite", "core.text", "core.legacy",
---- "core.video", "core.audio_emitter" or "core.scaled_frame". Returns nil when
---- the entity lacks that component.
+--- "core.video", "core.audio_emitter", "core.scaled_frame" or
+--- "core.input_hint". Returns nil when the entity lacks that component.
 ---@param entity SceneEntity
 ---@param typeName string
 ---@return SceneComponent|nil
@@ -469,6 +473,33 @@ function scene.exit() end
 ---   scale DOWN to whole multiples of itself (e.g. 0.5 allows only 0.5, 1.0,
 ---   1.5, ...) so UI art never renders at arbitrary fractions; the minimum
 ---   applied scale is one increment.
+
+--[[ Input hints (core.input_hint) ]]
+
+--- Declarative input hint: an icon for a command's current binding on the
+--- active input device plus an optional text label. Add it with
+--- `scene.addComponent(e, "core.input_hint")`; every frame the engine
+--- materialises the icon and label as child entities and relayouts only when
+--- the fields change. The icon is drawn centred on the entity's `(x, y)`
+--- origin with the label centred to its right.
+---
+--- The icon is a fixed 16x16 sprite (the native atlas cell); scale the hint
+--- entity's transform (`scale.x` / `scale.y`) to resize the whole hint —
+--- icon and label scale together.
+---
+--- Keyboard is the only supported device for now; gamepad themes
+--- (PlayStation/Xbox/Nintendo) will follow once device detection exists.
+---
+--- Fields:
+--- * `command` — the action name. Known commands ("accept" = Enter,
+---   "cancel" = Esc, "pause" = P, "inventory" = I, "map" = M, "run" = Shift,
+---   "ready" = Space) resolve to their key; any single letter or digit
+---   ("a", "5") resolves to that key. Unknown commands drop the icon but
+---   still show the label.
+--- * `text` — optional label string, e.g. "Pause".
+---
+--- Example: `hint.command = "pause"; hint.text = "Pause"` renders
+--- `[P] Pause`.
 
 --[[ The gfx namespace (module mode) ]]
 

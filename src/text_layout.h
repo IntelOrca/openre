@@ -76,7 +76,8 @@ namespace openre::text
     float measureWidth(const std::vector<GlyphRun>& runs);
 
     /// Rebuilds the per-glyph child SpriteComponents beneath `entity` for the
-    /// given TextComponent. Clears the previous layout container first. Called
+    /// given TextComponent. Glyph entities are tracked in TextComponent.glyphs
+    /// and reused in place; only the difference is created/destroyed. Called
     /// by TextLayoutSystem only when relayout is required.
     void layoutEntity(ecs::Scene& scene, ecs::Entity entity, ecs::TextComponent& text);
 

@@ -2,6 +2,7 @@
 
 #include "app.h"
 #include "ecs_components.h"
+#include "font.h"
 #include "game_module.h"
 #include "input.h"
 #include "logger.h"
@@ -16,8 +17,10 @@
 #include "system_filesystem.h"
 #include "system_window.h"
 #include "text_layout.h"
+#include "texture_loader.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -196,6 +199,184 @@ namespace openre
 
         // A full module frame advanced; the render system presents it.
         app.frameActive = true;
+    }
+
+    // ── Input hints ─────────────────────────────────────────────────────
+    //
+    // The button atlas (texture/input_keys.bmp) is a grid of 16x16 keycap
+    // cells: row 0 holds A-P, row 1 Q-Z then 0-5, row 2 6-9 plus the special
+    // keys and arrows, row 3 the mouse buttons. Gamepad themes will extend
+    // the atlas once input device detection exists.
+    constexpr float kInputKeyCell = 16.0f;
+    constexpr int kInputKeyCellsPerRow = 16;
+    // Space between the key icon's right edge and where the label starts.
+    constexpr float kHintGap = 4.0f;
+
+    enum InputKeyCells
+    {
+        kCellKeyA = 0,
+        kCellDigit0 = 26,
+        kCellEsc = 36,
+        kCellTab = 37,
+        kCellCtrl = 38,
+        kCellAlt = 39,
+        kCellShift = 40,
+        kCellEnter = 41,
+        kCellSpace = 42,
+        kCellUp = 43,
+        kCellDown = 44,
+        kCellLeft = 45,
+        kCellRight = 46,
+        kCellMouseLeft = 48,
+        kCellMouseMiddle = 49,
+        kCellMouseRight = 50,
+    };
+
+    struct InputCommandKey
+    {
+        const char* command;
+        int cell;
+    };
+
+    // Keyboard bindings for named commands. A command that is a single letter
+    // or digit ("p") resolves to its own key cell without an entry here.
+    constexpr InputCommandKey kKeyboardCommands[] = {
+        { "accept", kCellEnter },
+        { "cancel", kCellEsc },
+        { "pause", kCellKeyA + ('P' - 'A') },
+        { "inventory", kCellKeyA + ('I' - 'A') },
+        { "map", kCellKeyA + ('M' - 'A') },
+        { "run", kCellShift },
+        { "ready", kCellSpace },
+    };
+
+    bool lookupInputKeyCell(const std::string& command, int& outCell)
+    {
+        if (command.size() == 1)
+        {
+            const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(command[0])));
+            if (c >= 'A' && c <= 'Z')
+            {
+                outCell = kCellKeyA + (c - 'A');
+                return true;
+            }
+            if (c >= '0' && c <= '9')
+            {
+                outCell = kCellDigit0 + (c - '0');
+                return true;
+            }
+            return false;
+        }
+        for (const auto& entry : kKeyboardCommands)
+        {
+            if (command == entry.command)
+            {
+                outCell = entry.cell;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Engine-owned shared resources for hint icons/labels. The cookies are
+    // held forever so the atlas/font outlives every component that borrows
+    // them; both loaders cache the decoded file on disk, not in the manager.
+    ResourceCookie inputHintAtlas()
+    {
+        static ResourceCookie cookie = loadTextureResource("texture/input_keys", 0, 0);
+        return cookie;
+    }
+
+    ResourceCookie inputHintFont()
+    {
+        static ResourceCookie cookie = loadFontResource("fonts/std.fnt");
+        return cookie;
+    }
+
+    // Materialises InputHintComponents into child entities: a 16x16 key icon
+    // sprite centred on the entity origin and the optional text label to its
+    // right, centred on its own position. Runs before TextLayoutSystem so
+    // freshly created labels get laid out in the same frame; only rebuilds
+    // when the fingerprinted inputs change. Scale the hint entity's transform
+    // to resize the whole hint.
+    void InputHintSystem(AppContext& app)
+    {
+        if (app.closing() || !app.running())
+            return;
+        if (!game_module_active())
+            return;
+        if (!app.frameActive)
+            return;
+
+        app.scene.each<ecs::InputHintComponent>([&](ecs::Entity entity, ecs::InputHintComponent& hint) {
+            std::string fingerprint = hint.command + "|" + hint.text;
+            const bool entitiesValid = (hint.iconEntity == ecs::NullEntity || app.scene.isValid(hint.iconEntity))
+                && (hint.labelEntity == ecs::NullEntity || app.scene.isValid(hint.labelEntity));
+            if (fingerprint == hint.fingerprint && entitiesValid)
+                return;
+            hint.fingerprint = fingerprint;
+
+            // Rebuild from scratch: drop the previous children first.
+            for (ecs::Entity child : { hint.iconEntity, hint.labelEntity })
+            {
+                if (child != ecs::NullEntity && app.scene.isValid(child))
+                    app.scene.destroyEntity(child);
+            }
+            hint.iconEntity = ecs::NullEntity;
+            hint.labelEntity = ecs::NullEntity;
+
+            // Resolve the key glyph before touching the scene so an unknown
+            // command simply drops the icon instead of corrupting the layout.
+            int cell = -1;
+            const bool hasIcon = lookupInputKeyCell(hint.command, cell);
+            const ResourceCookie atlas = inputHintAtlas();
+
+            float nextX = 0.0f; // left edge of the content after the icon
+            if (hasIcon && atlas != 0)
+            {
+                ecs::Entity icon = app.scene.createEntity(entity);
+                hint.iconEntity = icon;
+                auto& transform = app.scene.getComponent<ecs::TransformComponent>(icon);
+                transform.position = { 0.0f, 0.0f, 0.0f }; // sprites draw centred on their position
+
+                auto& sprite = app.scene.addComponent<ecs::SpriteComponent>(icon);
+                sprite.size = { kInputKeyCell, kInputKeyCell };
+                sprite.texture = atlas;
+                sprite.src = {
+                    static_cast<float>(cell % kInputKeyCellsPerRow) * kInputKeyCell,
+                    static_cast<float>(cell / kInputKeyCellsPerRow) * kInputKeyCell,
+                    kInputKeyCell,
+                    kInputKeyCell,
+                };
+                nextX = kInputKeyCell * 0.5f + kHintGap;
+            }
+
+            if (hint.text.empty())
+                return;
+
+            // Measure the label so it can be centred on its own position,
+            // keeping glyph offsets small relative to the text entity.
+            auto* fontResource = ResourceManager::get().fromCookie<FontResource>(inputHintFont());
+            const float lineHeight = fontResource != nullptr && fontResource->fromFnt
+                ? static_cast<float>(fontResource->lineHeight())
+                : kInputKeyCell;
+            const float textWidth = fontResource != nullptr
+                ? text::measureWidth(text::decodeText(hint.text, fontResource, lineHeight, lineHeight))
+                : 0.0f;
+
+            ecs::Entity label = app.scene.createEntity(entity);
+            hint.labelEntity = label;
+            auto& transform = app.scene.getComponent<ecs::TransformComponent>(label);
+            // The word is centred on the label position: place that centre a
+            // half-width right of where the first glyph should start.
+            transform.position = { nextX + textWidth * 0.5f, 0.0f, 0.0f };
+
+            auto& text = app.scene.addComponent<ecs::TextComponent>(label);
+            text.text = hint.text;
+            text.size = { std::max(textWidth, 1.0f), lineHeight };
+            text.flags = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
+            text.font = inputHintFont();
+        });
     }
 
     // Materialises TextComponents into per-glyph child SpriteComponents. Runs

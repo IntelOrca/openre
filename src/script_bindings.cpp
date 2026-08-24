@@ -461,6 +461,7 @@ namespace openre::script
             constexpr int32_t video = 5;
             constexpr int32_t audio_emitter = 6;
             constexpr int32_t scaled_frame = 7;
+            constexpr int32_t input_hint = 8;
         }
 
         struct SceneEntityHandle
@@ -643,6 +644,14 @@ namespace openre::script
                     scene->addComponent<ecs::ScaledFrameComponent>(handle->entity);
                 }
                 kind = ComponentKind::scaled_frame;
+            }
+            else if (strcmp(name, "core.input_hint") == 0)
+            {
+                if (scene->tryGetComponent<ecs::InputHintComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::InputHintComponent>(handle->entity);
+                }
+                kind = ComponentKind::input_hint;
             }
             else
             {
@@ -936,6 +945,20 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::input_hint)
+            {
+                auto* hint = scene->tryGetComponent<ecs::InputHintComponent>(entity);
+                if (hint == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no input_hint component");
+                if (strcmp(name, "command") == 0)
+                    hint->command = luaL_checkstring(L, 3);
+                else if (strcmp(name, "text") == 0)
+                    hint->text = luaL_checkstring(L, 3);
+                else
+                    return luaL_error(L, "scene.setField: unknown input_hint field '%s'", name);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -1153,6 +1176,23 @@ namespace openre::script
                     lua_pushstring(L, frame->mode == ecs::ScaledFrameMode::Cover ? "cover" : "contain");
                 else if (strcmp(name, "increment") == 0)
                     lua_pushnumber(L, frame->increment);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::input_hint)
+            {
+                auto* hint = scene->tryGetComponent<ecs::InputHintComponent>(entity);
+                if (hint == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "command") == 0)
+                    lua_pushlstring(L, hint->command.data(), hint->command.size());
+                else if (strcmp(name, "text") == 0)
+                    lua_pushlstring(L, hint->text.data(), hint->text.size());
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1453,6 +1493,8 @@ namespace openre::script
                 return ComponentKind::audio_emitter;
             if (strcmp(name, "core.scaled_frame") == 0)
                 return ComponentKind::scaled_frame;
+            if (strcmp(name, "core.input_hint") == 0)
+                return ComponentKind::input_hint;
             return 0;
         }
 
@@ -1518,6 +1560,7 @@ namespace openre::script
             case ComponentKind::video: present = scene->hasComponent<ecs::VideoComponent>(h->entity); break;
             case ComponentKind::audio_emitter: present = scene->hasComponent<ecs::AudioEmitterComponent>(h->entity); break;
             case ComponentKind::scaled_frame: present = scene->hasComponent<ecs::ScaledFrameComponent>(h->entity); break;
+            case ComponentKind::input_hint: present = scene->hasComponent<ecs::InputHintComponent>(h->entity); break;
             }
             if (!present)
             {
@@ -1559,6 +1602,8 @@ namespace openre::script
                 push("core.audio_emitter");
             if (scene->hasComponent<ecs::ScaledFrameComponent>(h->entity))
                 push("core.scaled_frame");
+            if (scene->hasComponent<ecs::InputHintComponent>(h->entity))
+                push("core.input_hint");
             return 1;
         }
 
@@ -1635,6 +1680,10 @@ namespace openre::script
                 push("target.height");
                 push("mode");
                 push("increment");
+                break;
+            case ComponentKind::input_hint:
+                push("command");
+                push("text");
                 break;
             default: break;
             }

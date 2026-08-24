@@ -16,6 +16,7 @@ namespace openre
     void ModuleSystem(AppContext& app);
     void LegacyGameSystem(AppContext& app);
     void ScaledFrameSystem(AppContext& app);
+    void InputHintSystem(AppContext& app);
     void TextLayoutSystem(AppContext& app);
     void VideoSystem(AppContext& app);
     void AudioSystem(AppContext& app);

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace openre::ecs
 {
@@ -189,10 +190,11 @@ namespace openre::ecs
         std::string layoutFingerprint;
         bool needsLayout = true;
 
-        // Owns the glyph child entities produced by the last layout. The
-        // layout system creates/clears this container only, leaving any
-        // other user-attached children of the text entity untouched.
-        Entity layoutContainer = NullEntity;
+        // The per-glyph child entities produced by the last layout, in draw
+        // order. Managed entirely by the TextLayoutSystem: it reuses these
+        // entities in place when the glyph count matches and only
+        // creates/destroys the difference.
+        std::vector<Entity> glyphs;
     };
 
     /// Playback state of a VideoComponent.
@@ -222,6 +224,31 @@ namespace openre::ecs
         int texture = 0;
         int videoWidth = 0;
         int videoHeight = 0;
+    };
+
+    /// Declarative input hint: an icon for `command`'s current binding on the
+    /// active input device, with an optional `text` label drawn to its right
+    /// (e.g. command "pause", text "Pause" -> [P] Pause). The icon is a fixed
+    /// 16x16 sprite centred on the entity's origin; scale the entity's
+    /// transform to resize the whole hint (icon and text scale together).
+    ///
+    /// An InputHintSystem materialises the icon and label as child entities
+    /// beneath this one and relayouts only when the fingerprinted inputs
+    /// change. The icon comes from a shared button atlas (keyboard keys for
+    /// now; gamepad themes later), so only keyboard hints are supported yet.
+    struct InputHintComponent
+    {
+        std::string command; // e.g. "pause", "accept" or a single key "p"
+        std::string text;    // optional label drawn to the right of the icon
+
+        // Mirror of the inputs used for relayout detection (filled by the
+        // InputHintSystem; not set directly).
+        std::string fingerprint;
+
+        // The child entities created by the last layout (NullEntity when the
+        // hint has no icon/label). Owned here so they can be rebuilt in place.
+        Entity iconEntity = NullEntity;
+        Entity labelEntity = NullEntity;
     };
 
     /// Marks the entity as the "legacy game": the game driven by the original

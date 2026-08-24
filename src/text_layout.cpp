@@ -460,6 +460,17 @@ namespace openre::text
         outFingerprint = text.text + buf;
     }
 
+    // Destroys every glyph entity recorded on `text` and clears the list.
+    void destroyGlyphs(ecs::Scene& scene, ecs::TextComponent& text)
+    {
+        for (Entity g : text.glyphs)
+        {
+            if (scene.isValid(g))
+                scene.destroyEntity(g);
+        }
+        text.glyphs.clear();
+    }
+
     void layoutEntity(ecs::Scene& scene, ecs::Entity entity, ecs::TextComponent& text)
     {
         // Resolve the font resource to find its atlas texture cookie.
@@ -477,27 +488,15 @@ namespace openre::text
             }
         }
         if (font == nullptr || atlas == 0)
-            return; // no font; nothing to draw
-
-        // Ensure the dedicated layout container exists.
-        ecs::Entity container = text.layoutContainer;
-        if (container == ecs::NullEntity)
         {
-            container = scene.createEntity(entity);
-            text.layoutContainer = container;
-        }
-        else
-        {
-            // Clear the previous glyphs (and any sub-children) from the container.
-            scene.destroyEntity(container);
-            container = scene.createEntity(entity);
-            text.layoutContainer = container;
+            // No usable font: drop any previous glyphs so stale sprites do
+            // not linger on screen.
+            destroyGlyphs(scene, text);
+            return;
         }
 
         const float cellSize = small ? kSmallCellSize : kCellSize;
         auto runs = decodeText(text.text, font, cellSize, cellSize);
-        if (runs.empty())
-            return;
 
         const float totalW = measureWidth(runs);
         const float totalH = font->fromFnt ? static_cast<float>(font->lineHeight()) : cellSize;
@@ -524,6 +523,28 @@ namespace openre::text
 
         float x = originX;
         float y = originY;
+
+        // Match the glyph child entities to the drawable run count: destroy
+        // surplus glyphs, create missing ones (as direct children of the text
+        // entity), then update every survivor in place.
+        size_t drawableCount = 0;
+        for (const auto& run : runs)
+        {
+            if (!run.blank)
+                drawableCount++;
+        }
+        text.glyphs.erase(
+            std::remove_if(text.glyphs.begin(), text.glyphs.end(), [&](Entity g) { return !scene.isValid(g); }),
+            text.glyphs.end());
+        while (text.glyphs.size() > drawableCount)
+        {
+            scene.destroyEntity(text.glyphs.back());
+            text.glyphs.pop_back();
+        }
+        while (text.glyphs.size() < drawableCount)
+            text.glyphs.push_back(scene.createEntity(entity));
+
+        size_t glyphIndex = 0;
         for (auto& run : runs)
         {
             // Blank glyphs (spaces) advance the pen but draw nothing.
@@ -533,7 +554,7 @@ namespace openre::text
                 continue;
             }
 
-            Entity g = scene.createEntity(container);
+            Entity g = text.glyphs[glyphIndex++];
             auto& transform = scene.getComponent<TransformComponent>(g);
             // Sprites are centred on their position (render2d). Grid glyphs
             // fill the full cell; .fnt glyphs sit at pen_x - leftBearing and
@@ -544,20 +565,22 @@ namespace openre::text
                 transform.position.x = x + run.advanceX * 0.5f;
             transform.position.y = y + run.advanceY * 0.5f;
 
-            auto& sprite = scene.addComponent<SpriteComponent>(g);
+            auto* sprite = scene.tryGetComponent<SpriteComponent>(g);
+            if (sprite == nullptr)
+                sprite = &scene.addComponent<SpriteComponent>(g);
             if (run.hasSrc)
             {
-                sprite.size = { run.srcW, run.srcH };
-                sprite.src = { run.srcX, run.srcY, run.srcW, run.srcH };
-                sprite.texture = run.texture;
+                sprite->size = { run.srcW, run.srcH };
+                sprite->src = { run.srcX, run.srcY, run.srcW, run.srcH };
+                sprite->texture = run.texture;
             }
             else
             {
-                sprite.size = { run.advanceX, run.advanceY };
-                sprite.texture = atlas;
+                sprite->size = { run.advanceX, run.advanceY };
+                sprite->texture = atlas;
                 if (small)
                 {
-                    sprite.src = {
+                    sprite->src = {
                         kSmallCellSize * (run.cell % kSmallGridCols),
                         kSmallCellSize * (run.cell / kSmallGridCols),
                         kSmallCellSize,
@@ -566,7 +589,7 @@ namespace openre::text
                 }
                 else
                 {
-                    sprite.src = {
+                    sprite->src = {
                         14.0f * (run.cell % kGridCols),
                         14.0f * (run.cell / kGridCols),
                         kCellSize,
@@ -574,7 +597,7 @@ namespace openre::text
                     };
                 }
             }
-            sprite.color = run.color;
+            sprite->color = run.color;
             x += run.advanceX;
         }
     }
