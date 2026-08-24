@@ -22,6 +22,7 @@
 #include "system_input.h"
 #include "system_window.h"
 #include "systems.h"
+#include "text_layout.h"
 #include "texture_loader.h"
 #include "video_system.h"
 #include <algorithm>
@@ -1295,6 +1296,29 @@ namespace openre::script
             return 1;
         }
 
+        // gfx.measureText(font, text) -> width, height
+        //
+        // Measures a string exactly the way TextLayoutSystem will lay it out
+        // (same decode + metrics), so Lua UI code can size and centre labels
+        // before creating entities. The sandboxed VM has no io, so this is
+        // also the only way scripts can read glyph widths from a proportional
+        // .fnt font.
+        int gfxMeasureText(lua_State* L)
+        {
+            auto* fontHandle = static_cast<FontHandle*>(luaL_checkudata(L, 1, METATABLE_FONT));
+            auto* text = luaL_checkstring(L, 2);
+            auto* fontResource = ResourceManager::get().fromCookie<FontResource>(fontHandle->cookie);
+            if (fontResource == nullptr)
+                return luaL_error(L, "gfx.measureText: font is no longer valid");
+
+            const float cellSize = fontResource->small ? text::kSmallCellSize : text::kCellSize;
+            const float lineHeight = fontResource->fromFnt ? static_cast<float>(fontResource->lineHeight()) : cellSize;
+            auto runs = text::decodeText(text, fontResource, cellSize, cellSize);
+            lua_pushnumber(L, text::measureWidth(runs));
+            lua_pushnumber(L, lineHeight);
+            return 2;
+        }
+
         // gfx.requestScreenshot() - asks the renderer to grab the next
         // presented frame (the download runs on the render thread inside that
         // frame's submit, so the result is available from a later tick).
@@ -2412,6 +2436,7 @@ namespace openre::script
         // gfx.* - 2D engine rendering (textures, fonts, window size, fades).
         setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
         setGlobal(L, "gfx.loadFont", gfxLoadFont);
+        setGlobal(L, "gfx.measureText", gfxMeasureText);
         setGlobal(L, "gfx.screenWidth", gfxScreenWidth);
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
         setGlobal(L, "gfx.requestScreenshot", gfxRequestScreenshot);

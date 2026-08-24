@@ -560,6 +560,17 @@ function gfx.loadTexture(path, width, height, timIndex) end
 ---@return Font|nil
 function gfx.loadFont(path) end
 
+--- Measure a string exactly the way the engine will lay it out, so UI code can
+--- size and centre labels before creating entities. The sandbox has no io,
+--- so this is also the only way scripts can read glyph widths from a
+--- proportional .fnt font. Width covers the longest single line (span markup
+--- is honoured); height is the font's line height.
+---@param Font font A gfx.loadFont handle.
+---@param text string
+---@return number width
+---@return number height
+function gfx.measureText(Font, text) end
+
 --- Current window width in pixels.
 ---@return integer
 function gfx.screenWidth() end

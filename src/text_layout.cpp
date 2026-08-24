@@ -26,12 +26,7 @@ namespace openre::text
 
     namespace
     {
-        // Big font page 0 (font0): 14px cells in an 18-column grid.
-        constexpr float kCellSize = 14.0f;
         constexpr int kGridCols = 18;
-        // Small variant (:small): a grid of 8px cells, 32 per row. The cell
-        // index is (codepoint - 0x20), so space=0, '!'=1, 'A'=33 (col 1, row 1).
-        constexpr float kSmallCellSize = 8.0f;
         constexpr int kSmallGridCols = 32;
 
         // Decodes one UTF-8 sequence at `str` into a codepoint, advancing

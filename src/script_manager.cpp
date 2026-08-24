@@ -271,7 +271,17 @@ namespace openre::script
             _watchers.push_back(std::move(watcher));
         }
 
-        auto vm = createLuaVm("game", { dir });
+        // Shared Lua modules (the Lua ECS, UI controls) live next to the game
+        // modules in <games>/core/script; expose them to the module VM as a
+        // lower-priority require search path so any game can require('ecs')
+        // while still being able to override a core module with its own copy.
+        std::vector<fs::path> searchPaths{ dir };
+        const fs::path coreScriptDir = dir.parent_path() / "core" / "script";
+        std::error_code coreEc;
+        if (fs::is_directory(coreScriptDir, coreEc))
+            searchPaths.push_back(coreScriptDir.lexically_normal());
+
+        auto vm = createLuaVm("game", searchPaths);
         vm->run(dir / "main.lua");
         _scripts[GAME_MODULE_KEY] = std::move(vm);
     }

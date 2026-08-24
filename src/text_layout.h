@@ -21,6 +21,14 @@ namespace openre::ecs
 
 namespace openre::text
 {
+    // Legacy font-atlas grid sizes shared with the Lua bindings
+    // (gfx.measureText must mirror layout metrics exactly).
+    // Big font page 0 (font0): 14px cells in an 18-column grid.
+    inline constexpr float kCellSize = 14.0f;
+    // Small variant (:small): a grid of 8px cells, 32 per row. The cell
+    // index is (codepoint - 0x20), so space=0, '!'=1, 'A'=33 (col 1, row 1).
+    inline constexpr float kSmallCellSize = 8.0f;
+
     /// One resolved glyph of a text string: the font-atlas cell (or explicit
     /// .fnt glyph) to draw, its colour, and its advance offset. Produced by
     /// laying out a TextComponent.
