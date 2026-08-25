@@ -1,12 +1,13 @@
--- ecs.lua - a small ECS implemented entirely in Lua on top of the native
--- scene tree.
+-- ecs.lua - a small ECS implemented in Lua on top of the native scene tree.
 --
 -- Components are registered from Lua with a name and an ordered field list;
 -- every field has a name and one of four primitive types (int, float, bool,
--- string) plus an optional default. Under the covers each entity's component
--- row is stored as BINARY: the field list is compiled to a string.pack format
--- at registration time and rows are packed/unpacked on access. Nothing but
--- packed bytes is kept per entity.
+-- string) plus an optional default. Registration and storage are native:
+-- scene.defineComponent() adds the definition to the engine's runtime
+-- component registry and rows live on the scene itself (one typed field
+-- vector per entity), so every component is visible to the debug web
+-- inspector and readable/writable through the regular scene.component /
+-- scene.getField / scene.setField APIs.
 --
 -- Systems are registered with a name and a priority; this module subscribes
 -- once to HookKind.tick and dispatches them in ascending priority order
@@ -17,9 +18,6 @@
 -- Entities are addressed by their numeric scene id (what scene.children /
 -- scene.parent return). Use ecs.spawn() to create one and get both the
 -- native handle (for scene.setField etc.) and its id (for the ecs API).
--- Rows of destroyed entities are swept lazily during iteration: ids are
--- generation-checked against the scene via scene.entityFromId, so recycled
--- slots can never alias a dead component.
 
 local ecs = {}
 
@@ -27,84 +25,37 @@ local ecs = {}
 -- Component registry ---------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- Binary encoding per field type (little-endian).
-local FORMATS = {
-    int = '<i4',    -- 32-bit signed integer
-    float = '<f',   -- 32-bit float
-    bool = '<B',    -- one byte, 0/1
-    string = '<s4', -- 4-byte length prefix + bytes
+local FIELD_TYPES = {
+    int = true,
+    float = true,
+    bool = true,
+    string = true,
 }
-
-local components = {} -- name -> definition
-
-local function defaultFor(fieldType)
-    if fieldType == 'bool' then
-        return false
-    elseif fieldType == 'string' then
-        return ''
-    end
-    return 0
-end
 
 --- Register a component type. `fields` is an array of
 --- `{ name = ..., type = 'int'|'float'|'bool'|'string' [, default = ...] }`.
---- Field order defines the binary layout; do not reorder once shipped.
+--- Field order defines the row layout; do not reorder once shipped.
 ---@param name string e.g. 'ui.tab_strip'
 ---@param fields table[]
 function ecs.registerComponent(name, fields)
     assert(type(name) == 'string' and #name > 0, 'component name required')
-    assert(components[name] == nil, "component already registered: " .. name)
-    local def = {
-        name = name,
-        fields = {},
-        index = {},
-        format = '<',
-        rows = {}, -- entityId -> { data = binary string, seq = int }
-        nextSeq = 0,
-    }
-    local defaults = {}
+    assert(type(fields) == 'table', 'field array required')
+    local defs = {}
     for i, field in ipairs(fields) do
-        local fmt = FORMATS[field.type]
-        assert(fmt ~= nil, "unknown field type '" .. tostring(field.type) .. "'")
-        def.format = def.format .. fmt
-        def.fields[i] = { name = field.name, type = field.type }
-        def.index[field.name] = i
-        local value = field.default ~= nil and field.default or defaultFor(field.type)
-        -- Coerce to the packed representation up front so the template row
-        -- packs once without surprises.
-        if field.type == 'bool' then
-            value = value and 1 or 0
-        elseif field.type == 'int' then
-            value = math.floor(tonumber(value) or 0)
-        elseif field.type == 'float' then
-            value = tonumber(value) or 0.0
-        else
-            value = tostring(value)
-        end
-        defaults[i] = value
+        assert(FIELD_TYPES[field.type], "unknown field type '" .. tostring(field.type) .. "'")
+        assert(type(field.name) == 'string' and #field.name > 0, "field " .. i .. " has no name")
+        defs[i] = { name = field.name, type = field.type, default = field.default }
     end
-    def.defaultRow = string.pack(def.format, table.unpack(defaults, 1, #def.fields))
-    components[name] = def
+    assert(scene.defineComponent(name, defs), "component already registered: " .. name)
 end
 
-local function definition(name)
-    local def = components[name]
-    assert(def ~= nil, "component not registered: " .. tostring(name))
-    return def
-end
-
--- Unpacks a row into a table.pack result (values at 1..#fields).
-local function unpackRow(def, id)
-    local row = def.rows[id]
-    if row == nil then
-        error(("entity %s has no '%s' component"):format(tostring(id), def.name))
-    end
-    return table.pack(string.unpack(def.format, row.data))
-end
-
--- True when the numeric id refers to a live entity right now.
-local function isLive(id)
-    return type(id) == 'number' and scene.entityFromId(id) ~= nil
+-- Resolves the runtime component handle for an (entity, name) pair.
+local function rowHandle(entity, name)
+    local handle = scene.entityFromId(entity)
+    assert(handle ~= nil, ("entity %s has no '%s' component"):format(tostring(entity), name))
+    local comp = scene.component(handle, name)
+    assert(comp ~= nil, ("entity %s has no '%s' component"):format(tostring(entity), name))
+    return comp
 end
 
 --- Add `name` to `entity` (a numeric scene id from ecs.spawn), initialised
@@ -112,23 +63,22 @@ end
 ---@param entity integer
 ---@param name string
 function ecs.addComponent(entity, name)
-    local def = definition(name)
-    assert(isLive(entity), 'ecs.addComponent: entity is not live')
-    assert(def.rows[entity] == nil, ("entity %d already has '%s'"):format(entity, name))
-    def.nextSeq = def.nextSeq + 1
-    def.rows[entity] = { data = def.defaultRow, seq = def.nextSeq }
+    local handle = scene.entityFromId(entity)
+    assert(handle ~= nil, 'ecs.addComponent: entity is not live')
+    scene.addComponent(handle, name)
 end
 
 function ecs.removeComponent(entity, name)
-    definition(name).rows[entity] = nil
+    scene.removeComponent(scene.entityFromId(entity), name)
 end
 
 ---@param entity integer
 ---@param name string
 ---@return boolean
 function ecs.has(entity, name)
-    local def = components[name]
-    return def ~= nil and def.rows[entity] ~= nil
+    return type(entity) == 'number'
+        and scene.entityFromId(entity) ~= nil
+        and scene.component(scene.entityFromId(entity), name) ~= nil
 end
 
 --- Read one field of a component row.
@@ -137,62 +87,25 @@ end
 ---@param field string
 ---@return any
 function ecs.get(entity, name, field)
-    local def = definition(name)
-    local idx = def.index[field]
-    assert(idx ~= nil, ("'%s' has no field '%s'"):format(name, tostring(field)))
-    local values = unpackRow(def, entity)
-    if def.fields[idx].type == 'bool' then
-        -- Packed as a byte; surface it as a real boolean.
-        return values[idx] == 1
-    end
-    return values[idx]
+    return scene.getField(rowHandle(entity, name), field)
 end
 
---- Write one field of a component row (the whole row repacks).
+--- Write one field of a component row.
 ---@param entity integer
 ---@param name string
 ---@param field string
 ---@param value any
 function ecs.set(entity, name, field, value)
-    local def = definition(name)
-    local idx = def.index[field]
-    assert(idx ~= nil, ("'%s' has no field '%s'"):format(name, tostring(field)))
-    local values = unpackRow(def, entity)
-    local fieldType = def.fields[idx].type
-    if fieldType == 'int' then
-        values[idx] = math.floor(tonumber(value) or 0)
-    elseif fieldType == 'float' then
-        values[idx] = tonumber(value) or 0.0
-    elseif fieldType == 'bool' then
-        values[idx] = value and 1 or 0
-    else
-        values[idx] = tostring(value)
-    end
-    def.rows[entity].data =
-        string.pack(def.format, table.unpack(values, 1, #def.fields))
+    scene.setField(rowHandle(entity, name), field, value)
 end
 
 --- Call fn(entityId) for every live entity carrying `name`, in creation
---- order. Rows of entities destroyed since last touch are dropped here.
+--- order. The id list is a snapshot, so fn may add/remove rows safely.
 ---@param name string
 ---@param fn fun(entity: integer)
 function ecs.each(name, fn)
-    local def = definition(name)
-
-    -- Snapshot in creation order so fn may add/remove rows safely.
-    local ordered = {}
-    for id, row in pairs(def.rows) do
-        if not isLive(id) then
-            def.rows[id] = nil -- stale: entity was destroyed
-        else
-            ordered[#ordered + 1] = { id = id, seq = row.seq }
-        end
-    end
-    table.sort(ordered, function(a, b)
-        return a.seq < b.seq
-    end)
-    for _, item in ipairs(ordered) do
-        fn(item.id)
+    for _, id in ipairs(scene.entitiesWithComponent(name)) do
+        fn(id)
     end
 end
 
@@ -225,22 +138,11 @@ function ecs.spawn(parent)
     return handle, nil
 end
 
---- Destroy an entity (numeric id or native handle) and drop all of its
---- Lua-ECS component rows first. Numeric ids are the canonical addressing;
---- with a handle the rows are left for the lazy sweep in ecs.each().
+--- Destroy an entity (numeric id or native handle). The scene removes its
+--- runtime component rows together with the entity.
 ---@param entity SceneEntity|integer
 function ecs.destroyEntity(entity)
-    if type(entity) == 'number' then
-        for _, def in pairs(components) do
-            def.rows[entity] = nil
-        end
-        local handle = scene.entityFromId(entity)
-        if handle ~= nil then
-            scene.destroy(handle)
-        end
-    else
-        scene.destroy(entity)
-    end
+    scene.destroy(entity)
 end
 
 -------------------------------------------------------------------------------

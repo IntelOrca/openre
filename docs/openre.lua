@@ -390,12 +390,35 @@ function scene.entityFromId(id) end
 
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
 --- one of "core.transform", "core.sprite", "core.text", "core.legacy",
---- "core.video", "core.audio_emitter", "core.scaled_frame" or
---- "core.input_hint". Returns nil when the entity lacks that component.
+--- "core.video", "core.audio_emitter", "core.scaled_frame",
+--- "core.input_hint" or a runtime component name registered via
+--- `scene.defineComponent`. Returns nil when the entity lacks that component.
 ---@param entity SceneEntity
 ---@param typeName string
 ---@return SceneComponent|nil
 function scene.component(entity, typeName) end
+
+--- Register a runtime (Lua-defined) component type. `fields` is an array of
+--- `{ name = ..., type = "int"|"float"|"bool"|"string" [, default = ...] }`;
+--- field order defines the row layout and must stay stable once shipped.
+--- Registered components behave exactly like core.* ones afterwards: add
+--- them with `scene.addComponent`, read/write them with scene.getField /
+--- scene.setField, and they appear in the debug web inspector.
+---@param name string e.g. "ui.tab_strip"
+---@param fields table[]
+function scene.defineComponent(name, fields) end
+
+--- Remove a runtime component from an entity (no-op when absent).
+---@param entity SceneEntity
+---@param name string
+function scene.removeComponent(entity, name) end
+
+--- Return an array of entity ids (integers) carrying the named runtime
+--- component, oldest first. The list is a snapshot, so entries may be added
+--- or removed while iterating it.
+---@param name string
+---@return integer[]
+function scene.entitiesWithComponent(name) end
 
 --- Return a table of the component type names present on an entity (always
 --- including "core.transform").

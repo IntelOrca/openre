@@ -27,6 +27,7 @@
 #include "video_system.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -463,6 +464,9 @@ namespace openre::script
             constexpr int32_t audio_emitter = 6;
             constexpr int32_t scaled_frame = 7;
             constexpr int32_t input_hint = 8;
+            // A runtime (Lua-defined) component; the definition name lives in
+            // SceneComponentHandle::runtimeName.
+            constexpr int32_t runtime = 9;
         }
 
         struct SceneEntityHandle
@@ -474,6 +478,9 @@ namespace openre::script
         {
             ecs::Entity entity;
             int32_t kind;
+            // Only used when kind == ComponentKind::runtime: the registered
+            // component name ("ui.config_enum" etc).
+            std::string runtimeName;
         };
 
         struct TextureHandle
@@ -509,6 +516,107 @@ namespace openre::script
             }
             return 0;
         }
+
+        // ── runtime (Lua-defined) components ─────────────────────────────
+
+        // Parses a field type name ('int' / 'float' / 'bool' / 'string').
+        bool runtimeFieldTypeFromString(const char* text, ecs::RuntimeFieldType& outType)
+        {
+            if (strcmp(text, "int") == 0)
+                outType = ecs::RuntimeFieldType::Int;
+            else if (strcmp(text, "float") == 0)
+                outType = ecs::RuntimeFieldType::Float;
+            else if (strcmp(text, "bool") == 0)
+                outType = ecs::RuntimeFieldType::Bool;
+            else if (strcmp(text, "string") == 0)
+                outType = ecs::RuntimeFieldType::String;
+            else
+                return false;
+            return true;
+        }
+
+        // Zero/empty default for a runtime field type.
+        ecs::RuntimeValue runtimeDefaultFor(ecs::RuntimeFieldType type)
+        {
+            switch (type)
+            {
+            case ecs::RuntimeFieldType::Float: return 0.0f;
+            case ecs::RuntimeFieldType::Bool: return false;
+            case ecs::RuntimeFieldType::String: return std::string();
+            default: return int32_t{ 0 };
+            }
+        }
+
+        // Coerces a Lua value at `index` to the field's type, mirroring the
+        // coercion rules of the old pure-Lua ECS (ints floor, strings accept
+        // numbers, bools take truthiness).
+        ecs::RuntimeValue runtimeValueFromLua(lua_State* L, int index, ecs::RuntimeFieldType type)
+        {
+            switch (type)
+            {
+            case ecs::RuntimeFieldType::Int: return static_cast<int32_t>(std::floor(luaL_checknumber(L, index)));
+            case ecs::RuntimeFieldType::Float: return static_cast<float>(luaL_checknumber(L, index));
+            case ecs::RuntimeFieldType::Bool: return lua_toboolean(L, index) != 0;
+            default: // string
+            {
+                size_t length = 0;
+                const char* value = luaL_tolstring(L, index, &length);
+                std::string result(value, length);
+                lua_pop(L, 1);
+                return result;
+            }
+            }
+        }
+
+        void runtimeValueToLua(lua_State* L, const ecs::RuntimeValue& value)
+        {
+            std::visit(
+                [&](const auto& v) {
+                    using T = std::decay_t<decltype(v)>;
+                    if constexpr (std::is_same_v<T, int32_t>)
+                        lua_pushinteger(L, v);
+                    else if constexpr (std::is_same_v<T, float>)
+                        lua_pushnumber(L, v);
+                    else if constexpr (std::is_same_v<T, bool>)
+                        lua_pushboolean(L, v ? 1 : 0);
+                    else
+                        lua_pushlstring(L, v.data(), v.size());
+                },
+                value);
+        }
+
+        // Index of `fieldName` within the definition named by a runtime
+        // component handle, or -1.
+        int32_t runtimeFieldIndex(const ecs::Scene& scene, const SceneComponentHandle& comp, const char* fieldName)
+        {
+            auto* def = ecs::findRuntimeComponent(comp.runtimeName);
+            if (def == nullptr || !scene.isValid(comp.entity))
+                return -1;
+            for (size_t i = 0; i < def->fields.size(); i++)
+            {
+                if (def->fields[i].name == fieldName)
+                    return static_cast<int32_t>(i);
+            }
+            return -1;
+        }
+
+        // A component handle holds a std::string for runtime components, so
+        // creation goes through placement new and destruction runs in the
+        // metatable's __gc (lua_newuserdata only hands out raw memory).
+        SceneComponentHandle* newComponentHandle(lua_State* L)
+        {
+            return new (lua_newuserdata(L, sizeof(SceneComponentHandle))) SceneComponentHandle();
+        }
+
+        int sceneComponentGC(lua_State* L)
+        {
+            auto* comp = static_cast<SceneComponentHandle*>(lua_touserdata(L, 1));
+            if (comp != nullptr)
+                comp->~SceneComponentHandle();
+            return 0;
+        }
+
+        // ── scene entity/component API ───────────────────────────────────
 
         int sceneCreateEntity(lua_State* L)
         {
@@ -654,12 +762,28 @@ namespace openre::script
                 }
                 kind = ComponentKind::input_hint;
             }
+            else if (ecs::findRuntimeComponent(name) != nullptr)
+            {
+                // Runtime (Lua-defined) component: add a default-initialised
+                // row to the scene's runtime store.
+                if (!scene->addRuntimeComponent(handle->entity, name))
+                {
+                    return luaL_error(L, "scene.addComponent: entity already has '%s'", name);
+                }
+                auto* comp = newComponentHandle(L);
+                comp->entity = handle->entity;
+                comp->kind = ComponentKind::runtime;
+                comp->runtimeName = name;
+                luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
+                lua_setmetatable(L, -2);
+                return 1;
+            }
             else
             {
                 return luaL_error(L, "scene.addComponent: unknown component '%s'", name);
             }
 
-            auto* comp = static_cast<SceneComponentHandle*>(lua_newuserdata(L, sizeof(SceneComponentHandle)));
+            auto* comp = newComponentHandle(L);
             comp->entity = handle->entity;
             comp->kind = kind;
             luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
@@ -989,6 +1113,19 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::runtime)
+            {
+                const int32_t fieldIndex = runtimeFieldIndex(*scene, *comp, name);
+                auto* row = scene->tryGetRuntimeComponent(entity, comp->runtimeName);
+                if (fieldIndex < 0 || row == nullptr || fieldIndex >= static_cast<int32_t>(row->values.size()))
+                {
+                    return luaL_error(L, "scene.setField: unknown %s field '%s'", comp->runtimeName.c_str(), name);
+                }
+                row->values[static_cast<size_t>(fieldIndex)] = runtimeValueFromLua(
+                    L, 3, ecs::findRuntimeComponent(comp->runtimeName)->fields[static_cast<size_t>(fieldIndex)].type);
+                return 0;
+            }
+
             return luaL_error(L, "scene.setField: unsupported component (kind %d)", (int)comp->kind);
         }
 
@@ -1237,6 +1374,19 @@ namespace openre::script
                     lua_pushinteger(L, hint->font);
                 else
                     lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::runtime)
+            {
+                const int32_t fieldIndex = runtimeFieldIndex(*scene, *comp, name);
+                auto* row = scene->tryGetRuntimeComponent(entity, comp->runtimeName);
+                if (fieldIndex < 0 || row == nullptr || fieldIndex >= static_cast<int32_t>(row->values.size()))
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                runtimeValueToLua(L, row->values[static_cast<size_t>(fieldIndex)]);
                 return 1;
             }
 
@@ -1563,6 +1713,91 @@ namespace openre::script
             return 0;
         }
 
+        // ── runtime (Lua-defined) components ─────────────────────────────
+
+        // Registers a runtime component definition from Lua:
+        // scene.defineComponent('ui.config_enum', { { name = 'width',
+        // type = 'int', default = 120 }, ... }). Field order defines the row
+        // layout; defaults fall back to the type's zero value.
+        int sceneDefineComponent(lua_State* L)
+        {
+            const char* name = luaL_checkstring(L, 1);
+            luaL_argcheck(L, lua_istable(L, 2), 2, "expected a field array");
+            luaL_argcheck(L, strlen(name) > 0, 1, "component name required");
+
+            ecs::RuntimeComponentDef def;
+            def.name = name;
+            const lua_Integer count = lua_rawlen(L, 2);
+            for (lua_Integer i = 1; i <= count; i++)
+            {
+                lua_rawgeti(L, 2, i);
+                if (!lua_istable(L, -1))
+                {
+                    return luaL_error(L, "scene.defineComponent: field %d is not a table", (int)i);
+                }
+                lua_getfield(L, -1, "name");
+                if (!lua_isstring(L, -1))
+                {
+                    return luaL_error(L, "scene.defineComponent: field %d has no name", (int)i);
+                }
+                ecs::RuntimeFieldDef field;
+                field.name = lua_tostring(L, -1);
+                lua_pop(L, 1);
+
+                lua_getfield(L, -1, "type");
+                const char* typeName = luaL_optstring(L, -1, "");
+                lua_pop(L, 1);
+                if (!runtimeFieldTypeFromString(typeName, field.type))
+                {
+                    return luaL_error(
+                        L, "scene.defineComponent: field '%s' has unknown type '%s'", field.name.c_str(), typeName);
+                }
+
+                lua_getfield(L, -1, "default");
+                def.defaults.push_back(
+                    !lua_isnil(L, -1) ? runtimeValueFromLua(L, -1, field.type) : runtimeDefaultFor(field.type));
+                lua_pop(L, 2); // default + field table
+                def.fields.push_back(std::move(field));
+            }
+
+            if (!ecs::defineRuntimeComponent(std::move(def)))
+            {
+                return luaL_error(L, "scene.defineComponent: component already registered '%s'", name);
+            }
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // Returns an array of entity ids carrying the named runtime
+        // component, oldest first. The list is a snapshot, so the callback
+        // may add/remove rows safely while iterating it.
+        int sceneEntitiesWithComponent(lua_State* L)
+        {
+            auto* name = luaL_checkstring(L, 1);
+            auto* scene = current_scene();
+            lua_newtable(L);
+            if (scene == nullptr)
+                return 1;
+            int n = 0;
+            scene->eachRuntimeComponent(name, [&](ecs::Entity entity, ecs::RuntimeRow&) {
+                n++;
+                lua_pushinteger(L, static_cast<lua_Integer>(entity));
+                lua_rawseti(L, -2, n);
+            });
+            return 1;
+        }
+
+        // Removes a runtime component from an entity (no-op when absent).
+        int sceneRemoveComponent(lua_State* L)
+        {
+            auto* h = static_cast<SceneEntityHandle*>(luaL_checkudata(L, 1, METATABLE_SCENE_ENTITY));
+            auto* name = luaL_checkstring(L, 2);
+            auto* scene = current_scene();
+            if (scene != nullptr && scene->isValid(h->entity))
+                scene->removeRuntimeComponent(h->entity, name);
+            return 0;
+        }
+
         // Returns a table of every live entity id in the scene.
         int sceneAllEntities(lua_State* L)
         {
@@ -1612,7 +1847,20 @@ namespace openre::script
             const int32_t kind = componentKindFromName(name);
             if (kind == 0)
             {
-                lua_pushnil(L);
+                // Not a core component: fall back to the runtime registry.
+                if (scene->tryGetRuntimeComponent(h->entity, name) != nullptr)
+                {
+                    auto* comp = newComponentHandle(L);
+                    comp->entity = h->entity;
+                    comp->kind = ComponentKind::runtime;
+                    comp->runtimeName = name;
+                    luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
+                    lua_setmetatable(L, -2);
+                }
+                else
+                {
+                    lua_pushnil(L);
+                }
                 return 1;
             }
             bool present = true;
@@ -1632,7 +1880,7 @@ namespace openre::script
                 lua_pushnil(L);
                 return 1;
             }
-            auto* comp = static_cast<SceneComponentHandle*>(lua_newuserdata(L, sizeof(SceneComponentHandle)));
+            auto* comp = newComponentHandle(L);
             comp->entity = h->entity;
             comp->kind = kind;
             luaL_getmetatable(L, METATABLE_SCENE_COMPONENT);
@@ -1669,6 +1917,8 @@ namespace openre::script
                 push("core.scaled_frame");
             if (scene->hasComponent<ecs::InputHintComponent>(h->entity))
                 push("core.input_hint");
+            for (const auto& runtimeName : scene->runtimeComponentsOf(h->entity))
+                push(runtimeName.c_str());
             return 1;
         }
 
@@ -1752,6 +2002,15 @@ namespace openre::script
                 push("text");
                 push("font");
                 break;
+            case ComponentKind::runtime:
+            {
+                if (auto* def = ecs::findRuntimeComponent(comp->runtimeName))
+                {
+                    for (const auto& field : def->fields)
+                        push(field.name.c_str());
+                }
+                break;
+            }
             default: break;
             }
             return 1;
@@ -2432,6 +2691,9 @@ namespace openre::script
         setGlobal(L, "scene.getFieldNames", sceneGetFieldNames);
         setGlobal(L, "scene.parent", sceneParent);
         setGlobal(L, "scene.children", sceneChildren);
+        setGlobal(L, "scene.defineComponent", sceneDefineComponent);
+        setGlobal(L, "scene.removeComponent", sceneRemoveComponent);
+        setGlobal(L, "scene.entitiesWithComponent", sceneEntitiesWithComponent);
 
         // gfx.* - 2D engine rendering (textures, fonts, window size, fades).
         setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
@@ -2470,6 +2732,8 @@ namespace openre::script
         luaL_newmetatable(L, METATABLE_SCENE_ENTITY);
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_SCENE_COMPONENT);
+        lua_pushcfunction(L, sceneComponentGC);
+        lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_TEXTURE);
         lua_pushcfunction(L, resourceHandleGC<TextureHandle>);

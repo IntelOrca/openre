@@ -1,9 +1,53 @@
 #include "ecs_scene.h"
 
+#include <algorithm>
 #include <cassert>
 
 namespace openre::ecs
 {
+    namespace
+    {
+        // Global registry of runtime component definitions. Only the active
+        // game module registers definitions (via the Lua ECS), so a single
+        // global list is sufficient; Scene::clear() drops it alongside rows.
+        // Indirect storage keeps definition pointers stable across
+        // registrations (g_runtimeOrder hands out raw pointers).
+        std::vector<std::unique_ptr<RuntimeComponentDef>> g_runtimeComponents;
+        std::vector<RuntimeComponentDef*> g_runtimeOrder;
+    }
+
+    bool defineRuntimeComponent(RuntimeComponentDef def)
+    {
+        for (const auto& existing : g_runtimeComponents)
+        {
+            if (existing->name == def.name)
+                return false;
+        }
+        g_runtimeOrder.push_back(g_runtimeComponents.emplace_back(std::make_unique<RuntimeComponentDef>(std::move(def))).get());
+        return true;
+    }
+
+    const RuntimeComponentDef* findRuntimeComponent(std::string_view name)
+    {
+        for (const auto& def : g_runtimeComponents)
+        {
+            if (def->name == name)
+                return def.get();
+        }
+        return nullptr;
+    }
+
+    const std::vector<RuntimeComponentDef*>& runtimeComponents()
+    {
+        return g_runtimeOrder;
+    }
+
+    void clearRuntimeComponents()
+    {
+        g_runtimeComponents.clear();
+        g_runtimeOrder.clear();
+    }
+
     namespace
     {
         constexpr const char* rootName(Scene::RootKind kind)
@@ -64,6 +108,8 @@ namespace openre::ecs
         record.alive = false;
         for (auto& [id, storage] : m_storages)
             storage->removeEntity(index);
+        for (auto& [name, rows] : m_runtimeComponents)
+            rows.erase(index);
         m_freeIndices.push_back(index);
     }
 
@@ -180,5 +226,55 @@ namespace openre::ecs
             if (m_records[i].alive && make_entity(i, m_records[i].generation) != m_root)
                 destroySubtree(make_entity(i, m_records[i].generation));
         }
+        // Runtime component rows die with their entities above; drop the
+        // definitions too so a reloaded game module re-registers cleanly.
+        m_runtimeComponents.clear();
+        clearRuntimeComponents();
+    }
+
+    bool Scene::addRuntimeComponent(Entity entity, const std::string& name)
+    {
+        const RuntimeComponentDef* def = findRuntimeComponent(name);
+        if (def == nullptr || !isValid(entity))
+            return false;
+        auto& rows = m_runtimeComponents[name];
+        if (!rows.emplace(entity_index(entity), RuntimeRow{}).second)
+            return false;
+        auto& row = rows[entity_index(entity)];
+        row.seq = m_runtimeSeq++;
+        row.values = def->defaults;
+        return true;
+    }
+
+    void Scene::removeRuntimeComponent(Entity entity, const std::string& name)
+    {
+        auto it = m_runtimeComponents.find(name);
+        if (it != m_runtimeComponents.end())
+            it->second.erase(entity_index(entity));
+    }
+
+    RuntimeRow* Scene::tryGetRuntimeComponent(Entity entity, const std::string& name)
+    {
+        if (!isValid(entity))
+            return nullptr;
+        auto it = m_runtimeComponents.find(name);
+        if (it == m_runtimeComponents.end())
+            return nullptr;
+        auto row = it->second.find(entity_index(entity));
+        return row != it->second.end() ? &row->second : nullptr;
+    }
+
+    std::vector<std::string> Scene::runtimeComponentsOf(Entity entity) const
+    {
+        std::vector<std::string> names;
+        for (const auto* def : runtimeComponents())
+        {
+            auto it = m_runtimeComponents.find(def->name);
+            if (it != m_runtimeComponents.end() && isValid(entity) && it->second.find(entity_index(entity)) != it->second.end())
+            {
+                names.push_back(def->name);
+            }
+        }
+        return names;
     }
 }

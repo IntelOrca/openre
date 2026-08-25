@@ -2,16 +2,65 @@
 
 #include "ecs_components.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace openre::ecs
 {
+    /// Field type of a runtime (Lua-defined) component. Mirrors the four
+    /// primitive types the Lua ECS supports.
+    enum class RuntimeFieldType : uint8_t
+    {
+        Int = 0,
+        Float = 1,
+        Bool = 2,
+        String = 3,
+    };
+
+    /// One field of a runtime component definition.
+    struct RuntimeFieldDef
+    {
+        std::string name;
+        RuntimeFieldType type = RuntimeFieldType::Int;
+    };
+
+    /// A typed value stored in a runtime component row.
+    using RuntimeValue = std::variant<int32_t, float, bool, std::string>;
+
+    /// A registered runtime component type: ordered fields + default values.
+    struct RuntimeComponentDef
+    {
+        std::string name;
+        std::vector<RuntimeFieldDef> fields;
+        std::vector<RuntimeValue> defaults;
+    };
+
+    /// One runtime component row stored on a Scene entity: field values in
+    /// definition order plus an insertion sequence number.
+    struct RuntimeRow
+    {
+        std::vector<RuntimeValue> values;
+        uint64_t seq = 0;
+    };
+
+    /// Registers a runtime component definition in the global registry.
+    /// Returns false when a definition with this name already exists.
+    bool defineRuntimeComponent(RuntimeComponentDef def);
+    /// Looks up a registered runtime component definition, or nullptr.
+    const RuntimeComponentDef* findRuntimeComponent(std::string_view name);
+    /// Registered definitions in registration order.
+    const std::vector<RuntimeComponentDef*>& runtimeComponents();
+    /// Drops every runtime component definition (rows live on Scene and are
+    /// dropped with it).
+    void clearRuntimeComponents();
     /// Monotonic counter shared by every component_type_id<T> instantiation,
     /// so each distinct component type gets a unique id.
     inline uint32_t next_component_type_id()
@@ -134,6 +183,45 @@ namespace openre::ecs
                     fn(make_entity(i, m_records[i].generation));
             }
         }
+
+        // ── Runtime components ───────────────────────────────────────────
+        // Lua-defined component types (see the registry above and the Lua ECS
+        // in games/core/script/ecs.lua). Rows are typed field vectors keyed by
+        // (component name, entity index); a per-row sequence number keeps
+        // iteration in creation order. Accessors take full Entity handles and
+        // validate them, so recycled slots can never alias a stale row.
+
+        /// Adds a default-initialised runtime component row to `entity`.
+        /// Returns false when the definition is unknown or the entity already
+        /// has the component.
+        bool addRuntimeComponent(Entity entity, const std::string& name);
+        /// Removes the runtime component from `entity` (no-op when absent).
+        void removeRuntimeComponent(Entity entity, const std::string& name);
+        /// The runtime component row on `entity`, or nullptr when absent (or
+        /// the entity is not live).
+        RuntimeRow* tryGetRuntimeComponent(Entity entity, const std::string& name);
+        /// Calls fn(entity, row&) for every entity carrying the named runtime
+        /// component, oldest first.
+        template<typename Fn> void eachRuntimeComponent(const std::string& name, Fn&& fn)
+        {
+            auto it = m_runtimeComponents.find(name);
+            if (it == m_runtimeComponents.end())
+                return;
+            std::vector<std::pair<Entity, RuntimeRow*>> ordered;
+            for (auto& [index, row] : it->second)
+            {
+                Entity entity = make_entity(index, m_records[index].generation);
+                if (isValid(entity))
+                    ordered.emplace_back(entity, &row);
+            }
+            std::sort(
+                ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.second->seq < b.second->seq; });
+            for (auto& [entity, row] : ordered)
+                fn(entity, *row);
+        }
+        /// Names of the runtime components present on `entity`, in the order
+        /// their definitions were registered.
+        std::vector<std::string> runtimeComponentsOf(Entity entity) const;
 
         /// The first live entity carrying a T component, or the null entity.
         template<typename T> Entity find()
@@ -262,6 +350,8 @@ namespace openre::ecs
         std::vector<Record> m_records;
         std::vector<uint32_t> m_freeIndices;
         std::unordered_map<uint32_t, std::unique_ptr<StorageBase>> m_storages;
+        std::unordered_map<std::string, std::unordered_map<uint32_t, RuntimeRow>> m_runtimeComponents;
+        uint64_t m_runtimeSeq = 0;
         Entity m_root = NullEntity;
         Entity m_roots[5] = { NullEntity, NullEntity, NullEntity, NullEntity, NullEntity };
     };
