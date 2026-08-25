@@ -561,6 +561,18 @@ namespace openre::render2d
             y0 = snapToPixel(y0);
             x1 = snapToPixel(x1);
             y1 = snapToPixel(y1);
+            // Rounding both edges independently can still shrink a quad by a
+            // pixel per axis. At near-1:1 scales nearest sampling then skips
+            // the last row/column of source texels entirely, visibly clipping
+            // thin glyph features (e.g. descender tails). Restore the ideal
+            // device size against the snapped origin; this can only inflate a
+            // quad that snapping squeezed, never deflate one.
+            const float minW = std::max(1.0f, std::round(s.dst.width));
+            const float minH = std::max(1.0f, std::round(s.dst.height));
+            if (x1 - x0 < minW)
+                x1 = x0 + minW;
+            if (y1 - y0 < minH)
+                y1 = y0 + minH;
 
             out[0].sx = x0;
             out[0].sy = y0;
