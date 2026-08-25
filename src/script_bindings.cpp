@@ -464,6 +464,8 @@ namespace openre::script
             constexpr int32_t audio_emitter = 6;
             constexpr int32_t scaled_frame = 7;
             constexpr int32_t input_hint = 8;
+            constexpr int32_t ui_size = 10;
+            constexpr int32_t ui_flex = 11;
             // A runtime (Lua-defined) component; the definition name lives in
             // SceneComponentHandle::runtimeName.
             constexpr int32_t runtime = 9;
@@ -762,6 +764,22 @@ namespace openre::script
                 }
                 kind = ComponentKind::input_hint;
             }
+            else if (strcmp(name, "core.ui_size") == 0)
+            {
+                if (scene->tryGetComponent<ecs::UiSizeComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::UiSizeComponent>(handle->entity);
+                }
+                kind = ComponentKind::ui_size;
+            }
+            else if (strcmp(name, "core.ui_flex") == 0)
+            {
+                if (scene->tryGetComponent<ecs::UiFlexComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::UiFlexComponent>(handle->entity);
+                }
+                kind = ComponentKind::ui_flex;
+            }
             else if (ecs::findRuntimeComponent(name) != nullptr)
             {
                 // Runtime (Lua-defined) component: add a default-initialised
@@ -854,11 +872,7 @@ namespace openre::script
                     return luaL_error(L, "scene.setField: entity has no sprite component");
                 }
 
-                if (strcmp(name, "size.width") == 0)
-                    sprite->size.width = static_cast<float>(luaL_checknumber(L, 3));
-                else if (strcmp(name, "size.height") == 0)
-                    sprite->size.height = static_cast<float>(luaL_checknumber(L, 3));
-                else if (strcmp(name, "src.x") == 0)
+                if (strcmp(name, "src.x") == 0)
                     sprite->src.x = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "src.y") == 0)
                     sprite->src.y = static_cast<float>(luaL_checknumber(L, 3));
@@ -924,10 +938,6 @@ namespace openre::script
                 {
                     text->text = luaL_checkstring(L, 3);
                 }
-                else if (strcmp(name, "size.width") == 0)
-                    text->size.width = static_cast<float>(luaL_checknumber(L, 3));
-                else if (strcmp(name, "size.height") == 0)
-                    text->size.height = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "flags") == 0)
                 {
                     const auto value = luaL_checkinteger(L, 3);
@@ -1113,6 +1123,51 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::ui_size)
+            {
+                auto* size = scene->tryGetComponent<ecs::UiSizeComponent>(entity);
+                if (size == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no ui_size component");
+                if (strcmp(name, "width") == 0)
+                    size->width = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "height") == 0)
+                    size->height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "weight") == 0)
+                    size->weight = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown ui_size field '%s'", name);
+                return 0;
+            }
+
+            if (comp->kind == ComponentKind::ui_flex)
+            {
+                auto* flex = scene->tryGetComponent<ecs::UiFlexComponent>(entity);
+                if (flex == nullptr)
+                    return luaL_error(L, "scene.setField: entity has no ui_flex component");
+                if (strcmp(name, "orientation") == 0)
+                {
+                    auto* value = luaL_checkstring(L, 3);
+                    if (strcmp(value, "none") == 0)
+                        flex->orientation = ecs::UiFlexOrientation::None;
+                    else if (strcmp(value, "horizontal") == 0)
+                        flex->orientation = ecs::UiFlexOrientation::Horizontal;
+                    else if (strcmp(value, "vertical") == 0)
+                        flex->orientation = ecs::UiFlexOrientation::Vertical;
+                    else
+                        return luaL_error(
+                            L,
+                            "scene.setField: unknown ui_flex orientation '%s' (expected none, horizontal or vertical)",
+                            value);
+                }
+                else if (strcmp(name, "gap") == 0)
+                    flex->gap = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "padding") == 0)
+                    flex->padding = static_cast<float>(luaL_checknumber(L, 3));
+                else
+                    return luaL_error(L, "scene.setField: unknown ui_flex field '%s'", name);
+                return 0;
+            }
+
             if (comp->kind == ComponentKind::runtime)
             {
                 const int32_t fieldIndex = runtimeFieldIndex(*scene, *comp, name);
@@ -1179,11 +1234,7 @@ namespace openre::script
                     lua_pushnil(L);
                     return 1;
                 }
-                if (strcmp(name, "size.width") == 0)
-                    lua_pushnumber(L, sprite->size.width);
-                else if (strcmp(name, "size.height") == 0)
-                    lua_pushnumber(L, sprite->size.height);
-                else if (strcmp(name, "src.x") == 0)
+                if (strcmp(name, "src.x") == 0)
                     lua_pushnumber(L, sprite->src.x);
                 else if (strcmp(name, "src.y") == 0)
                     lua_pushnumber(L, sprite->src.y);
@@ -1223,10 +1274,6 @@ namespace openre::script
                 }
                 if (strcmp(name, "text") == 0)
                     lua_pushlstring(L, text->text.data(), text->text.size());
-                else if (strcmp(name, "size.width") == 0)
-                    lua_pushnumber(L, text->size.width);
-                else if (strcmp(name, "size.height") == 0)
-                    lua_pushnumber(L, text->size.height);
                 else if (strcmp(name, "flags") == 0)
                     lua_pushinteger(L, text->flags);
                 else if (strcmp(name, "font") == 0)
@@ -1372,6 +1419,51 @@ namespace openre::script
                 }
                 else if (strcmp(name, "font") == 0)
                     lua_pushinteger(L, hint->font);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::ui_size)
+            {
+                auto* size = scene->tryGetComponent<ecs::UiSizeComponent>(entity);
+                if (size == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "width") == 0)
+                    lua_pushnumber(L, size->width);
+                else if (strcmp(name, "height") == 0)
+                    lua_pushnumber(L, size->height);
+                else if (strcmp(name, "weight") == 0)
+                    lua_pushnumber(L, size->weight);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::ui_flex)
+            {
+                auto* flex = scene->tryGetComponent<ecs::UiFlexComponent>(entity);
+                if (flex == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "orientation") == 0)
+                {
+                    switch (flex->orientation)
+                    {
+                    case ecs::UiFlexOrientation::Horizontal: lua_pushstring(L, "horizontal"); break;
+                    case ecs::UiFlexOrientation::Vertical: lua_pushstring(L, "vertical"); break;
+                    default: lua_pushstring(L, "none"); break;
+                    }
+                }
+                else if (strcmp(name, "gap") == 0)
+                    lua_pushnumber(L, flex->gap);
+                else if (strcmp(name, "padding") == 0)
+                    lua_pushnumber(L, flex->padding);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1710,6 +1802,10 @@ namespace openre::script
                 return ComponentKind::scaled_frame;
             if (strcmp(name, "core.input_hint") == 0)
                 return ComponentKind::input_hint;
+            if (strcmp(name, "core.ui_size") == 0)
+                return ComponentKind::ui_size;
+            if (strcmp(name, "core.ui_flex") == 0)
+                return ComponentKind::ui_flex;
             return 0;
         }
 
@@ -1874,6 +1970,8 @@ namespace openre::script
             case ComponentKind::audio_emitter: present = scene->hasComponent<ecs::AudioEmitterComponent>(h->entity); break;
             case ComponentKind::scaled_frame: present = scene->hasComponent<ecs::ScaledFrameComponent>(h->entity); break;
             case ComponentKind::input_hint: present = scene->hasComponent<ecs::InputHintComponent>(h->entity); break;
+            case ComponentKind::ui_size: present = scene->hasComponent<ecs::UiSizeComponent>(h->entity); break;
+            case ComponentKind::ui_flex: present = scene->hasComponent<ecs::UiFlexComponent>(h->entity); break;
             }
             if (!present)
             {
@@ -1917,6 +2015,10 @@ namespace openre::script
                 push("core.scaled_frame");
             if (scene->hasComponent<ecs::InputHintComponent>(h->entity))
                 push("core.input_hint");
+            if (scene->hasComponent<ecs::UiSizeComponent>(h->entity))
+                push("core.ui_size");
+            if (scene->hasComponent<ecs::UiFlexComponent>(h->entity))
+                push("core.ui_flex");
             for (const auto& runtimeName : scene->runtimeComponentsOf(h->entity))
                 push(runtimeName.c_str());
             return 1;
@@ -1947,8 +2049,6 @@ namespace openre::script
                 push("scale.z");
                 break;
             case ComponentKind::sprite:
-                push("size.width");
-                push("size.height");
                 push("src.x");
                 push("src.y");
                 push("src.width");
@@ -1961,8 +2061,6 @@ namespace openre::script
                 break;
             case ComponentKind::text:
                 push("text");
-                push("size.width");
-                push("size.height");
                 push("flags");
                 push("font");
                 break;
@@ -2001,6 +2099,16 @@ namespace openre::script
                 push("device");
                 push("text");
                 push("font");
+                break;
+            case ComponentKind::ui_size:
+                push("width");
+                push("height");
+                push("weight");
+                break;
+            case ComponentKind::ui_flex:
+                push("orientation");
+                push("gap");
+                push("padding");
                 break;
             case ComponentKind::runtime:
             {
@@ -2430,7 +2538,9 @@ namespace openre::script
                     transform.position.x = static_cast<float>(render2d::SpriteRenderer::get().screenWidth()) * 0.5f;
                     transform.position.y = static_cast<float>(render2d::SpriteRenderer::get().screenHeight()) - 20.0f;
                     auto& captionText = scene->addComponent<ecs::TextComponent>(captionEntity);
-                    captionText.size = { static_cast<float>(render2d::SpriteRenderer::get().screenWidth()), 24.0f };
+                    auto& captionSize = scene->addComponent<ecs::UiSizeComponent>(captionEntity);
+                    captionSize.width = static_cast<float>(render2d::SpriteRenderer::get().screenWidth());
+                    captionSize.height = 24.0f;
                     captionText.flags
                         = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
                     captionText.font = loadFontResource("fonts/sm.fnt");

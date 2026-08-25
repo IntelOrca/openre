@@ -578,25 +578,13 @@ namespace openre
                     { "touchpad", kPsTouchpad },
                 },
                 {
-                    { "south", kPsCross },
-                    { "east", kPsCircle },
-                    { "north", kPsTriangle },
-                    { "west", kPsSquare },
-                    { "l_trigger", kPsLt },
-                    { "r_trigger", kPsRt },
-                    { "l_shoulder", kPsLb },
-                    { "r_shoulder", kPsRb },
-                    { "start", kPsStart },
+                    { "south", kPsCross },        { "east", kPsCircle },        { "north", kPsTriangle },
+                    { "west", kPsSquare },        { "l_trigger", kPsLt },       { "r_trigger", kPsRt },
+                    { "l_shoulder", kPsLb },      { "r_shoulder", kPsRb },      { "start", kPsStart },
                     { "mode", kPsTouchpad }, // no PS logo glyph; touchpad is nearest
-                    { "l3", kPsLsClick },
-                    { "r3", kPsRsClick },
-                    { "dpad_up", kPsDpadUp },
-                    { "dpad_down", kPsDpadDown },
-                    { "dpad_left", kPsDpadLeft },
-                    { "dpad_right", kPsDpadRight },
-                    { "axis_left_y-", kPsLs },
-                    { "axis_left_y+", kPsLs },
-                    { "axis_left_x-", kPsLs },
+                    { "l3", kPsLsClick },         { "r3", kPsRsClick },         { "dpad_up", kPsDpadUp },
+                    { "dpad_down", kPsDpadDown }, { "dpad_left", kPsDpadLeft }, { "dpad_right", kPsDpadRight },
+                    { "axis_left_y-", kPsLs },    { "axis_left_y+", kPsLs },    { "axis_left_x-", kPsLs },
                     { "axis_left_x+", kPsLs },
                 },
                 kPsDpadLeft,
@@ -798,7 +786,7 @@ namespace openre
         // ("mouse_left", "dpad") or unknown name (no icon).
         int cell = -1;
         const bool found = hint.device == ecs::InputHintDevice::KeyboardMouse ? lookupKbmCell(hint.command, cell)
-                                                                            : lookupPadCell(hint.device, hint.command, cell);
+                                                                              : lookupPadCell(hint.device, hint.command, cell);
         if (found)
             outCells.push_back(cell);
     }
@@ -857,7 +845,9 @@ namespace openre
                 transform.position = { static_cast<float>(i) * (kInputCell + kHintGap), 0.0f, 0.0f };
 
                 auto& sprite = app.scene.addComponent<ecs::SpriteComponent>(icon);
-                sprite.size = { kInputCell, kInputCell };
+                auto& iconSize = app.scene.addComponent<ecs::UiSizeComponent>(icon);
+                iconSize.width = kInputCell;
+                iconSize.height = kInputCell;
                 sprite.texture = atlas;
                 sprite.src = {
                     static_cast<float>(cell % kInputCellsPerRow) * kInputCell,
@@ -890,8 +880,10 @@ namespace openre
             transform.position = { nextX + textWidth * 0.5f, 0.0f, 0.0f };
 
             auto& text = app.scene.addComponent<ecs::TextComponent>(label);
+            auto& labelSize = app.scene.addComponent<ecs::UiSizeComponent>(label);
+            labelSize.width = std::max(textWidth, 1.0f);
+            labelSize.height = lineHeight;
             text.text = hint.text;
-            text.size = { std::max(textWidth, 1.0f), lineHeight };
             text.flags = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
             text.font = font;
         });
@@ -911,7 +903,7 @@ namespace openre
 
         app.scene.each<ecs::TextComponent>([&](ecs::Entity entity, ecs::TextComponent& text) {
             std::string fingerprint;
-            text::fingerprint(text, fingerprint);
+            text::fingerprint(app.scene, entity, text, fingerprint);
             if (fingerprint == text.layoutFingerprint && !text.needsLayout)
                 return;
             text::layoutEntity(app.scene, entity, text);
@@ -956,6 +948,234 @@ namespace openre
             transform.scale.x = scale;
             transform.scale.y = scale;
         });
+    }
+
+    namespace
+    {
+        // One immediate child of a flex container during a layout pass.
+        struct FlexSlot
+        {
+            ecs::Entity entity = ecs::NullEntity;
+            ecs::TransformComponent* transform = nullptr;
+            ecs::UiSizeComponent* uiSize = nullptr; // null when the child has none
+            float width = 0;
+            float height = 0;
+            float weight = 0;
+        };
+
+        // Writes a slot's final laid-out rectangle to the entity. Positions
+        // are the CENTRE of the rectangle (render2d draws sprites centred on
+        // their transform position).
+        void placeFlexSlot(FlexSlot& slot, float centreX, float centreY)
+        {
+            if (slot.transform != nullptr)
+            {
+                slot.transform->position.x = centreX;
+                slot.transform->position.y = centreY;
+            }
+            if (slot.uiSize != nullptr)
+            {
+                slot.uiSize->width = slot.width;
+                slot.uiSize->height = slot.height;
+            }
+        }
+
+        // Lays out the immediate children of one UiFlex container.
+        //
+        // Main axis (horizontal/vertical): fixed (weight-0) children take
+        // their literal size; when they overflow the content box every
+        // literal size AND gap is scaled by available/fixedTotal so nothing
+        // escapes the container, weighted children collapsing to zero.
+        // Remaining space goes to weighted children proportionally by
+        // weight; when no child has weight the whole run is centred.
+        // Cross axis: weighted children stretch to the content box,
+        // fixed children are clamped to it and centred.
+        //
+        // Orientation None is an overlay stack: each child independently
+        // fills (weight > 0) or is clamped+centred (weight 0) on both axes.
+        void layoutFlexContainer(ecs::Scene& scene, ecs::Entity container, const ecs::UiFlexComponent& flex)
+        {
+            auto* size = scene.tryGetComponent<ecs::UiSizeComponent>(container);
+            if (size == nullptr)
+                return;
+
+            const float pad = std::max(flex.padding, 0.0f);
+            const float contentW = size->width - pad * 2;
+            const float contentH = size->height - pad * 2;
+            if (contentW <= 0 || contentH <= 0)
+                return;
+
+            // Container transforms are the CENTRE of their box (render2d
+            // draws sprites centred on their position), so the content box's
+            // top-left corner sits at (-halfWidth + pad, -halfHeight + pad)
+            // in the container's local space.
+            const float originX = pad - size->width * 0.5f;
+            const float originY = pad - size->height * 0.5f;
+
+            std::vector<FlexSlot> slots;
+            for (ecs::Entity child = scene.getComponent<ecs::TransformComponent>(container).firstChild;
+                 child != ecs::NullEntity;
+                 child = scene.getComponent<ecs::TransformComponent>(child).nextSibling)
+            {
+                FlexSlot slot;
+                slot.entity = child;
+                slot.transform = &scene.getComponent<ecs::TransformComponent>(child);
+                slot.uiSize = scene.tryGetComponent<ecs::UiSizeComponent>(child);
+                if (slot.uiSize != nullptr)
+                {
+                    slot.width = slot.uiSize->width;
+                    slot.height = slot.uiSize->height;
+                    slot.weight = slot.uiSize->weight;
+                }
+                slots.push_back(slot);
+            }
+            if (slots.empty())
+                return;
+
+            if (flex.orientation == ecs::UiFlexOrientation::None)
+            {
+                // Every clamped/filled child shares the same mid-point:
+                // the centre of the content box.
+                const float centreX = originX + contentW * 0.5f;
+                const float centreY = originY + contentH * 0.5f;
+                for (auto& slot : slots)
+                {
+                    if (slot.weight > 0)
+                    {
+                        slot.width = contentW;
+                        slot.height = contentH;
+                    }
+                    else
+                    {
+                        slot.width = std::min(slot.width, contentW);
+                        slot.height = std::min(slot.height, contentH);
+                    }
+                    placeFlexSlot(slot, centreX, centreY);
+                }
+                return;
+            }
+
+            const bool horizontal = flex.orientation == ecs::UiFlexOrientation::Horizontal;
+            const float originMain = horizontal ? originX : originY;
+            const float originCross = horizontal ? originY : originX;
+            const float contentMain = horizontal ? contentW : contentH;
+            const float contentCross = horizontal ? contentH : contentW;
+
+            float fixedTotal = slots.size() > 1 ? flex.gap * static_cast<float>(slots.size() - 1) : 0.0f;
+            float totalWeight = 0;
+            for (auto& slot : slots)
+            {
+                if (slot.weight > 0)
+                    totalWeight += slot.weight;
+                else
+                    fixedTotal += horizontal ? slot.width : slot.height;
+            }
+
+            float gap = flex.gap;
+            float cursorStart = originMain;
+            if (fixedTotal > contentMain && fixedTotal > 0)
+            {
+                // Overflow: shrink literals and gaps into the container.
+                const float f = contentMain / fixedTotal;
+                gap *= f;
+                for (auto& slot : slots)
+                {
+                    if (slot.weight <= 0)
+                    {
+                        if (horizontal)
+                            slot.width *= f;
+                        else
+                            slot.height *= f;
+                    }
+                    else if (horizontal)
+                    {
+                        slot.width = 0;
+                    }
+                    else
+                    {
+                        slot.height = 0;
+                    }
+                }
+            }
+            else if (totalWeight > 0)
+            {
+                // Weighted children share the slack proportionally.
+                const float unit = (contentMain - fixedTotal) / totalWeight;
+                for (auto& slot : slots)
+                {
+                    if (slot.weight <= 0)
+                        continue;
+                    const float share = slot.weight * unit;
+                    if (horizontal)
+                        slot.width = share;
+                    else
+                        slot.height = share;
+                }
+            }
+            else
+            {
+                // Nothing weighted: centre the whole run in the leftover space.
+                cursorStart += (contentMain - fixedTotal) * 0.5f;
+            }
+
+            float cursor = cursorStart;
+            for (auto& slot : slots)
+            {
+                const float mainSize = horizontal ? slot.width : slot.height;
+                float crossSize = horizontal ? slot.height : slot.width;
+                if (slot.weight > 0)
+                    crossSize = contentCross;
+                else
+                    crossSize = std::min(crossSize, contentCross);
+
+                const float centreMain = cursor + mainSize * 0.5f;
+                // Weighted children stretch to the content box; clamped
+                // children share its mid-point on the cross axis either way.
+                const float centreCross = originCross + contentCross * 0.5f;
+                if (horizontal)
+                {
+                    slot.height = crossSize;
+                    placeFlexSlot(slot, centreMain, centreCross);
+                }
+                else
+                {
+                    slot.width = crossSize;
+                    placeFlexSlot(slot, centreCross, centreMain);
+                }
+                cursor += mainSize + gap;
+            }
+        }
+
+        // Depth-first top-down pass: each flex container is laid out before
+        // its subtrees are visited, so nested flex sees parent-fresh sizes.
+        void layoutFlexTree(ecs::Scene& scene, ecs::Entity entity)
+        {
+            if (auto* flex = scene.tryGetComponent<ecs::UiFlexComponent>(entity))
+                layoutFlexContainer(scene, entity, *flex);
+            for (ecs::Entity child = scene.getComponent<ecs::TransformComponent>(entity).firstChild; child != ecs::NullEntity;
+                 child = scene.getComponent<ecs::TransformComponent>(child).nextSibling)
+            {
+                layoutFlexTree(scene, child);
+            }
+        }
+    }
+
+    // Applies every UiFlexComponent: lays out the immediate children of each
+    // flex container within its (authored) UiSize box. Children have their
+    // local position and UiSize width/height written every frame - both are
+    // system-owned on flex children. Runs after the script tick so
+    // Lua-created entities participate immediately, before rendering reads
+    // transforms.
+    void UiFlexSystem(AppContext& app)
+    {
+        if (app.closing() || !app.running())
+            return;
+        if (!game_module_active())
+            return;
+        if (!app.frameActive)
+            return;
+
+        layoutFlexTree(app.scene, app.scene.root());
     }
 
     namespace
@@ -1159,6 +1379,11 @@ namespace openre
                 const float sy
                     = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
 
+                // The draw size comes from the entity's UiSize component.
+                const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
+                const float sizeW = uiSize != nullptr ? uiSize->width : 0.0f;
+                const float sizeH = uiSize != nullptr ? uiSize->height : 0.0f;
+
                 TextureResource* tex = nullptr;
                 if (sprite.texture != 0)
                 {
@@ -1170,7 +1395,7 @@ namespace openre
                 render2d::SpriteDraw d{};
                 d.textureHandle = tex ? tex->textureHandle : 0;
                 d.src = { sprite.src.x, sprite.src.y, sprite.src.width, sprite.src.height };
-                d.dst = { x, y, sprite.size.width * sx, sprite.size.height * sy };
+                d.dst = { x, y, sizeW * sx, sizeH * sy };
                 d.flags = sprite.flags;
                 d.r = sprite.color.r;
                 d.g = sprite.color.g;
@@ -1204,8 +1429,9 @@ namespace openre
                 const float sy
                     = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
 
-                const float boundsW = video.size.width * sx;
-                const float boundsH = video.size.height * sy;
+                const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
+                const float boundsW = (uiSize != nullptr ? uiSize->width : 0.0f) * sx;
+                const float boundsH = (uiSize != nullptr ? uiSize->height : 0.0f) * sy;
                 const float vw = static_cast<float>(video.videoWidth);
                 const float vh = static_cast<float>(video.videoHeight);
                 const float scale = std::min(boundsW / vw, boundsH / vh);

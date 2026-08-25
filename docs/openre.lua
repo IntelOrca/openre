@@ -325,8 +325,7 @@ function scene.addComponent(entity, name) end
 --- positions are relative to the parent when the entity was attached with
 --- `scene.setParent`, and a parent's scale is inherited by
 --- its children (offsets and rendered sizes both scale). Sprite fields mirror the layout of the underlying C++
---- struct: `size.width`, `size.height` (destination size in window pixels),
---- `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
+--- struct: `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
 --- pixels; 0-sized means "full texture"), `texture` (a Texture or nil),
 --- `flags` (a bitmask of SpriteFlags values combined with `|`), `color` (an
 --- RGBA tint/opacity table `{r, g, b, a}` with each channel 0-255; defaults
@@ -335,12 +334,19 @@ function scene.addComponent(entity, name) end
 --- behind and a lower `z` renders in front (equal `z` keeps creation order).
 --- A sprite is
 --- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
---- place the entity where you want the centre of the sprite. Text fields:
+--- place the entity where you want the centre of the sprite; its drawn size
+--- comes from the entity's `core.ui_size` component. Text fields:
 --- `text` (UTF-8 string; supports `<span color="#ff0">` markup plus the
 --- `#rrggbb` and `#rrggbbaa` forms — the last two hex digits are the alpha
 --- channel, 0-255), `font` (a
---- Font or nil), `size.width` / `size.height` (bounds the text is aligned
---- within), and `flags` (a bitmask of TextFlags values combined with `|`).
+--- Font or nil) and `flags` (a bitmask of TextFlags values combined with
+--- `|`); the bounds the text aligns within come from the entity's
+--- `core.ui_size` component.
+--- UI size fields (`core.ui_size`): `width` / `height` (the entity's visual
+--- size in window pixels — every sprite, text band and video reads them),
+--- plus `weight` for flex layouts (see core.ui_flex). Flex containers write
+--- their children's width/height every frame, so treat those as read-only on
+--- flex children.
 --- Audio emitter fields: `category` ("bgm", "sfx" or "voice"), `state`
 --- ("playing" starts the source, anything else stops it — see below),
 --- `source` (.sap file path relative to the game module directory),
@@ -362,6 +368,18 @@ function scene.addComponent(entity, name) end
 --- "ps", "x" or "n"), `text` (optional label drawn right of the icons) and
 --- `font` (optional label font). The icons are fixed 32x32 sprites; scale
 --- the entity's transform to resize the whole hint.
+--- Flex fields (`core.ui_flex`): `orientation` ("none", "horizontal" or
+--- "vertical"; default "none"), `gap` (space between consecutive children in
+--- the flow orientations) and `padding` (inset applied to every edge of the
+--- content box). Every immediate child of a flex entity is laid out each
+--- frame: weighted children (`core.ui_size` `weight` > 0) share the
+--- remaining main-axis space proportionally and stretch across it; weight-0
+--- children keep their literal size, are clamped so they never escape the
+--- container, and are centred on the cross axis. When fixed content
+--- overflows, every literal size and the gap shrink by the same factor so
+--- the run fits exactly; when no child has weight the whole run is centred.
+--- Orientation "none" is an overlay stack: each child fills the box
+--- (weighted) or is clamped and centred on both axes independently.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any
@@ -391,8 +409,9 @@ function scene.entityFromId(id) end
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
 --- one of "core.transform", "core.sprite", "core.text", "core.legacy",
 --- "core.video", "core.audio_emitter", "core.scaled_frame",
---- "core.input_hint" or a runtime component name registered via
---- `scene.defineComponent`. Returns nil when the entity lacks that component.
+--- "core.input_hint", "core.ui_size", "core.ui_flex" or a runtime component
+--- name registered via `scene.defineComponent`. Returns nil when the entity
+--- lacks that component.
 ---@param entity SceneEntity
 ---@param typeName string
 ---@return SceneComponent|nil

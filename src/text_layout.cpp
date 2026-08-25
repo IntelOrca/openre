@@ -23,6 +23,7 @@ namespace openre::text
     using openre::ecs::TextAlignY;
     using openre::ecs::TextFlags;
     using openre::ecs::TransformComponent;
+    using openre::ecs::UiSizeComponent;
 
     namespace
     {
@@ -447,11 +448,13 @@ namespace openre::text
         return w;
     }
 
-    void fingerprint(const ecs::TextComponent& text, std::string& outFingerprint)
+    void fingerprint(ecs::Scene& scene, ecs::Entity entity, const ecs::TextComponent& text, std::string& outFingerprint)
     {
         char buf[64];
-        std::snprintf(
-            buf, sizeof(buf), "|flags=%u|font=%u|w=%g|h=%g|", text.flags, text.font, text.size.width, text.size.height);
+        const auto* size = scene.tryGetComponent<UiSizeComponent>(entity);
+        const float w = size != nullptr ? size->width : 0.0f;
+        const float h = size != nullptr ? size->height : 0.0f;
+        std::snprintf(buf, sizeof(buf), "|flags=%u|font=%u|w=%g|h=%g|", text.flags, text.font, w, h);
         outFingerprint = text.text + buf;
     }
 
@@ -501,20 +504,23 @@ namespace openre::text
         // align within a box centred on the origin.
         const TextAlignX ax = (TextAlignX)((text.flags & (uint32_t)TextFlags::XMask) >> 0);
         const TextAlignY ay = (TextAlignY)((text.flags & (uint32_t)TextFlags::YMask) >> 2);
+        const auto* size = scene.tryGetComponent<UiSizeComponent>(entity);
+        const float bandW = size != nullptr ? size->width : 0.0f;
+        const float bandH = size != nullptr ? size->height : 0.0f;
         float originX = 0;
         if (ax == TextAlignX::Center)
             originX = -totalW * 0.5f;
         else if (ax == TextAlignX::Right)
-            originX = text.size.width * 0.5f - totalW;
+            originX = bandW * 0.5f - totalW;
         else
-            originX = -text.size.width * 0.5f; // Left
+            originX = -bandW * 0.5f; // Left
         float originY = 0;
         if (ay == TextAlignY::Middle)
             originY = -totalH * 0.5f;
         else if (ay == TextAlignY::Bottom)
-            originY = text.size.height * 0.5f - totalH;
+            originY = bandH * 0.5f - totalH;
         else
-            originY = -text.size.height * 0.5f; // Top
+            originY = -bandH * 0.5f; // Top
 
         float x = originX;
         float y = originY;
@@ -563,15 +569,20 @@ namespace openre::text
             auto* sprite = scene.tryGetComponent<SpriteComponent>(g);
             if (sprite == nullptr)
                 sprite = &scene.addComponent<SpriteComponent>(g);
+            auto* glyphSize = scene.tryGetComponent<UiSizeComponent>(g);
+            if (glyphSize == nullptr)
+                glyphSize = &scene.addComponent<UiSizeComponent>(g);
             if (run.hasSrc)
             {
-                sprite->size = { run.srcW, run.srcH };
+                glyphSize->width = run.srcW;
+                glyphSize->height = run.srcH;
                 sprite->src = { run.srcX, run.srcY, run.srcW, run.srcH };
                 sprite->texture = run.texture;
             }
             else
             {
-                sprite->size = { run.advanceX, run.advanceY };
+                glyphSize->width = run.advanceX;
+                glyphSize->height = run.advanceY;
                 sprite->texture = atlas;
                 if (small)
                 {

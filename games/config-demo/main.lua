@@ -2,10 +2,12 @@
 --
 -- Run with: OPENRE_GAME=config-demo run.bat (plus OPENRE_SCRIPTS for web.lua)
 --
--- The game creates several ui.config_list_item rows (games/core/script/ui/
--- config.lua), each given a ui.config_enum sub entity; every other pixel -
--- row label, underline, changed diamond, arrow sprites, centred value,
--- indicator bar row - is produced by the two registered systems.
+-- The game creates a native-flex list container and several
+-- ui.config_list_item rows (games/core/script/ui/config.lua) inside it, each
+-- given a ui.config_enum sub entity; every other pixel - row label,
+-- underline, changed diamond, arrow sprites, centred value, indicator bar
+-- row, selection chrome - is produced by the two registered systems on top
+-- of declarative core.ui_flex trees laid out by the engine.
 --
 -- The components are purely visual, so the demo drives them by hand to show
 -- live updates: W/S or dpad up/down pick a row, A/D or left/right cycle that
@@ -37,6 +39,9 @@ local frame = scene.addComponent(canvasHandle, 'core.scaled_frame')
 scene.setField(frame, 'source.width', DESIGN_W)
 scene.setField(frame, 'source.height', DESIGN_H)
 scene.setField(frame, 'mode', 'contain')
+-- Snap the fitted scale down one SCALE_STEP so art never renders at odd
+-- fractions (see re2/script/menu.lua).
+scene.setField(frame, 'increment', 1)
 
 local function fitCanvas()
     scene.setField(frame, 'target.width', gfx.screenWidth())
@@ -52,11 +57,12 @@ local function addText(parent, dx, dy, bandW, bandH, markup, flags)
     scene.setField(handle, 'name', 'text')
     scene.setField(handle, 'x', dx - DESIGN_W * 0.5)
     scene.setField(handle, 'y', dy - DESIGN_H * 0.5)
+    local size = scene.addComponent(handle, 'core.ui_size')
+    scene.setField(size, 'width', bandW)
+    scene.setField(size, 'height', bandH)
     local t = scene.addComponent(handle, 'core.text')
     scene.setField(t, 'font', stdFont)
     scene.setField(t, 'text', markup)
-    scene.setField(t, 'size.width', bandW)
-    scene.setField(t, 'size.height', bandH)
     scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
     return t -- component handle: callers rewrite 'text' on it
 end
@@ -91,20 +97,31 @@ for _, row in ipairs(ROWS) do
     row.index = row.index or 1
 end
 
--- One list item per line, all the same width so the underlines align into a
--- column; each item gets an enum sub entity whose position/width the system
--- owns (always half the item width, on the right side).
+-- One list container laid out by the native flex: a vertical run of rows
+-- packed with no gap. The container is sized to its exact content height,
+-- so group centring keeps the rows top-packed at LIST_TOP. Each item gets
+-- an enum sub entity on its row whose width is exactly half the item width.
 local LIST_TOP = 120
-local ROW_PITCH = 56
 local ITEM_WIDTH = 360
 
+local listHandle = scene.createEntity(canvasHandle)
+scene.setField(listHandle, 'name', 'list')
+do
+    local x = 160 + ITEM_WIDTH * 0.5 - DESIGN_W * 0.5
+    local listH = #ROWS * config.ITEM_HEIGHT
+    scene.setField(listHandle, 'x', x)
+    scene.setField(listHandle, 'y', LIST_TOP + listH * 0.5 - DESIGN_H * 0.5)
+    local size = scene.addComponent(listHandle, 'core.ui_size')
+    scene.setField(size, 'width', ITEM_WIDTH)
+    scene.setField(size, 'height', listH)
+    local flex = scene.addComponent(listHandle, 'core.ui_flex')
+    scene.setField(flex, 'orientation', 'vertical')
+    scene.setField(flex, 'gap', 0)
+end
+
 for i, row in ipairs(ROWS) do
-    local handle, id = config.addListItem(
-        canvasHandle,
-        160 + ITEM_WIDTH * 0.5 - DESIGN_W * 0.5,
-        LIST_TOP + (i - 1) * ROW_PITCH - DESIGN_H * 0.5,
-        ITEM_WIDTH)
-    local _, enumId = config.addEnum(handle, 0, 0)
+    local _, id, rowHandle = config.addListItem(listHandle, 0, 0, ITEM_WIDTH)
+    local _, enumId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
     row.id = id
     row.enumId = enumId
 end

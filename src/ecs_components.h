@@ -40,6 +40,42 @@ namespace openre::ecs
         float height = 0;
     };
 
+    /// The visual size of an entity: the single source of truth for how much
+    /// space a SpriteComponent draw, TextComponent alignment band or
+    /// VideoComponent letterbox bounds occupy.
+    ///
+    /// `weight` is layout-only and ignored by rendering: inside a UiFlex
+    /// parent, children with positive weight share the remaining main-axis
+    /// space proportionally (and stretch to fill the cross axis), while
+    /// weight-0 children keep their literal width/height. The UiFlexSystem
+    /// overwrites width/height of weighted children every frame; authoring
+    /// them on such entities has no effect.
+    struct UiSizeComponent
+    {
+        float width = 0;
+        float height = 0;
+        float weight = 0;
+    };
+
+    /// Main-axis direction of a UiFlexComponent.
+    enum class UiFlexOrientation : uint32_t
+    {
+        None = 0,       // no flow: each child fills or is centred independently
+        Horizontal = 1, // children distributed left to right
+        Vertical = 2,   // children distributed top to bottom
+    };
+
+    /// Declarative flow layout for an entity's immediate children
+    /// (UiFlexSystem). The container's own UiSize must be authored; children
+    /// are positioned/sized automatically and their transforms + UiSize are
+    /// system-owned from the frame they are created.
+    struct UiFlexComponent
+    {
+        UiFlexOrientation orientation = UiFlexOrientation::None;
+        float gap = 0;     // space between consecutive children (flow modes)
+        float padding = 0; // inset applied to every edge of the content box
+    };
+
     /// An axis-aligned rectangle with a top-left origin.
     struct Rect2f
     {
@@ -62,16 +98,15 @@ namespace openre::ecs
 
     /// A 2D image drawn into the window by the scene-tree render path.
     ///
-    /// The entity's world transform position is the top-left corner and
-    /// `size` is the destination width/height in window pixels. `texture`
-    /// is a ResourceCookie into the engine ResourceManager; `src` selects the
-    /// region of the texture to draw (0-sized src means the full texture).
-    /// `flags` controls whether each axis tiles (`Repeat*`) or scales the
-    /// source to the destination (`Stretch*`). `color` tints the sprite
-    /// (defaults to opaque white).
+    /// The sprite is drawn centred on the entity's world transform position
+    /// (see render2d); the UiSizeComponent width/height give the destination
+    /// size in window pixels. `texture` is a ResourceCookie into the engine
+    /// ResourceManager; `src` selects the region of the texture to draw
+    /// (0-sized src means the full texture). `flags` controls whether each
+    /// axis tiles (`Repeat*`) or scales the source to the destination
+    /// (`Stretch*`). `color` tints the sprite (defaults to opaque white).
     struct SpriteComponent
     {
-        Size2f size;
         ResourceCookie texture = 0;
         Rect2f src;
         uint32_t flags = static_cast<uint32_t>(SpriteFlags::StretchX) | static_cast<uint32_t>(SpriteFlags::StretchY);
@@ -177,11 +212,11 @@ namespace openre::ecs
     /// Declarative text: which string to draw, in what bounds, with what
     /// alignment and font. A TextLayoutSystem materialises the glyphs as
     /// child SpriteComponents (one per character) beneath this entity, and
-    /// relayouts only when the fingerprinted inputs change.
+    /// relayouts only when the fingerprinted inputs change. The alignment
+    /// bounds are the entity's UiSizeComponent.
     struct TextComponent
     {
         std::string text;        // UTF-8; supports <span color="#rrggbbaa"> markup
-        Size2f size;             // bounds within which the text is aligned
         uint32_t flags = 0;      // TextFlags alignment bits
         ResourceCookie font = 0; // FontResource cookie from gfx.loadFont
 
@@ -207,18 +242,17 @@ namespace openre::ecs
     /// A video clip drawn into the window by the scene-tree render path.
     ///
     /// `movie` is a MovieResource cookie from core.loadMovie; the movie file
-    /// itself is streamed from disk while playing. `size` is the entity bounds
-    /// in window pixels (top-left at the world transform position); the
-    /// decoded video is letterboxed inside these bounds while preserving its
-    /// aspect ratio. `status` and `position` (playback time in seconds) are
-    /// advanced by the VideoSystem. `texture` is the render2d
+    /// itself is streamed from disk while playing. The entity's UiSizeComponent
+    /// bounds the draw area in window pixels (top-left at the world transform
+    /// position); the decoded video is letterboxed inside these bounds while
+    /// preserving its aspect ratio. `status` and `position` (playback time in
+    /// seconds) are advanced by the VideoSystem. `texture` is the render2d
     /// dynamic-texture handle for the latest decoded frame (0 when none), and
     /// `videoWidth`/`videoHeight` are the native decoded frame size used to
     /// compute the aspect-preserving draw rectangle.
     struct VideoComponent
     {
         ResourceCookie movie = 0;
-        Size2f size;
         VideoStatus status = VideoStatus::Stopped;
         float position = 0.0f;
         int texture = 0;

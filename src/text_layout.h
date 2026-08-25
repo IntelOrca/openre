@@ -89,7 +89,8 @@ namespace openre::text
     /// by TextLayoutSystem only when relayout is required.
     void layoutEntity(ecs::Scene& scene, ecs::Entity entity, ecs::TextComponent& text);
 
-    /// Whether `text`'s inputs differ from the last laid-out fingerprint. Sets
+    /// Whether `text`'s inputs differ from the last laid-out fingerprint. The
+    /// alignment band is read from the entity's UiSizeComponent. Sets
     /// `outFingerprint` to the current fingerprint for the caller to store.
-    void fingerprint(const ecs::TextComponent& text, std::string& outFingerprint);
+    void fingerprint(ecs::Scene& scene, ecs::Entity entity, const ecs::TextComponent& text, std::string& outFingerprint);
 }

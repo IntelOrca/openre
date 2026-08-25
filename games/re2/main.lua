@@ -9,13 +9,14 @@ local function createSplash()
     scene.setField(splash.entity, 'name', 'splash')
     splash.texture = gfx.loadTexture('common/data/gw2', 320, 240)
     splash.sprite = scene.addComponent(splash.entity, 'core.sprite')
+    splash.size = scene.addComponent(splash.entity, 'core.ui_size')
     scene.setField(splash.sprite, 'texture', splash.texture)
     -- Authored in the 320x240 design space. The canvas entity (splash.entity)
     -- is centred in the window by util.fitCanvas, and the engine renders the
     -- sprite centred on the entity's transform, so a 320x240 sprite at the
     -- canvas origin (0,0) fills the window-centred canvas.
-    scene.setField(splash.sprite, 'size.width', 320)
-    scene.setField(splash.sprite, 'size.height', 240)
+    scene.setField(splash.size, 'width', 320)
+    scene.setField(splash.size, 'height', 240)
     scene.setField(splash.sprite, 'src.x', 0)
     scene.setField(splash.sprite, 'src.y', 0)
     scene.setField(splash.sprite, 'src.width', 0)
@@ -97,7 +98,7 @@ else
                     return
                 end
             end
-end
+
         -- Own function frame so the intro movie's handle dies the moment the
         -- movie is over; the collect below unloads its resource before the
         -- menu loads.

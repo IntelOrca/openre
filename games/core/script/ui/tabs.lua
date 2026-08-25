@@ -186,8 +186,9 @@ local function addQuadChild(parentHandle, name, w, h, color, z)
     scene.setField(handle, 'name', name)
     local sprite = scene.addComponent(handle, 'core.sprite')
     scene.setField(sprite, 'color', color)
-    scene.setField(sprite, 'size.width', w)
-    scene.setField(sprite, 'size.height', h)
+    local size = scene.addComponent(handle, 'core.ui_size')
+    scene.setField(size, 'width', w)
+    scene.setField(size, 'height', h)
     scene.setField(sprite, 'z', z)
     return id
 end
@@ -245,8 +246,9 @@ local function ensureSeparator(view, parentHandle, index)
         scene.setField(handle, 'name', 'ui.tab_strip.sep' .. index)
         local sprite = scene.addComponent(handle, 'core.sprite')
         scene.setField(sprite, 'color', COLOR_SEPARATOR)
-        scene.setField(sprite, 'size.width', SEP_W)
-        scene.setField(sprite, 'size.height', SEP_H)
+        local size = scene.addComponent(handle, 'core.ui_size')
+        scene.setField(size, 'width', SEP_W)
+        scene.setField(size, 'height', SEP_H)
         scene.setField(sprite, 'z', Z_SEPARATOR)
         view.seps[index] = id
     end
@@ -279,6 +281,7 @@ local function ensureTabText(tabView, textParentHandle, label, selected, boxW, b
         local text = scene.addComponent(handle, 'core.text')
         scene.setField(text, 'font', uiFont)
         scene.setField(text, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
+        scene.addComponent(handle, 'core.ui_size')
         tabView.label = nil
     end
 
@@ -292,8 +295,9 @@ local function ensureTabText(tabView, textParentHandle, label, selected, boxW, b
     if markup ~= tabView.markup then
         local textHandle = scene.component(scene.entityFromId(tabView.textId), 'core.text')
         scene.setField(textHandle, 'text', markup)
-        scene.setField(textHandle, 'size.width', boxW)
-        scene.setField(textHandle, 'size.height', boxH)
+        local sizeHandle = scene.component(scene.entityFromId(tabView.textId), 'core.ui_size')
+        scene.setField(sizeHandle, 'width', boxW)
+        scene.setField(sizeHandle, 'height', boxH)
         tabView.markup = markup
     end
 end
@@ -315,8 +319,9 @@ local function moveHighlight(view, parentHandle, cx, w, h)
         scene.setField(handle, 'x', cx)
         scene.setField(handle, 'y', 0)
         local sprite = scene.component(handle, 'core.sprite')
-        scene.setField(sprite, 'size.width', w + layer.pad * 2)
-        scene.setField(sprite, 'size.height', h + layer.pad * 2)
+        local size = scene.component(handle, 'core.ui_size')
+        scene.setField(size, 'width', w + layer.pad * 2)
+        scene.setField(size, 'height', h + layer.pad * 2)
     end
 end
 

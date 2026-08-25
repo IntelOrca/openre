@@ -139,7 +139,9 @@ namespace openre
         video.movie = movie;
         video.status = ecs::VideoStatus::Playing;
 
-        video.size = { static_cast<float>(ws.width), static_cast<float>(ws.height) };
+        auto& videoSize = scene.addComponent<ecs::UiSizeComponent>(entity);
+        videoSize.width = static_cast<float>(ws.width);
+        videoSize.height = static_cast<float>(ws.height);
 
         auto* decoder = new VideoDecoder();
         if (!decoder->open(resolved))

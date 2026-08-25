@@ -550,22 +550,26 @@ local function buildScene(c)
         scene.setField(bgE, 'x', 0)
         scene.setField(bgE, 'y', 0)
         local bgS = scene.addComponent(bgE, 'core.sprite')
-        scene.setField(bgS, 'size.width', 0) -- hidden
-        scene.setField(bgS, 'size.height', 0)
+        local bgSize = scene.addComponent(bgE, 'core.ui_size')
+        scene.setField(bgSize, 'width', 0) -- hidden
+        scene.setField(bgSize, 'height', 0)
         scene.setField(bgS, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
                 scene.setField(bgS, 'z', BACKDROP_Z)
                 c.backdrop = bgS
+                c.backdropSize = bgSize
 
                 local bgtE = scene.createEntity(canvas)
                 scene.setField(bgtE, 'name', 'prologue.backdropTop')
                 scene.setField(bgtE, 'x', 0)
                 scene.setField(bgtE, 'y', 0)
                 local bgtS = scene.addComponent(bgtE, 'core.sprite')
-                scene.setField(bgtS, 'size.width', 0) -- hidden until a cross-fade starts
-                scene.setField(bgtS, 'size.height', 0)
+                local bgtSize = scene.addComponent(bgtE, 'core.ui_size')
+                scene.setField(bgtSize, 'width', 0) -- hidden until a cross-fade starts
+                scene.setField(bgtSize, 'height', 0)
                 scene.setField(bgtS, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
                 scene.setField(bgtS, 'z', BACKDROP_TOP_Z)
                 c.backdropTop = bgtS
+                c.backdropTopSize = bgtSize
 
     c.sprs = {}
     for i, rec in ipairs(c.def.sprites) do
@@ -574,8 +578,9 @@ local function buildScene(c)
         scene.setField(e, 'x', 0)
         scene.setField(e, 'y', 0)
         local s = scene.addComponent(e, 'core.sprite')
-        scene.setField(s, 'size.width', 0)
-        scene.setField(s, 'size.height', 0)
+        local size = scene.addComponent(e, 'core.ui_size')
+        scene.setField(size, 'width', 0)
+        scene.setField(size, 'height', 0)
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
 
         local entry = { rec = rec, flg = 0 }
@@ -604,6 +609,7 @@ local function buildScene(c)
         scene.setField(s, 'color', rec.type == 1 and WHITE_QUAD or colour(0))
                 entry.ent = e
                 entry.comp = s
+                entry.size = size
                 c.sprs[i] = entry
     end
 
@@ -668,8 +674,8 @@ local function applyAction(c, a)
                         -- First still: it takes the base layer, revealed by the screen
                         -- fade-in that accompanies this transition (from black).
                         scene.setField(c.backdrop, 'texture', tex)
-                        scene.setField(c.backdrop, 'size.width', CANVAS_W)
-                        scene.setField(c.backdrop, 'size.height', CANVAS_H)
+                        scene.setField(c.backdropSize, 'width', CANVAS_W)
+                        scene.setField(c.backdropSize, 'height', CANVAS_H)
                         scene.setField(c.backdrop, 'color', OPAQUE_QUAD)
                         c.backdropShown = true
                     else
@@ -677,8 +683,8 @@ local function applyAction(c, a)
                         -- cutting in from black: load it into the spare top layer at 0%
                         -- opacity and ramp it up to opaque over the next frames.
                         scene.setField(c.backdropTop, 'texture', tex)
-                        scene.setField(c.backdropTop, 'size.width', CANVAS_W)
-                        scene.setField(c.backdropTop, 'size.height', CANVAS_H)
+                        scene.setField(c.backdropTopSize, 'width', CANVAS_W)
+                        scene.setField(c.backdropTopSize, 'height', CANVAS_H)
                         scene.setField(c.backdropTop, 'color', { 255, 255, 255, 0 })
                         c.surf = { n = 0, tex = tex }
                     end
@@ -723,22 +729,22 @@ local function updateSprites(c)
     for _, s in ipairs(c.sprs) do
         local flg = s.flg
         if flg % 2 == 0 then
-            scene.setField(s.comp, 'size.width', 0)
-            scene.setField(s.comp, 'size.height', 0)
+            scene.setField(s.size, 'width', 0)
+            scene.setField(s.size, 'height', 0)
         else
             local typ = s.rec.type
             if typ == 1 then
                 if flg % 16 >= 8 then -- fade-out => dissolves instantly
                     s.flg = 0
-                    scene.setField(s.comp, 'size.width', 0)
-                    scene.setField(s.comp, 'size.height', 0)
+                    scene.setField(s.size, 'width', 0)
+                    scene.setField(s.size, 'height', 0)
                 else
                     local cx = s.rec.x + math.floor(s.w / 2) - math.floor(CANVAS_W / 2)
                     local cy = s.rec.y + math.floor(s.h / 2) - math.floor(CANVAS_H / 2)
                     scene.setField(s.ent, 'x', cx)
                                         scene.setField(s.ent, 'y', cy)
-                    scene.setField(s.comp, 'size.width', s.w)
-                    scene.setField(s.comp, 'size.height', s.h)
+                    scene.setField(s.size, 'width', s.w)
+                    scene.setField(s.size, 'height', s.h)
                     scene.setField(s.comp, 'color', WHITE_QUAD)
                 end
             elseif typ == 2 then
@@ -765,11 +771,11 @@ local function updateSprites(c)
                     end
                 end
                 if s.flg % 2 == 0 then
-                    scene.setField(s.comp, 'size.width', 0)
-                    scene.setField(s.comp, 'size.height', 0)
+                    scene.setField(s.size, 'width', 0)
+                    scene.setField(s.size, 'height', 0)
                 else
-                    scene.setField(s.comp, 'size.width', s.w)
-                    scene.setField(s.comp, 'size.height', s.h)
+                    scene.setField(s.size, 'width', s.w)
+                    scene.setField(s.size, 'height', s.h)
                     scene.setField(s.comp, 'color', colour(s.lvl))
                 end
             else
@@ -796,8 +802,8 @@ local function updateSprites(c)
                 local cy = s.rec.y + math.floor(h / 2) - math.floor(CANVAS_H / 2)
                 scene.setField(s.ent, 'x', cx)
                                 scene.setField(s.ent, 'y', cy)
-                scene.setField(s.comp, 'size.width', w)
-                scene.setField(s.comp, 'size.height', h)
+                scene.setField(s.size, 'width', w)
+                scene.setField(s.size, 'height', h)
                 scene.setField(s.comp, 'color', colour(s.lvl))
             end
         end
@@ -818,8 +824,8 @@ local function updateSprites(c)
         end
         if allCity then
             c.backdropRetired = true
-            scene.setField(c.backdrop, 'size.width', 0)
-            scene.setField(c.backdrop, 'size.height', 0)
+            scene.setField(c.backdropSize, 'width', 0)
+            scene.setField(c.backdropSize, 'height', 0)
         end
     end
 end
@@ -836,11 +842,11 @@ local function updateSurf(c)
         -- base may have been retired (hidden) once the city tiles covered it,
         -- so restore its size/colour as it becomes the open11 backdrop.
         scene.setField(c.backdrop, 'texture', s.tex)
-        scene.setField(c.backdrop, 'size.width', CANVAS_W)
-        scene.setField(c.backdrop, 'size.height', CANVAS_H)
+        scene.setField(c.backdropSize, 'width', CANVAS_W)
+        scene.setField(c.backdropSize, 'height', CANVAS_H)
         scene.setField(c.backdrop, 'color', OPAQUE_QUAD)
-        scene.setField(c.backdropTop, 'size.width', 0)
-        scene.setField(c.backdropTop, 'size.height', 0)
+        scene.setField(c.backdropTopSize, 'width', 0)
+        scene.setField(c.backdropTopSize, 'height', 0)
         c.surf = nil
     else
         local a = math.floor(255 * s.n / SURF_FADE_FRAMES)

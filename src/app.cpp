@@ -35,7 +35,7 @@ namespace openre
     // ModuleSystem drives the loaded game module when OPENRE_GAME is set;
     // otherwise it is a no-op and LegacyGameSystem drives the original game.
     const SystemFn gAppSystems[] = {
-        system_window,   system_input,     ModuleSystem, LegacyGameSystem, ScaledFrameSystem,
+        system_window,   system_input,     ModuleSystem, LegacyGameSystem, ScaledFrameSystem, UiFlexSystem,
         InputHintSystem, TextLayoutSystem, VideoSystem,  AudioSystem,      RenderSystem,
     };
 

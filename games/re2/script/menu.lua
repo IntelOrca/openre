@@ -445,8 +445,9 @@ local function createLine(parent, font, centerX, centerY, bandW, bandH, text, na
     local t = scene.addComponent(e, 'core.text')
     scene.setField(t, 'font', font)
     scene.setField(t, 'text', text)
-    scene.setField(t, 'size.width', bandW)
-    scene.setField(t, 'size.height', bandH)
+    local size = scene.addComponent(e, 'core.ui_size')
+    scene.setField(size, 'width', bandW)
+    scene.setField(size, 'height', bandH)
     scene.setField(t, 'flags', flags)
     return e, t
 end
@@ -751,8 +752,8 @@ local function update(self)
         local h = gfx.screenHeight()
         scene.setField(self.backdrop, 'x', w * 0.5)
         scene.setField(self.backdrop, 'y', h * 0.5)
-        scene.setField(self.backdropSprite, 'size.width', w)
-        scene.setField(self.backdropSprite, 'size.height', h)
+        scene.setField(self.backdropSize, 'width', w)
+        scene.setField(self.backdropSize, 'height', h)
     end
 
     -- Smoothly animate the logo toward its target position.
@@ -904,12 +905,14 @@ function Title:new(opts)
     scene.setField(backdrop, 'name', 'menu.backdrop')
     local backdropSprite = scene.addComponent(backdrop, 'core.sprite')
     scene.setField(backdropSprite, 'color', { 8, 0, 0, 255 })
-    scene.setField(backdropSprite, 'size.width', gfx.screenWidth())
-    scene.setField(backdropSprite, 'size.height', gfx.screenHeight())
+    local backdropSize = scene.addComponent(backdrop, 'core.ui_size')
+    scene.setField(backdropSize, 'width', gfx.screenWidth())
+    scene.setField(backdropSize, 'height', gfx.screenHeight())
     scene.setField(backdrop, 'x', gfx.screenWidth() * 0.5)
     scene.setField(backdrop, 'y', gfx.screenHeight() * 0.5)
     instance.backdrop = backdrop
     instance.backdropSprite = backdropSprite
+    instance.backdropSize = backdropSize
 
     instance.back, instance.backFrame = createLayer('menu.back', 0)
     instance.front, instance.frontFrame = createLayer('menu.front', SCALE_STEP)
@@ -933,8 +936,9 @@ function Title:new(opts)
         scene.setField(e, 'y', 0)
         local s = scene.addComponent(e, 'core.sprite')
         scene.setField(s, 'texture', bgTex)
-        scene.setField(s, 'size.width', CANVAS_W)
-        scene.setField(s, 'size.height', CANVAS_H)
+        local size = scene.addComponent(e, 'core.ui_size')
+        scene.setField(size, 'width', CANVAS_W)
+        scene.setField(size, 'height', CANVAS_H)
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
     end
 
@@ -974,8 +978,9 @@ function Title:new(opts)
             scene.setField(s, 'src.y', t[3])
             scene.setField(s, 'src.width', t[4])
             scene.setField(s, 'src.height', t[5])
-            scene.setField(s, 'size.width', t[4])
-            scene.setField(s, 'size.height', t[5])
+            local size = scene.addComponent(e, 'core.ui_size')
+            scene.setField(size, 'width', t[4])
+            scene.setField(size, 'height', t[5])
             scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
         end
     end

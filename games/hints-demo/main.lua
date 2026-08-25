@@ -21,8 +21,9 @@ local function addText(parent, x, y, bandW, text, small, flags)
     local t = scene.addComponent(e, 'core.text')
     scene.setField(t, 'font', small and smFont or stdFont)
     scene.setField(t, 'text', text)
-    scene.setField(t, 'size.width', bandW)
-    scene.setField(t, 'size.height', small and 14 or 20)
+    local size = scene.addComponent(e, 'core.ui_size')
+    scene.setField(size, 'width', bandW)
+    scene.setField(size, 'height', small and 14 or 20)
     scene.setField(t, 'flags', flags or (TextFlags.xLeft | TextFlags.yMiddle))
     return e
 end

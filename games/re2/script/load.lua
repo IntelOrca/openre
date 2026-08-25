@@ -150,8 +150,9 @@ local function createLine(parent, font, lx, ly, bandW, bandH, text, name, flags)
     local t = scene.addComponent(e, 'core.text')
     scene.setField(t, 'font', font)
     scene.setField(t, 'text', text)
-    scene.setField(t, 'size.width', bandW)
-    scene.setField(t, 'size.height', bandH)
+    local size = scene.addComponent(e, 'core.ui_size')
+    scene.setField(size, 'width', bandW)
+    scene.setField(size, 'height', bandH)
     scene.setField(t, 'flags', flags)
     return e, t
 end
@@ -203,8 +204,9 @@ function LoadScreen:new(opts)
         scene.setField(e, 'y', 0)
         local s = scene.addComponent(e, 'core.sprite')
         scene.setField(s, 'texture', instance.bgTexture)
-        scene.setField(s, 'size.width', CANVAS_W)
-        scene.setField(s, 'size.height', CANVAS_H)
+        local size = scene.addComponent(e, 'core.ui_size')
+        scene.setField(size, 'width', CANVAS_W)
+        scene.setField(size, 'height', CANVAS_H)
         scene.setField(s, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
     end
 
@@ -227,8 +229,9 @@ function LoadScreen:new(opts)
         scene.setField(e, 'x', 0)
         local s = scene.addComponent(e, 'core.sprite')
         scene.setField(s, 'color', { 255, 255, 255, math.floor(ALPHA_HIGHLIGHT * 255 + 0.5) })
-        scene.setField(s, 'size.width', PANEL_W)
-        scene.setField(s, 'size.height', ROW_PITCH)
+        local size = scene.addComponent(e, 'core.ui_size')
+        scene.setField(size, 'width', PANEL_W)
+        scene.setField(size, 'height', ROW_PITCH)
         instance.highlight = e
         instance.highlightSprite = s
     end
