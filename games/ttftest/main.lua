@@ -46,6 +46,9 @@ end
 
 -- Small dim label describing the font used by the row below it.
 local function caption(str, x, y)
+    if not str then
+        return
+    end
     local e = scene.createEntity(root)
     scene.setField(e, 'x', x)
     scene.setField(e, 'y', y)
@@ -87,8 +90,8 @@ local code = [[int main() {
     printf("value: %d\n", x);      /* escapes, braces, commas */
     return (x > 0) ? -x : ~x & 0xFF;
 }]]
-caption('Inter Regular 20', 16, y - 14)
-row(code, inter20)
+row(code, inter20,
+    'Inter Regular 20')
 -- The code block is multi-line; skip enough room for all of its lines
 -- so the following rows don't overlap. lineHeight for inter20 is ~24px,
 -- and the code string contains 4 newlines.

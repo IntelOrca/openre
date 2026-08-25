@@ -369,6 +369,18 @@ namespace openre::text
             // Markup: <span ...>. A '<' that does not start an actual <span>
             // tag is a literal character, so code snippets and math render
             // normally instead of being swallowed as a tag.
+            const bool isCloseTag = p + 6 <= end && (std::strncmp(p, "</span", 6) == 0 || std::strncmp(p, "</SPAN", 6) == 0);
+            if (isCloseTag)
+            {
+                const char* close = std::strchr(p, '>');
+                if (close != nullptr)
+                {
+                    // No nesting support: a close restores the default colour.
+                    color = ecs::Color{ 255, 255, 255, 255 };
+                    p = close + 1;
+                    continue;
+                }
+            }
             const bool isSpanTag = p + 5 <= end && (std::strncmp(p, "<span", 5) == 0 || std::strncmp(p, "<SPAN", 5) == 0);
             if (isSpanTag)
             {
