@@ -2,18 +2,19 @@
 --
 -- Run with: OPENRE_GAME=config-demo run.bat (plus OPENRE_SCRIPTS for web.lua)
 --
--- The game creates several ui.config_enum items (games/core/script/ui/
--- config.lua) with varying widths, option counts and values; every other
--- pixel - arrow sprites, centred label, indicator bar row - is produced by
--- the ui.config system.
+-- The game creates several ui.config_list_item rows (games/core/script/ui/
+-- config.lua), each given a ui.config_enum sub entity; every other pixel -
+-- row label, underline, changed diamond, arrow sprites, centred value,
+-- indicator bar row - is produced by the two registered systems.
 --
--- The component is purely visual, so the demo drives it by hand to show
--- live updates: W/S or dpad up/down pick a row, A/D or left/right cycle
--- that row's selected index (rewriting text/selected_index), and Return
--- retargets the BRIGHTNESS row onto a longer option list to exercise bars
--- being created and destroyed.
+-- The components are purely visual, so the demo drives them by hand to show
+-- live updates: W/S or dpad up/down pick a row, A/D or left/right cycle that
+-- row's selected index, Return retargets the BRIGHTNESS row onto a longer
+-- option list to exercise bars being created and destroyed, and Escape
+-- restores the picked row to its default so the changed diamond disappears.
 --
--- Input: W/S pick row, A/D change value, Return swap BRIGHTNESS options.
+-- Input: W/S pick row, A/D change value, Return swap BRIGHTNESS options,
+-- Escape restore default.
 
 local ecs = require('ecs')
 local config = require('ui.config')
@@ -69,59 +70,70 @@ end
 -------------------------------------------------------------------------------
 
 addText(canvasHandle, 0, 14, DESIGN_W, 20,
-    span('#ffffff', 'Lua ECS Config Enum Component Demo'))
+    span('#ffffff', 'Lua ECS Config List Item Demo'))
 
 local footer = addText(canvasHandle, 0, 448, DESIGN_W, 16, '')
 
 -------------------------------------------------------------------------------
--- The config enum rows (the only control-specific code in the game) ----------
+-- The config list rows (the only control-specific code in the game) ----------
 -------------------------------------------------------------------------------
 
 local ROWS = {
-    { label = 'SOUND',     options = { 'MONO', 'STEREO', 'SURROUND' } },
+    { label = 'SOUND',     options = { 'MONO', 'STEREO', 'SURROUND' }, index = 2 },
     { label = 'BRIGHTNESS', options = { '1', '2', '3', '4', '5' } },
     { label = 'SUBTITLES', options = { 'OFF', 'ON' } },
     { label = 'CAMERA',    options = { 'CLASSIC', 'SHOULDER', 'FIRST PERSON', 'DRONE' } },
 }
+-- Every option list starts from its first entry; SOUND is already moved off
+-- its default so a changed diamond is visible without touching anything.
 for _, row in ipairs(ROWS) do
-    row.index = 1
+    row.defaultIndex = 1
+    row.index = row.index or 1
 end
 
--- One row per line; every row gets the same control width so the boundary
--- boxes align into a list column.
+-- One list item per line, all the same width so the underlines align into a
+-- column; each item gets an enum sub entity whose position/width the system
+-- owns (always half the item width, on the right side).
 local LIST_TOP = 120
 local ROW_PITCH = 56
-local CONTROL_WIDTH = 240
+local ITEM_WIDTH = 360
 
 for i, row in ipairs(ROWS) do
-    -- Row caption on the left of the column, enum control to its right.
-    addText(canvasHandle, 140, LIST_TOP + (i - 1) * ROW_PITCH, 100, 14,
-        span('#9a9a9a', row.label), TextFlags.xLeft | TextFlags.yMiddle)
-
-    local handle, id = config.addEnum(
+    local handle, id = config.addListItem(
         canvasHandle,
-        320 + CONTROL_WIDTH * 0.5 - 40, LIST_TOP + (i - 1) * ROW_PITCH - DESIGN_H * 0.5,
-        CONTROL_WIDTH)
+        160 + ITEM_WIDTH * 0.5 - DESIGN_W * 0.5,
+        LIST_TOP + (i - 1) * ROW_PITCH - DESIGN_H * 0.5,
+        ITEM_WIDTH)
+    local _, enumId = config.addEnum(handle, 0, 0)
     row.id = id
-end
-
-local function pushRow(row)
-    ecs.set(row.id, 'ui.config_enum', 'count', #row.options)
-    ecs.set(row.id, 'ui.config_enum', 'selected_index', row.index)
-    ecs.set(row.id, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+    row.enumId = enumId
 end
 
 local cursorRow = 1
+
+local function pushRow(row)
+    ecs.set(row.id, 'ui.config_list_item', 'text', row.label)
+    ecs.set(row.id, 'ui.config_list_item', 'changed', row.index ~= row.defaultIndex)
+    ecs.set(row.enumId, 'ui.config_enum', 'count', #row.options)
+    ecs.set(row.enumId, 'ui.config_enum', 'selected_index', row.index)
+    ecs.set(row.enumId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+end
+
+local function refreshSelection()
+    for i, row in ipairs(ROWS) do
+        ecs.set(row.id, 'ui.config_list_item', 'selected', i == cursorRow)
+    end
+end
 
 local function refreshFooter()
     local row = ROWS[cursorRow]
     scene.setField(footer, 'text',
         span('#8a8a8a', 'W/S or dpad select row') .. span('#666666', '   -   ')
         .. span('#8a8a8a', 'A/D or left/right change value') .. span('#666666', '   -   ')
-        .. span('#8a8a8a', 'Return swap BRIGHTNESS options')
+        .. span('#8a8a8a', 'Return swap BRIGHTNESS options') .. span('#666666', '   -   ')
+        .. span('#8a8a8a', 'Escape restore default')
         .. '   ' .. span('#ffffff', '[' .. row.label .. ']'))
 end
-refreshFooter()
 
 re.subscribe(HookKind.tick, function()
     fitCanvas()
@@ -132,9 +144,11 @@ re.subscribe(HookKind.tick, function()
 
     if input.pressed('up') then
         cursorRow = wrap(cursorRow, -1, #ROWS)
+        refreshSelection()
         refreshFooter()
     elseif input.pressed('down') then
         cursorRow = wrap(cursorRow, 1, #ROWS)
+        refreshSelection()
         refreshFooter()
     end
 
@@ -154,10 +168,19 @@ re.subscribe(HookKind.tick, function()
         row.index = math.min(row.index, #row.options)
         pushRow(row)
     end
+
+    -- Restore the picked row to its default so the changed diamond goes.
+    if input.pressed('cancel') then
+        local row = ROWS[cursorRow]
+        row.index = row.defaultIndex
+        pushRow(row)
+    end
 end)
 
 for _, row in ipairs(ROWS) do
     pushRow(row)
 end
+refreshSelection()
+refreshFooter()
 
-print('[config-demo] ready: ' .. #ROWS .. ' config_enum rows')
+print('[config-demo] ready: ' .. #ROWS .. ' config_list_item rows')
