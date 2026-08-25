@@ -24,13 +24,17 @@
 --       local handle, id = config.addListItem(root, x, y, 320)
 --       config.addEnum(handle, 0, 0)  -- position/width owned by the system
 --
---   The 'ui.config_list_item' system lays the pair out: the label text fills
---   the left half, the enum sub entity always takes exactly 50% of the item
---   width on the right side, and a gray underline runs along the bottom of
---   everything except a small diamond that is rasterised after (to the right
---   of) the line whenever the enum's value differs from its default
---   (`changed` = true). `selected` draws the cursor chrome over the whole
---   row - an opaque background block (covering the underline) plus a border.
+--   The 'ui.config_list_item' system lays the pair out around a selection
+--   rect: the label text fills the left half (vertically centred), the enum
+--   sub entity always takes exactly 50% of the item width on the right side
+--   (its whole text-plus-bars block centred, so its text row rides slightly
+--   high), and a gray underline runs along the rect's bottom border. A small
+--   diamond is rasterised to the right of the selection box - outside it,
+--   but still inside the component width - whenever the enum's value differs
+--   from its default (`changed` = true); the item label, arrows and diamond
+--   all share the rect's vertical centre line. `selected` draws the cursor
+--   chrome over the content area - an opaque background block (covering the
+--   underline) plus a border that stops short of the diamond.
 --
 -- Both components are purely visual: no input handling lives here. Games
 -- move the selection themselves by rewriting the fields; the systems only
@@ -53,15 +57,24 @@ local ARROW_W = 5        -- ui_arrow.bmp natural cell size
 local ARROW_H = 9
 local ARROW_PAD = 3      -- arrow centre inset from the boundary box edge
 
--- List item geometry. The label band matches the enum's so both texts sit
--- on one line; the underline sits low enough to clear the enum's bar row.
-local ITEM_TEXT_H = 14   -- shared label band height
-local ITEM_LINE_Y = 18   -- underline centre Y (below the enum's bars)
+-- List item geometry, expressed in item-local coordinates with the origin
+-- on the selection rect's centre. The enum's content block (label band plus
+-- indicator bar row) is what gets centred: its label row sits above the
+-- rect centre and the bars below it, while the item label, arrows and
+-- changed diamond all share the centre line. The underline sits on the
+-- rect's bottom border.
+local ITEM_TEXT_H = TEXT_ROW_H -- shared label band height
 local LINE_H = 1         -- underline thickness
 local BORDER_W = 1       -- selection border thickness
 local DIAMOND_SIZE = 5   -- square edge before the 45-degree rotation
-local DIAMOND_GAP = 3    -- line end -> diamond left tip
-local ITEM_PAD = 2       -- selection chrome padding around the content
+local DIAMOND_GAP = 3    -- selection rect edge -> diamond left tip
+local ITEM_PAD = 2       -- selection chrome padding around the enum block
+local ENUM_BLOCK_TOP = -TEXT_ROW_H * 0.5
+local ENUM_BLOCK_BOTTOM = TEXT_ROW_H * 0.5 + BAR_TOP_GAP + BAR_H
+local ENUM_BLOCK_MID = (ENUM_BLOCK_TOP + ENUM_BLOCK_BOTTOM) * 0.5
+local ENUM_DY = -ENUM_BLOCK_MID -- enum entity offset so its block centres
+local ITEM_RECT_TOP = ENUM_BLOCK_TOP + ENUM_DY - ITEM_PAD
+local ITEM_RECT_BOTTOM = ENUM_BLOCK_BOTTOM + ENUM_DY + ITEM_PAD
 
 local COLOR_TEXT = '#ffffff'
 local COLOR_BAR_LIT = { 255, 255, 255, 255 }
@@ -214,8 +227,8 @@ local function addQuadChild(parentHandle, name, w, h, color, z)
 end
 
 -- Creates or refreshes one flanking arrow sprite. `dir` is -1 / +1 and
--- `cx` is the arrow centre relative to the control origin.
-local function ensureArrow(view, parentHandle, dir, cx)
+-- (cx, cy) is the arrow centre relative to the control origin.
+local function ensureArrow(view, parentHandle, dir, cx, cy)
     local key = dir < 0 and 'arrowL' or 'arrowR'
     local id = liveChild(view, key)
     if id == nil then
@@ -236,7 +249,7 @@ local function ensureArrow(view, parentHandle, dir, cx)
     end
     local handle = scene.entityFromId(id)
     scene.setField(handle, 'x', cx)
-    scene.setField(handle, 'y', 0)
+    scene.setField(handle, 'y', cy)
 end
 
 -- Creates or refreshes the centred label text child.
@@ -315,9 +328,10 @@ ecs.registerSystem('ui.config', 1000, function()
         local selectedIndex = math.max(1, math.min(count,
             ecs.get(enumId, 'ui.config_enum', 'selected_index')))
 
-        -- Arrows hug the boundary box edges, centred on the label row.
-        ensureArrow(view, enumHandle, -1, -(width * 0.5 - ARROW_PAD))
-        ensureArrow(view, enumHandle, 1, width * 0.5 - ARROW_PAD)
+        -- Arrows hug the boundary box edges, centred on the whole content
+        -- block (label band plus bar row), not just the label row.
+        ensureArrow(view, enumHandle, -1, -(width * 0.5 - ARROW_PAD), ENUM_BLOCK_MID)
+        ensureArrow(view, enumHandle, 1, width * 0.5 - ARROW_PAD, ENUM_BLOCK_MID)
 
         -- Label band is the box minus the arrow zones, so long labels stop
         -- short of the glyphs instead of running under them.
@@ -409,30 +423,31 @@ local function ensureItemText(view, handle, text, boxW, selected)
     view.boxW = boxW
 end
 
--- Creates or refreshes the bottom underline spanning [x0, x1].
+-- Creates or refreshes the bottom underline spanning [x0, x1]. It sits on
+-- the selection rect's bottom border so the two line up exactly.
 local function ensureLine(view, handle, x0, x1)
     local lineHandle = trackedQuad(view, 'line', handle, 'ui.config_list_item.line',
         math.max(1, x1 - x0), LINE_H, COLOR_LINE, Z_LINE)
     scene.setField(lineHandle, 'x', (x0 + x1) * 0.5)
-    scene.setField(lineHandle, 'y', ITEM_LINE_Y)
+    scene.setField(lineHandle, 'y', ITEM_RECT_BOTTOM)
 end
 
 -- Rebuilds the rasterised diamond (one thin quad per pixel row of a square
--- turned 45 degrees), centred on `cx`.
-local function ensureDiamond(view, handle, cx)
+-- turned 45 degrees), centred on (cx, cy).
+local function ensureDiamond(view, handle, cx, cy)
     local half = (DIAMOND_SIZE - 1) * 0.5
     for i = 0, DIAMOND_SIZE - 1 do
         local w = DIAMOND_SIZE - 2 * math.abs(i - half)
         local quadHandle = trackedQuad(view, 'diamond' .. i, handle,
             'ui.config_list_item.diamond' .. i, w, 1, COLOR_DIAMOND, Z_DIAMOND)
         scene.setField(quadHandle, 'x', cx)
-        scene.setField(quadHandle, 'y', ITEM_LINE_Y + (i - half))
+        scene.setField(quadHandle, 'y', cy + (i - half))
     end
 end
 
--- Selection chrome: a background block plus border covering the whole item.
--- Its z sits below the underline's, so it draws on top of (covers) the line
--- while staying behind the diamond and glyphs.
+-- Selection chrome: a background block plus border covering [x0, x1] x
+-- [yTop, yBottom]. Its z sits below the underline's, so it draws on top of
+-- (covers) the line while staying behind the diamond and glyphs.
 local function ensureSelection(view, handle, x0, x1, yTop, yBottom)
     local w = math.max(1, x1 - x0)
     local h = math.max(1, yBottom - yTop)
@@ -509,34 +524,39 @@ ecs.registerSystem('ui.config_list_item', 900, function()
         scene.setField(labelHandle, 'x', -halfW + bandW * 0.5)
         scene.setField(labelHandle, 'y', 0)
 
-        -- Underline along the bottom, ending just before the diamond.
+        -- Underline along the rect's bottom border, ending just before the
+        -- diamond.
         ensureLine(view, handle, -halfW, contentR)
 
-        -- Selection chrome covers the whole item (over the underline).
+        -- Selection chrome covers the content area; its right edge stops
+        -- before the diamond so the diamond reads as outside the box while
+        -- staying inside the component bounds.
         if selected then
-            ensureSelection(view, handle, -halfW, halfW,
-                -(ITEM_TEXT_H * 0.5) - ITEM_PAD,
-                ITEM_LINE_Y + (DIAMOND_SIZE - 1) * 0.5 + ITEM_PAD)
+            ensureSelection(view, handle, -halfW, contentR,
+                ITEM_RECT_TOP, ITEM_RECT_BOTTOM)
         else
             clearQuads(view, 'sel')
         end
 
-        -- Diamond sits after (to the right of) the underline's end, but only
-        -- while the value differs from the default.
+        -- Diamond sits after (to the right of) the selection box, centred
+        -- on the item's centre line, but only while the value differs from
+        -- the default.
         if changed then
-            ensureDiamond(view, handle, diamondCx)
+            ensureDiamond(view, handle, diamondCx, 0)
         else
             clearQuads(view, 'diamond')
         end
 
         -- The paired enum control owns the right side: exactly 50% of the
-        -- item width, vertically centred on the shared label band. Both are
-        -- forced every frame; the game's own values never survive layout.
+        -- item width, right edge on the selection rect's edge and shifted
+        -- up so its whole content block (text plus bars) centres in the
+        -- rect. Both are forced every frame; the game's own values never
+        -- survive layout.
         local enumId = findEnumChild(handle)
         if enumId ~= nil then
             local enumHandle = scene.entityFromId(enumId)
             scene.setField(enumHandle, 'x', contentR - width * 0.25)
-            scene.setField(enumHandle, 'y', 0)
+            scene.setField(enumHandle, 'y', ENUM_DY)
             ecs.set(enumId, 'ui.config_enum', 'width',
                 math.max(1, math.floor(width * 0.5)))
         end
