@@ -56,6 +56,20 @@ namespace openre::script
             }
         }
 
+        // Second phase: runs after every tick hook of every script. Systems
+        // that react to scene mutations (the Lua ECS population systems) live
+        // here so an entity spawned by any tick hook is fully populated
+        // before the renderers read the scene - hook order within a VM is
+        // subscription order and across VMs unspecified, so a plain tick
+        // subscription cannot guarantee this.
+        for (auto& entry : _scripts)
+        {
+            if (entry.second)
+            {
+                entry.second->callHooks(HookKind::post_tick);
+            }
+        }
+
         // A game-module change schedules a reload that mutates _scripts, so do it
         // after the tick hooks have run to avoid invalidating the iterator above.
         if (_pendingGameModuleReload)
@@ -85,7 +99,10 @@ namespace openre::script
     {
         auto it = _scripts.find(name);
         if (it != _scripts.end() && it->second)
+        {
             it->second->callHooks(HookKind::tick);
+            it->second->callHooks(HookKind::post_tick);
+        }
     }
 
     bool ScriptManager::evalIn(const std::string& name, const std::string& code, std::string& outResult)

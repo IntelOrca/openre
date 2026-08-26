@@ -29,6 +29,9 @@ function require(name) end
 HookKind = {
     --- Fired every game frame.
     tick = 1,
+    --- Fired after every tick hook has run, same frame. Use for systems that
+    --- must observe scene mutations made by tick hooks.
+    post_tick = 2,
 }
 
 ---@enum LogLevel
@@ -128,9 +131,10 @@ local Entity = {}
 ---@class re
 local re = {}
 
---- Subscribe a hook callback. Currently only HookKind.tick is supported.
+--- Subscribe a hook callback. Supported kinds: HookKind.tick and
+--- HookKind.post_tick (fires after all tick hooks, same frame).
 ---@param kind HookKind
----@param fn function Called every tick.
+---@param fn function Called on the hook event.
 function re.subscribe(kind, fn) end
 
 --- Read a bit flag. Bit indexes use MSB-first numbering

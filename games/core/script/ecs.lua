@@ -10,10 +10,11 @@
 -- scene.getField / scene.setField APIs.
 --
 -- Systems are registered with a name and a priority; this module subscribes
--- once to HookKind.tick and dispatches them in ascending priority order
--- (lower runs first) every frame. The dispatch happens inside the engine's
--- script tick (ModuleSystem), i.e. before TextLayoutSystem/RenderSystem read
--- the scene, so entities created or updated by a system render same-frame.
+-- once to HookKind.post_tick and dispatches them in ascending priority order
+-- (lower runs first) every frame. The late phase matters: game tick hooks run
+-- first and may spawn or destroy entities, so running the systems afterwards
+-- means a new entity's populated children exist before TextLayoutSystem /
+-- RenderSystem read the scene and it never renders a frame unpopulated.
 --
 -- Entities are addressed by their numeric scene id (what scene.children /
 -- scene.parent return). Use ecs.spawn() to create one and get both the
@@ -177,6 +178,6 @@ local function runSystems()
     end
 end
 
-re.subscribe(HookKind.tick, runSystems)
+re.subscribe(HookKind.post_tick, runSystems)
 
 return ecs

@@ -386,7 +386,7 @@ namespace openre::script
         {
             auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
             auto kind = static_cast<int32_t>(luaL_checkinteger(L, 1));
-            if (kind != static_cast<int32_t>(HookKind::tick))
+            if (kind != static_cast<int32_t>(HookKind::tick) && kind != static_cast<int32_t>(HookKind::post_tick))
             {
                 return luaL_error(L, "unsupported hook kind: %d", kind);
             }
@@ -2758,6 +2758,7 @@ namespace openre::script
 #endif
 
         setGlobal(L, "HookKind.tick", static_cast<int32_t>(HookKind::tick));
+        setGlobal(L, "HookKind.post_tick", static_cast<int32_t>(HookKind::post_tick));
 
         setGlobal(L, "LogLevel.info", LogLevel::info);
         setGlobal(L, "LogLevel.warning", LogLevel::warning);

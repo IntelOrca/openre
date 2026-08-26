@@ -12,6 +12,7 @@ namespace openre::script
     enum class HookKind
     {
         tick = 1,
+        post_tick = 2,
     };
 
     // A single Lua execution environment for one script file.

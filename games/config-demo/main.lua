@@ -1,31 +1,42 @@
--- config-demo - demo game for the shared Lua-ECS config list controls.
+-- config-demo - options screen skeleton built from the shared Lua-ECS
+-- controls (games/core/script/ui).
 --
 -- Run with: OPENRE_GAME=config-demo run.bat (plus OPENRE_SCRIPTS for web.lua)
 --
--- The game creates a native-flex list container and several
--- ui.config_list_item rows (games/core/script/ui/config.lua) inside it, each
--- given a ui.config_enum sub entity; every other pixel - row label,
--- underline, changed diamond, arrow sprites, centred value, indicator bar
--- row, selection chrome - is produced by the two registered systems on top
--- of declarative core.ui_flex trees laid out by the engine.
+-- The whole screen is one declarative flex tree:
 --
--- The components are purely visual, so the demo drives them by hand to show
--- live updates: W/S or dpad up/down pick a row, A/D or left/right cycle that
--- row's selected index, Return retargets the BRIGHTNESS row onto a longer
--- option list to exercise bars being created and destroyed, and Escape
--- restores the picked row to its default so the changed diamond disappears.
+--   ui (vertical)
+--   |- heading
+--   |- main category tab strip
+--   |- content (horizontal)
+--   |  |- left (vertical): sub strip, scroll area (list + scroll bar), spacer
+--   |  `- right (vertical, padding 16): hint text for the selected option
+--   |- spacer
+--   `- back hint row
 --
--- Input: W/S pick row, A/D change value, Return swap BRIGHTNESS options,
--- Escape restore default.
+-- Nothing is pre-created per tab panel: when the main tab changes the old
+-- panel entities are destroyed and the new category's sub strip + lists are
+-- built on demand. Switching a sub tab only parks/unparks its list inside
+-- the scroll area. The demo never computes control geometry - it mirrors
+-- state into components, rebuilds the visible rows on scroll and moves the
+-- scroll thumb.
+--
+-- Input: tab_left/tab_right switch main category, subtab_left/subtab_right
+-- switch sub category, W/S or dpad pick a row (the list scrolls to keep the
+-- cursor visible), A/D or left/right change value, Return retargets the
+-- BRIGHTNESS row onto a longer option list, Escape restores the picked row.
 
 local ecs = require('ecs')
 local config = require('ui.config')
+local tabs = require('ui.tabs')
 
 local DESIGN_W = 640
 local DESIGN_H = 480
 
 local stdFont = gfx.loadFont('fonts/std.fnt')
+local smFont = gfx.loadFont('fonts/sm.fnt')
 config.setFont(stdFont)
+tabs.setFont(stdFont)
 
 local root = scene.getRoot('user')
 
@@ -51,153 +62,494 @@ local function fitCanvas()
 end
 fitCanvas()
 
--- Canvas-space helpers: (dx, dy) are design-space offsets from the centre.
-local function addText(parent, dx, dy, bandW, bandH, markup, flags)
-    local handle = ecs.spawn(parent)
-    scene.setField(handle, 'name', 'text')
-    scene.setField(handle, 'x', dx - DESIGN_W * 0.5)
-    scene.setField(handle, 'y', dy - DESIGN_H * 0.5)
-    local size = scene.addComponent(handle, 'core.ui_size')
-    scene.setField(size, 'width', bandW)
-    scene.setField(size, 'height', bandH)
-    local t = scene.addComponent(handle, 'core.text')
-    scene.setField(t, 'font', stdFont)
-    scene.setField(t, 'text', markup)
-    scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
-    return t -- component handle: callers rewrite 'text' on it
-end
+-------------------------------------------------------------------------------
+-- Small builders -------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 local function span(color, text)
     return '<span color="' .. color .. '">' .. text .. '</span>'
 end
 
--------------------------------------------------------------------------------
--- Static chrome --------------------------------------------------------------
--------------------------------------------------------------------------------
-
-addText(canvasHandle, 0, 14, DESIGN_W, 20,
-    span('#ffffff', 'Lua ECS Config List Item Demo'))
-
-local footer = addText(canvasHandle, 0, 448, DESIGN_W, 16, '')
-
--------------------------------------------------------------------------------
--- The config list rows (the only control-specific code in the game) ----------
--------------------------------------------------------------------------------
-
-local ROWS = {
-    { label = 'SOUND',     options = { 'MONO', 'STEREO', 'SURROUND' }, index = 2 },
-    { label = 'BRIGHTNESS', options = { '1', '2', '3', '4', '5' } },
-    { label = 'SUBTITLES', options = { 'OFF', 'ON' } },
-    { label = 'CAMERA',    options = { 'CLASSIC', 'SHOULDER', 'FIRST PERSON', 'DRONE' } },
-}
--- Every option list starts from its first entry; SOUND is already moved off
--- its default so a changed diamond is visible without touching anything.
-for _, row in ipairs(ROWS) do
-    row.defaultIndex = 1
-    row.index = row.index or 1
-end
-
--- One list container laid out by the native flex: a vertical run of rows
--- packed with no gap. The container is sized to its exact content height,
--- so group centring keeps the rows top-packed at LIST_TOP. Each item gets
--- an enum sub entity on its row whose width is exactly half the item width.
-local LIST_TOP = 120
-local ITEM_WIDTH = 360
-
-local listHandle = scene.createEntity(canvasHandle)
-scene.setField(listHandle, 'name', 'list')
-do
-    local x = 160 + ITEM_WIDTH * 0.5 - DESIGN_W * 0.5
-    local listH = #ROWS * config.ITEM_HEIGHT
-    scene.setField(listHandle, 'x', x)
-    scene.setField(listHandle, 'y', LIST_TOP + listH * 0.5 - DESIGN_H * 0.5)
-    local size = scene.addComponent(listHandle, 'core.ui_size')
-    scene.setField(size, 'width', ITEM_WIDTH)
-    scene.setField(size, 'height', listH)
-    local flex = scene.addComponent(listHandle, 'core.ui_flex')
-    scene.setField(flex, 'orientation', 'vertical')
-    scene.setField(flex, 'gap', 0)
-end
-
-for i, row in ipairs(ROWS) do
-    local _, id, rowHandle = config.addListItem(listHandle, 0, 0, ITEM_WIDTH)
-    local _, enumId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
-    row.id = id
-    row.enumId = enumId
-end
-
-local cursorRow = 1
-
-local function pushRow(row)
-    ecs.set(row.id, 'ui.config_list_item', 'text', row.label)
-    ecs.set(row.id, 'ui.config_list_item', 'changed', row.index ~= row.defaultIndex)
-    ecs.set(row.enumId, 'ui.config_enum', 'count', #row.options)
-    ecs.set(row.enumId, 'ui.config_enum', 'selected_index', row.index)
-    ecs.set(row.enumId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
-end
-
-local function refreshSelection()
-    for i, row in ipairs(ROWS) do
-        ecs.set(row.id, 'ui.config_list_item', 'selected', i == cursorRow)
+local function addSize(handle, w, h, weight)
+    local size = scene.addComponent(handle, 'core.ui_size')
+    scene.setField(size, 'width', w)
+    scene.setField(size, 'height', h)
+    if weight ~= nil then
+        scene.setField(size, 'weight', weight)
     end
 end
 
-local function refreshFooter()
-    local row = ROWS[cursorRow]
-    scene.setField(footer, 'text',
-        span('#8a8a8a', 'W/S or dpad select row') .. span('#666666', '   -   ')
-        .. span('#8a8a8a', 'A/D or left/right change value') .. span('#666666', '   -   ')
-        .. span('#8a8a8a', 'Return swap BRIGHTNESS options') .. span('#666666', '   -   ')
-        .. span('#8a8a8a', 'Escape restore default')
-        .. '   ' .. span('#ffffff', '[' .. row.label .. ']'))
+local function addFlex(handle, orientation, gap, padding)
+    local flex = scene.addComponent(handle, 'core.ui_flex')
+    scene.setField(flex, 'orientation', orientation)
+    if gap ~= nil then
+        scene.setField(flex, 'gap', gap)
+    end
+    if padding ~= nil then
+        scene.setField(flex, 'padding', padding)
+    end
 end
+
+-- A text child of a flex container; position is owned by the parent flex.
+local function addText(parentHandle, w, h, markup, small, flags)
+    local handle = ecs.spawn(parentHandle)
+    local t = scene.addComponent(handle, 'core.text')
+    scene.setField(t, 'font', small and smFont or stdFont)
+    scene.setField(t, 'text', markup)
+    scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
+    addSize(handle, w, h)
+    return handle, t
+end
+
+-- A solid-colour quad child centred on its own origin. Coordinates are in
+-- the parent's local space.
+local function addQuad(parentHandle, cx, cy, w, h, color, z)
+    local handle = ecs.spawn(parentHandle)
+    scene.setField(handle, 'x', cx)
+    scene.setField(handle, 'y', cy)
+    local sprite = scene.addComponent(handle, 'core.sprite')
+    scene.setField(sprite, 'color', color)
+    scene.setField(sprite, 'z', z)
+    addSize(handle, w, h)
+    return handle
+end
+
+-------------------------------------------------------------------------------
+-- The option catalog ---------------------------------------------------------
+-------------------------------------------------------------------------------
+
+local function volumeOptions()
+    local options = {}
+    for i = 0, 10 do
+        options[#options + 1] = tostring(i)
+    end
+    return options
+end
+
+local VOL = volumeOptions()
+
+-- Each row: label, options, starting index (default 1) and the right-pane
+-- description shown while the cursor is on it.
+local CATALOG = {
+    {
+        label = 'GAME',
+        subs = {
+            {
+                label = 'CAMERA',
+                rows = {
+                    { label = 'CAMERA', options = { 'CLASSIC', 'SHOULDER', 'FIRST PERSON', 'DRONE' },
+                        desc = 'Sets the camera behaviour during play.' },
+                    { label = 'LOOK SPEED', options = { '1', '2', '3', '4', '5' },
+                        desc = 'How quickly the camera follows your input.' },
+                    { label = 'INVERT Y', options = { 'OFF', 'ON' },
+                        desc = 'Inverts vertical camera movement.' },
+                    { label = 'AIM', options = { 'AUTO', 'MANUAL' },
+                        desc = 'Auto aim locks onto the nearest enemy.' },
+                    { label = 'TARGETING', options = { 'ORIGINAL', 'ALTERNATIVE' },
+                        desc = 'Swaps between the two targeting styles.' },
+                    { label = 'CAMERA DISTANCE', options = { 'NEAR', 'MEDIUM', 'FAR' },
+                        desc = 'How far back the camera sits behind you.' },
+                },
+            },
+            {
+                label = 'DISPLAY',
+                rows = {
+                    { label = 'SUBTITLES', options = { 'OFF', 'ON' },
+                        desc = 'Shows dialogue subtitles during movies.' },
+                    { label = 'BRIGHTNESS', options = { '1', '2', '3', '4', '5' },
+                        desc = 'Adjusts screen brightness. Press Return to swap this row onto a longer option list.' },
+                    { label = 'GAMMA', options = { '1', '2', '3', '4', '5', '6', '7', '8' },
+                        desc = 'Fine tuning for the dark areas of the image.' },
+                    { label = 'SCANLINES', options = { 'OFF', 'ON' },
+                        desc = 'Overlays a CRT style scanline filter.' },
+                    { label = 'SCREEN SIZE', options = { 'SMALL', 'MEDIUM', 'LARGE' },
+                        desc = 'Scales the picture inside the frame.' },
+                    { label = 'WIDESCREEN', options = { 'OFF', 'ON' },
+                        desc = 'Stretches the picture to fill wide screens.' },
+                },
+            },
+        },
+    },
+    {
+        label = 'SOUND',
+        subs = {
+            {
+                label = 'VOLUME',
+                rows = {
+                    { label = 'SOUND TYPE', options = { 'MONO', 'STEREO', 'SURROUND' },
+                        desc = 'Speaker configuration for audio output.' },
+                    { label = 'BGM', options = VOL,
+                        desc = 'Background music volume.' },
+                    { label = 'SE', options = VOL,
+                        desc = 'Sound effect volume.' },
+                    { label = 'VOICE', options = VOL,
+                        desc = 'Character voice volume.' },
+                    { label = 'MOVIE', options = VOL,
+                        desc = 'Pre-rendered movie volume.' },
+                    { label = 'AMBIENCE', options = VOL,
+                        desc = 'Room tone and environment loops.' },
+                    { label = 'DYNAMIC RANGE', options = { 'NORMAL', 'WIDE' },
+                        desc = 'Wide keeps quiet details audible at low volume.' },
+                    { label = 'OUTPUT DELAY', options = { '0', '1', '2', '3', '4', '5' },
+                        desc = 'Lip sync correction in frames.' },
+                },
+            },
+        },
+    },
+}
+
+for _, cat in ipairs(CATALOG) do
+    for _, sub in ipairs(cat.subs) do
+        for _, row in ipairs(sub.rows) do
+            row.defaultIndex = 1
+            row.index = row.index or 1
+        end
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Static flex tree -----------------------------------------------------------
+-------------------------------------------------------------------------------
+
+local HEADING_H = 24
+local STRIP_H = 28          -- main + sub tab strip band height
+local CONTENT_H = 372
+local VIEW_H = 160          -- visible list height: VISIBLE_ROWS rows
+local BACK_H = 20
+
+local VISIBLE_ROWS = VIEW_H / config.ITEM_HEIGHT
+if VISIBLE_ROWS ~= math.floor(VISIBLE_ROWS) then
+    error('config-demo: VIEW_H must be a multiple of the item height')
+end
+local ITEM_WIDTH = 290
+local TRACK_CX = 148        -- scroll track centre x, local to the scroll area
+local TRACK_W = 3
+local COLOR_TRACK = { 70, 70, 70, 255 }
+local COLOR_THUMB = { 180, 180, 180, 255 }
+
+-- Top-level vertical container filling the design frame.
+local ui = ecs.spawn(canvasHandle)
+scene.setField(ui, 'name', 'ui')
+addSize(ui, DESIGN_W, DESIGN_H)
+addFlex(ui, 'vertical', 8)
+
+addText(ui, DESIGN_W, HEADING_H, span('#ffffff', 'OPTIONS'))
+
+-- Main category strip; resized through its authored ui_size so the native
+-- strip chrome rides inside the flex layout.
+local mainStripHandle, mainStripId = tabs.addStrip(ui, 0, 0, 1)
+do
+    local size = scene.component(mainStripHandle, 'core.ui_size')
+    scene.setField(size, 'width', DESIGN_W)
+    scene.setField(size, 'height', STRIP_H)
+end
+for _, cat in ipairs(CATALOG) do
+    tabs.addTab(mainStripId, cat.label)
+end
+
+-- Content splits into the left controls column and the right hint pane.
+local content = ecs.spawn(ui)
+scene.setField(content, 'name', 'content')
+addSize(content, DESIGN_W, CONTENT_H)
+addFlex(content, 'horizontal')
+
+local left = ecs.spawn(content)
+scene.setField(left, 'name', 'left')
+addSize(left, 0, 0, 1)
+addFlex(left, 'vertical', 8)
+
+local right = ecs.spawn(content)
+scene.setField(right, 'name', 'right')
+addSize(right, 0, 0, 1)
+addFlex(right, 'vertical', 8, 16)
+
+local paneHeadingHandle, paneHeading = addText(right, DESIGN_W * 0.5 - 32, 20,
+    '', false, TextFlags.xLeft | TextFlags.yMiddle)
+-- Weighted: stretches down the pane; yTop keeps the glyphs anchored high.
+local paneBody = nil
+do
+    local handle = ecs.spawn(right)
+    local t = scene.addComponent(handle, 'core.text')
+    scene.setField(t, 'font', smFont)
+    scene.setField(t, 'text', '')
+    scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yTop)
+    addSize(handle, DESIGN_W * 0.5 - 32, 0, 1)
+    paneBody = t
+end
+
+-- Spacer pins everything below to the bottom.
+local topSpacer = ecs.spawn(ui)
+scene.setField(topSpacer, 'name', 'spacer')
+addSize(topSpacer, 0, 0, 1)
+
+-- Bottom middle: one hint - Back.
+local backRow = ecs.spawn(ui)
+scene.setField(backRow, 'name', 'back_row')
+addSize(backRow, 70, BACK_H)
+addFlex(backRow, 'horizontal', 6)
+do
+    local hintHandle = ecs.spawn(backRow)
+    scene.setField(hintHandle, 'scale.x', 0.5)
+    scene.setField(hintHandle, 'scale.y', 0.5)
+    local hint = scene.addComponent(hintHandle, 'core.input_hint')
+    scene.setField(hint, 'device', 'ps')
+    scene.setField(hint, 'command', 'cancel')
+    addSize(hintHandle, 16, 16)
+end
+addText(backRow, 48, BACK_H, span('#9a9a9a', 'BACK'), true,
+    TextFlags.xLeft | TextFlags.yMiddle)
+
+-------------------------------------------------------------------------------
+-- Panel building (one panel per main category, created on demand) ------------
+-------------------------------------------------------------------------------
+
+local activePanel = nil
+
+local function pushRow(v)
+    local row = v.src
+    ecs.set(v.id, 'ui.config_list_item', 'text', row.label)
+    ecs.set(v.id, 'ui.config_list_item', 'changed', row.index ~= row.defaultIndex)
+    ecs.set(v.enumId, 'ui.config_enum', 'count', #row.options)
+    ecs.set(v.enumId, 'ui.config_enum', 'selected_index', row.index)
+    ecs.set(v.enumId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+end
+
+local function refreshSelection(sub)
+    local sel = sub.rows[sub.cursor]
+    for _, v in ipairs(sub.view) do
+        ecs.set(v.id, 'ui.config_list_item', 'selected', v.src == sel)
+    end
+end
+
+-- The view entry backing the cursor, if that row is currently materialised.
+local function cursorView(sub)
+    local src = sub.rows[sub.cursor]
+    for _, v in ipairs(sub.view) do
+        if v.src == src then
+            return v
+        end
+    end
+    return nil
+end
+
+-- Rebuilds the list container so it holds exactly the VISIBLE_ROWS window
+-- starting at sub.offset. There is no clipping, so scrolled-out rows must
+-- not exist at all rather than being shifted outside the viewport.
+local function rebuildList(sub)
+    for _, v in ipairs(sub.view or {}) do
+        ecs.destroyEntity(v.handle)
+    end
+    sub.view = {}
+
+    local first = sub.offset + 1
+    local last = math.min(#sub.rows, first + VISIBLE_ROWS - 1)
+    for i = first, last do
+        local src = sub.rows[i]
+        local handle, id, rowHandle = config.addListItem(sub.list, 0, 0, ITEM_WIDTH)
+        local _, enumId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
+        local v = { src = src, handle = handle, id = id, enumId = enumId }
+        sub.view[#sub.view + 1] = v
+        pushRow(v)
+        ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
+    end
+end
+
+-- Clamps offset/cursor, rebuilds the visible row window and moves the thumb.
+-- The list itself never moves: it is pinned to the scroll area.
+local function updateScroll(sub)
+    local rows = #sub.rows
+    local maxOffset = math.max(0, rows - VISIBLE_ROWS)
+    if sub.offset > maxOffset then
+        sub.offset = maxOffset
+    elseif sub.offset < 0 then
+        sub.offset = 0
+    end
+    if sub.cursor < sub.offset + 1 then
+        sub.offset = sub.cursor - 1
+    elseif sub.cursor > sub.offset + VISIBLE_ROWS then
+        sub.offset = sub.cursor - VISIBLE_ROWS
+    end
+
+    rebuildList(sub)
+
+    local thumbH = math.max(14,
+        math.floor(VIEW_H * math.min(rows, VISIBLE_ROWS) / rows))
+    local frac = maxOffset > 0 and sub.offset / maxOffset or 0
+    local size = scene.component(sub.thumb, 'core.ui_size')
+    scene.setField(size, 'height', thumbH)
+    scene.setField(sub.thumb, 'y', frac * (VIEW_H - thumbH) - VIEW_H * 0.5 + thumbH * 0.5)
+end
+
+local function refreshPane()
+    local sub = activePanel.subs[tabs.selectedIndex(activePanel.subStripId)]
+    local row = sub.rows[sub.cursor]
+    scene.setField(paneHeading, 'text', span('#ffffff', row.label))
+    scene.setField(paneBody, 'text', span('#9a9a9a', row.desc))
+end
+
+-- Shows `sub`'s list, parking every sibling's far away.
+local function activateSub(sub)
+    for _, other in ipairs(activePanel.cat.subs) do
+        if other ~= sub and other.list ~= nil then
+            scene.setField(other.list, 'y', -10000)
+        end
+    end
+    scene.setField(sub.list, 'y', 0)
+    updateScroll(sub)
+    refreshSelection(sub)
+end
+
+-- Builds one main category's entities under the static tree. Everything is
+-- parented to two roots so switching categories destroys exactly two nodes.
+local function buildPanel(cat)
+    local subStripHandle, subStripId = tabs.addStrip(left, 0, 0, 2)
+    local subStripSize = scene.component(subStripHandle, 'core.ui_size')
+    scene.setField(subStripSize, 'width', DESIGN_W * 0.5)
+    scene.setField(subStripSize, 'height', STRIP_H)
+    for _, sub in ipairs(cat.subs) do
+        tabs.addTab(subStripId, sub.label)
+    end
+
+    -- Scroll area: plain box (no flex) so the demo owns the list's parking;
+    -- the track and thumb live at its right edge. The list is a fixed-size
+    -- window (VISIBLE_ROWS rows); its contents are rebuilt on scroll.
+    local scrollArea = ecs.spawn(left)
+    scene.setField(scrollArea, 'name', 'scroll_area')
+    addSize(scrollArea, DESIGN_W * 0.5, VIEW_H)
+    local track = addQuad(scrollArea, TRACK_CX, 0, TRACK_W, VIEW_H, COLOR_TRACK, 50)
+    local thumb = addQuad(scrollArea, TRACK_CX, 0, TRACK_W, VIEW_H, COLOR_THUMB, 40)
+
+    -- Trailing weighted spacer keeps the fixed-height children top-packed.
+    local filler = ecs.spawn(left)
+    scene.setField(filler, 'name', 'filler')
+    addSize(filler, 0, 0, 1)    for _, sub in ipairs(cat.subs) do
+        sub.list = ecs.spawn(scrollArea)
+        scene.setField(sub.list, 'name', 'list.' .. sub.label)
+        addSize(sub.list, ITEM_WIDTH, VIEW_H)
+        addFlex(sub.list, 'vertical', 0)
+        sub.track = track
+        sub.thumb = thumb
+        sub.cursor = 1
+        sub.offset = 0
+        sub.view = {}
+        updateScroll(sub)
+    end
+
+    -- Park every list except the first, then select sub tab 1.
+    for i, sub in ipairs(cat.subs) do
+        if i > 1 then
+            scene.setField(sub.list, 'y', -10000)
+        end
+    end
+    tabs.setSelectedIndex(subStripId, 1)
+
+    activePanel = {
+        cat = cat,
+        subStripId = subStripId,
+        subs = cat.subs,
+        roots = { scene.entityFromId(subStripId), scrollArea, filler },
+    }
+end
+
+local function destroyPanel()
+    if activePanel == nil then
+        return
+    end
+    for _, handle in ipairs(activePanel.roots) do
+        scene.destroy(handle)
+    end
+    for _, sub in ipairs(activePanel.cat.subs) do
+        sub.list = nil
+        sub.track = nil
+        sub.thumb = nil
+        sub.view = nil
+    end
+    activePanel = nil
+end
+
+buildPanel(CATALOG[1])
+refreshPane()
+
+print('[config-demo] ready')
+
+-------------------------------------------------------------------------------
+-- Per-frame input ------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+local lastMainSel = 1
+local lastSubSel = 1
 
 re.subscribe(HookKind.tick, function()
     fitCanvas()
+
+    -- Tab selection is written by the native systems after this hook, so
+    -- these reads lag one frame; fine for a demo.
+    local mainSel = tabs.selectedIndex(mainStripId)
+    if mainSel ~= lastMainSel then
+        lastMainSel = mainSel
+        destroyPanel()
+        buildPanel(CATALOG[mainSel])
+        lastSubSel = 1
+        refreshPane()
+    end
+
+    local subSel = tabs.selectedIndex(activePanel.subStripId)
+    if subSel ~= lastSubSel then
+        lastSubSel = subSel
+        activateSub(activePanel.subs[subSel])
+        refreshPane()
+    end
+
+    local sub = activePanel.subs[subSel]
 
     local function wrap(value, delta, count)
         return ((value - 1 + delta) % count) + 1
     end
 
     if input.pressed('up') then
-        cursorRow = wrap(cursorRow, -1, #ROWS)
-        refreshSelection()
-        refreshFooter()
+        sub.cursor = wrap(sub.cursor, -1, #sub.rows)
+        refreshSelection(sub)
+        updateScroll(sub)
+        refreshPane()
     elseif input.pressed('down') then
-        cursorRow = wrap(cursorRow, 1, #ROWS)
-        refreshSelection()
-        refreshFooter()
+        sub.cursor = wrap(sub.cursor, 1, #sub.rows)
+        refreshSelection(sub)
+        updateScroll(sub)
+        refreshPane()
     end
 
     if input.pressed('left') or input.pressed('right') then
-        local row = ROWS[cursorRow]
-        row.index = wrap(row.index, input.pressed('right') and 1 or -1, #row.options)
-        pushRow(row)
+        local v = cursorView(sub)
+        if v ~= nil then
+            v.src.index = wrap(v.src.index, input.pressed('right') and 1 or -1,
+                #v.src.options)
+            pushRow(v)
+        end
     end
 
-    -- Retarget one row onto a different-length option list mid-run so the
-    -- bar row's create/destroy path is exercised while watching.
+    -- Retarget BRIGHTNESS onto a different-length option list mid-run so
+    -- the bar row's create/destroy path is exercised while watching.
     if input.pressed('accept') then
-        local row = ROWS[2]
-        row.options = #row.options == 5
-            and { '10', '20', '30', '40', '50', '60', '70', '80', '90', '100' }
-            or { '1', '2', '3', '4', '5' }
-        row.index = math.min(row.index, #row.options)
-        pushRow(row)
+        for _, s in ipairs(activePanel.cat.subs) do
+            for _, v in ipairs(s.view or {}) do
+                if v.src.label == 'BRIGHTNESS' then
+                    v.src.options = #v.src.options == 5
+                        and { '10', '20', '30', '40', '50', '60', '70', '80', '90', '100' }
+                        or { '1', '2', '3', '4', '5' }
+                    v.src.index = math.min(v.src.index, #v.src.options)
+                    pushRow(v)
+                end
+            end
+        end
     end
 
     -- Restore the picked row to its default so the changed diamond goes.
     if input.pressed('cancel') then
-        local row = ROWS[cursorRow]
-        row.index = row.defaultIndex
-        pushRow(row)
+        local v = cursorView(sub)
+        if v ~= nil then
+            v.src.index = v.src.defaultIndex
+            pushRow(v)
+        end
+        refreshPane()
     end
 end)
-
-for _, row in ipairs(ROWS) do
-    pushRow(row)
-end
-refreshSelection()
-refreshFooter()
-
-print('[config-demo] ready: ' .. #ROWS .. ' config_list_item rows')
