@@ -961,6 +961,7 @@ namespace openre
             float width = 0;
             float height = 0;
             float weight = 0;
+            ecs::UiSizeAlignment alignment = ecs::UiSizeAlignment::Stretch;
         };
 
         // Writes a slot's final laid-out rectangle to the entity. Positions
@@ -1026,6 +1027,7 @@ namespace openre
                     slot.width = slot.uiSize->width;
                     slot.height = slot.uiSize->height;
                     slot.weight = slot.uiSize->weight;
+                    slot.alignment = slot.uiSize->alignment;
                 }
                 slots.push_back(slot);
             }
@@ -1123,15 +1125,24 @@ namespace openre
             {
                 const float mainSize = horizontal ? slot.width : slot.height;
                 float crossSize = horizontal ? slot.height : slot.width;
-                if (slot.weight > 0)
+                // `alignment` controls the cross axis for every child,
+                // regardless of weight (which is purely main-axis).
+                const bool stretch = slot.alignment == ecs::UiSizeAlignment::Stretch;
+                if (stretch)
                     crossSize = contentCross;
                 else
                     crossSize = std::min(crossSize, contentCross);
 
                 const float centreMain = cursor + mainSize * 0.5f;
-                // Weighted children stretch to the content box; clamped
-                // children share its mid-point on the cross axis either way.
-                const float centreCross = originCross + contentCross * 0.5f;
+                float centreCross;
+                switch (slot.alignment)
+                {
+                case ecs::UiSizeAlignment::Begin: centreCross = originCross + crossSize * 0.5f; break;
+                case ecs::UiSizeAlignment::End: centreCross = originCross + contentCross - crossSize * 0.5f; break;
+                default: // Center or Stretch
+                    centreCross = originCross + contentCross * 0.5f;
+                    break;
+                }
                 if (horizontal)
                 {
                     slot.height = crossSize;

@@ -40,21 +40,32 @@ namespace openre::ecs
         float height = 0;
     };
 
+    /// Cross-axis placement of a child inside a UiFlex parent (the axis the
+    /// parent does not flow along). `main` is controlled by `weight`.
+    enum class UiSizeAlignment : uint32_t
+    {
+        Begin = 0,   // pin to the start of the cross axis
+        Center = 1,  // centre on the cross axis
+        End = 2,     // pin to the end of the cross axis
+        Stretch = 3, // fill the cross axis
+    };
+
     /// The visual size of an entity: the single source of truth for how much
     /// space a SpriteComponent draw, TextComponent alignment band or
     /// VideoComponent letterbox bounds occupy.
     ///
     /// `weight` is layout-only and ignored by rendering: inside a UiFlex
-    /// parent, children with positive weight share the remaining main-axis
-    /// space proportionally (and stretch to fill the cross axis), while
-    /// weight-0 children keep their literal width/height. The UiFlexSystem
-    /// overwrites width/height of weighted children every frame; authoring
-    /// them on such entities has no effect.
+    /// parent it is the main-axis share (positive weight grabs a proportional
+    /// slice of the leftover main-axis space). `alignment` is the cross-axis
+    /// behaviour (left/centre/right/stretch) and applies to every child
+    /// regardless of weight. When the parent has no flex (or flex `none`) the
+    /// UiFlexSystem owns the size instead and `alignment` is unused.
     struct UiSizeComponent
     {
         float width = 0;
         float height = 0;
         float weight = 0;
+        UiSizeAlignment alignment = UiSizeAlignment::Stretch;
     };
 
     /// Main-axis direction of a UiFlexComponent.

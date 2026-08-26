@@ -9,17 +9,17 @@
 --   |- heading
 --   |- main category tab strip
 --   |- content (horizontal)
---   |  |- left (vertical): sub strip, scroll area (list + scroll bar), spacer
+--   |  |- left (vertical): sub strip, scroll area (list | scrollbar), spacer
 --   |  `- right (vertical, padding 16): hint text for the selected option
 --   |- spacer
 --   `- back hint row
 --
 -- Nothing is pre-created per tab panel: when the main tab changes the old
--- panel entities are destroyed and the new category's sub strip + lists are
--- built on demand. Switching a sub tab only parks/unparks its list inside
--- the scroll area. The demo never computes control geometry - it mirrors
--- state into components, rebuilds the visible rows on scroll and moves the
--- scroll thumb.
+-- panel entities are destroyed and the new category's sub strip + scroll
+-- area are built on demand. Switching a sub tab rebuilds the single shared
+-- list with that sub's rows. The demo never computes control geometry - it
+-- mirrors state into components, rebuilds the visible rows on scroll and
+-- moves the scroll thumb.
 --
 -- Input: tab_left/tab_right switch main category, subtab_left/subtab_right
 -- switch sub category, W/S or dpad pick a row (the list scrolls to keep the
@@ -222,7 +222,7 @@ if VISIBLE_ROWS ~= math.floor(VISIBLE_ROWS) then
     error('config-demo: VIEW_H must be a multiple of the item height')
 end
 local ITEM_WIDTH = 290
-local TRACK_CX = 148        -- scroll track centre x, local to the scroll area
+local SCROLLBAR_W = 7       -- width reserved for the scrollbar column
 local TRACK_W = 3
 local COLOR_TRACK = { 70, 70, 70, 255 }
 local COLOR_THUMB = { 180, 180, 180, 255 }
@@ -255,7 +255,7 @@ addFlex(content, 'horizontal')
 
 local left = ecs.spawn(content)
 scene.setField(left, 'name', 'left')
-addSize(left, 0, 0, 1)
+addSize(left, 0, 0, 2)
 addFlex(left, 'vertical', 8)
 
 local right = ecs.spawn(content)
@@ -332,7 +332,7 @@ local function cursorView(sub)
     return nil
 end
 
--- Rebuilds the list container so it holds exactly the VISIBLE_ROWS window
+-- Rebuilds the shared list so it holds exactly the VISIBLE_ROWS window
 -- starting at sub.offset. There is no clipping, so scrolled-out rows must
 -- not exist at all rather than being shifted outside the viewport.
 local function rebuildList(sub)
@@ -345,7 +345,7 @@ local function rebuildList(sub)
     local last = math.min(#sub.rows, first + VISIBLE_ROWS - 1)
     for i = first, last do
         local src = sub.rows[i]
-        local handle, id, rowHandle = config.addListItem(sub.list, 0, 0, ITEM_WIDTH)
+        local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
         local _, enumId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
         local v = { src = src, handle = handle, id = id, enumId = enumId }
         sub.view[#sub.view + 1] = v
@@ -387,14 +387,18 @@ local function refreshPane()
     scene.setField(paneBody, 'text', span('#9a9a9a', row.desc))
 end
 
--- Shows `sub`'s list, parking every sibling's far away.
+-- Shows `sub`'s rows in the single shared list. The previously shown sub's
+-- rows are destroyed first (they live in the same list), then `sub` is
+-- rebuilt and scrolled into view.
 local function activateSub(sub)
-    for _, other in ipairs(activePanel.cat.subs) do
-        if other ~= sub and other.list ~= nil then
-            scene.setField(other.list, 'y', -10000)
+    local prev = activePanel.activeSub
+    if prev ~= nil and prev ~= sub then
+        for _, v in ipairs(prev.view or {}) do
+            ecs.destroyEntity(v.handle)
         end
+        prev.view = {}
     end
-    scene.setField(sub.list, 'y', 0)
+    activePanel.activeSub = sub
     updateScroll(sub)
     refreshSelection(sub)
 end
@@ -410,45 +414,51 @@ local function buildPanel(cat)
         tabs.addTab(subStripId, sub.label)
     end
 
-    -- Scroll area: plain box (no flex) so the demo owns the list's parking;
-    -- the track and thumb live at its right edge. The list is a fixed-size
-    -- window (VISIBLE_ROWS rows); its contents are rebuilt on scroll.
+    -- Scroll area: a horizontal flex of [list (weight 1) | scrollbar
+    -- (weight 0)]. A single list is rebuilt per sub category; the scrollbar
+    -- holds the shared track and thumb.
     local scrollArea = ecs.spawn(left)
     scene.setField(scrollArea, 'name', 'scroll_area')
     addSize(scrollArea, DESIGN_W * 0.5, VIEW_H)
-    local track = addQuad(scrollArea, TRACK_CX, 0, TRACK_W, VIEW_H, COLOR_TRACK, 50)
-    local thumb = addQuad(scrollArea, TRACK_CX, 0, TRACK_W, VIEW_H, COLOR_THUMB, 40)
+    addFlex(scrollArea, 'horizontal', 2)
+
+    -- Single list: a vertical flex (weight 1) rebuilt for the active sub.
+    local list = ecs.spawn(scrollArea)
+    scene.setField(list, 'name', 'list')
+    addSize(list, 0, 0, 1)
+    addFlex(list, 'vertical', 0)
+
+    -- Scrollbar (weight 0): an overlay box holding the track and thumb.
+    local scrollbar = ecs.spawn(scrollArea)
+    scene.setField(scrollbar, 'name', 'scrollbar')
+    addSize(scrollbar, SCROLLBAR_W, 0)
+    local track = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_TRACK, 50)
+    local thumb = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_THUMB, 40)
 
     -- Trailing weighted spacer keeps the fixed-height children top-packed.
     local filler = ecs.spawn(left)
     scene.setField(filler, 'name', 'filler')
-    addSize(filler, 0, 0, 1)    for _, sub in ipairs(cat.subs) do
-        sub.list = ecs.spawn(scrollArea)
-        scene.setField(sub.list, 'name', 'list.' .. sub.label)
-        addSize(sub.list, ITEM_WIDTH, VIEW_H)
-        addFlex(sub.list, 'vertical', 0)
+    addSize(filler, 0, 0, 1)
+    for _, sub in ipairs(cat.subs) do
         sub.track = track
         sub.thumb = thumb
         sub.cursor = 1
         sub.offset = 0
         sub.view = {}
-        updateScroll(sub)
     end
 
-    -- Park every list except the first, then select sub tab 1.
-    for i, sub in ipairs(cat.subs) do
-        if i > 1 then
-            scene.setField(sub.list, 'y', -10000)
-        end
-    end
     tabs.setSelectedIndex(subStripId, 1)
 
     activePanel = {
         cat = cat,
         subStripId = subStripId,
         subs = cat.subs,
+        list = list,
+        scrollbar = scrollbar,
+        activeSub = nil,
         roots = { scene.entityFromId(subStripId), scrollArea, filler },
     }
+    activateSub(cat.subs[1])
 end
 
 local function destroyPanel()
@@ -459,7 +469,6 @@ local function destroyPanel()
         scene.destroy(handle)
     end
     for _, sub in ipairs(activePanel.cat.subs) do
-        sub.list = nil
         sub.track = nil
         sub.thumb = nil
         sub.view = nil

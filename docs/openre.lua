@@ -348,9 +348,15 @@ function scene.addComponent(entity, name) end
 --- `core.ui_size` component.
 --- UI size fields (`core.ui_size`): `width` / `height` (the entity's visual
 --- size in window pixels — every sprite, text band and video reads them),
---- plus `weight` for flex layouts (see core.ui_flex). Flex containers write
---- their children's width/height every frame, so treat those as read-only on
---- flex children.
+--- plus `weight` for flex layouts (see core.ui_flex) and `alignment` for the
+--- cross-axis placement. `alignment` is one of "begin", "center", "end" or
+--- "stretch" (default "stretch") and controls the axis the parent flex does
+--- *not* flow along: in a horizontal flex it governs the child's height
+--- (top/centre/bottom/fill), in a vertical flex its width (left/centre/right/
+--- fill). It applies to every child regardless of `weight` and is unused when
+--- the parent has no flex (or flex "none"). Flex containers write their
+--- children's width/height every frame, so treat those as read-only on flex
+--- children.
 --- Audio emitter fields: `category` ("bgm", "sfx" or "voice"), `state`
 --- ("playing" starts the source, anything else stops it — see below),
 --- `source` (.sap file path relative to the game module directory),
@@ -376,14 +382,16 @@ function scene.addComponent(entity, name) end
 --- "vertical"; default "none"), `gap` (space between consecutive children in
 --- the flow orientations) and `padding` (inset applied to every edge of the
 --- content box). Every immediate child of a flex entity is laid out each
---- frame: weighted children (`core.ui_size` `weight` > 0) share the
---- remaining main-axis space proportionally and stretch across it; weight-0
---- children keep their literal size, are clamped so they never escape the
---- container, and are centred on the cross axis. When fixed content
---- overflows, every literal size and the gap shrink by the same factor so
---- the run fits exactly; when no child has weight the whole run is centred.
---- Orientation "none" is an overlay stack: each child fills the box
---- (weighted) or is clamped and centred on both axes independently.
+--- frame: `weight` (on `core.ui_size`, default 0) is the main-axis share —
+--- children with positive weight grab a proportional slice of the leftover
+--- main-axis space. The child's cross-axis behaviour is set by its
+--- `core.ui_size` `alignment` ("begin", "center", "end" or "stretch";
+--- default "stretch") and applies to every child regardless of weight. When
+--- fixed content overflows, every literal size and the gap shrink by the same
+--- factor so the run fits exactly; when no child has weight the whole run is
+--- centred on the main axis. Orientation "none" is an overlay stack: each
+--- child fills the box (weighted) or is clamped and centred on both axes
+--- independently, and `alignment` is ignored.
 ---@param handle SceneEntity|SceneComponent
 ---@param name string
 ---@param value any

@@ -12,9 +12,10 @@
 --       ecs.set(id, 'ui.config_enum', 'count', 3)
 --
 --   The control is a declarative flex tree: a horizontal root of
---   [arrow | pad | weighted vertical stack | pad | arrow] where the stack
---   holds the label band and the indicator bar row. The arrows are top-level
---   so they centre on the whole block height, not just the label band. The
+--   [arrow | weighted vertical stack | arrow] spaced by a flex gap, where the
+--   stack holds the label band and the indicator bar row. The arrows are
+--   top-level children cross-axis centred (alignment "center") on the whole
+--   block height, not just the label band. The
 --   native UiFlexSystem positions and sizes every box; the registered
 --   'ui.config' system only mirrors state into derived entities - label
 --   markup, bar count and bar colours - and never writes geometry.
@@ -34,10 +35,9 @@
 --   `selected`, and a padded interior holding the blue selection fill plus
 --   the content row. The interior's padding insets the blue fill by the
 --   border width, so the white rect shows through as a 1px ring around every
---   edge. The row lays out [label (weighted) | enum (literal half-width)],
---   so the enum always owns exactly half the item width. The diamond lives
---   outside the selection box, vertically centred in the leftover space,
---   whenever `changed` is true.
+--   edge. The row lays out [label (weighted) | enum (weighted)], so the two
+--   share the item width. The diamond lives outside the selection box,
+--   vertically centred in the leftover space, whenever `changed` is true.
 --
 -- Both components are purely visual: no input handling lives here, and no
 -- code writes positions or sizes - geometry is owned entirely by the native
@@ -58,7 +58,6 @@ local BAR_GAP = 3        -- horizontal gap between bars
 local BAR_TOP_GAP = 4    -- label band bottom -> bar top
 local ARROW_W = 5        -- ui_arrow.bmp natural cell size
 local ARROW_H = 9
-local ARROW_PAD = 2      -- breathing room between arrows and the label band
 
 local ENUM_BLOCK_H = TEXT_ROW_H + BAR_TOP_GAP + BAR_H -- enum content height
 local LINE_H = 1         -- underline thickness
@@ -219,12 +218,12 @@ function config.addEnum(parent, width)
     scene.setField(handle, 'name', 'ui.config_enum')
     ecs.addComponent(id, 'ui.config_enum')
     local w = width or 120
-    addSize(handle, w, ENUM_BLOCK_H)
+    addSize(handle, w, ENUM_BLOCK_H, 1)
 
-    -- Horizontal root: [arrowL | pad | weighted stack | pad | arrowR]. The
-    -- arrows are top-level children so their weight-0 boxes centre on the
-    -- full block height rather than just the label band.
-    addFlex(handle, 'horizontal')
+    -- Horizontal root: [arrowL | weighted stack | arrowR], spaced by a 2px
+    -- flex gap. The arrows are top-level children; their weight-0 boxes are
+    -- cross-axis centred (alignment "center") on the full block height.
+    addFlex(handle, 'horizontal', 2)
 
     local atlas = arrowAtlas()
 
@@ -240,10 +239,10 @@ function config.addEnum(parent, width)
         scene.setField(sprite, 'color', COLOR_ARROW)
         scene.setField(sprite, 'z', Z_ARROW)
         addSize(arrow, ARROW_W, ARROW_H)
+        scene.setField(scene.component(arrow, 'core.ui_size'), 'alignment', 'center')
     end
 
     addArrow(-1)
-    addSpacer(handle, 'ui.config_enum.arrow_padL', ARROW_PAD, 0)
 
     -- Weighted vertical stack filling the space between the arrows; the
     -- label band and bar row below are authored to fill it exactly.
@@ -252,7 +251,7 @@ function config.addEnum(parent, width)
     addSize(stack, 0, 0, 1)
     addFlex(stack, 'vertical', BAR_TOP_GAP)
 
-    local bandW = w - 2 * (ARROW_W + ARROW_PAD)
+    local bandW = w - 2 * ARROW_W
 
     -- Centred value label; the system writes the markup here.
     local labelHandle, labelId = ecs.spawn(stack)
@@ -269,7 +268,6 @@ function config.addEnum(parent, width)
     addSize(barsRowHandle, bandW, BAR_H)
     addFlex(barsRowHandle, 'horizontal', BAR_GAP)
 
-    addSpacer(handle, 'ui.config_enum.arrow_padR', ARROW_PAD, 0)
     addArrow(1)
 
     enumTree[id] = { labelId = labelId, barsRowId = barsRowId, bars = {}, markup = nil }

@@ -1134,6 +1134,23 @@ namespace openre::script
                     size->height = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "weight") == 0)
                     size->weight = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "alignment") == 0)
+                {
+                    auto* value = luaL_checkstring(L, 3);
+                    if (strcmp(value, "begin") == 0)
+                        size->alignment = ecs::UiSizeAlignment::Begin;
+                    else if (strcmp(value, "center") == 0)
+                        size->alignment = ecs::UiSizeAlignment::Center;
+                    else if (strcmp(value, "end") == 0)
+                        size->alignment = ecs::UiSizeAlignment::End;
+                    else if (strcmp(value, "stretch") == 0)
+                        size->alignment = ecs::UiSizeAlignment::Stretch;
+                    else
+                        return luaL_error(
+                            L,
+                            "scene.setField: unknown ui_size alignment '%s' (expected left, center, right or stretch)",
+                            value);
+                }
                 else
                     return luaL_error(L, "scene.setField: unknown ui_size field '%s'", name);
                 return 0;
@@ -1438,6 +1455,16 @@ namespace openre::script
                     lua_pushnumber(L, size->height);
                 else if (strcmp(name, "weight") == 0)
                     lua_pushnumber(L, size->weight);
+                else if (strcmp(name, "alignment") == 0)
+                {
+                    switch (size->alignment)
+                    {
+                    case ecs::UiSizeAlignment::Begin: lua_pushstring(L, "begin"); break;
+                    case ecs::UiSizeAlignment::Center: lua_pushstring(L, "center"); break;
+                    case ecs::UiSizeAlignment::End: lua_pushstring(L, "end"); break;
+                    default: lua_pushstring(L, "stretch"); break;
+                    }
+                }
                 else
                     lua_pushnil(L);
                 return 1;
@@ -2104,6 +2131,7 @@ namespace openre::script
                 push("width");
                 push("height");
                 push("weight");
+                push("alignment");
                 break;
             case ComponentKind::ui_flex:
                 push("orientation");
