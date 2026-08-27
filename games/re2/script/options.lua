@@ -1,8 +1,8 @@
 -- options.lua - OPTIONS overlay (games/re2/script/options.lua).
 --
--- Rendered with the shared Lua-ECS controls (games/core/script/ui), identical
--- in content to the config-demo screen. Exposes open()/isOpen()/close() so the
--- RE2 menu can show it as a popup and park itself underneath.
+-- Rendered with the shared Lua-ECS controls (games/core/script/ui). Exposes
+-- open()/isOpen()/close() so the RE2 menu can show it as a popup and park
+-- itself underneath.
 --
 -- Run model: open() builds the whole screen under the 'user' root and the tick
 -- handler keeps it in sync; close() destroys it. The tick is subscribed once

@@ -786,7 +786,8 @@ function input.pressed(name) end
 
 --- The registered command names in engine order ("cancel", "accept", "up",
 --- ...). Combined with input.bindings this drives binding UIs and hint
---- displays (see the hints-demo game module for a full example).
+--- displays (see the options screen at games/re2/script/options.lua for a
+--- full example).
 ---@return string[]
 function input.commands() end
 
