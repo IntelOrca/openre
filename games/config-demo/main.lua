@@ -218,13 +218,18 @@ end
 local HEADING_H = 24
 local STRIP_H = 28          -- main + sub tab strip band height
 local CONTENT_H = 372
-local VIEW_H = 160          -- visible list height: VISIBLE_ROWS rows
+local LIST_GAP = 8          -- vertical flex gap of the left column (see addFlex(left))
 local BACK_H = 20
 
-local VISIBLE_ROWS = VIEW_H / config.ITEM_HEIGHT
-if VISIBLE_ROWS ~= math.floor(VISIBLE_ROWS) then
-    error('config-demo: VIEW_H must be a multiple of the item height')
+-- Fill the left column vertically: take the space left after the sub strip and
+-- the flex gaps, then drop any partial row so the scroll area height is an
+-- exact multiple of the item height.
+local usableH = CONTENT_H - STRIP_H - 2 * LIST_GAP
+local VIEW_H = math.floor(usableH / config.ITEM_HEIGHT) * config.ITEM_HEIGHT
+if VIEW_H <= 0 then
+    error('config-demo: not enough vertical space for one item row')
 end
+local VISIBLE_ROWS = VIEW_H / config.ITEM_HEIGHT
 local ITEM_WIDTH = 290
 local SCROLLBAR_W = 7       -- width reserved for the scrollbar column
 local TRACK_W = 3
@@ -298,10 +303,9 @@ do
     local hint = scene.addComponent(hintHandle, 'core.input_hint')
     scene.setField(hint, 'device', 'ps')
     scene.setField(hint, 'command', 'cancel')
+    scene.setField(hint, 'text', 'Back')
     addSize(hintHandle, 16, 16)
 end
-addText(backRow, 48, BACK_H, span('#9a9a9a', 'BACK'), true,
-    TextFlags.xLeft | TextFlags.yMiddle)
 
 -------------------------------------------------------------------------------
 -- Panel building (one panel per main category, created on demand) ------------
@@ -357,6 +361,10 @@ local function rebuildList(sub)
     for _, v in ipairs(sub.view or {}) do
         ecs.destroyEntity(v.handle)
     end
+    if activePanel.filler ~= nil then
+        ecs.destroyEntity(activePanel.filler)
+        activePanel.filler = nil
+    end
     sub.view = {}
 
     local first = sub.offset + 1
@@ -375,6 +383,12 @@ local function rebuildList(sub)
         pushRow(v)
         ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
     end
+
+    -- Trailing weighted spacer. With no weighted child the vertical flex would
+    -- centre a short run of rows in the leftover space; this absorbs that space
+    -- so the rows always start at the top of the list.
+    activePanel.filler = ecs.spawn(activePanel.list)
+    addSize(activePanel.filler, 0, 0, 1)
 end
 
 -- Clamps offset/cursor, rebuilds the visible row window and moves the thumb.
@@ -479,6 +493,7 @@ local function buildPanel(cat)
         list = list,
         scrollbar = scrollbar,
         activeSub = nil,
+        filler = nil,
         roots = { scene.entityFromId(subStripId), scrollArea, filler },
     }
     activateSub(cat.subs[1])
