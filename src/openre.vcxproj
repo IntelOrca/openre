@@ -107,6 +107,7 @@
     <ClCompile Include="openre.cpp" />
     <ClCompile Include="player.cpp" />
     <ClCompile Include="rdt.cpp" />
+    <ClCompile Include="rdt_re1.cpp" />
     <ClCompile Include="render2d.cpp" />
     <ClCompile Include="resmgr.cpp" />
     <ClCompile Include="room.cpp" />
@@ -179,6 +180,7 @@
     <ClInclude Include="openre.h" />
     <ClInclude Include="player.h" />
     <ClInclude Include="rdt.h" />
+    <ClInclude Include="rdt_re1.h" />
     <ClInclude Include="re2.h" />
     <ClInclude Include="render2d.h" />
     <ClInclude Include="resmgr.h" />

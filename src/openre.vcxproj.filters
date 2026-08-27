@@ -60,6 +60,9 @@
     <ClCompile Include="rdt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="rdt_re1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="door.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -195,6 +198,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="rdt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rdt_re1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="door.h">
