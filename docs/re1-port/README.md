@@ -11,6 +11,18 @@ whenever progress is merged back into the source branch (see
   Ghidra DB access, file layout, and what the port means for the engine.
 - `re1-rdt-mapping.md` - RE1 RDT -> RE2 RDT chunk/field mapping (first task).
 
+## First task status: RE1 room conversion
+
+- `src/rdt_re1.cpp` is a self-contained RE1 RDT loader + RE2 RDT writer; all
+  RE1-side structs live in that file, `re2.h` structs are copy destinations.
+- `openre.exe create-game <pack> --source <re1-data>` now also converts every
+  `STAGE*/ROOM*.RDT` into `room/roomXXXX.rdt` in the pack.
+- Verified headlessly against `biohazard-utils`: all 318 real rooms convert
+  and parse cleanly as `Rdt2`; embedded object models (TMD -> MD1) are
+  byte-identical to the reference `MeshConverter`.
+- Remaining: visual verification inside the running engine (needs the Windows
+  binary), plus loading/warp integration for converted rooms.
+
 ## Workflow reminder
 
 Work happens on `re1-port`. To merge progress back into the source branch
