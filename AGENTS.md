@@ -51,6 +51,25 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * When adding new source files, update `src\openre.vcxproj`.
 * Avoid labels as much as possible, extract small sections of code to functions if that helps avoid them. Use [[fallthrough]] in switch blocks.
 
+## RE1 port sub-project
+* This is a long-lived sub-project porting Resident Evil 1 to this engine. Work
+  happens on the `re1-port` branch; the source branch it merges back into is
+  currently `ecs` (may become `master` in future).
+* All working notes live in `docs/re1-port/` and exist ONLY on the `re1-port`
+  branch. This whole AGENTS.md section is branch-local too.
+* To merge progress back into the source branch WITHOUT the notes:
+  `scripts/re1-merge.sh [source-branch]` (defaults to `ecs`). It merges
+  --no-commit --no-ff, strips `docs/re1-port/`, reverts AGENTS.md to the source
+  version, then commits. Never merge re1-port into the source branch manually.
+* RE1 data: `/mnt/f/games/re1/JPN/STAGE*/ROOM*.RDT`. Reference library:
+  `/home/ted/repos/biohazard-utils` (`Rdt1`, `Rdt2`, ScdReader). RE1 Ghidra DB
+  via the `re1-ghidra` MCP server (`~/projects/re1-ghidra`).
+* First task: port RE1 rooms to the engine. The RE1 RDT loader/converter is a
+  self-contained module `src/rdt_re1.cpp`; all RE1-side structs live in that
+  file and `re2.h` structs are used only as copy destinations when mapping
+  RE1 data to RE2 format. Room conversion is wired into the `create-game`
+  subcommand (game_create.cpp).
+
 ## Building
 * Run `format.bat` to format all code in the repo
 * Run `build.bat`
