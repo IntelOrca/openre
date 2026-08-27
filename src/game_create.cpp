@@ -1,6 +1,7 @@
 #include "game_create.h"
 
 #include "gfx_bmp.h"
+#include "rdt_re1.h"
 
 #include <algorithm>
 #include <cctype>
@@ -387,6 +388,85 @@ namespace openre
             }
             return graphics::bmp_write_rgb555(dest.string().c_str(), kPixWidth, kPixHeight, (const uint16_t*)bytes.data());
         }
+
+        // Reads a whole file into a byte vector (empty on failure).
+        std::vector<uint8_t> read_file_bytes(const fs::path& path)
+        {
+            std::ifstream in(path, std::ios::binary);
+            if (!in)
+                return {};
+            std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            return bytes;
+        }
+
+        // --- RE1 room conversion ---
+
+        // Recursively finds RE1 room files (STAGE*/ROOM*.RDT) in the source
+        // tree, skipping local mod folders like the asset index does.
+        std::vector<fs::path> find_re1_rooms(const fs::path& root)
+        {
+            std::vector<fs::path> rooms;
+            std::error_code ec;
+            fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+            const fs::recursive_directory_iterator end;
+            while (it != end)
+            {
+                std::error_code typeEc;
+                if (it->is_regular_file(typeEc) && it->path().extension() == ".RDT")
+                {
+                    const std::string name = to_lower(it->path().filename().string());
+                    if (name.rfind("room", 0) == 0 && name.size() > 4 && isxdigit((unsigned char)name[4]))
+                    {
+                        rooms.push_back(it->path());
+                    }
+                }
+                else if (it->is_directory(typeEc) && is_pruned_directory(to_lower(it->path().filename().string())))
+                {
+                    it.disable_recursion_pending();
+                }
+                it.increment(ec);
+                if (ec)
+                    break;
+            }
+            std::sort(rooms.begin(), rooms.end());
+            return rooms;
+        }
+
+        // Converts an RE1 room file into RE2 RDT format and writes it to the
+        // game pack under room/<roomcode>.rdt. Returns the RE2 room code (e.g.
+        // "room1000") or empty on failure.
+        std::string convert_re1_room(const fs::path& source, const fs::path& targetRoot, bool& ok)
+        {
+            ok = false;
+            auto bytes = read_file_bytes(source);
+            if (bytes.empty())
+                return {};
+
+            auto converted = rdt_re1::convert_re1_rdt(bytes.data(), bytes.size());
+            if (converted.empty())
+                return {};
+
+            // Reuse the RE1 file name (e.g. ROOM1000.RDT) as the RE2 room
+            // code; the engine loads rooms from PlX\Rdt\roomXXXX.rdt.
+            const std::string name = source.filename().string();
+            const std::string code = to_lower(name.substr(0, name.size() - 4));
+            const fs::path dest = targetRoot / "room" / (code + ".rdt");
+
+            std::error_code destEc;
+            fs::create_directories(dest.parent_path(), destEc);
+            if (destEc)
+                return {};
+
+            std::ofstream out(dest, std::ios::binary);
+            if (!out)
+                return {};
+            out.write((const char*)converted.data(), (std::streamsize)converted.size());
+            if (!out)
+                return {};
+
+            ok = true;
+            return code;
+        }
     }
 
     bool game_create_requested(const char** args, int argc)
@@ -645,6 +725,32 @@ namespace openre
         std::cout << "\nimported " << imported << "/" << results.size() << " entries into " << fs::absolute(targetRoot).string()
                   << "\n";
 
-        return failures == 0 ? 0 : 1;
+        // RE1 rooms: convert every STAGE*/ROOM*.RDT into an RE2 RDT and place
+        // it in the game pack so the engine can load it as a room.
+        size_t roomsConverted = 0;
+        size_t roomFailures = 0;
+        if (std::strcmp(game->id, "re1") == 0)
+        {
+            auto rooms = find_re1_rooms(sourceRoot);
+            std::cout << "converting " << rooms.size() << " RE1 rooms...\n";
+            for (const auto& room : rooms)
+            {
+                bool ok = false;
+                const std::string code = convert_re1_room(room, targetRoot, ok);
+                if (ok)
+                {
+                    roomsConverted++;
+                    std::cout << "  done  " << code << ".rdt\n";
+                }
+                else
+                {
+                    roomFailures++;
+                    std::cout << "  fail  " << room.filename().string() << "\n";
+                }
+            }
+            std::cout << "converted " << roomsConverted << "/" << rooms.size() << " rooms\n";
+        }
+
+        return failures == 0 && roomFailures == 0 ? 0 : 1;
     }
 }

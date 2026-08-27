@@ -415,4 +415,5 @@ dump/
 games/*/movie/
 games/*/sound/
 games/*/texture/
+games/*/room/
 
