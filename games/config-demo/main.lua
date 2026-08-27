@@ -425,8 +425,25 @@ local function updateScroll(sub)
     local e = cursorEntry ~= nil and cursorEntry.eindex or 1
     if e < sub.offset + 1 then
         sub.offset = e - 1
+        -- If a group header sits directly above the pinned row, pull the window
+        -- up one more so the header stays on screen.
+        if sub.offset > 0 and sub.entries[sub.offset] ~= nil
+            and sub.entries[sub.offset].kind == 'group' then
+            sub.offset = sub.offset - 1
+        end
     elseif e > sub.offset + VISIBLE_ROWS then
         sub.offset = e - VISIBLE_ROWS
+    else
+        -- Cursor already sits inside the window. If a group header is the entry
+        -- immediately above the window and the cursor is the topmost visible row,
+        -- pull the window up one so the heading is shown. Without this, the first
+        -- row of a group can never reveal its own heading once scrolled down:
+        -- the cursor (which can never rest on the non-selectable header) keeps
+        -- offset pinned at 1, so the very first group heading is lost.
+        if sub.offset > 0 and e == sub.offset + 1 and sub.entries[sub.offset] ~= nil
+            and sub.entries[sub.offset].kind == 'group' then
+            sub.offset = sub.offset - 1
+        end
     end
     if sub.offset > maxOffset then
         sub.offset = maxOffset
