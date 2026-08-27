@@ -318,11 +318,11 @@ namespace openre::options
                     "Blood",
                     "Enables blood and gore effects during gameplay."),
                 1);
-            // GRAPHICS / Audio
+            // AUDIO / General
             add_range(
                 make_def(
-                    "GRAPHICS",
-                    "Audio",
+                    "AUDIO",
+                    "General",
                     "Volume",
                     "audio_master_volume",
                     "Master Volume",
@@ -333,8 +333,8 @@ namespace openre::options
                 10);
             add_range(
                 make_def(
-                    "GRAPHICS",
-                    "Audio",
+                    "AUDIO",
+                    "General",
                     "Volume",
                     "audio_sound_effects",
                     "Sound Effects",
@@ -345,8 +345,8 @@ namespace openre::options
                 10);
             add_range(
                 make_def(
-                    "GRAPHICS",
-                    "Audio",
+                    "AUDIO",
+                    "General",
                     "Volume",
                     "audio_background_music",
                     "Background Music",
@@ -357,8 +357,8 @@ namespace openre::options
                 10);
             add_range(
                 make_def(
-                    "GRAPHICS",
-                    "Audio",
+                    "AUDIO",
+                    "General",
                     "Volume",
                     "audio_menu_sound_effects",
                     "Menu Sound Effects",
@@ -369,8 +369,8 @@ namespace openre::options
                 10);
             add_range(
                 make_def(
-                    "GRAPHICS",
-                    "Audio",
+                    "AUDIO",
+                    "General",
                     "Volume",
                     "audio_dialogue_voices",
                     "Dialogue Voices",
@@ -380,7 +380,7 @@ namespace openre::options
                 1,
                 10);
             add_enum(
-                make_def("GRAPHICS", "Audio", "Output", "audio_device", "Audio Device", "Playback device used for game audio."),
+                make_def("AUDIO", "General", "Output", "audio_device", "Audio Device", "Playback device used for game audio."),
                 { "System Default" },
                 0);
             // LANGUAGE / General
