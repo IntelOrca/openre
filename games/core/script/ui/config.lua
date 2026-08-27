@@ -1,7 +1,7 @@
 -- ui/config.lua - configuration list item controls built on the Lua ECS
 -- (see games/core/script/ecs.lua).
 --
--- There are two controls:
+-- There are three controls:
 --
 -- * ui.config_enum ('<' value row used by settings lists). A game creates
 --   one entity inside a row and drives its fields:
@@ -20,7 +20,22 @@
 --   'ui.config' system only mirrors state into derived entities - label
 --   markup, bar count and bar colours - and never writes geometry.
 --
--- * ui.config_list_item (a whole settings row wrapping one enum). A game
+-- * ui.config_range (a '< - |....| + > N' slider for ranged settings). A game
+--   creates it like the enum and drives:
+--
+--       local handle, id = config.addRange(rowHandle, 180)
+--       ecs.set(id, 'ui.config_range', 'value', 8)
+--       ecs.set(id, 'ui.config_range', 'min', 0)
+--       ecs.set(id, 'ui.config_range', 'max', 20)
+--       ecs.set(id, 'ui.config_range', 'step', 1)
+--
+--   The control is a horizontal flex of [arrow | - | slider (weighted) | + |
+--   arrow | value]. The slider holds a full-width rule with distributed
+--   vertical ticks (the end ticks slightly taller) and a full-height marker on
+--   the current value. The 'ui.config' system builds the ticks from
+--   (max - min) / step + 1 and never wraps.
+--
+-- * ui.config_list_item (a whole settings row wrapping one control). A game
 --   creates it with config.addListItem(parent, width), attaches one enum
 --   sub entity with config.addEnum(rowHandle, width * 0.5) and drives:
 --
@@ -90,6 +105,18 @@ local Z_ARROW = 50
 local Z_BAR = 50
 local Z_DIAMOND = 40
 
+-- ui.config_range slider control constants.
+local RANGE_BLOCK_H = ENUM_BLOCK_H   -- matches the enum control height
+local RULE_H = 1                     -- horizontal rule thickness
+local MARK_W = 1                     -- vertical tick width
+local MARK_H = 3                     -- tick extent above/below the rule (middle)
+local END_MARK_H = 4                 -- taller tick at either end
+local RANGE_VALUE_W = 24             -- end value text block width
+local RANGE_ICON_W = 8               -- "+"/"-" icon box width
+local Z_RULE = 60                    -- rule line (behind the ticks)
+local Z_MARK = 50                    -- slider ticks (in front of the rule)
+local Z_ICON = 30                    -- range '-' / '+' white glyphs (front-most)
+
 -------------------------------------------------------------------------------
 -- Component ------------------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -100,6 +127,17 @@ ecs.registerComponent('ui.config_enum', {
     -- only (the system never writes fields back).
     { name = 'selected_index', type = 'int', default = 1 },
     { name = 'count', type = 'int', default = 0 },
+})
+
+ecs.registerComponent('ui.config_range', {
+    { name = 'text', type = 'string', default = '' },
+    -- Live numeric value (drawn as the end text block and the full-height
+    -- current marker). min/max/step describe the legal range, whose mark
+    -- count is (max - min) / step + 1. The control never wraps.
+    { name = 'value', type = 'int', default = 0 },
+    { name = 'min', type = 'int', default = 0 },
+    { name = 'max', type = 'int', default = 0 },
+    { name = 'step', type = 'int', default = 1 },
 })
 
 ecs.registerComponent('ui.config_list_item', {
@@ -161,10 +199,10 @@ end
 -- An invisible child that absorbs remaining main-axis space (weight 1) or
 -- reserves fixed space (weight omitted).
 local function addSpacer(parent, name, w, h, weight)
-    local handle = ecs.spawn(parent)
+    local handle, id = ecs.spawn(parent)
     scene.setField(handle, 'name', name)
     addSize(handle, w or 0, h or 0, weight)
-    return handle
+    return handle, id
 end
 
 -- Left/right arrow cells of the shared atlas (games/core/texture/
@@ -180,6 +218,43 @@ local function arrowAtlas()
     return arrowTexture
 end
 
+-- Left/right arrow cell of the shared ui_arrow atlas, as a top-level child of
+-- `parent` (cross-axis centred on the full block height).
+local function addArrow(parent, dir)
+    local arrow = ecs.spawn(parent)
+    scene.setField(arrow, 'name', 'ui.config_arrow' .. (dir < 0 and 'L' or 'R'))
+    local sprite = scene.addComponent(arrow, 'core.sprite')
+    scene.setField(sprite, 'texture', arrowAtlas())
+    scene.setField(sprite, 'src.x', dir < 0 and 0 or ARROW_W)
+    scene.setField(sprite, 'src.y', 0)
+    scene.setField(sprite, 'src.width', ARROW_W)
+    scene.setField(sprite, 'src.height', ARROW_H)
+    scene.setField(sprite, 'color', COLOR_ARROW)
+    scene.setField(sprite, 'z', Z_ARROW)
+    addSize(arrow, ARROW_W, ARROW_H)
+    scene.setField(scene.component(arrow, 'core.ui_size'), 'alignment', 'center')
+    return arrow
+end
+
+-- The '-' / '+' glyphs of the range slider, drawn as plain white rectangles
+-- (not font glyphs). Each is a 'none' flex box (so the shape centres) holding
+-- one (minus) or two (plus) white quads.
+local function addIcon(parent, kind, name)
+    local box, boxId = ecs.spawn(parent)
+    scene.setField(box, 'name', name)
+    addSize(box, RANGE_ICON_W, RANGE_BLOCK_H)
+    addFlex(box, 'none')
+
+    if kind == '-' then
+        addQuad(box, name .. '.bar', RANGE_ICON_W - 4, 1, COLOR_DIAMOND, Z_ICON)
+    else -- '+'
+        addQuad(box, name .. '.h', RANGE_ICON_W - 4, 1, COLOR_DIAMOND, Z_ICON)
+        local vh = addQuad(box, name .. '.v', 1, 4, COLOR_DIAMOND, Z_ICON)
+        scene.setField(scene.component(vh, 'core.ui_size'), 'alignment', 'center')
+    end
+    return box, boxId
+end
+
 -- Per-frame view state, kept out of the binary rows: these describe derived
 -- entities rather than authored data.
 --   enumTree[id] = { labelId, barsRowId, bars[], markup }
@@ -187,6 +262,7 @@ end
 --                    chromeIds[]|nil, diamondQuads{}, markup }
 local enumTree = {}
 local itemTree = {}
+local rangeTree = {}
 
 -- Drops bookkeeping for entities that no longer exist.
 local function pruneTrees()
@@ -198,6 +274,11 @@ local function pruneTrees()
     for id in pairs(itemTree) do
         if scene.entityFromId(id) == nil then
             itemTree[id] = nil
+        end
+    end
+    for id in pairs(rangeTree) do
+        if scene.entityFromId(id) == nil then
+            rangeTree[id] = nil
         end
     end
 end
@@ -225,24 +306,7 @@ function config.addEnum(parent, width)
     -- cross-axis centred (alignment "center") on the full block height.
     addFlex(handle, 'horizontal', 2)
 
-    local atlas = arrowAtlas()
-
-    local function addArrow(dir)
-        local arrow = ecs.spawn(handle)
-        scene.setField(arrow, 'name', 'ui.config_enum.arrow' .. (dir < 0 and 'L' or 'R'))
-        local sprite = scene.addComponent(arrow, 'core.sprite')
-        scene.setField(sprite, 'texture', atlas)
-        scene.setField(sprite, 'src.x', dir < 0 and 0 or ARROW_W)
-        scene.setField(sprite, 'src.y', 0)
-        scene.setField(sprite, 'src.width', ARROW_W)
-        scene.setField(sprite, 'src.height', ARROW_H)
-        scene.setField(sprite, 'color', COLOR_ARROW)
-        scene.setField(sprite, 'z', Z_ARROW)
-        addSize(arrow, ARROW_W, ARROW_H)
-        scene.setField(scene.component(arrow, 'core.ui_size'), 'alignment', 'center')
-    end
-
-    addArrow(-1)
+    addArrow(handle, -1)
 
     -- Weighted vertical stack filling the space between the arrows; the
     -- label band and bar row below are authored to fill it exactly.
@@ -268,9 +332,76 @@ function config.addEnum(parent, width)
     addSize(barsRowHandle, bandW, BAR_H)
     addFlex(barsRowHandle, 'horizontal', BAR_GAP)
 
-    addArrow(1)
+    addArrow(handle, 1)
 
     enumTree[id] = { labelId = labelId, barsRowId = barsRowId, bars = {}, markup = nil }
+
+    return handle, id
+end
+
+--- Create a range slider control under `parent` (usually a config list item's
+--- row). Its box is `width` wide; height matches the enum control. The value is
+--- driven through the `value`, `min`, `max` and `step` fields; the system
+--- renders a horizontal rule with distributed ticks, a taller tick at each
+--- end, the current value as a full-height marker, and the value text block.
+---@param parent SceneEntity Row/entity to attach to.
+---@param width number Boundary box width in design pixels.
+---@return SceneEntity handle
+---@return integer id
+function config.addRange(parent, width)
+    local handle, id = ecs.spawn(parent)
+    assert(id ~= nil, 'ui.config.addRange: spawn failed')
+    scene.setField(handle, 'name', 'ui.config_range')
+    ecs.addComponent(id, 'ui.config_range')
+    local w = width or 120
+    addSize(handle, w, RANGE_BLOCK_H, 1)
+
+    -- Horizontal root: [arrowL | - | slider (weighted) | + | arrowR | value].
+    addFlex(handle, 'horizontal', 2)
+
+    addArrow(handle, -1)
+    addIcon(handle, '-', 'ui.config_range.subtract')
+
+    -- Slider: a 'none' flex filling the weighted slot, holding the rule line
+    -- (full width) behind a horizontal marks flex (full size). The marks flex
+    -- owns the distributed ticks + spacers (see the ui.config system).
+    local sliderHandle, sliderId = ecs.spawn(handle)
+    scene.setField(sliderHandle, 'name', 'ui.config_range.slider')
+    addSize(sliderHandle, 0, 0, 1)
+    addFlex(sliderHandle, 'none')
+
+    addQuad(sliderHandle, 'ui.config_range.rule', 1000, RULE_H, COLOR_LINE, Z_RULE)
+
+    local marksHandle, marksId = ecs.spawn(sliderHandle)
+    scene.setField(marksHandle, 'name', 'ui.config_range.marks')
+    addSize(marksHandle, 0, 0, 1)
+    addFlex(marksHandle, 'horizontal', 0)
+
+    addIcon(handle, '+', 'ui.config_range.plus')
+    addArrow(handle, 1)
+
+    -- Value text block (right end): a fixed-width flex box so the text is
+    -- centred within the allocated area rather than hugging the left edge.
+    local valueHandle, valueId = ecs.spawn(handle)
+    scene.setField(valueHandle, 'name', 'ui.config_range.value')
+    addSize(valueHandle, RANGE_VALUE_W, RANGE_BLOCK_H)
+    addFlex(valueHandle, 'none')
+
+    local valueText, valueTextId = ecs.spawn(valueHandle)
+    scene.setField(valueText, 'name', 'ui.config_range.value.text')
+    local vt = scene.addComponent(valueText, 'core.text')
+    scene.setField(vt, 'font', uiFont)
+    scene.setField(vt, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
+    addSize(valueText, 0, 0)
+
+    rangeTree[id] = {
+        marksId = marksId,
+        textId = valueTextId,
+        flexOrder = {},
+        markHandles = {},
+        count = nil,
+        markup = nil,
+    }
 
     return handle, id
 end
@@ -340,12 +471,12 @@ function config.addListItem(parent, x, y, width)
     addSize(labelHandle, 0, 0, 1)
 
     -- The changed diamond: a literal-sized box at top level, weight-0, so
-    -- it keeps its size and centres vertically in the item. Its rasterised
-    -- rows are filled in by the system while `changed`.
+    -- it keeps its size and centres vertically in the item. Its single 5x5
+    -- white square sprite is shown by the system while `changed`.
     local diamondBox, diamondBoxId = ecs.spawn(handle)
     scene.setField(diamondBox, 'name', 'ui.config_list_item.diamond')
     addSize(diamondBox, DIAMOND_SIZE, DIAMOND_SIZE)
-    addFlex(diamondBox, 'vertical')
+    addFlex(diamondBox, 'none')
 
     itemTree[id] = {
         rowId = rowId,
@@ -400,17 +531,15 @@ local function destroyChrome(tree)
     tree.chromeIds = nil
 end
 
--- Fills or empties the reserved diamond box with the rasterised changed
--- diamond: one thin quad per pixel row of a square turned 45 degrees. The
--- box is a vertical flex with no weights, so the rows group-centre on both
--- axes and every row width centres horizontally.
+-- Fills or empties the reserved diamond box with a single 5x5 white square
+-- sprite, shown while the value differs from its default.
 local function ensureDiamond(tree, changed)
     local boxHandle = scene.entityFromId(tree.diamondBoxId)
     if boxHandle == nil then
         return
     end
 
-    while #tree.diamondQuads > (changed and DIAMOND_SIZE or 0) do
+    while #tree.diamondQuads > (changed and 1 or 0) do
         local id = table.remove(tree.diamondQuads)
         local quadHandle = scene.entityFromId(id)
         if quadHandle ~= nil then
@@ -418,12 +547,10 @@ local function ensureDiamond(tree, changed)
         end
     end
     if changed then
-        local half = (DIAMOND_SIZE - 1) * 0.5
-        for i = #tree.diamondQuads + 1, DIAMOND_SIZE do
-            local w = DIAMOND_SIZE - 2 * math.abs(i - 1 - half)
-            local _, id = addQuad(boxHandle, 'ui.config_list_item.diamond.row' .. i,
-                w, 1, COLOR_DIAMOND, Z_DIAMOND)
-            tree.diamondQuads[i] = id
+        for _ = #tree.diamondQuads + 1, 1 do
+            local _, id = addQuad(boxHandle, 'ui.config_list_item.diamond.square',
+                DIAMOND_SIZE, DIAMOND_SIZE, COLOR_DIAMOND, Z_DIAMOND)
+            tree.diamondQuads[#tree.diamondQuads + 1] = id
         end
     end
 end
@@ -531,6 +658,93 @@ ecs.registerSystem('ui.config', 1000, function()
                 scene.setField(scene.component(barHandle, 'core.sprite'), 'color',
                     lit and COLOR_BAR_LIT or COLOR_BAR_OFF)
             end
+        end
+    end)
+
+    -- Range slider: rebuilds the distributed tick run when the mark count
+    -- changes, then lights the current value's full-height marker.
+    ecs.each('ui.config_range', function(rangeId)
+        local tree = rangeTree[rangeId]
+        if tree == nil then
+            return
+        end
+
+        local min = ecs.get(rangeId, 'ui.config_range', 'min')
+        local max = ecs.get(rangeId, 'ui.config_range', 'max')
+        local step = math.max(1, ecs.get(rangeId, 'ui.config_range', 'step'))
+        local value = ecs.get(rangeId, 'ui.config_range', 'value')
+        local count = math.floor((max - min) / step) + 1
+        if count < 1 then
+            count = 1
+        end
+
+        -- Rebuild the fixed mark + spacer run when the mark count changes
+        -- (min/max/step differ). Children order: mark0, spacer1, mark1, ...,
+        -- spacerN-1, markN-1. The leading mark's left edge sits on the slider
+        -- left edge and the trailing mark's right edge on the right edge, so
+        -- the ticks are distributed with a taller tick at each end. Heights
+        -- are cross-axis and set later, so they never disturb x positions.
+        if tree.count ~= count then
+            for _, childId in ipairs(tree.flexOrder or {}) do
+                local h = scene.entityFromId(childId)
+                if h ~= nil then
+                    ecs.destroyEntity(h)
+                end
+            end
+            tree.flexOrder = {}
+            tree.markHandles = {}
+            local marksHandle = scene.entityFromId(tree.marksId)
+            if marksHandle ~= nil then
+                for i = 0, count - 1 do
+                    if i > 0 then
+                        local _, sid = addSpacer(marksHandle,
+                            'ui.config_range.spacer' .. i, 0, 0, 1)
+                        tree.flexOrder[#tree.flexOrder + 1] = sid
+                    end
+                    local mh, mid = addQuad(marksHandle,
+                        'ui.config_range.mark' .. i, MARK_W, MARK_H * 2, COLOR_BAR_OFF, Z_MARK)
+                    scene.setField(scene.component(mh, 'core.ui_size'), 'alignment', 'center')
+                    tree.flexOrder[#tree.flexOrder + 1] = mid
+                    tree.markHandles[i + 1] = mid
+                end
+            end
+            tree.count = count
+        end
+
+        -- Light the current value's full-height marker; end ticks are taller
+        -- than the middle ticks. Heights are cross-axis (vertical) so changing
+        -- them does not move the horizontal tick positions.
+        local currentPos = math.max(0, math.min(count - 1,
+            math.floor((value - min) / step)))
+        for i = 1, count do
+            local pos = i - 1
+            local h = scene.entityFromId(tree.markHandles[i])
+            if h ~= nil then
+                local isEnd = (pos == 0 or pos == count - 1)
+                local isCurrent = (pos == currentPos)
+                local hgt = isCurrent and RANGE_BLOCK_H
+                    or (isEnd and END_MARK_H * 2 or MARK_H * 2)
+                local size = scene.component(h, 'core.ui_size')
+                if size ~= nil then
+                    scene.setField(size, 'height', hgt)
+                end
+                local sprite = scene.component(h, 'core.sprite')
+                if sprite ~= nil then
+                    scene.setField(sprite, 'color',
+                        isCurrent and COLOR_BAR_LIT or COLOR_BAR_OFF)
+                end
+            end
+        end
+
+        -- End value text block.
+        local text = ecs.get(rangeId, 'ui.config_range', 'text') or ''
+        local markup = '<span color="' .. COLOR_TEXT .. '">' .. text .. '</span>'
+        if tree.markup ~= markup then
+            local th = scene.entityFromId(tree.textId)
+            if th ~= nil then
+                scene.setField(scene.component(th, 'core.text'), 'text', markup)
+            end
+            tree.markup = markup
         end
     end)
 end)

@@ -23,8 +23,8 @@
 --
 -- Input: tab_left/tab_right switch main category, subtab_left/subtab_right
 -- switch sub category, W/S or dpad pick a row (the list scrolls to keep the
--- cursor visible), A/D or left/right change value, Return retargets the
--- BRIGHTNESS row onto a longer option list, Escape restores the picked row.
+-- cursor visible), A/D or left/right change value (written to the native
+-- options registry), Escape restores the picked row to its default.
 
 local ecs = require('ecs')
 local config = require('ui.config')
@@ -118,91 +118,95 @@ end
 -- The option catalog ---------------------------------------------------------
 -------------------------------------------------------------------------------
 
-local function volumeOptions()
-    local options = {}
-    for i = 0, 10 do
-        options[#options + 1] = tostring(i)
+-- The category / subcategory / row tree is built from the native engine
+-- options registry (options.list). Each row wraps one registered Def and its
+-- displayed value is kept in sync with the live options.get()/options.set()
+-- state.
+--
+-- A row carries:
+--   * def          - the OptionsDef returned by options.list()
+--   * label/desc   - display title / tooltip (def.title / def.tooltip)
+--   * options      - display strings for the value cycle (the label list for
+--                    toggle/enum, or a ranged numeric list for range)
+--   * index        - 1-based position within `options` for the current value
+--   * defaultIndex - 1-based position of the default value
+--   * editable     - false for "external" entries (actions like "Reset HUD")
+
+-- Map a native option value onto its 1-based option-list index.
+local function valueToIndex(def, value)
+    if def.kind == 'range' then
+        return math.floor((value - def.min) / def.step) + 1
     end
-    return options
+    -- toggle / enum: value is the 0-based label index.
+    return value + 1
 end
 
-local VOL = volumeOptions()
+-- Map a row's 1-based option-list index back onto its native option value.
+local function indexToValue(def, index)
+    if def.kind == 'range' then
+        return def.min + (index - 1) * def.step
+    end
+    return index - 1
+end
 
--- Each row: label, options, starting index (default 1) and the right-pane
--- description shown while the cursor is on it.
-local CATALOG = {
-    {
-        label = 'GAME',
-        subs = {
-            {
-                label = 'CAMERA',
-                rows = {
-                    { label = 'CAMERA', options = { 'CLASSIC', 'SHOULDER', 'FIRST PERSON', 'DRONE' },
-                        desc = 'Sets the camera behaviour during play.' },
-                    { label = 'LOOK SPEED', options = { '1', '2', '3', '4', '5' },
-                        desc = 'How quickly the camera follows your input.' },
-                    { label = 'INVERT Y', options = { 'OFF', 'ON' },
-                        desc = 'Inverts vertical camera movement.' },
-                    { label = 'AIM', options = { 'AUTO', 'MANUAL' },
-                        desc = 'Auto aim locks onto the nearest enemy.' },
-                    { label = 'TARGETING', options = { 'ORIGINAL', 'ALTERNATIVE' },
-                        desc = 'Swaps between the two targeting styles.' },
-                    { label = 'CAMERA DISTANCE', options = { 'NEAR', 'MEDIUM', 'FAR' },
-                        desc = 'How far back the camera sits behind you.' },
-                },
-            },
-            {
-                label = 'DISPLAY',
-                rows = {
-                    { label = 'SUBTITLES', options = { 'OFF', 'ON' },
-                        desc = 'Shows dialogue subtitles during movies.' },
-                    { label = 'BRIGHTNESS', options = { '1', '2', '3', '4', '5' },
-                        desc = 'Adjusts screen brightness. Press Return to swap this row onto a longer option list.' },
-                    { label = 'GAMMA', options = { '1', '2', '3', '4', '5', '6', '7', '8' },
-                        desc = 'Fine tuning for the dark areas of the image.' },
-                    { label = 'SCANLINES', options = { 'OFF', 'ON' },
-                        desc = 'Overlays a CRT style scanline filter.' },
-                    { label = 'SCREEN SIZE', options = { 'SMALL', 'MEDIUM', 'LARGE' },
-                        desc = 'Scales the picture inside the frame.' },
-                    { label = 'WIDESCREEN', options = { 'OFF', 'ON' },
-                        desc = 'Stretches the picture to fill wide screens.' },
-                },
-            },
-        },
-    },
-    {
-        label = 'SOUND',
-        subs = {
-            {
-                label = 'VOLUME',
-                rows = {
-                    { label = 'SOUND TYPE', options = { 'MONO', 'STEREO', 'SURROUND' },
-                        desc = 'Speaker configuration for audio output.' },
-                    { label = 'BGM', options = VOL,
-                        desc = 'Background music volume.' },
-                    { label = 'SE', options = VOL,
-                        desc = 'Sound effect volume.' },
-                    { label = 'VOICE', options = VOL,
-                        desc = 'Character voice volume.' },
-                    { label = 'MOVIE', options = VOL,
-                        desc = 'Pre-rendered movie volume.' },
-                    { label = 'AMBIENCE', options = VOL,
-                        desc = 'Room tone and environment loops.' },
-                    { label = 'DYNAMIC RANGE', options = { 'NORMAL', 'WIDE' },
-                        desc = 'Wide keeps quiet details audible at low volume.' },
-                    { label = 'OUTPUT DELAY', options = { '0', '1', '2', '3', '4', '5' },
-                        desc = 'Lip sync correction in frames.' },
-                },
-            },
-        },
-    },
-}
+local function makeRow(def)
+    local value = options.get(def.id) or def.default
+    local row = {
+        def = def,
+        label = def.title,
+        desc = def.tooltip,
+    }
+    if def.kind == 'toggle' or def.kind == 'enum' then
+        row.options = {}
+        for i, label in ipairs(def.labels) do
+            row.options[i] = label
+        end
+        row.editable = true
+    elseif def.kind == 'range' then
+        row.options = {}
+        local n = 0
+        for v = def.min, def.max, def.step do
+            n = n + 1
+            row.options[n] = tostring(v)
+        end
+        row.editable = true
+    else
+        -- external action entry: not value-editable.
+        row.options = {}
+        row.editable = false
+    end
+    row.index = valueToIndex(def, value)
+    row.defaultIndex = valueToIndex(def, def.default)
+    return row
+end
 
+local defs = options.list() or {}
+
+-- Unique main categories in registration order.
+local CATALOG = {}
+local seenCat = {}
+for _, def in ipairs(defs) do
+    if not seenCat[def.category] then
+        seenCat[def.category] = true
+        CATALOG[#CATALOG + 1] = { label = def.category, subs = {} }
+    end
+end
+
+-- Unique subcategories per category (registration order), each populated with
+-- its rows in registration order.
 for _, cat in ipairs(CATALOG) do
+    local seenSub = {}
+    for _, def in ipairs(defs) do
+        if def.category == cat.label and not seenSub[def.subcategory] then
+            seenSub[def.subcategory] = true
+            cat.subs[#cat.subs + 1] = { label = def.subcategory, rows = {} }
+        end
+    end
     for _, sub in ipairs(cat.subs) do
-        for _, row in ipairs(sub.rows) do
-            row.defaultIndex = 1
-            row.index = row.index or 1
+        for _, def in ipairs(defs) do
+            if def.category == cat.label and def.subcategory == sub.label then
+                sub.rows[#sub.rows + 1] = makeRow(def)
+            end
         end
     end
 end
@@ -308,10 +312,24 @@ local activePanel = nil
 local function pushRow(v)
     local row = v.src
     ecs.set(v.id, 'ui.config_list_item', 'text', row.label)
-    ecs.set(v.id, 'ui.config_list_item', 'changed', row.index ~= row.defaultIndex)
-    ecs.set(v.enumId, 'ui.config_enum', 'count', #row.options)
-    ecs.set(v.enumId, 'ui.config_enum', 'selected_index', row.index)
-    ecs.set(v.enumId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+    ecs.set(v.id, 'ui.config_list_item', 'changed',
+        row.editable and row.index ~= row.defaultIndex)
+    if row.def.kind == 'range' then
+        ecs.set(v.controlId, 'ui.config_range', 'min', row.def.min)
+        ecs.set(v.controlId, 'ui.config_range', 'max', row.def.max)
+        ecs.set(v.controlId, 'ui.config_range', 'step', row.def.step)
+        ecs.set(v.controlId, 'ui.config_range', 'value', indexToValue(row.def, row.index))
+        ecs.set(v.controlId, 'ui.config_range', 'text', tostring(row.options[row.index]))
+    elseif row.editable then
+        ecs.set(v.controlId, 'ui.config_enum', 'count', #row.options)
+        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', row.index)
+        ecs.set(v.controlId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+    else
+        -- External action entry: not value-editable.
+        ecs.set(v.controlId, 'ui.config_enum', 'count', 0)
+        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', 1)
+        ecs.set(v.controlId, 'ui.config_enum', 'text', '')
+    end
 end
 
 local function refreshSelection(sub)
@@ -346,8 +364,13 @@ local function rebuildList(sub)
     for i = first, last do
         local src = sub.rows[i]
         local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
-        local _, enumId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
-        local v = { src = src, handle = handle, id = id, enumId = enumId }
+        local controlId
+        if src.def.kind == 'range' then
+            _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5)
+        else
+            _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
+        end
+        local v = { src = src, handle = handle, id = id, controlId = controlId }
         sub.view[#sub.view + 1] = v
         pushRow(v)
         ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
@@ -529,34 +552,27 @@ re.subscribe(HookKind.tick, function()
 
     if input.pressed('left') or input.pressed('right') then
         local v = cursorView(sub)
-        if v ~= nil then
-            v.src.index = wrap(v.src.index, input.pressed('right') and 1 or -1,
-                #v.src.options)
+        if v ~= nil and v.src.editable then
+            -- Value selection never wraps: clamp to the first/last option.
+            local delta = input.pressed('right') and 1 or -1
+            v.src.index = math.max(1, math.min(#v.src.options, v.src.index + delta))
+            -- Persist into the native options registry.
+            options.set(v.src.def.id, indexToValue(v.src.def, v.src.index))
+            -- Re-read in case the value was clamped or snapped to a step grid.
+            local value = options.get(v.src.def.id) or v.src.def.default
+            v.src.index = valueToIndex(v.src.def, value)
+            options.flush()
             pushRow(v)
-        end
-    end
-
-    -- Retarget BRIGHTNESS onto a different-length option list mid-run so
-    -- the bar row's create/destroy path is exercised while watching.
-    if input.pressed('accept') then
-        for _, s in ipairs(activePanel.cat.subs) do
-            for _, v in ipairs(s.view or {}) do
-                if v.src.label == 'BRIGHTNESS' then
-                    v.src.options = #v.src.options == 5
-                        and { '10', '20', '30', '40', '50', '60', '70', '80', '90', '100' }
-                        or { '1', '2', '3', '4', '5' }
-                    v.src.index = math.min(v.src.index, #v.src.options)
-                    pushRow(v)
-                end
-            end
         end
     end
 
     -- Restore the picked row to its default so the changed diamond goes.
     if input.pressed('cancel') then
         local v = cursorView(sub)
-        if v ~= nil then
+        if v ~= nil and v.src.editable then
             v.src.index = v.src.defaultIndex
+            options.set(v.src.def.id, indexToValue(v.src.def, v.src.index))
+            options.flush()
             pushRow(v)
         end
         refreshPane()
