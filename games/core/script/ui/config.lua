@@ -117,13 +117,13 @@ local GROUP_PAD = 6        -- vertical padding of the gray back box around its t
 -- Decorative rects sit behind text glyph sprites (which render at z = 0);
 -- higher z sorts further back / draws earlier. Back-to-front: underline,
 -- selection ring, blue interior fill, enum internals, diamond, glyphs.
-local Z_LINE = 80
-local Z_SEL_RING = 70
-local Z_SEL_FILL = 65
-local Z_ARROW = 50
-local Z_BAR = 50
-local Z_DIAMOND = 40
-local Z_GROUP_BG = Z_LINE - 10  -- gray band sits behind the rule and text
+local Z_LINE = 0
+local Z_SEL_RING = 0
+local Z_SEL_FILL = 0
+local Z_ARROW = 0
+local Z_BAR = 0
+local Z_DIAMOND = 0
+local Z_GROUP_BG = 0  -- gray band sits behind the rule and text
 
 -- ui.config_range slider control constants.
 local RANGE_BLOCK_H = ENUM_BLOCK_H   -- matches the enum control height
@@ -133,9 +133,9 @@ local MARK_H = 3                     -- tick extent above/below the rule (middle
 local END_MARK_H = 4                 -- taller tick at either end
 local RANGE_VALUE_W = 24             -- end value text block width
 local RANGE_ICON_W = 8               -- "+"/"-" icon box width
-local Z_RULE = 60                    -- rule line (behind the ticks)
-local Z_MARK = 50                    -- slider ticks (in front of the rule)
-local Z_ICON = 30                    -- range '-' / '+' white glyphs (front-most)
+local Z_RULE = 0                    -- rule line (behind the ticks)
+local Z_MARK = 0                    -- slider ticks (in front of the rule)
+local Z_ICON = 0                    -- range '-' / '+' white glyphs (front-most)
 
 -------------------------------------------------------------------------------
 -- Component ------------------------------------------------------------------

@@ -63,9 +63,9 @@ local DIM_COLOR = '#9a9a9a'
 -- Decorative rects sit behind text glyph sprites (which render at z = 0);
 -- a higher z renders further back. The underline cell draws above the rule
 -- so the selected segment reads as a brighter, thicker part of it.
-local Z_RULE = 70
-local Z_SEPARATOR = 50
-local Z_UNDERLINE = 75
+local Z_RULE = 0
+local Z_SEPARATOR = 0
+local Z_UNDERLINE = 0
 
 -------------------------------------------------------------------------------
 -- Components -----------------------------------------------------------------

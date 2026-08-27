@@ -1,1267 +1,672 @@
--- options.lua - OPTIONS overlay styled after the RE2 remake options screen.
--- The option list is driven by the engine's `options` registry API: rows are
--- rebuilt from options.list() for the current category/subcategory and values
--- are read from options.get() at refresh time. Static chrome (heading, outer
--- tab strip, rules, scrollbar track) is built once by open(); everything below
--- the subtab rule hangs off a dynamic subtree that refresh() tears down and
--- recreates on every state change - at this scale rebuilding a few dozen
--- entities is far cheaper than diffing individual text/quad fields and keeps
--- highlights, scrollbar geometry and the tooltip trivially consistent.
+-- options.lua - OPTIONS overlay (games/re2/script/options.lua).
 --
--- Layering model: every sprite carries an explicit `z` (higher z renders
--- further back). Text glyphs are materialised as sprites with the default
--- z = 0, so decorative rects live at DECOR_Z (> 0, behind any text) and the
--- full-window backdrop at BACKDROP_Z (furthest back of all).
+-- Rendered with the shared Lua-ECS controls (games/core/script/ui), identical
+-- in content to the config-demo screen. Exposes open()/isOpen()/close() so the
+-- RE2 menu can show it as a popup and park itself underneath.
 --
--- Input model: the tick handler consumes edge-triggered commands - up/down
--- move the list cursor (skipping header rows, no wrap at the ends), left/right
--- edit the cursor option's value, tab_left/tab_right switch the outer tab and
--- subtab_left/subtab_right the subtab (both wrap, with per-tab cursor
--- memory), and cancel flushes dirty values then closes. Holding left/right
--- auto-repeats the value edit; every action updates the state table then
--- redraws exactly once through refresh().
+-- Run model: open() builds the whole screen under the 'user' root and the tick
+-- handler keeps it in sync; close() destroys it. The tick is subscribed once
+-- (the engine has no unsubscribe) and is inert while the overlay is closed.
 --
 -- All content is authored in a fixed 640x480 design space mapped onto the
 -- window by a native scaled_frame ("contain"); the frame target is refreshed
 -- every tick so resizes are tracked.
 
--- Module state: nil while closed.
-local Options = {}
-local state = nil
+local ecs = require('ecs')
+local config = require('ui.config')
+local tabs = require('ui.tabs')
+
+local DESIGN_W = 640
+local DESIGN_H = 480
+
+local stdFont = gfx.loadFont('fonts/std.fnt')
+local smFont = gfx.loadFont('fonts/sm.fnt')
+config.setFont(stdFont)
+tabs.setFont(stdFont)
+
+local root = scene.getRoot('user')
+
+-- Popup module state.
+local isOpenFlag = false
+local optionsHandle = nil
+local backdrop = nil
+local frame = nil
+
+-- Built on open(); read by the tick while the overlay is open.
+local CATALOG = {}
+local activePanel = nil
+local mainStripId = nil
+local paneHeading = nil
+local paneBody = nil
+local ui, content, left, right, backRow, topSpacer
+local lastMainSel = 1
+local lastSubSel = 1
 
 -------------------------------------------------------------------------------
--- Layout constants (design space is 640x480) ---------------------------------
+-- Small builders -------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-local DESIGN_W          = 640
-local DESIGN_H          = 480
-local SMALL_CELL        = 8                     -- font0:small advance/cell size
-
--- Sprite z ordering (higher = further back; text glyphs sit at z = 0).
-local DECOR_Z           = 100                   -- rects/bands: behind all text
-local BACKDROP_Z        = 1000000               -- backdrop: furthest back
-
--- Colours (sprite RGBA tables; text opacity goes through <span> markup).
-local COLOR_BACKDROP    = { 0, 0, 0, 204 }
-local COLOR_KEYCAP_FILL = { 26, 26, 26, 235 }
-local COLOR_KEYCAP_EDGE = { 208, 208, 208, 255 }
-local COLOR_GLOW_WIDE   = { 255, 255, 255, 36 }  -- selection glow: widest/dimmest
-local COLOR_GLOW_MED    = { 255, 255, 255, 72 }
-local COLOR_GLOW_CORE   = { 255, 255, 255, 128 } -- narrow bright core
-local COLOR_ROW_BAND    = { 255, 255, 255, 42 }  -- selected row highlight
-local COLOR_RULE        = { 132, 132, 132, 220 }
-local COLOR_SEPARATOR   = { 150, 150, 150, 200 }
-local COLOR_BANNER      = { 70, 70, 70, 215 }
-local COLOR_TRACK       = { 58, 58, 58, 255 }
-local COLOR_SEGMENT     = { 168, 168, 168, 255 }
-local COLOR_ROW_SEP     = { 48, 48, 48, 255 }
-local COLOR_BANNER_EDGE = { 104, 104, 104, 220 } -- header banner bottom edge
-local COLOR_BAND_MID    = { 255, 255, 255, 72 }  -- row highlight: middle layer
-local COLOR_BAND_CORE   = { 255, 255, 255, 118 } -- row highlight: bright core
-local COLOR_SEG_LIT     = { 255, 255, 255, 235 } -- segment dash at/before value
-local COLOR_SEG_OFF     = { 66, 66, 66, 255 }    -- segment dash after value
-local COLOR_TICK_LIT    = { 255, 255, 255, 225 } -- ruler tick at/before value
-local COLOR_TICK_DIM    = { 92, 92, 92, 255 }    -- ruler tick after value
-local COLOR_TICK_CURSOR = { 255, 255, 255, 255 } -- ruler cursor marker
-local COLOR_ICON_FALLBACK = { 170, 170, 170, 255 }
-
--- Shared page geometry.
-local EDGE_MARGIN       = 24                    -- left/right page margin
-local FONT_PATH         = 'common/data/font0:small'
-
--- "OPTIONS" heading (top-left corner of its text box).
-local HEADING_LEFT      = EDGE_MARGIN
-local HEADING_TOP       = 14
-local HEADING_BAND_W    = 200
-local HEADING_BAND_H    = 12
-
--- Keycap hint boxes (LB/RB/LT/RT): solid fill + 1px border + centred label.
-local KEYCAP_W          = 26
-local KEYCAP_H          = 14
-local KEYCAP_EDGE       = 1                     -- border thickness
-
--- Tab/subtab strips: keycaps hug the margins, labels scroll between them.
-local STRIP_INSET       = 12                    -- keycap <-> first/last label gap
-local STRIP_LEFT        = EDGE_MARGIN + KEYCAP_W + STRIP_INSET
-local STRIP_RIGHT       = DESIGN_W - EDGE_MARGIN - KEYCAP_W - STRIP_INSET
-local STRIP_WIDTH       = STRIP_RIGHT - STRIP_LEFT
-
--- Outer tab strip (row centred near y=48).
-local TAB_STRIP_CY      = 50                    -- vertical centre of the row
-local TAB_RULE_Y        = 66                    -- horizontal rule below the row
-local TAB_GAP           = 20                    -- label pitch gap (separator lives here)
-
--- Inner subtab strip (row centred near y=76), no separators.
-local SUB_STRIP_CY      = 78
-local SUB_RULE_Y        = 92
-local SUB_GAP           = 24
-
--- Strip separators ("|"): thin vertical rect centred in the label gap.
-local SEP_W             = 1
-local SEP_H             = 16
-
--- Selection glow stack (widths/heights added around the label box).
-local GLOW_WIDE_PAD     = 9                     -- extra half-width/half-height
-local GLOW_MED_PAD      = 5
-local GLOW_CORE_PAD     = 2
-
--- Content area (list + scrollbar).
-local LIST_RIGHT        = 600
-local LIST_TOP          = 100
-local ROW_TOP           = 130
-local ROW_HEIGHT        = 30
-local ROW_TEXT_PAD      = 8                     -- title/header inset from list edge
-
--- Scrollbar track along the right edge of the list area.
-local SCROLLBAR_X       = 615                   -- left edge of the thin track
-local SCROLLBAR_W       = 2
-local SCROLLBAR_BOTTOM  = 430
-local SCROLL_THUMB_MIN  = 4                     -- shortest usable thumb (px)
-
--- The row window: whole rows only, no clipping is available.
-local VISIBLE_ROWS      = math.floor((SCROLLBAR_BOTTOM - ROW_TOP) / ROW_HEIGHT)
-
--- Selected row highlight: stacked translucent bands, widest/dimmest first.
-local BAND_INSET_STEP   = 3                     -- vertical inset added per layer
-
--- Value column shared by every option row (titles end far left of it).
-local VALUE_LEFT        = 440
-local VALUE_RIGHT       = 560
-local VALUE_CX          = (VALUE_LEFT + VALUE_RIGHT) * 0.5
-
--- Toggle/enum rows: '<' label '>' cluster centred in the value column ...
-local CHOICE_GAP        = 4                     -- chevron <-> label spacing
-
--- ... plus a segmented indicator (one dash per possible value) underneath.
-local SEG_DASH_W        = 8
-local SEG_DASH_H        = 2
-local SEG_DASH_GAP      = 2
-local SEG_MAX_DASHES    = 12                    -- keep dashes inside the column
-local SEG_BOTTOM_INSET  = 6                     -- dash bottom inset from row bottom
-
--- Range rows: '<' ruler '>' then the numeric readout, left to right.
-local RULER_LEFT        = 456                   -- centre of the first tick
-local RULER_RIGHT       = 522                   -- centre of the last tick
-local RULER_CHEV_OFF    = 8                     -- chevron centre <-> end tick
-local RULER_TICK_W      = 1
-local RULER_TICK_H      = 10
-local RULER_CURSOR_W    = 2
-local RULER_CURSOR_H    = 16
-local RULER_MAX_TICKS   = 32                    -- sample longer rulers
-local RANGE_READOUT_W   = 26                    -- 3-digit band, right-aligned
-
--- External rows: icon texture scaled into the value column.
-local EXTERNAL_TEXTURE  = 'texture/external'
-local EXTERNAL_ICON     = 16
-
--- Bottom tooltip strip (~y=440..480): grey heading + wrapped detail lines and
--- a "(Default: ...)" line for options.
-local TOOLTIP_HEADING_TOP = 442
-local TOOLTIP_DETAIL_TOP  = 454
-local TOOLTIP_LINE_STEP   = 9
-local TOOLTIP_DEFAULT_TOP = 472
-local TOOLTIP_MAX_LINES   = 2
-local TOOLTIP_WRAP_CHARS  = 72                    -- 8px per char, ~592px band
-local TOOLTIP_HINT        = 'LB/RB change pages, LT/RT change groups.'
-
--- Hold-to-repeat for left/right value editing only (frames); up/down and the
--- tab commands never auto-repeat.
-local HOLD_REPEAT_DELAY   = 15                    -- held this long -> repeat
-local HOLD_REPEAT_RATE    = 4                     -- then one step per this many
-
--------------------------------------------------------------------------------
--- Colour helpers -------------------------------------------------------------
--- <span color="#rrggbbaa"> markup: the last two hex digits are the alpha.
--------------------------------------------------------------------------------
-
-local function hexByte(n)
-    return string.format('%02x', n)
+local function span(color, text)
+    return '<span color="' .. color .. '">' .. text .. '</span>'
 end
 
-local function tintedSpan(text, rgb, alphaFrac)
-    local a = math.floor(math.max(0, math.min(1, alphaFrac)) * 255 + 0.5)
-    return '<span color="#' .. hexByte(rgb[1]) .. hexByte(rgb[2]) .. hexByte(rgb[3])
-        .. hexByte(a) .. '">' .. text .. '</span>'
+local function addSize(handle, w, h, weight)
+    local size = scene.addComponent(handle, 'core.ui_size')
+    scene.setField(size, 'width', w)
+    scene.setField(size, 'height', h)
+    if weight ~= nil then
+        scene.setField(size, 'weight', weight)
+    end
 end
 
-local function whiteSpan(text, alphaFrac)
-    return tintedSpan(text, { 255, 255, 255 }, alphaFrac)
+local function addFlex(handle, orientation, gap, padding)
+    local flex = scene.addComponent(handle, 'core.ui_flex')
+    scene.setField(flex, 'orientation', orientation)
+    if gap ~= nil then
+        scene.setField(flex, 'gap', gap)
+    end
+    if padding ~= nil then
+        scene.setField(flex, 'padding', padding)
+    end
 end
 
-local function greySpan(text, alphaFrac)
-    return tintedSpan(text, { 154, 154, 154 }, alphaFrac)
+-- A text child of a flex container; position is owned by the parent flex.
+local function addText(parentHandle, w, h, markup, small, flags)
+    local handle = ecs.spawn(parentHandle)
+    local t = scene.addComponent(handle, 'core.text')
+    scene.setField(t, 'font', small and smFont or stdFont)
+    scene.setField(t, 'text', markup)
+    scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
+    addSize(handle, w, h)
+    return handle, t
+end
+
+-- A solid-colour quad child centred on its own origin. Coordinates are in
+-- the parent's local space.
+local function addQuad(parentHandle, cx, cy, w, h, color, z)
+    local handle = ecs.spawn(parentHandle)
+    scene.setField(handle, 'x', cx)
+    scene.setField(handle, 'y', cy)
+    local sprite = scene.addComponent(handle, 'core.sprite')
+    scene.setField(sprite, 'color', color)
+    scene.setField(sprite, 'z', z)
+    addSize(handle, w, h)
+    return handle
 end
 
 -------------------------------------------------------------------------------
--- Tape-scroll ----------------------------------------------------------------
--- Lays sequential items of known widths (separated by `gap`) along a virtual
--- tape starting at x = 0, then scrolls it so the cursor item always ends up
--- fully inside [0, stripWidth]. There is no clipping in the renderer, so items
--- that would stick out of the strip are reported invisible and callers hide
--- them instead of drawing them over their neighbours.
---
--- Returns one `{ x = <left edge inside the strip>, visible = bool }` per item.
+-- The option catalog ---------------------------------------------------------
 -------------------------------------------------------------------------------
 
-local function tapeScroll(widths, cursorIndex, stripWidth, gap)
-    local n = #widths
+-- Map a native option value onto its 1-based option-list index.
+local function valueToIndex(def, value)
+    if def.kind == 'range' then
+        return math.floor((value - def.min) / def.step) + 1
+    end
+    -- toggle / enum: value is the 0-based label index.
+    return value + 1
+end
 
-    -- Unscrolled left edge of every item, plus the total tape length.
-    local lefts = {}
-    local total = 0
-    for i = 1, n do
-        lefts[i] = total
-        total = total + widths[i]
-        if i < n then
-            total = total + gap
+-- Map a row's 1-based option-list index back onto its native option value.
+local function indexToValue(def, index)
+    if def.kind == 'range' then
+        return def.min + (index - 1) * def.step
+    end
+    return index - 1
+end
+
+local function makeRow(def)
+    local value = options.get(def.id) or def.default
+    local row = {
+        def = def,
+        label = def.title,
+        desc = def.tooltip,
+    }
+    if def.kind == 'toggle' or def.kind == 'enum' then
+        row.options = {}
+        for i, label in ipairs(def.labels) do
+            row.options[i] = label
         end
-    end
-
-    -- Classic list-box behaviour: move as little as possible so the cursor
-    -- item fits. Anchor the tape at 0 until the cursor pushes past the right
-    -- edge, then follow it; pull back if it sticks out past the left edge.
-    local scroll = 0
-    if n > 0 and widths[cursorIndex] ~= nil then
-        local l = lefts[cursorIndex]
-        local r = l + widths[cursorIndex]
-        if r - scroll > stripWidth then
-            scroll = r - stripWidth
+        row.editable = true
+    elseif def.kind == 'range' then
+        row.options = {}
+        local n = 0
+        for v = def.min, def.max, def.step do
+            n = n + 1
+            row.options[n] = tostring(v)
         end
-        if l - scroll < 0 then
-            scroll = l
-        end
-        -- Never overscroll past the end of the tape.
-        scroll = math.max(0, math.min(scroll, math.max(0, total - stripWidth)))
+        row.editable = true
+    else
+        -- external action entry: not value-editable.
+        row.options = {}
+        row.editable = false
     end
-
-    local out = {}
-    for i = 1, n do
-        local x = lefts[i] - scroll
-        out[i] = {
-            x = x,
-            visible = x >= 0 and x + widths[i] <= stripWidth,
-        }
-    end
-    return out
+    row.index = valueToIndex(def, value)
+    row.defaultIndex = valueToIndex(def, def.default)
+    return row
 end
 
--------------------------------------------------------------------------------
--- Option list model ----------------------------------------------------------
--- Pure helpers over the registry data; the navigation step drives these.
--------------------------------------------------------------------------------
-
--- Greedy word wrap on spaces; returns an array of lines each <= maxChars
--- (a single overlong word becomes its own overflowing line).
-local function wordWrap(text, maxChars)
-    local lines = {}
-    local line = nil
-    for word in string.gmatch(text or '', '%S+') do
-        if line == nil then
-            line = word
-        elseif #line + 1 + #word <= maxChars then
-            line = line .. ' ' .. word
-        else
-            lines[#lines + 1] = line
-            line = word
-        end
-    end
-    if line ~= nil then
-        lines[#lines + 1] = line
-    end
-    return lines
-end
-
--- Human-readable label for an option's default value.
-local function defaultLabel(def)
-    if def.kind == 'external' then
-        return 'n/a'
-    end
-    if (def.kind == 'toggle' or def.kind == 'enum') and def.labels ~= nil then
-        return def.labels[(def.default or 0) + 1] or tostring(def.default)
-    end
-    return tostring(def.default)
-end
-
--- Tooltip detail text folded onto at most TOOLTIP_MAX_LINES lines, marking a
--- cut-off remainder with '..'.
-local function tooltipLines(text)
-    local lines = wordWrap(text, TOOLTIP_WRAP_CHARS)
-    if #lines <= TOOLTIP_MAX_LINES then
-        return lines
-    end
-    local last = lines[TOOLTIP_MAX_LINES]
-    if #last > TOOLTIP_WRAP_CHARS - 2 then
-        last = string.sub(last, 1, TOOLTIP_WRAP_CHARS - 2)
-    end
-    lines[TOOLTIP_MAX_LINES] = last .. '..'
-    for i = TOOLTIP_MAX_LINES + 1, #lines do
-        lines[i] = nil
-    end
-    return lines
-end
-
--- Unique values of one def field in registration order, optionally filtered.
-local function uniqueField(defs, field, predicate)
-    local values, seen = {}, {}
+-- Builds CATALOG (category / subcategory / group / row tree) from the native
+-- engine options registry (options.list). Each row wraps one registered Def and
+-- its displayed value tracks the live options.get()/options.set() state.
+local function buildCatalog()
+    CATALOG = {}
+    local defs = options.list() or {}
+    local seenCat = {}
     for _, def in ipairs(defs) do
-        local v = def[field]
-        if v ~= nil and not seen[v] and (predicate == nil or predicate(def)) then
-            seen[v] = true
-            values[#values + 1] = v
+        if not seenCat[def.category] then
+            seenCat[def.category] = true
+            CATALOG[#CATALOG + 1] = { label = def.category, subs = {} }
         end
     end
-    return values
-end
-
-local function categoryName(s)
-    return s.categories[s.categoryIndex]
-end
-
--- Subcategories of one category, in registration order.
-local function categorySubCategories(s, category)
-    return uniqueField(s.defs, 'subcategory', function(def)
-        return def.category == category
-    end)
-end
-
-local function subCategories(s)
-    return categorySubCategories(s, categoryName(s))
-end
-
--- Display rows for the current category/subcategory: a header row whenever
--- the registration-order group changes, then one row per option carrying its
--- live options.get() value.
-local function rebuildRows(s)
-    local category = categoryName(s)
-    local subcategory = s.subcats[s.subcategoryIndex]
-    local rows = {}
-    local prevGroup = nil
-    for _, def in ipairs(s.defs) do
-        if def.category == category and def.subcategory == subcategory then
-            if def.group ~= prevGroup then
-                rows[#rows + 1] = { type = 'header', label = def.group }
-                prevGroup = def.group
+    for _, cat in ipairs(CATALOG) do
+        local seenSub = {}
+        for _, def in ipairs(defs) do
+            if def.category == cat.label and not seenSub[def.subcategory] then
+                seenSub[def.subcategory] = true
+                cat.subs[#cat.subs + 1] = { label = def.subcategory, rows = {} }
             end
-            rows[#rows + 1] = { type = 'option', def = def, value = options.get(def.id) or 0 }
+        end
+        for _, sub in ipairs(cat.subs) do
+            sub.entries = {}
+            sub.rows = {}
+            local prevGroup = nil
+            for _, def in ipairs(defs) do
+                if def.category == cat.label and def.subcategory == sub.label then
+                    -- A group header is inserted whenever the option's group
+                    -- differs from the previous one (and is non-empty). Group
+                    -- headers and value rows share one uniform-height window.
+                    if def.group ~= '' and def.group ~= prevGroup then
+                        sub.entries[#sub.entries + 1] = { kind = 'group', text = def.group }
+                        prevGroup = def.group
+                    end
+                    local row = makeRow(def)
+                    row.kind = 'row'
+                    sub.entries[#sub.entries + 1] = row
+                    row.eindex = #sub.entries
+                    sub.rows[#sub.rows + 1] = row
+                end
+            end
         end
     end
-    return rows
 end
 
--- Keep the cursor inside the list and the scroll window around the cursor.
-local function clampScroll(s, visibleCount)
-    local total = #s.rows
-    s.cursorRow = math.max(1, math.min(s.cursorRow, math.max(total, 1)))
-    local maxScroll = math.max(1, total - visibleCount + 1)
-    s.scrollRow = math.max(1, math.min(s.scrollRow, maxScroll))
-    if s.cursorRow < s.scrollRow then
-        s.scrollRow = s.cursorRow
+-------------------------------------------------------------------------------
+-- Static flex tree -----------------------------------------------------------
+-------------------------------------------------------------------------------
+
+local HEADING_H = 24
+local STRIP_H = 28          -- main + sub tab strip band height
+local CONTENT_H = 372
+local LIST_GAP = 8          -- vertical flex gap of the left column (see addFlex(left))
+local BACK_H = 20
+
+-- Fill the left column vertically: take the space left after the sub strip and
+-- the flex gaps, then drop any partial row so the scroll area height is an
+-- exact multiple of the item height.
+local usableH = CONTENT_H - STRIP_H - 2 * LIST_GAP
+local VIEW_H = math.floor(usableH / config.ITEM_HEIGHT) * config.ITEM_HEIGHT
+if VIEW_H <= 0 then
+    error('options: not enough vertical space for one item row')
+end
+local VISIBLE_ROWS = VIEW_H / config.ITEM_HEIGHT
+local ITEM_WIDTH = 290
+local SCROLLBAR_W = 7       -- width reserved for the scrollbar column
+local TRACK_W = 3
+local COLOR_TRACK = { 70, 70, 70, 255 }
+local COLOR_THUMB = { 180, 180, 180, 255 }
+
+local function fitCanvas()
+    scene.setField(frame, 'target.width', gfx.screenWidth())
+    scene.setField(frame, 'target.height', gfx.screenHeight())
+    scene.setField(optionsHandle, 'x', gfx.screenWidth() * 0.5)
+    scene.setField(optionsHandle, 'y', gfx.screenHeight() * 0.5)
+end
+
+-- Builds the canvas + static flex tree under a fresh root entity.
+local function buildTree()
+    optionsHandle = scene.createEntity(root)
+    scene.setField(optionsHandle, 'name', 'options')
+    frame = scene.addComponent(optionsHandle, 'core.scaled_frame')
+    scene.setField(frame, 'source.width', DESIGN_W)
+    scene.setField(frame, 'source.height', DESIGN_H)
+    scene.setField(frame, 'mode', 'contain')
+    scene.setField(frame, 'increment', 0)
+    fitCanvas()
+
+    -- 96%-opacity black backdrop covering the whole screen. It is a direct
+    -- child of the root (not the scaled canvas), so it is never letterboxed,
+    -- and it is created before the options content at the default z (0): the
+    -- engine's stable z-sort keeps it in front of the already-built menu but
+    -- behind the options UI, dimming the menu to ~4% underneath the popup.
+    backdrop = scene.createEntity(root)
+    scene.setField(backdrop, 'name', 'backdrop')
+    local backdropSprite = scene.addComponent(backdrop, 'core.sprite')
+    scene.setField(backdropSprite, 'color', { 0, 0, 0, 245 })
+    scene.setField(backdrop, 'x', gfx.screenWidth() * 0.5)
+    scene.setField(backdrop, 'y', gfx.screenHeight() * 0.5)
+    addSize(backdrop, gfx.screenWidth(), gfx.screenHeight())
+
+    -- Top-level vertical container filling the design frame.
+    ui = ecs.spawn(optionsHandle)
+    scene.setField(ui, 'name', 'ui')
+    addSize(ui, DESIGN_W, DESIGN_H)
+    addFlex(ui, 'vertical', 8)
+
+    addText(ui, DESIGN_W, HEADING_H, span('#ffffff', 'OPTIONS'))
+
+    -- Main category strip; resized through its authored ui_size so the native
+    -- strip chrome rides inside the flex layout.
+    local mainStripHandle
+    mainStripHandle, mainStripId = tabs.addStrip(ui, 0, 0, 1)
+    do
+        local size = scene.component(mainStripHandle, 'core.ui_size')
+        scene.setField(size, 'width', DESIGN_W)
+        scene.setField(size, 'height', STRIP_H)
     end
-    if s.cursorRow > s.scrollRow + visibleCount - 1 then
-        s.scrollRow = s.cursorRow - visibleCount + 1
+    for _, cat in ipairs(CATALOG) do
+        tabs.addTab(mainStripId, cat.label)
+    end
+
+    -- Content splits into the left controls column and the right hint pane.
+    content = ecs.spawn(ui)
+    scene.setField(content, 'name', 'content')
+    addSize(content, DESIGN_W, CONTENT_H)
+    addFlex(content, 'horizontal')
+
+    left = ecs.spawn(content)
+    scene.setField(left, 'name', 'left')
+    addSize(left, 0, 0, 2)
+    addFlex(left, 'vertical', 8)
+
+    right = ecs.spawn(content)
+    scene.setField(right, 'name', 'right')
+    addSize(right, 0, 0, 1)
+    addFlex(right, 'vertical', 8, 16)
+
+    local paneHeadingHandle
+    paneHeadingHandle, paneHeading = addText(right, DESIGN_W * 0.5 - 32, 20,
+        '', false, TextFlags.xLeft | TextFlags.yMiddle)
+    -- Weighted: stretches down the pane; yTop keeps the glyphs anchored high.
+    do
+        local handle = ecs.spawn(right)
+        local t = scene.addComponent(handle, 'core.text')
+        scene.setField(t, 'font', smFont)
+        scene.setField(t, 'text', '')
+        scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yTop)
+        addSize(handle, DESIGN_W * 0.5 - 32, 0, 1)
+        paneBody = t
+    end
+
+    -- Spacer pins everything below to the bottom.
+    topSpacer = ecs.spawn(ui)
+    scene.setField(topSpacer, 'name', 'spacer')
+    addSize(topSpacer, 0, 0, 1)
+
+    -- Bottom middle: one hint - Back.
+    backRow = ecs.spawn(ui)
+    scene.setField(backRow, 'name', 'back_row')
+    addSize(backRow, 70, BACK_H)
+    addFlex(backRow, 'horizontal', 6)
+    do
+        local hintHandle = ecs.spawn(backRow)
+        scene.setField(hintHandle, 'scale.x', 0.5)
+        scene.setField(hintHandle, 'scale.y', 0.5)
+        local hint = scene.addComponent(hintHandle, 'core.input_hint')
+        scene.setField(hint, 'device', 'ps')
+        scene.setField(hint, 'command', 'cancel')
+        scene.setField(hint, 'text', 'Back')
+        addSize(hintHandle, 16, 16)
     end
 end
 
--- Index of the first selectable (non-header) row at or after `start`,
--- searching in direction dir (+1 towards the list end, -1 towards the top);
--- nil when the list end comes first.
-local function findSelectable(rows, start, dir)
-    local limit = dir >= 0 and #rows or 1
-    for i = start, limit, dir do
-        if rows[i].type == 'option' then
-            return i
+-------------------------------------------------------------------------------
+-- Panel building (one panel per main category, created on demand) ------------
+-------------------------------------------------------------------------------
+
+local function pushRow(v)
+    local row = v.src
+    ecs.set(v.id, 'ui.config_list_item', 'text', row.label)
+    ecs.set(v.id, 'ui.config_list_item', 'changed',
+        row.editable and row.index ~= row.defaultIndex)
+    if row.def.kind == 'range' then
+        ecs.set(v.controlId, 'ui.config_range', 'min', row.def.min)
+        ecs.set(v.controlId, 'ui.config_range', 'max', row.def.max)
+        ecs.set(v.controlId, 'ui.config_range', 'step', row.def.step)
+        ecs.set(v.controlId, 'ui.config_range', 'value', indexToValue(row.def, row.index))
+        ecs.set(v.controlId, 'ui.config_range', 'text', tostring(row.options[row.index]))
+    elseif row.editable then
+        ecs.set(v.controlId, 'ui.config_enum', 'count', #row.options)
+        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', row.index)
+        ecs.set(v.controlId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+    else
+        -- External action entry: not value-editable.
+        ecs.set(v.controlId, 'ui.config_enum', 'count', 0)
+        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', 1)
+        ecs.set(v.controlId, 'ui.config_enum', 'text', '')
+    end
+end
+
+local function refreshSelection(sub)
+    local sel = sub.rows[sub.cursor]
+    for _, v in ipairs(sub.view) do
+        if v.src ~= nil then
+            ecs.set(v.id, 'ui.config_list_item', 'selected', v.src == sel)
+        end
+    end
+end
+
+-- The view entry backing the cursor, if that row is currently materialised.
+local function cursorView(sub)
+    local src = sub.rows[sub.cursor]
+    for _, v in ipairs(sub.view) do
+        if v.src == src then
+            return v
         end
     end
     return nil
 end
 
--------------------------------------------------------------------------------
--- Entity builders ------------------------------------------------------------
--- Coordinates: entities under the content root use offsets from the root's
--- origin (the window centre). Design-space point (dx, dy) maps to the offset
--- (dx - DESIGN_W / 2, dy - DESIGN_H / 2).
--------------------------------------------------------------------------------
-
--- Texture-less sprite = solid colour quad, drawn centred on its entity.
--- (cx, cy) are offsets from the parent origin.
-local function addQuad(parent, name, cx, cy, w, h, color)
-    local e = scene.createEntity(parent)
-    scene.setField(e, 'name', name)
-    scene.setField(e, 'x', cx)
-    scene.setField(e, 'y', cy)
-    local s = scene.addComponent(e, 'core.sprite')
-    scene.setField(s, 'color', color)
-    local size = scene.addComponent(e, 'core.ui_size')
-    scene.setField(size, 'width', w)
-    scene.setField(size, 'height', h)
-    scene.setField(s, 'z', DECOR_Z)
-    return e, s
-end
-
--- Same quad, positioned by a design-space rectangle's top-left corner.
-local function addQuadAt(parent, name, left, top, w, h, color)
-    return addQuad(parent, name,
-        left - DESIGN_W * 0.5 + w * 0.5,
-        top - DESIGN_H * 0.5 + h * 0.5,
-        w, h, color)
-end
-
--- One line of text laid out inside a box. The entity sits at the box centre
--- (glyphs align around the transform origin); (cx, cy) are parent-relative.
-local function addText(parent, font, name, cx, cy, bandW, bandH, text, flags)
-    local e = scene.createEntity(parent)
-    scene.setField(e, 'name', name)
-    scene.setField(e, 'x', cx)
-    scene.setField(e, 'y', cy)
-    local t = scene.addComponent(e, 'core.text')
-    scene.setField(t, 'font', font)
-    scene.setField(t, 'text', text)
-    local size = scene.addComponent(e, 'core.ui_size')
-    scene.setField(size, 'width', bandW)
-    scene.setField(size, 'height', bandH)
-    scene.setField(t, 'flags', flags)
-    return e, t
-end
-
--- Text inside a design-space box given by its top-left corner.
-local function addTextBox(parent, font, name, left, top, bandW, bandH, text, flags)
-    return addText(parent, font, name,
-        left - DESIGN_W * 0.5 + bandW * 0.5,
-        top - DESIGN_H * 0.5 + bandH * 0.5,
-        bandW, bandH, text, flags)
-end
-
--- Keycap hint box: dark fill, four 1px border rects, centred label.
--- (dx, dy) is the design-space centre of the box.
-local function createKeycap(parent, font, name, dx, dy, label)
-    local l = dx - KEYCAP_W * 0.5
-    local t = dy - KEYCAP_H * 0.5
-    addQuadAt(parent, name .. '.fill', l, t, KEYCAP_W, KEYCAP_H, COLOR_KEYCAP_FILL)
-    addQuadAt(parent, name .. '.edgeT', l, t, KEYCAP_W, KEYCAP_EDGE, COLOR_KEYCAP_EDGE)
-    addQuadAt(parent, name .. '.edgeB', l, t + KEYCAP_H - KEYCAP_EDGE, KEYCAP_W, KEYCAP_EDGE, COLOR_KEYCAP_EDGE)
-    addQuadAt(parent, name .. '.edgeL', l, t, KEYCAP_EDGE, KEYCAP_H, COLOR_KEYCAP_EDGE)
-    addQuadAt(parent, name .. '.edgeR', l + KEYCAP_W - KEYCAP_EDGE, t, KEYCAP_EDGE, KEYCAP_H, COLOR_KEYCAP_EDGE)
-    addText(parent, font, name .. '.label',
-        dx - DESIGN_W * 0.5, dy - DESIGN_H * 0.5, KEYCAP_W, KEYCAP_H,
-        whiteSpan(label, 0.95), TextFlags.xCenter | TextFlags.yMiddle)
-end
-
--- Selection glow: stacked translucent rects behind the label, created widest
--- first so the narrow bright core paints last (equal z keeps creation order).
-local function createGlow(parent, name, cx, cy, labelW)
-    addQuad(parent, name .. '.wide',
-        cx, cy, labelW + GLOW_WIDE_PAD * 2, SMALL_CELL + GLOW_WIDE_PAD * 2, COLOR_GLOW_WIDE)
-    addQuad(parent, name .. '.med',
-        cx, cy, labelW + GLOW_MED_PAD * 2, SMALL_CELL + GLOW_MED_PAD * 2, COLOR_GLOW_MED)
-    addQuad(parent, name .. '.core',
-        cx, cy, labelW + GLOW_CORE_PAD * 2, SMALL_CELL + GLOW_CORE_PAD * 2, COLOR_GLOW_CORE)
-end
-
--- Textured sprite sized `size` px square, layered with text (z = 0, above the
--- DECOR_Z rectangles); src stays unset = full texture.
-local function addSprite(parent, name, cx, cy, size, texture)
-    local e = scene.createEntity(parent)
-    scene.setField(e, 'name', name)
-    scene.setField(e, 'x', cx)
-    scene.setField(e, 'y', cy)
-    local sp = scene.addComponent(e, 'core.sprite')
-    scene.setField(sp, 'texture', texture)
-    local sizeHandle = scene.addComponent(e, 'core.ui_size')
-    scene.setField(sizeHandle, 'width', size)
-    scene.setField(sizeHandle, 'height', size)
-    scene.setField(sp, 'z', 0)
-    return e, sp
-end
-
--- Selected row highlight: full-width translucent bands stacked narrowest and
--- brightest last, echoing the strip glow for a soft edge.
-local function createRowBand(parent, name, top, width)
-    addQuadAt(parent, name .. '.outer', EDGE_MARGIN, top + 1,
-        width, ROW_HEIGHT - 2, COLOR_ROW_BAND)
-    addQuadAt(parent, name .. '.mid', EDGE_MARGIN, top + 1 + BAND_INSET_STEP,
-        width, ROW_HEIGHT - 2 - BAND_INSET_STEP * 2, COLOR_BAND_MID)
-    addQuadAt(parent, name .. '.core', EDGE_MARGIN, top + 1 + BAND_INSET_STEP * 2,
-        width, ROW_HEIGHT - 2 - BAND_INSET_STEP * 4, COLOR_BAND_CORE)
-end
-
--- One labelled strip: keycaps at both ends plus tape-scrolled labels, with
--- optional separators centred between adjacent labels. Returns the created
--- per-item records ({ text }) for the later navigation step.
-local function createStrip(parent, font, name, cy, labels, selectedIndex, gap, withSeparators, leftCap, rightCap)
-    local items = {}
-    local rowCy = cy - DESIGN_H * 0.5
-
-    -- LB/RB or LT/RT keycap hints hugging the page margins.
-    createKeycap(parent, font, name .. '.keyL',
-        EDGE_MARGIN + KEYCAP_W * 0.5, cy, leftCap)
-    createKeycap(parent, font, name .. '.keyR',
-        DESIGN_W - EDGE_MARGIN - KEYCAP_W * 0.5, cy, rightCap)
-
-    local widths = {}
-    for i, label in ipairs(labels) do
-        widths[i] = #label * SMALL_CELL
+-- Rebuilds the shared list so it holds exactly the VISIBLE_ROWS window
+-- starting at sub.offset. There is no clipping, so scrolled-out rows must
+-- not exist at all rather than being shifted outside the viewport.
+local function rebuildList(sub)
+    for _, v in ipairs(sub.view or {}) do
+        ecs.destroyEntity(v.handle)
     end
-    local slots = tapeScroll(widths, selectedIndex, STRIP_WIDTH, gap)
+    if activePanel.filler ~= nil then
+        ecs.destroyEntity(activePanel.filler)
+        activePanel.filler = nil
+    end
+    sub.view = {}
 
-    -- Labels (invisible ones are skipped: no clipping is available).
-    for i, slot in ipairs(slots) do
-        if not slot.visible then
-            items[i] = nil
+    local first = sub.offset + 1
+    local last = math.min(#sub.entries, first + VISIBLE_ROWS - 1)
+    for i = first, last do
+        local entry = sub.entries[i]
+        if entry.kind == 'group' then
+            -- Group header: same height as a list item, never selectable.
+            local handle, id = config.addListGroup(activePanel.list, 0, 0, ITEM_WIDTH)
+            ecs.set(id, 'ui.config_list_group', 'text', entry.text)
+            sub.view[#sub.view + 1] = { entry = entry, handle = handle, id = id }
         else
-            local cx = STRIP_LEFT - DESIGN_W * 0.5 + slot.x + widths[i] * 0.5
-            local selected = i == selectedIndex
-            if selected then
-                createGlow(parent, name .. '.' .. i .. '.glow', cx, rowCy, widths[i])
-            end
-            local _, t = addText(parent, font, name .. '.' .. i, cx, rowCy,
-                widths[i], SMALL_CELL,
-                selected and whiteSpan(labels[i], 1.0) or greySpan(labels[i], 0.75),
-                TextFlags.xCenter | TextFlags.yMiddle)
-            items[i] = { text = t }
-        end
-    end
-
-    -- Thin "|" separators, centred in each gap; shown only while BOTH of its
-    -- neighbouring labels are visible.
-    if withSeparators then
-        for i = 1, #slots - 1 do
-            if slots[i].visible and slots[i + 1].visible then
-                local sepCx = STRIP_LEFT - DESIGN_W * 0.5
-                    + slots[i].x + widths[i] + gap * 0.5 - SEP_W * 0.5
-                addQuad(parent, name .. '.sep' .. i, sepCx, rowCy, SEP_W, SEP_H, COLOR_SEPARATOR)
-            end
-        end
-    end
-
-    return items
-end
-
--- Full-width horizontal hairline under a strip.
-local function createRule(s, top)
-    addQuadAt(s.root, 'options.rule' .. top,
-        EDGE_MARGIN, top, DESIGN_W - EDGE_MARGIN * 2, 1, COLOR_RULE)
-end
-
--------------------------------------------------------------------------------
--- List widgets ---------------------------------------------------------------
--- Everything here hangs off s.dyn and is recreated by refresh() on every
--- state change (see the module header comment).
--------------------------------------------------------------------------------
-
--- '<'/'>' chevron pair tinted like the row (bright on the cursor row).
-local function addChevrons(parent, font, name, cy, selected, leftCx, rightCx)
-    local tint = selected and whiteSpan or greySpan
-    local alpha = selected and 1.0 or 0.5
-    addText(parent, font, name .. '.chevL', leftCx, cy, SMALL_CELL, ROW_HEIGHT,
-        tint('<', alpha), TextFlags.xCenter | TextFlags.yMiddle)
-    addText(parent, font, name .. '.chevR', rightCx, cy, SMALL_CELL, ROW_HEIGHT,
-        tint('>', alpha), TextFlags.xCenter | TextFlags.yMiddle)
-end
-
--- Toggle/enum value: '<' label '>' cluster centred in the value column with a
--- segmented indicator underneath: one small dash per possible value, lit up to
--- and including the current index.
-local function addChoiceWidget(s, i, row, top, selected)
-    local def = row.def
-    local labels = def.labels or {}
-    local label = labels[row.value + 1] or tostring(row.value)
-    local labelW = #label * SMALL_CELL
-    local cluster = labelW + (SMALL_CELL + CHOICE_GAP) * 2
-    local left = VALUE_CX - cluster * 0.5
-    local cy = top + ROW_HEIGHT * 0.5
-    local tint = selected and whiteSpan or greySpan
-    local alpha = selected and 1.0 or 0.5
-    local name = 'options.list.value' .. i
-
-    addChevrons(s.dyn, s.font, name, cy, selected,
-        left + SMALL_CELL * 0.5, left + cluster - SMALL_CELL * 0.5)
-    addText(s.dyn, s.font, name .. '.label',
-        left + SMALL_CELL + CHOICE_GAP + labelW * 0.5, cy, labelW, ROW_HEIGHT,
-        tint(label, alpha), TextFlags.xCenter | TextFlags.yMiddle)
-
-    local dashes = math.min(#labels, SEG_MAX_DASHES)
-    local dashTop = top + ROW_HEIGHT - SEG_DASH_H - SEG_BOTTOM_INSET
-    local totalW = dashes * SEG_DASH_W + (dashes - 1) * SEG_DASH_GAP
-    for j = 0, dashes - 1 do
-        addQuadAt(s.dyn, name .. '.seg' .. j,
-            VALUE_CX - totalW * 0.5 + j * (SEG_DASH_W + SEG_DASH_GAP), dashTop,
-            SEG_DASH_W, SEG_DASH_H,
-            j <= row.value and COLOR_SEG_LIT or COLOR_SEG_OFF)
-    end
-end
-
--- Range value: a tick ruler with everything at/before the value filled in, a
--- taller cursor marker on the value's stop, chevrons at the ruler ends and the
--- numeric readout right-aligned at the value column edge.
-local function addRangeWidget(s, i, row, top, selected)
-    local def = row.def
-    local lo = def.min or 0
-    local hi = def.max or lo
-    local step = ((def.step or 1) > 1) and def.step or 1
-    local stops = math.floor(math.max(hi - lo, 0) / step) + 1
-    local value = row.value
-    if value < lo then
-        value = lo
-    end
-    if value > hi then
-        value = hi
-    end
-    local stopIdx = math.floor((value - lo) / step)
-    local cy = top + ROW_HEIGHT * 0.5
-    local name = 'options.list.value' .. i
-
-    addChevrons(s.dyn, s.font, name, cy, selected,
-        RULER_LEFT - RULER_CHEV_OFF, RULER_RIGHT + RULER_CHEV_OFF)
-
-    -- Centre of the tick for one stop index along the ruler.
-    local function tickCx(stopIndex)
-        if stops <= 1 then
-            return (RULER_LEFT + RULER_RIGHT) * 0.5
-        end
-        return RULER_LEFT + (RULER_RIGHT - RULER_LEFT) * stopIndex / (stops - 1)
-    end
-
-    -- Thin 1px ticks, one per stop; sample long rulers down to RULER_MAX_TICKS.
-    local stride = math.ceil(stops / RULER_MAX_TICKS)
-    local lastStop = -1
-    for stopIndex = 0, stops - 1, stride do
-        addQuadAt(s.dyn, name .. '.ruler' .. stopIndex,
-            math.floor(tickCx(stopIndex)), cy - RULER_TICK_H * 0.5,
-            RULER_TICK_W, RULER_TICK_H,
-            stopIndex <= stopIdx and COLOR_TICK_LIT or COLOR_TICK_DIM)
-        lastStop = stopIndex
-    end
-    if lastStop ~= stops - 1 then
-        addQuadAt(s.dyn, name .. '.ruler' .. (stops - 1),
-            math.floor(tickCx(stops - 1)), cy - RULER_TICK_H * 0.5,
-            RULER_TICK_W, RULER_TICK_H,
-            stops - 1 <= stopIdx and COLOR_TICK_LIT or COLOR_TICK_DIM)
-    end
-
-    -- Cursor marker pinned to the value's exact stop position.
-    addQuadAt(s.dyn, name .. '.cursor',
-        math.floor(tickCx(stopIdx)), cy - RULER_CURSOR_H * 0.5,
-        RULER_CURSOR_W, RULER_CURSOR_H, COLOR_TICK_CURSOR)
-
-    addTextBox(s.dyn, s.font, name .. '.readout',
-        VALUE_RIGHT - RANGE_READOUT_W, top, RANGE_READOUT_W, ROW_HEIGHT,
-        selected and whiteSpan(tostring(value), 1.0)
-            or greySpan(tostring(value), 0.5),
-        TextFlags.xRight | TextFlags.yMiddle)
-end
-
--- External value: the icon texture scaled into the column, or a hollow
--- placeholder square when the texture failed to load.
-local function addExternalWidget(s, i, top)
-    local cx = VALUE_CX
-    local cy = top + ROW_HEIGHT * 0.5
-    local name = 'options.list.value' .. i
-    if s.externalTex ~= nil then
-        addSprite(s.dyn, name .. '.icon', cx, cy, EXTERNAL_ICON, s.externalTex)
-        return
-    end
-    local l = cx - EXTERNAL_ICON * 0.5
-    local t = cy - EXTERNAL_ICON * 0.5
-    addQuadAt(s.dyn, name .. '.fallback.top',
-        l, t, EXTERNAL_ICON, 1, COLOR_ICON_FALLBACK)
-    addQuadAt(s.dyn, name .. '.fallback.bottom',
-        l, t + EXTERNAL_ICON - 1, EXTERNAL_ICON, 1, COLOR_ICON_FALLBACK)
-    addQuadAt(s.dyn, name .. '.fallback.left',
-        l, t, 1, EXTERNAL_ICON, COLOR_ICON_FALLBACK)
-    addQuadAt(s.dyn, name .. '.fallback.right',
-        l + EXTERNAL_ICON - 1, t, 1, EXTERNAL_ICON, COLOR_ICON_FALLBACK)
-end
-
-local function buildListArea(s)
-    local rows = s.rows
-    local total = #rows
-    if total == 0 then
-        return
-    end
-    local font = s.font
-    local bannerW = LIST_RIGHT - EDGE_MARGIN
-    local lastRow = math.min(total, s.scrollRow + VISIBLE_ROWS - 1)
-    local prevType = nil
-
-    for i = s.scrollRow, lastRow do
-        local row = rows[i]
-        local top = ROW_TOP + (i - s.scrollRow) * ROW_HEIGHT
-        local name = 'options.list.row' .. i
-
-        if row.type == 'header' then
-            -- Group banner: darker fill with a thin bottom edge, grey label.
-            addQuadAt(s.dyn, name .. '.fill', EDGE_MARGIN, top,
-                bannerW, ROW_HEIGHT - 1, COLOR_BANNER)
-            addQuadAt(s.dyn, name .. '.edge', EDGE_MARGIN, top + ROW_HEIGHT - 1,
-                bannerW, 1, COLOR_BANNER_EDGE)
-            addTextBox(s.dyn, font, name .. '.label',
-                EDGE_MARGIN + ROW_TEXT_PAD, top, bannerW - ROW_TEXT_PAD * 2, ROW_HEIGHT,
-                greySpan(row.label, 0.7), TextFlags.xLeft | TextFlags.yMiddle)
-        else
-            local selected = i == s.cursorRow
-            if selected then
-                createRowBand(s.dyn, 'options.list.band' .. i, top, bannerW)
-            end
-            addTextBox(s.dyn, font, name,
-                EDGE_MARGIN + ROW_TEXT_PAD, top, bannerW - ROW_TEXT_PAD * 2, ROW_HEIGHT,
-                selected and whiteSpan(row.def.title, 1.0)
-                    or greySpan(row.def.title, 0.5),
-                TextFlags.xLeft | TextFlags.yMiddle)
-
-            -- 1px dark separator between consecutive option rows only; header
-            -- banners carry their own bottom edge.
-            if prevType == 'option' then
-                addQuadAt(s.dyn, 'options.list.sep' .. i,
-                    EDGE_MARGIN, top - 1, bannerW, 1, COLOR_ROW_SEP)
-            end
-
-            local kind = row.def.kind
-            if kind == 'toggle' or kind == 'enum' then
-                addChoiceWidget(s, i, row, top, selected)
-            elseif kind == 'range' then
-                addRangeWidget(s, i, row, top, selected)
+            local src = entry
+            local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
+            local controlId
+            if src.def.kind == 'range' then
+                _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5)
             else
-                addExternalWidget(s, i, top)
+                _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
             end
+            local v = { src = src, handle = handle, id = id, controlId = controlId }
+            sub.view[#sub.view + 1] = v
+            pushRow(v)
+            ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
         end
-        prevType = row.type
     end
+
+    -- Trailing weighted spacer. With no weighted child the vertical flex would
+    -- centre a short run of rows in the leftover space; this absorbs that space
+    -- so the rows always start at the top of the list.
+    activePanel.filler = ecs.spawn(activePanel.list)
+    addSize(activePanel.filler, 0, 0, 1)
 end
 
--- Thumb segment sized/positioned as the visible window over all display rows.
-local function buildScrollbarThumb(s)
-    local total = #s.rows
-    if total <= VISIBLE_ROWS then
-        return -- everything fits: no thumb
-    end
-    local trackH = SCROLLBAR_BOTTOM - LIST_TOP
-    local thumbH = math.max(SCROLL_THUMB_MIN,
-        math.floor(trackH * VISIBLE_ROWS / total))
-    local t = (s.scrollRow - 1) / (total - VISIBLE_ROWS)
-    addQuadAt(s.dyn, 'options.scrollbar.thumb',
-        SCROLLBAR_X, LIST_TOP + math.floor(t * (trackH - thumbH)),
-        SCROLLBAR_W, thumbH, COLOR_SEGMENT)
-end
-
--- Bottom strip: heading line, up to two wrapped detail lines and, for options,
--- a "(Default: ...)" line. Header rows show the group name + generic hint.
-local function buildTooltip(s)
-    local font = s.font
-    local width = DESIGN_W - EDGE_MARGIN * 2
-    local row = s.rows[s.cursorRow]
-
-    if row == nil then
-        addTextBox(s.dyn, font, 'options.tooltip.heading',
-            EDGE_MARGIN, TOOLTIP_HEADING_TOP, width, SMALL_CELL + 2,
-            greySpan('OPTIONS', 0.85), TextFlags.xLeft | TextFlags.yTop)
-        return
-    end
-
-    local heading, details
-    if row.type == 'header' then
-        heading = row.label
-        details = { TOOLTIP_HINT }
+-- Clamps offset/cursor, rebuilds the visible row window and moves the thumb.
+-- The list itself never moves: it is pinned to the scroll area. Scrolling is in
+-- entry space (group headers + value rows, all one item tall).
+local function updateScroll(sub)
+    local entryCount = #sub.entries
+    local maxOffset = math.max(0, entryCount - VISIBLE_ROWS)
+    local cursorEntry = sub.rows[sub.cursor]
+    local e = cursorEntry ~= nil and cursorEntry.eindex or 1
+    if e < sub.offset + 1 then
+        sub.offset = e - 1
+        -- If a group header sits directly above the pinned row, pull the window
+        -- up one more so the header stays on screen.
+        if sub.offset > 0 and sub.entries[sub.offset] ~= nil
+            and sub.entries[sub.offset].kind == 'group' then
+            sub.offset = sub.offset - 1
+        end
+    elseif e > sub.offset + VISIBLE_ROWS then
+        sub.offset = e - VISIBLE_ROWS
     else
-        heading = row.def.title
-        details = tooltipLines(row.def.tooltip)
-    end
-
-    addTextBox(s.dyn, font, 'options.tooltip.heading',
-        EDGE_MARGIN, TOOLTIP_HEADING_TOP, width, SMALL_CELL + 2,
-        greySpan(heading, 0.85), TextFlags.xLeft | TextFlags.yTop)
-    for j = 1, #details do
-        addTextBox(s.dyn, font, 'options.tooltip.detail' .. j,
-            EDGE_MARGIN, TOOLTIP_DETAIL_TOP + (j - 1) * TOOLTIP_LINE_STEP,
-            width, SMALL_CELL,
-            whiteSpan(details[j], 0.8), TextFlags.xLeft | TextFlags.yTop)
-    end
-    if row.type == 'option' then
-        addTextBox(s.dyn, font, 'options.tooltip.default',
-            EDGE_MARGIN, TOOLTIP_DEFAULT_TOP, width, SMALL_CELL,
-            greySpan('(Default: ' .. defaultLabel(row.def) .. ')', 0.75),
-            TextFlags.xLeft | TextFlags.yTop)
-    end
-end
-
-local function buildSubTabs(s)
-    s.subtabs = createStrip(s.dyn, s.font, 'options.subtab', SUB_STRIP_CY,
-        s.subcats, s.subcategoryIndex, SUB_GAP, false, 'LT', 'RT')
-end
-
--- Tear down the previous dynamic subtree (if any) and rebuild it from the
--- current state table.
-local function rebuildDynamic(s)
-    if s.dyn ~= nil then
-        scene.destroy(s.dyn)
-        s.dyn = nil
-    end
-    local dyn = scene.createEntity(s.root)
-    scene.setField(dyn, 'name', 'options.dyn')
-    scene.setField(dyn, 'x', 0) -- identity transform: children keep using
-    scene.setField(dyn, 'y', 0) -- design-space offsets from the root centre
-    s.dyn = dyn
-
-    buildSubTabs(s)
-    buildListArea(s)
-    buildScrollbarThumb(s)
-    buildTooltip(s)
-end
-
--------------------------------------------------------------------------------
--- State ----------------------------------------------------------------------
-
--- First half of open(): read the registry and derive the navigation baseline
--- before any entity exists (the tab strips need the category list). `restore`
--- (optional) is a previous session's { categoryIndex, subcategoryIndex,
--- cursorRow, scrollRow } mirrored through the shared table by persistState();
--- out-of-range values are clamped here and by the following refresh().
-local function initNavState(s, restore)
-    s.open = true
-    s.defs = options.list() or {}
-    s.categories = uniqueField(s.defs, 'category')
-    s.categoryIndex = 1
-    s.subcategoryIndex = 1
-    s.cursorRow = 1 -- index into s.rows; may land on a header until navigation skips it
-    s.scrollRow = 1 -- first visible row
-    s.rows = {}
-    -- Cursor memory per (category, subcategory) pair, keyed "cat|sub" -> row.
-    -- In-memory only: discarded when the overlay closes.
-    s.cursorMemory = {}
-    -- Per-direction hold-repeat countdowns for value editing.
-    s.holds = { left = { timer = 0 }, right = { timer = 0 } }
-
-    if type(restore) == 'table' then
-        if type(restore.categoryIndex) == 'number' and restore.categoryIndex >= 1
-            and restore.categoryIndex <= #s.categories then
-            s.categoryIndex = math.floor(restore.categoryIndex)
-        end
-        if type(restore.subcategoryIndex) == 'number' and restore.subcategoryIndex >= 1 then
-            s.subcategoryIndex = math.floor(restore.subcategoryIndex)
-        end
-        if type(restore.cursorRow) == 'number' and restore.cursorRow >= 1 then
-            s.cursorRow = math.floor(restore.cursorRow)
-        end
-        if type(restore.scrollRow) == 'number' and restore.scrollRow >= 1 then
-            s.scrollRow = math.floor(restore.scrollRow)
+        -- Cursor already sits inside the window. If a group header is the entry
+        -- immediately above the window and the cursor is the topmost visible
+        -- row, pull the window up one so the heading is shown. Without this, the
+        -- first row of a group can never reveal its own heading once scrolled
+        -- down: the cursor (which can never rest on the non-selectable header)
+        -- keeps offset pinned at 1, so the very first group heading is lost.
+        if sub.offset > 0 and e == sub.offset + 1 and sub.entries[sub.offset] ~= nil
+            and sub.entries[sub.offset].kind == 'group' then
+            sub.offset = sub.offset - 1
         end
     end
+    if sub.offset > maxOffset then
+        sub.offset = maxOffset
+    elseif sub.offset < 0 then
+        sub.offset = 0
+    end
+
+    rebuildList(sub)
+
+    local thumbH = math.max(14,
+        math.floor(VIEW_H * math.min(entryCount, VISIBLE_ROWS) / entryCount))
+    local frac = maxOffset > 0 and sub.offset / maxOffset or 0
+    local size = scene.component(sub.thumb, 'core.ui_size')
+    scene.setField(size, 'height', thumbH)
+    scene.setField(sub.thumb, 'y', frac * (VIEW_H - thumbH) - VIEW_H * 0.5 + thumbH * 0.5)
 end
 
--- Mirror the navigation state into the cross-VM `shared` table so a hot reload
--- of the game module can restore the overlay exactly as it was (menu.lua
--- reopens the overlay from shared.options when OPENRE_FAST_RELOAD is set).
-local function persistState(s)
-    if shared == nil then
-        return
+local function refreshPane()
+    local sub = activePanel.subs[tabs.selectedIndex(activePanel.subStripId)]
+    local row = sub.rows[sub.cursor]
+    scene.setField(paneHeading, 'text', span('#ffffff', row.label))
+    scene.setField(paneBody, 'text', span('#9a9a9a', row.desc))
+end
+
+-- Shows `sub`'s rows in the single shared list. The previously shown sub's
+-- rows are destroyed first (they live in the same list), then `sub` is
+-- rebuilt and scrolled into view.
+local function activateSub(sub)
+    local prev = activePanel.activeSub
+    if prev ~= nil and prev ~= sub then
+        for _, v in ipairs(prev.view or {}) do
+            ecs.destroyEntity(v.handle)
+        end
+        prev.view = {}
     end
-    shared.options = {
-        open = true,
-        categoryIndex = s.categoryIndex,
-        subcategoryIndex = s.subcategoryIndex,
-        cursorRow = s.cursorRow,
-        scrollRow = s.scrollRow,
+    activePanel.activeSub = sub
+    updateScroll(sub)
+    refreshSelection(sub)
+end
+
+-- Builds one main category's entities under the static tree. Everything is
+-- parented to two roots so switching categories destroys exactly two nodes.
+local function buildPanel(cat)
+    local subStripHandle, subStripId = tabs.addStrip(left, 0, 0, 2)
+    local subStripSize = scene.component(subStripHandle, 'core.ui_size')
+    scene.setField(subStripSize, 'width', DESIGN_W * 0.5)
+    scene.setField(subStripSize, 'height', STRIP_H)
+    for _, sub in ipairs(cat.subs) do
+        tabs.addTab(subStripId, sub.label)
+    end
+
+    -- Scroll area: a horizontal flex of [list (weight 1) | scrollbar
+    -- (weight 0)]. A single list is rebuilt per sub category; the scrollbar
+    -- holds the shared track and thumb.
+    local scrollArea = ecs.spawn(left)
+    scene.setField(scrollArea, 'name', 'scroll_area')
+    addSize(scrollArea, DESIGN_W * 0.5, VIEW_H)
+    addFlex(scrollArea, 'horizontal', 2)
+
+    -- Single list: a vertical flex (weight 1) rebuilt for the active sub.
+    local list = ecs.spawn(scrollArea)
+    scene.setField(list, 'name', 'list')
+    addSize(list, 0, 0, 1)
+    addFlex(list, 'vertical', 0)
+
+    -- Scrollbar (weight 0): an overlay box holding the track and thumb.
+    local scrollbar = ecs.spawn(scrollArea)
+    scene.setField(scrollbar, 'name', 'scrollbar')
+    addSize(scrollbar, SCROLLBAR_W, 0)
+    local track = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_TRACK, 0)
+    local thumb = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_THUMB, 0)
+
+    -- Trailing weighted spacer keeps the fixed-height children top-packed.
+    local filler = ecs.spawn(left)
+    scene.setField(filler, 'name', 'filler')
+    addSize(filler, 0, 0, 1)
+    for _, sub in ipairs(cat.subs) do
+        sub.track = track
+        sub.thumb = thumb
+        sub.cursor = 1
+        sub.offset = 0
+        sub.view = {}
+    end
+
+    tabs.setSelectedIndex(subStripId, 1)
+
+    activePanel = {
+        cat = cat,
+        subStripId = subStripId,
+        subs = cat.subs,
+        list = list,
+        scrollbar = scrollbar,
+        activeSub = nil,
+        filler = nil,
+        roots = { scene.entityFromId(subStripId), scrollArea, filler },
     }
+    activateSub(cat.subs[1])
 end
 
--- Recompute everything derived from the state table and redraw the dynamic
--- subtree. open() calls it once; the navigation actions below call it after
--- every category/cursor/value change (exactly once per input frame).
-local function refresh(s)
-    if s.categoryIndex < 1 or s.categoryIndex > #s.categories then
-        s.categoryIndex = 1
+local function destroyPanel()
+    if activePanel == nil then
+        return
     end
-    s.subcats = subCategories(s)
-    if s.subcategoryIndex < 1 or s.subcategoryIndex > #s.subcats then
-        s.subcategoryIndex = 1
+    for _, handle in ipairs(activePanel.roots) do
+        scene.destroy(handle)
     end
-    s.rows = rebuildRows(s)
-    clampScroll(s, VISIBLE_ROWS)
-    persistState(s)
-
-    local ok, err = pcall(rebuildDynamic, s)
-    if not ok then
-        print('[options] refresh failed: ' .. tostring(err))
+    for _, sub in ipairs(activePanel.cat.subs) do
+        sub.track = nil
+        sub.thumb = nil
+        sub.view = nil
     end
+    activePanel = nil
 end
 
 -------------------------------------------------------------------------------
--- Input navigation -----------------------------------------------------------
--- Small named actions shared by the tick handler: each one updates the state
--- table then redraws exactly once through refresh().
+-- Popup lifecycle ------------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- "category|subcategory" key of the current location (cursor memory).
-local function locationKey(s)
-    return categoryName(s) .. '|' .. tostring(s.subcats[s.subcategoryIndex])
+-- Opens the overlay. `restore` is accepted for call-site compatibility but the
+-- overlay always opens at its default category/scroll position (no persisted
+-- state is kept between opens).
+local function open(restore)
+    if isOpenFlag then
+        return
+    end
+    isOpenFlag = true
+    buildCatalog()
+    buildTree()
+    buildPanel(CATALOG[1])
+    refreshPane()
+    print('[options] ready')
 end
 
--- Any state change restarts both hold-repeat countdowns.
-local function resetHolds(s)
-    s.holds.left.timer = 0
-    s.holds.right.timer = 0
+local function close()
+    if not isOpenFlag then
+        return
+    end
+    isOpenFlag = false
+    if optionsHandle ~= nil then
+        scene.destroy(optionsHandle)
+        optionsHandle = nil
+    end
+    if backdrop ~= nil then
+        scene.destroy(backdrop)
+        backdrop = nil
+    end
+    frame = nil
+    activePanel = nil
 end
 
--- Move the list cursor one selectable row up/down. Header rows are skipped,
--- the ends do not wrap, and clampScroll() inside refresh() keeps the cursor
--- row fully visible - scrolling by exactly one row at the window edges. The
--- landing row is remembered for this tab pair.
-local function moveCursor(s, delta)
-    local rows = s.rows
-    if rows == nil or #rows == 0 then
-        return
-    end
-    -- Landed on a header (fresh open): vertical input snaps to the nearest
-    -- selectable row instead of stepping past it.
-    local from = s.cursorRow + delta
-    if rows[s.cursorRow] ~= nil and rows[s.cursorRow].type ~= 'option' then
-        from = s.cursorRow
-    end
-    local target = findSelectable(rows, from, delta)
-    if target == nil then
-        return
-    end
-    s.cursorRow = target
-    s.cursorMemory[locationKey(s)] = target
-    resetHolds(s)
-    refresh(s)
-end
-
--- Step the cursor option's value by delta (+/-1). Toggles/enums move their
--- label index without wrapping at the ends; ranges move along their step grid
--- clamped to [min, max]; external rows have no editable value here. A value
--- that did not change (clamped) or a rejected options.set is ignored.
-local function adjustValue(s, delta)
-    local row = s.rows ~= nil and s.rows[s.cursorRow] or nil
-    if row == nil or row.type ~= 'option' then
-        return
-    end
-    local def = row.def
-    if def.kind ~= 'toggle' and def.kind ~= 'enum' and def.kind ~= 'range' then
-        return
-    end
-    local value = options.get(def.id)
-    if value == nil then
-        return
-    end
-    local newValue
-    if def.kind == 'range' then
-        local step = ((def.step or 1) > 1) and def.step or 1
-        newValue = value + delta * step
-        local lo = def.min or 0
-        local hi = def.max or lo
-        if newValue < lo then
-            newValue = lo
-        end
-        if newValue > hi then
-            newValue = hi
-        end
-    else
-        local count = #(def.labels or {})
-        newValue = value + delta
-        if newValue < 0 or newValue >= count then
-            return -- against an end chevron: clamped, no wrap
-        end
-    end
-    if newValue == value or not options.set(def.id, newValue) then
-        return
-    end
-    refresh(s)
-end
-
--- Shared tail of a tab/subtab switch: recompute the subcategory list for the
--- new location, restore its remembered cursor row (or the first selectable
--- row), park the scroll window around it and redraw once.
-local function enterLocation(s)
-    s.subcats = subCategories(s)
-    if s.subcategoryIndex < 1 or s.subcategoryIndex > #s.subcats then
-        s.subcategoryIndex = 1
-    end
-    local rows = rebuildRows(s)
-    local remembered = s.cursorMemory[locationKey(s)]
-    local target = nil
-    if remembered ~= nil and rows[remembered] ~= nil
-        and rows[remembered].type == 'option' then
-        target = remembered
-    end
-    if target == nil then
-        target = findSelectable(rows, 1, 1) or 1
-    end
-    s.rows = rows
-    s.cursorRow = target
-    -- Park the scroll window around the restored cursor (centre-ish), clamped
-    -- to the list; clampScroll() inside refresh() finishes the job.
-    s.scrollRow = math.max(1, math.min(
-        target - math.floor(VISIBLE_ROWS * 0.5),
-        math.max(1, #rows - VISIBLE_ROWS + 1)))
-    resetHolds(s)
-    refresh(s)
-end
-
--- Switch the outer tab, wrapping around both ends; lands on the new
--- category's first subcategory with its remembered cursor restored.
-local function switchCategory(s, delta)
-    local count = #s.categories
-    if count == 0 then
-        return
-    end
-    s.categoryIndex = ((s.categoryIndex - 1 + delta) % count) + 1
-    s.subcategoryIndex = 1
-    enterLocation(s)
-end
-
--- Switch the inner subtab of the current category, wrapping around both ends.
-local function switchSubcategory(s, delta)
-    local count = #s.subcats
-    if count == 0 then
-        return
-    end
-    s.subcategoryIndex = ((s.subcategoryIndex - 1 + delta) % count) + 1
-    enterLocation(s)
-end
-
--- Auto-repeat for held left/right VALUE EDITS only: the pressed edge already
--- applied the first step, so after HOLD_REPEAT_DELAY frames of holding the
--- same step fires again, then one more every HOLD_REPEAT_RATE frames.
--- Releasing - or any navigation via resetHolds() - restarts the countdown.
-local function tickHold(s, direction, delta)
-    local hold = s.holds[direction]
-    if not input.down(direction) then
-        hold.timer = 0
-        return
-    end
-    hold.timer = hold.timer + 1
-    if hold.timer >= HOLD_REPEAT_DELAY
-        and (hold.timer - HOLD_REPEAT_DELAY) % HOLD_REPEAT_RATE == 0 then
-        adjustValue(s, delta)
-    end
+local function isOpen()
+    return isOpenFlag
 end
 
 -------------------------------------------------------------------------------
--- Open / close / tick --------------------------------------------------------
+-- Per-frame input ------------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- Keep one scaled-frame layer tracking the window: recentre it and refresh its
--- target so ScaledFrameSystem recomputes the contain-fit scale every frame.
-local function fitLayer(entity, frame)
-    local w = gfx.screenWidth()
-    local h = gfx.screenHeight()
-    scene.setField(entity, 'x', w * 0.5)
-    scene.setField(entity, 'y', h * 0.5)
-    scene.setField(frame, 'target.width', w)
-    scene.setField(frame, 'target.height', h)
-end
+re.subscribe(HookKind.tick, function()
+    if not isOpenFlag or activePanel == nil then
+        return
+    end
+    fitCanvas()
 
--- Solid backdrop covering the whole window, behind everything (BACKDROP_Z).
-local function refreshBackdrop(s)
-    local w = gfx.screenWidth()
-    local h = gfx.screenHeight()
-    scene.setField(s.backdrop, 'x', w * 0.5)
-    scene.setField(s.backdrop, 'y', h * 0.5)
-    scene.setField(s.backdropSize, 'width', w)
-    scene.setField(s.backdropSize, 'height', h)
-end
+    -- Tab selection is written by the native systems after this hook, so
+    -- these reads lag one frame; fine for a demo.
+    local mainSel = tabs.selectedIndex(mainStripId)
+    if mainSel ~= lastMainSel then
+        lastMainSel = mainSel
+        destroyPanel()
+        buildPanel(CATALOG[mainSel])
+        lastSubSel = 1
+        refreshPane()
+    end
 
-local function update(s)
-    -- Re-centre/re-fit every frame so resizes are tracked.
-    fitLayer(s.root, s.frame)
-    refreshBackdrop(s)
+    local subSel = tabs.selectedIndex(activePanel.subStripId)
+    if subSel ~= lastSubSel then
+        lastSubSel = subSel
+        activateSub(activePanel.subs[subSel])
+        refreshPane()
+    end
 
-    -- Cancel persists any edited values, then closes.
+    local sub = activePanel.subs[subSel]
+
+    local function wrap(value, delta, count)
+        return ((value - 1 + delta) % count) + 1
+    end
+
+    -- Back/cancel closes the popup, flushing any pending value changes.
     if input.pressed('cancel') then
         options.flush()
-        Options.close()
+        close()
         return
     end
 
-    -- List cursor: edge-triggered only, never auto-repeats.
     if input.pressed('up') then
-        moveCursor(s, -1)
+        sub.cursor = wrap(sub.cursor, -1, #sub.rows)
+        refreshSelection(sub)
+        updateScroll(sub)
+        refreshPane()
     elseif input.pressed('down') then
-        moveCursor(s, 1)
+        sub.cursor = wrap(sub.cursor, 1, #sub.rows)
+        refreshSelection(sub)
+        updateScroll(sub)
+        refreshPane()
     end
 
-    if input.pressed('left') then
-        adjustValue(s, -1)
-    elseif input.pressed('right') then
-        adjustValue(s, 1)
-    end
-
-    -- Outer tabs wrap; subtabs wrap within the current category.
-    if input.pressed('tab_left') then
-        switchCategory(s, -1)
-    elseif input.pressed('tab_right') then
-        switchCategory(s, 1)
-    end
-
-    if input.pressed('subtab_left') then
-        switchSubcategory(s, -1)
-    elseif input.pressed('subtab_right') then
-        switchSubcategory(s, 1)
-    end
-
-    -- Held left/right keeps stepping the edited value (value editing only).
-    tickHold(s, 'left', -1)
-    tickHold(s, 'right', 1)
-end
-
-local function teardown(s)
-    if s == nil then
-        return
-    end
-    -- The backdrop lives directly under the user root; everything else hangs
-    -- off the content root and dies with it.
-    if s.backdrop ~= nil then
-        scene.destroy(s.backdrop)
-    end
-    if s.root ~= nil then
-        scene.destroy(s.root)
-    end
-end
-
--- Build the static chrome (backdrop, scaled-frame root, heading, outer tab
--- strip, rules, scrollbar track) into the (already created) state table `s`.
--- Running it under pcall with a pre-made table means a failure midway can
--- still tear down whatever was created so far.
-local function buildAll(s)
-    -- Solid black overlay across the whole window, painted behind everything
-    -- via its explicit z.
-    s.backdrop = scene.createEntity(scene.getRoot('user'))
-    scene.setField(s.backdrop, 'name', 'options.backdrop')
-    s.backdropSprite = scene.addComponent(s.backdrop, 'core.sprite')
-    scene.setField(s.backdropSprite, 'color', COLOR_BACKDROP)
-    s.backdropSize = scene.addComponent(s.backdrop, 'core.ui_size')
-    scene.setField(s.backdropSize, 'width', gfx.screenWidth())
-    scene.setField(s.backdropSize, 'height', gfx.screenHeight())
-    scene.setField(s.backdropSprite, 'z', BACKDROP_Z)
-    scene.setField(s.backdrop, 'x', gfx.screenWidth() * 0.5)
-    scene.setField(s.backdrop, 'y', gfx.screenHeight() * 0.5)
-
-    -- Content root: maps the 640x480 design space onto the window with a
-    -- native scaled frame ("contain"). fitLayer() places it at the window
-    -- centre every tick; children live in offsets from that centre.
-    s.root = scene.createEntity(scene.getRoot('user'))
-    scene.setField(s.root, 'name', 'options.root')
-    s.frame = scene.addComponent(s.root, 'core.scaled_frame')
-    scene.setField(s.frame, 'source.width', DESIGN_W)
-    scene.setField(s.frame, 'source.height', DESIGN_H)
-    scene.setField(s.frame, 'mode', 'contain')
-    scene.setField(s.frame, 'increment', 0)
-    fitLayer(s.root, s.frame)
-
-    s.font = gfx.loadFont(FONT_PATH)
-    if s.font == nil then
-        print('[options] failed to load font: ' .. FONT_PATH)
-    end
-
-    -- External-action icon, loaded once per open; a nil texture falls back to
-    -- a hollow placeholder square (warned once, here).
-    s.externalTex = gfx.loadTexture(EXTERNAL_TEXTURE)
-    if s.externalTex == nil then
-        print('[options] external icon texture not found: ' .. EXTERNAL_TEXTURE)
-    end
-
-    -- Heading.
-    addTextBox(s.root, s.font, 'options.heading',
-        HEADING_LEFT, HEADING_TOP, HEADING_BAND_W, HEADING_BAND_H,
-        whiteSpan('OPTIONS', 0.95), TextFlags.xLeft | TextFlags.yTop)
-
-    -- Outer tab strip with LB/RB hints and "|" separators; one tab per
-    -- registered category.
-    s.tabs = createStrip(s.root, s.font, 'options.tab', TAB_STRIP_CY,
-        s.categories, s.categoryIndex, TAB_GAP, true, 'LB', 'RB')
-    createRule(s, TAB_RULE_Y)
-
-    -- Static hairline under the (dynamic) subtab strip.
-    createRule(s, SUB_RULE_Y)
-
-    -- Scrollbar track; the thumb is rebuilt by refresh().
-    addQuadAt(s.root, 'options.scrollbar.track',
-        SCROLLBAR_X, LIST_TOP, SCROLLBAR_W, SCROLLBAR_BOTTOM - LIST_TOP, COLOR_TRACK)
-end
-
-function Options.open(restore)
-    if state ~= nil then
-        return -- already open
-    end
-
-    local draft = {}
-    local ok, err = pcall(initNavState, draft, restore)
-    if not ok then
-        print('[options] open failed: ' .. tostring(err))
-        return
-    end
-
-    -- Build the whole entity tree into the (already created) state table.
-    -- Running it under pcall means a failure midway can still tear down
-    -- whatever was created so far.
-    ok, err = pcall(buildAll, draft)
-    if not ok then
-        print('[options] open failed: ' .. tostring(err))
-        pcall(teardown, draft)
-        return
-    end
-
-    state = draft
-    ok, err = pcall(refresh, state) -- rows + dynamic subtree + tooltip
-    if not ok then
-        print('[options] open failed: ' .. tostring(err))
-        state = nil
-        pcall(teardown, draft)
-        return
-    end
-    -- Never rest the initial cursor on a group banner (a restored cursorRow
-    -- may also exceed the rebuilt rows - clamp it first).
-    local rows = state.rows
-    if state.cursorRow > #rows then
-        state.cursorRow = math.max(1, #rows)
-    end
-    if rows[state.cursorRow] ~= nil and rows[state.cursorRow].type ~= 'option' then
-        local target = findSelectable(rows, 1, 1)
-        if target ~= nil then
-            state.cursorRow = target
+    if input.pressed('left') or input.pressed('right') then
+        local v = cursorView(sub)
+        if v ~= nil and v.src.editable then
+            -- Value selection never wraps: clamp to the first/last option.
+            local delta = input.pressed('right') and 1 or -1
+            v.src.index = math.max(1, math.min(#v.src.options, v.src.index + delta))
+            -- Persist into the native options registry.
+            options.set(v.src.def.id, indexToValue(v.src.def, v.src.index))
+            -- Re-read in case the value was clamped or snapped to a step grid.
+            local value = options.get(v.src.def.id) or v.src.def.default
+            v.src.index = valueToIndex(v.src.def, value)
+            options.flush()
+            pushRow(v)
         end
-    end
-    print('[options] opened')
-end
-
-function Options.close()
-    local s = state
-    if s == nil then
-        return
-    end
-    state = nil -- stop the tick handler before touching the tree
-    -- Record the closed state so a hot reload does not resurrect the overlay.
-    if shared ~= nil then
-        shared.options = { open = false }
-    end
-    local ok, err = pcall(teardown, s)
-    if not ok then
-        print('[options] close failed: ' .. tostring(err))
-        return
-    end
-    print('[options] closed')
-end
-
-function Options.isOpen()
-    return state ~= nil
-end
-
--- The sandbox exposes no unsubscribe API, so the tick subscription made below
--- is permanent but inert: it does nothing until open() populates `state`, and
--- stops doing work once close() clears it.
-re.subscribe(HookKind.tick, function()
-    local s = state
-    if s == nil then
-        return
-    end
-    local ok, err = pcall(update, s)
-    if not ok then
-        print('[options] tick error: ' .. tostring(err))
     end
 end)
 
 return {
-    open = Options.open,
-    close = Options.close,
-    isOpen = Options.isOpen,
+    open = open,
+    close = close,
+    isOpen = isOpen,
 }
