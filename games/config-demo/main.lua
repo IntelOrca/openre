@@ -203,9 +203,23 @@ for _, cat in ipairs(CATALOG) do
         end
     end
     for _, sub in ipairs(cat.subs) do
+        sub.entries = {}
+        sub.rows = {}
+        local prevGroup = nil
         for _, def in ipairs(defs) do
             if def.category == cat.label and def.subcategory == sub.label then
-                sub.rows[#sub.rows + 1] = makeRow(def)
+                -- A group header is inserted whenever the option's group differs
+                -- from the previous one (and is non-empty). Group headers and
+                -- value rows share one uniform-height scroll window.
+                if def.group ~= '' and def.group ~= prevGroup then
+                    sub.entries[#sub.entries + 1] = { kind = 'group', text = def.group }
+                    prevGroup = def.group
+                end
+                local row = makeRow(def)
+                row.kind = 'row'
+                sub.entries[#sub.entries + 1] = row
+                row.eindex = #sub.entries
+                sub.rows[#sub.rows + 1] = row
             end
         end
     end
@@ -339,7 +353,9 @@ end
 local function refreshSelection(sub)
     local sel = sub.rows[sub.cursor]
     for _, v in ipairs(sub.view) do
-        ecs.set(v.id, 'ui.config_list_item', 'selected', v.src == sel)
+        if v.src ~= nil then
+            ecs.set(v.id, 'ui.config_list_item', 'selected', v.src == sel)
+        end
     end
 end
 
@@ -368,20 +384,28 @@ local function rebuildList(sub)
     sub.view = {}
 
     local first = sub.offset + 1
-    local last = math.min(#sub.rows, first + VISIBLE_ROWS - 1)
+    local last = math.min(#sub.entries, first + VISIBLE_ROWS - 1)
     for i = first, last do
-        local src = sub.rows[i]
-        local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
-        local controlId
-        if src.def.kind == 'range' then
-            _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5)
+        local entry = sub.entries[i]
+        if entry.kind == 'group' then
+            -- Group header: same height as a list item, never selectable.
+            local handle, id = config.addListGroup(activePanel.list, 0, 0, ITEM_WIDTH)
+            ecs.set(id, 'ui.config_list_group', 'text', entry.text)
+            sub.view[#sub.view + 1] = { entry = entry, handle = handle, id = id }
         else
-            _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
+            local src = entry
+            local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
+            local controlId
+            if src.def.kind == 'range' then
+                _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5)
+            else
+                _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
+            end
+            local v = { src = src, handle = handle, id = id, controlId = controlId }
+            sub.view[#sub.view + 1] = v
+            pushRow(v)
+            ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
         end
-        local v = { src = src, handle = handle, id = id, controlId = controlId }
-        sub.view[#sub.view + 1] = v
-        pushRow(v)
-        ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
     end
 
     -- Trailing weighted spacer. With no weighted child the vertical flex would
@@ -392,25 +416,28 @@ local function rebuildList(sub)
 end
 
 -- Clamps offset/cursor, rebuilds the visible row window and moves the thumb.
--- The list itself never moves: it is pinned to the scroll area.
+-- The list itself never moves: it is pinned to the scroll area. Scrolling is in
+-- entry space (group headers + value rows, all one item tall).
 local function updateScroll(sub)
-    local rows = #sub.rows
-    local maxOffset = math.max(0, rows - VISIBLE_ROWS)
+    local entryCount = #sub.entries
+    local maxOffset = math.max(0, entryCount - VISIBLE_ROWS)
+    local cursorEntry = sub.rows[sub.cursor]
+    local e = cursorEntry ~= nil and cursorEntry.eindex or 1
+    if e < sub.offset + 1 then
+        sub.offset = e - 1
+    elseif e > sub.offset + VISIBLE_ROWS then
+        sub.offset = e - VISIBLE_ROWS
+    end
     if sub.offset > maxOffset then
         sub.offset = maxOffset
     elseif sub.offset < 0 then
         sub.offset = 0
     end
-    if sub.cursor < sub.offset + 1 then
-        sub.offset = sub.cursor - 1
-    elseif sub.cursor > sub.offset + VISIBLE_ROWS then
-        sub.offset = sub.cursor - VISIBLE_ROWS
-    end
 
     rebuildList(sub)
 
     local thumbH = math.max(14,
-        math.floor(VIEW_H * math.min(rows, VISIBLE_ROWS) / rows))
+        math.floor(VIEW_H * math.min(entryCount, VISIBLE_ROWS) / entryCount))
     local frac = maxOffset > 0 and sub.offset / maxOffset or 0
     local size = scene.component(sub.thumb, 'core.ui_size')
     scene.setField(size, 'height', thumbH)

@@ -1,7 +1,7 @@
 -- ui/config.lua - configuration list item controls built on the Lua ECS
 -- (see games/core/script/ecs.lua).
 --
--- There are three controls:
+-- There are four controls:
 --
 -- * ui.config_enum ('<' value row used by settings lists). A game creates
 --   one entity inside a row and drives its fields:
@@ -34,6 +34,21 @@
 --   vertical ticks (the end ticks slightly taller) and a full-height marker on
 --   the current value. The 'ui.config' system builds the ticks from
 --   (max - min) / step + 1 and never wraps.
+--
+-- * ui.config_list_group (a group header band the same height as a list item,
+--   placed before the options of a group). A game creates it with
+--   config.addListGroup(parent, x, y, width) and drives:
+--
+--       local handle, id = config.addListGroup(listHandle, 0, 0, 290)
+--       ecs.set(id, 'ui.config_list_group', 'text', 'CHEATS')
+--
+--   The control is a vertical flex of [spacer | bottom band | rule]: the band is
+--   a horizontal flex of [gray back box (weighted) | spacer], the gray box is an
+--   overlay holding the gray sprite (behind) and the white category text, and the
+--   rule is the 1px underline shared with the list items. The native
+--   UiFlexSystem positions and sizes every box; the registered
+--   'ui.config_list_group' system only mirrors the text field into the label
+--   markup and never writes geometry.
 --
 -- * ui.config_list_item (a whole settings row wrapping one control). A game
 --   creates it with config.addListItem(parent, width), attaches one enum
@@ -95,6 +110,10 @@ local COLOR_DIAMOND = { 255, 255, 255, 255 }
 local COLOR_SEL_BG = { 36, 52, 100, 255 }
 local COLOR_SEL_BORDER = { 230, 230, 230, 255 }
 
+-- List group header band.
+local COLOR_GROUP_BG = { 50, 50, 50, 255 }   -- gray back box
+local GROUP_PAD = 6        -- vertical padding of the gray back box around its text
+
 -- Decorative rects sit behind text glyph sprites (which render at z = 0);
 -- higher z sorts further back / draws earlier. Back-to-front: underline,
 -- selection ring, blue interior fill, enum internals, diamond, glyphs.
@@ -104,6 +123,7 @@ local Z_SEL_FILL = 65
 local Z_ARROW = 50
 local Z_BAR = 50
 local Z_DIAMOND = 40
+local Z_GROUP_BG = Z_LINE - 10  -- gray band sits behind the rule and text
 
 -- ui.config_range slider control constants.
 local RANGE_BLOCK_H = ENUM_BLOCK_H   -- matches the enum control height
@@ -148,6 +168,11 @@ ecs.registerComponent('ui.config_list_item', {
     -- true while the paired enum value differs from its default; shows the
     -- changed diamond after the underline.
     { name = 'changed', type = 'bool', default = false },
+})
+
+ecs.registerComponent('ui.config_list_group', {
+    -- The group / category title drawn in white on the gray band.
+    { name = 'text', type = 'string', default = '' },
 })
 
 -------------------------------------------------------------------------------
@@ -263,6 +288,7 @@ end
 local enumTree = {}
 local itemTree = {}
 local rangeTree = {}
+local groupTree = {}
 
 -- Drops bookkeeping for entities that no longer exist.
 local function pruneTrees()
@@ -492,6 +518,80 @@ function config.addListItem(parent, x, y, width)
     return handle, id, row
 end
 
+--- Create a group header row under `parent`. Its box is `width` wide and
+--- `config.ITEM_HEIGHT` tall so it lines up with the list items around it. The
+--- header is a vertical flex of [spacer | bottom band | rule]: the band is a
+--- horizontal flex of [gray back box (weighted) | spacer (weighted)], the gray
+--- box is a bottom-left tag exactly half the band's content width (so half the
+--- row width at whatever width the flex system lays the row out at) holding the
+--- gray sprite (behind) and the white category text, and the rule is the 1px
+--- underline shared with the list items. The 'ui.config_list_group' system
+--- mirrors the `text` field into the label markup.
+---@param parent SceneEntity
+---@param x number Canvas-space centre X.
+---@param y number Canvas-space centre Y.
+---@param width? integer Total row width in design pixels.
+---@return SceneEntity handle
+---@return integer id
+function config.addListGroup(parent, x, y, width)
+    local handle, id = ecs.spawn(parent)
+    assert(id ~= nil, 'ui.config.addListGroup: spawn failed')
+    scene.setField(handle, 'name', 'ui.config_list_group')
+    scene.setField(handle, 'x', x)
+    scene.setField(handle, 'y', y)
+    ecs.addComponent(id, 'ui.config_list_group')
+    addSize(handle, width or 240, ITEM_H)
+    addFlex(handle, 'vertical', 0)
+
+    -- Weighted top spacer; absorbs any rounding so the band + rule fill the row.
+    addSpacer(handle, 'ui.config_list_group.spacer', 0, 0, 1)
+
+    -- Bottom band: horizontal flex, no padding, so the gray box sits flush with
+    -- the left edge of the row. The gray box is a left-aligned tag half the row
+    -- width; a trailing weighted spacer pins it to the left edge. Weight 1 lets
+    -- the band fill the row above the rule.
+    local bottom, bottomId = ecs.spawn(handle)
+    scene.setField(bottom, 'name', 'ui.config_list_group.bottom')
+    addSize(bottom, 0, ITEM_H - LINE_H, 1)
+    addFlex(bottom, 'horizontal', 0)
+
+    -- Gray back box: fills the bottom band's height (stretch) and takes half the
+    -- row width (weight 1:1 with the trailing spacer). It carries its own gray
+    -- sprite (drawn behind the text) and the white category text; no dedicated
+    -- background sub-entity is needed.
+    local grayBack, grayBackId = ecs.spawn(bottom)
+    scene.setField(grayBack, 'name', 'ui.config_list_group.gray_back')
+    addSize(grayBack, 0, TEXT_ROW_H + GROUP_PAD * 2, 1)
+    addFlex(grayBack, 'none', nil, 1)
+    -- Stretch to the band height; the weight shares the row 50:50 with the spacer.
+    scene.setField(scene.component(grayBack, 'core.ui_size'), 'alignment', 'stretch')
+    local sprite = scene.addComponent(grayBack, 'core.sprite')
+    scene.setField(sprite, 'color', COLOR_GROUP_BG)
+    scene.setField(sprite, 'z', Z_GROUP_BG)
+
+    local labelHandle, labelId = ecs.spawn(grayBack)
+    scene.setField(labelHandle, 'name', 'ui.config_list_group.label')
+    local t = scene.addComponent(labelHandle, 'core.text')
+    scene.setField(t, 'font', uiFont)
+    scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yMiddle)
+    addSize(labelHandle, 0, 0, 1)
+
+    -- Trailing weighted spacer: shares the band 50:50 with the gray box and
+    -- pins it to the left edge.
+    addSpacer(bottom, 'ui.config_list_group.trailing', 0, 0, 1)
+
+    -- Underline shared with the list items.
+    addQuad(handle, 'ui.config_list_group.rule', width or 240, LINE_H, COLOR_LINE, Z_LINE)
+
+    groupTree[id] = {
+        labelId = labelId,
+        grayBackId = grayBackId,
+        markup = nil,
+    }
+
+    return handle, id
+end
+
 -- Natural item box height, for callers composing lists with flex gaps.
 config.ITEM_HEIGHT = ITEM_H
 
@@ -600,6 +700,37 @@ ecs.registerSystem('ui.config_list_item', 900, function()
         -- Changed diamond fills its reserved slot while the value differs
         -- from the default.
         ensureDiamond(tree, changed)
+    end)
+end)
+
+-- Group header system: mirrors the text field into the white category label.
+-- Runs alongside the list item system so a freshly attached group draws this frame.
+ecs.registerSystem('ui.config_list_group', 900, function()
+    for gid in pairs(groupTree) do
+        if scene.entityFromId(gid) == nil then
+            groupTree[gid] = nil
+        end
+    end
+
+    ecs.each('ui.config_list_group', function(gid)
+        local tree = groupTree[gid]
+        if tree == nil then
+            return
+        end
+        local handle = scene.entityFromId(gid)
+        if handle == nil then
+            return
+        end
+
+        local text = ecs.get(gid, 'ui.config_list_group', 'text')
+        local markup = '<span color="' .. COLOR_TEXT .. '">' .. text .. '</span>'
+        if tree.markup ~= markup then
+            local labelHandle = scene.entityFromId(tree.labelId)
+            if labelHandle ~= nil then
+                scene.setField(scene.component(labelHandle, 'core.text'), 'text', markup)
+            end
+            tree.markup = markup
+        end
     end)
 end)
 
