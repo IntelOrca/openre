@@ -29,6 +29,7 @@ local root = scene.getRoot('user')
 -- Popup module state.
 local isOpenFlag = false
 local optionsHandle = nil
+local canvasHandle = nil
 local backdrop = nil
 local frame = nil
 
@@ -71,8 +72,11 @@ local function addFlex(handle, orientation, gap, padding)
 end
 
 -- A text child of a flex container; position is owned by the parent flex.
-local function addText(parentHandle, w, h, markup, small, flags)
+local function addText(parentHandle, w, h, markup, small, flags, name)
     local handle = ecs.spawn(parentHandle)
+    if name ~= nil then
+        scene.setField(handle, 'name', name)
+    end
     local t = scene.addComponent(handle, 'core.text')
     scene.setField(t, 'font', small and smFont or stdFont)
     scene.setField(t, 'text', markup)
@@ -83,8 +87,11 @@ end
 
 -- A solid-colour quad child centred on its own origin. Coordinates are in
 -- the parent's local space.
-local function addQuad(parentHandle, cx, cy, w, h, color, z)
+local function addQuad(parentHandle, cx, cy, w, h, color, z, name)
     local handle = ecs.spawn(parentHandle)
+    if name ~= nil then
+        scene.setField(handle, 'name', name)
+    end
     scene.setField(handle, 'x', cx)
     scene.setField(handle, 'y', cy)
     local sprite = scene.addComponent(handle, 'core.sprite')
@@ -219,27 +226,23 @@ local COLOR_THUMB = { 180, 180, 180, 255 }
 local function fitCanvas()
     scene.setField(frame, 'target.width', gfx.screenWidth())
     scene.setField(frame, 'target.height', gfx.screenHeight())
-    scene.setField(optionsHandle, 'x', gfx.screenWidth() * 0.5)
-    scene.setField(optionsHandle, 'y', gfx.screenHeight() * 0.5)
+    scene.setField(canvasHandle, 'x', gfx.screenWidth() * 0.5)
+    scene.setField(canvasHandle, 'y', gfx.screenHeight() * 0.5)
 end
 
 -- Builds the canvas + static flex tree under a fresh root entity.
 local function buildTree()
+    -- Owner node for the whole overlay; both the backdrop and the scaled
+    -- canvas hang off it so the popup is a single destroyable subtree.
     optionsHandle = scene.createEntity(root)
     scene.setField(optionsHandle, 'name', 'options')
-    frame = scene.addComponent(optionsHandle, 'core.scaled_frame')
-    scene.setField(frame, 'source.width', DESIGN_W)
-    scene.setField(frame, 'source.height', DESIGN_H)
-    scene.setField(frame, 'mode', 'contain')
-    scene.setField(frame, 'increment', 0)
-    fitCanvas()
 
-    -- 96%-opacity black backdrop covering the whole screen. It is a direct
-    -- child of the root (not the scaled canvas), so it is never letterboxed,
-    -- and it is created before the options content at the default z (0): the
-    -- engine's stable z-sort keeps it in front of the already-built menu but
-    -- behind the options UI, dimming the menu to ~4% underneath the popup.
-    backdrop = scene.createEntity(root)
+    -- 96%-opacity black backdrop covering the whole screen. It is a child of
+    -- the options owner (not the scaled canvas), so it is never letterboxed,
+    -- and it is created before the canvas at the default z (0): the engine's
+    -- stable z-sort keeps it in front of the already-built menu but behind the
+    -- options UI, dimming the menu to ~4% underneath the popup.
+    backdrop = scene.createEntity(optionsHandle)
     scene.setField(backdrop, 'name', 'backdrop')
     local backdropSprite = scene.addComponent(backdrop, 'core.sprite')
     scene.setField(backdropSprite, 'color', { 0, 0, 0, 245 })
@@ -247,18 +250,28 @@ local function buildTree()
     scene.setField(backdrop, 'y', gfx.screenHeight() * 0.5)
     addSize(backdrop, gfx.screenWidth(), gfx.screenHeight())
 
+    -- Scaled canvas holding the design-space layout.
+    canvasHandle = scene.createEntity(optionsHandle)
+    scene.setField(canvasHandle, 'name', 'canvas')
+    frame = scene.addComponent(canvasHandle, 'core.scaled_frame')
+    scene.setField(frame, 'source.width', DESIGN_W)
+    scene.setField(frame, 'source.height', DESIGN_H)
+    scene.setField(frame, 'mode', 'contain')
+    scene.setField(frame, 'increment', 0)
+    fitCanvas()
+
     -- Top-level vertical container filling the design frame.
-    ui = ecs.spawn(optionsHandle)
+    ui = ecs.spawn(canvasHandle)
     scene.setField(ui, 'name', 'ui')
     addSize(ui, DESIGN_W, DESIGN_H)
     addFlex(ui, 'vertical', 8)
 
-    addText(ui, DESIGN_W, HEADING_H, span('#ffffff', 'OPTIONS'))
+    addText(ui, DESIGN_W, HEADING_H, span('#ffffff', 'OPTIONS'), nil, nil, 'heading')
 
     -- Main category strip; resized through its authored ui_size so the native
     -- strip chrome rides inside the flex layout.
     local mainStripHandle
-    mainStripHandle, mainStripId = tabs.addStrip(ui, 0, 0, 1)
+    mainStripHandle, mainStripId = tabs.addStrip(ui, 0, 0, 1, 'main_strip')
     do
         local size = scene.component(mainStripHandle, 'core.ui_size')
         scene.setField(size, 'width', DESIGN_W)
@@ -286,10 +299,11 @@ local function buildTree()
 
     local paneHeadingHandle
     paneHeadingHandle, paneHeading = addText(right, DESIGN_W * 0.5 - 32, 20,
-        '', false, TextFlags.xLeft | TextFlags.yMiddle)
+        '', false, TextFlags.xLeft | TextFlags.yMiddle, 'pane_heading')
     -- Weighted: stretches down the pane; yTop keeps the glyphs anchored high.
     do
         local handle = ecs.spawn(right)
+        scene.setField(handle, 'name', 'pane_body')
         local t = scene.addComponent(handle, 'core.text')
         scene.setField(t, 'font', smFont)
         scene.setField(t, 'text', '')
@@ -310,6 +324,7 @@ local function buildTree()
     addFlex(backRow, 'horizontal', 6)
     do
         local hintHandle = ecs.spawn(backRow)
+        scene.setField(hintHandle, 'name', 'back_hint')
         scene.setField(hintHandle, 'scale.x', 0.5)
         scene.setField(hintHandle, 'scale.y', 0.5)
         local hint = scene.addComponent(hintHandle, 'core.input_hint')
@@ -386,17 +401,17 @@ local function rebuildList(sub)
         local entry = sub.entries[i]
         if entry.kind == 'group' then
             -- Group header: same height as a list item, never selectable.
-            local handle, id = config.addListGroup(activePanel.list, 0, 0, ITEM_WIDTH)
+            local handle, id = config.addListGroup(activePanel.list, 0, 0, ITEM_WIDTH, 'list_group')
             ecs.set(id, 'ui.config_list_group', 'text', entry.text)
             sub.view[#sub.view + 1] = { entry = entry, handle = handle, id = id }
         else
             local src = entry
-            local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH)
+            local handle, id, rowHandle = config.addListItem(activePanel.list, 0, 0, ITEM_WIDTH, 'list_item')
             local controlId
             if src.def.kind == 'range' then
-                _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5)
+                _, controlId = config.addRange(rowHandle, ITEM_WIDTH * 0.5, 'range')
             else
-                _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5)
+                _, controlId = config.addEnum(rowHandle, ITEM_WIDTH * 0.5, 'enum')
             end
             local v = { src = src, handle = handle, id = id, controlId = controlId }
             sub.view[#sub.view + 1] = v
@@ -409,6 +424,7 @@ local function rebuildList(sub)
     -- centre a short run of rows in the leftover space; this absorbs that space
     -- so the rows always start at the top of the list.
     activePanel.filler = ecs.spawn(activePanel.list)
+    scene.setField(activePanel.filler, 'name', 'list_filler')
     addSize(activePanel.filler, 0, 0, 1)
 end
 
@@ -484,7 +500,7 @@ end
 -- Builds one main category's entities under the static tree. Everything is
 -- parented to two roots so switching categories destroys exactly two nodes.
 local function buildPanel(cat)
-    local subStripHandle, subStripId = tabs.addStrip(left, 0, 0, 2)
+    local subStripHandle, subStripId = tabs.addStrip(left, 0, 0, 2, 'sub_strip')
     local subStripSize = scene.component(subStripHandle, 'core.ui_size')
     scene.setField(subStripSize, 'width', DESIGN_W * 0.5)
     scene.setField(subStripSize, 'height', STRIP_H)
@@ -510,8 +526,8 @@ local function buildPanel(cat)
     local scrollbar = ecs.spawn(scrollArea)
     scene.setField(scrollbar, 'name', 'scrollbar')
     addSize(scrollbar, SCROLLBAR_W, 0)
-    local track = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_TRACK, 0)
-    local thumb = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_THUMB, 0)
+    local track = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_TRACK, 0, 'scroll_track')
+    local thumb = addQuad(scrollbar, 0, 0, TRACK_W, VIEW_H, COLOR_THUMB, 0, 'scroll_thumb')
 
     -- Trailing weighted spacer keeps the fixed-height children top-packed.
     local filler = ecs.spawn(left)
@@ -580,13 +596,13 @@ local function close()
     end
     isOpenFlag = false
     if optionsHandle ~= nil then
+        -- Destroying the owner tears down the backdrop, canvas and the whole
+        -- UI subtree with it.
         scene.destroy(optionsHandle)
         optionsHandle = nil
     end
-    if backdrop ~= nil then
-        scene.destroy(backdrop)
-        backdrop = nil
-    end
+    canvasHandle = nil
+    backdrop = nil
     frame = nil
     activePanel = nil
 end

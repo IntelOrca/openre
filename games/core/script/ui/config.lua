@@ -245,9 +245,9 @@ end
 
 -- Left/right arrow cell of the shared ui_arrow atlas, as a top-level child of
 -- `parent` (cross-axis centred on the full block height).
-local function addArrow(parent, dir)
+local function addArrow(parent, dir, name)
     local arrow = ecs.spawn(parent)
-    scene.setField(arrow, 'name', 'ui.config_arrow' .. (dir < 0 and 'L' or 'R'))
+    scene.setField(arrow, 'name', name or ('ui.config_arrow' .. (dir < 0 and 'L' or 'R')))
     local sprite = scene.addComponent(arrow, 'core.sprite')
     scene.setField(sprite, 'texture', arrowAtlas())
     scene.setField(sprite, 'src.x', dir < 0 and 0 or ARROW_W)
@@ -317,12 +317,14 @@ end
 --- row). Its box is `width` wide; height is the natural content block.
 ---@param parent SceneEntity Row/entity to attach to.
 ---@param width number Boundary box width in design pixels.
+---@param name? string Override for the entity-name prefix (default `ui.config_enum`).
 ---@return SceneEntity handle
 ---@return integer id
-function config.addEnum(parent, width)
+function config.addEnum(parent, width, name)
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.config.addEnum: spawn failed')
-    scene.setField(handle, 'name', 'ui.config_enum')
+    local prefix = name or 'ui.config_enum'
+    scene.setField(handle, 'name', prefix)
     ecs.addComponent(id, 'ui.config_enum')
     local w = width or 120
     addSize(handle, w, ENUM_BLOCK_H, 1)
@@ -332,12 +334,12 @@ function config.addEnum(parent, width)
     -- cross-axis centred (alignment "center") on the full block height.
     addFlex(handle, 'horizontal', 2)
 
-    addArrow(handle, -1)
+    addArrow(handle, -1, prefix .. '.arrowL')
 
     -- Weighted vertical stack filling the space between the arrows; the
     -- label band and bar row below are authored to fill it exactly.
     local stack = ecs.spawn(handle)
-    scene.setField(stack, 'name', 'ui.config_enum.stack')
+    scene.setField(stack, 'name', prefix .. '.stack')
     addSize(stack, 0, 0, 1)
     addFlex(stack, 'vertical', BAR_TOP_GAP)
 
@@ -345,7 +347,7 @@ function config.addEnum(parent, width)
 
     -- Centred value label; the system writes the markup here.
     local labelHandle, labelId = ecs.spawn(stack)
-    scene.setField(labelHandle, 'name', 'ui.config_enum.label')
+    scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.text')
     scene.setField(t, 'font', uiFont)
     scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
@@ -354,13 +356,14 @@ function config.addEnum(parent, width)
     -- Indicator bar row underneath; bars are created/destroyed by the
     -- system as `count` changes and group-centre horizontally.
     local barsRowHandle, barsRowId = ecs.spawn(stack)
-    scene.setField(barsRowHandle, 'name', 'ui.config_enum.bars_row')
+    scene.setField(barsRowHandle, 'name', prefix .. '.bars_row')
     addSize(barsRowHandle, bandW, BAR_H)
     addFlex(barsRowHandle, 'horizontal', BAR_GAP)
 
-    addArrow(handle, 1)
+    addArrow(handle, 1, prefix .. '.arrowR')
 
-    enumTree[id] = { labelId = labelId, barsRowId = barsRowId, bars = {}, markup = nil }
+    enumTree[id] = { labelId = labelId, barsRowId = barsRowId,     bars = {},
+    prefix = prefix, markup = nil }
 
     return handle, id
 end
@@ -372,12 +375,14 @@ end
 --- end, the current value as a full-height marker, and the value text block.
 ---@param parent SceneEntity Row/entity to attach to.
 ---@param width number Boundary box width in design pixels.
+---@param name? string Override for the entity-name prefix (default `ui.config_range`).
 ---@return SceneEntity handle
 ---@return integer id
-function config.addRange(parent, width)
+function config.addRange(parent, width, name)
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.config.addRange: spawn failed')
-    scene.setField(handle, 'name', 'ui.config_range')
+    local prefix = name or 'ui.config_range'
+    scene.setField(handle, 'name', prefix)
     ecs.addComponent(id, 'ui.config_range')
     local w = width or 120
     addSize(handle, w, RANGE_BLOCK_H, 1)
@@ -385,36 +390,36 @@ function config.addRange(parent, width)
     -- Horizontal root: [arrowL | - | slider (weighted) | + | arrowR | value].
     addFlex(handle, 'horizontal', 2)
 
-    addArrow(handle, -1)
-    addIcon(handle, '-', 'ui.config_range.subtract')
+    addArrow(handle, -1, prefix .. '.arrowL')
+    addIcon(handle, '-', prefix .. '.subtract')
 
     -- Slider: a 'none' flex filling the weighted slot, holding the rule line
     -- (full width) behind a horizontal marks flex (full size). The marks flex
     -- owns the distributed ticks + spacers (see the ui.config system).
     local sliderHandle, sliderId = ecs.spawn(handle)
-    scene.setField(sliderHandle, 'name', 'ui.config_range.slider')
+    scene.setField(sliderHandle, 'name', prefix .. '.slider')
     addSize(sliderHandle, 0, 0, 1)
     addFlex(sliderHandle, 'none')
 
-    addQuad(sliderHandle, 'ui.config_range.rule', 1000, RULE_H, COLOR_LINE, Z_RULE)
+    addQuad(sliderHandle, prefix .. '.rule', 1000, RULE_H, COLOR_LINE, Z_RULE)
 
     local marksHandle, marksId = ecs.spawn(sliderHandle)
-    scene.setField(marksHandle, 'name', 'ui.config_range.marks')
+    scene.setField(marksHandle, 'name', prefix .. '.marks')
     addSize(marksHandle, 0, 0, 1)
     addFlex(marksHandle, 'horizontal', 0)
 
-    addIcon(handle, '+', 'ui.config_range.plus')
-    addArrow(handle, 1)
+    addIcon(handle, '+', prefix .. '.plus')
+    addArrow(handle, 1, prefix .. '.arrowR')
 
     -- Value text block (right end): a fixed-width flex box so the text is
     -- centred within the allocated area rather than hugging the left edge.
     local valueHandle, valueId = ecs.spawn(handle)
-    scene.setField(valueHandle, 'name', 'ui.config_range.value')
+    scene.setField(valueHandle, 'name', prefix .. '.value')
     addSize(valueHandle, RANGE_VALUE_W, RANGE_BLOCK_H)
     addFlex(valueHandle, 'none')
 
     local valueText, valueTextId = ecs.spawn(valueHandle)
-    scene.setField(valueText, 'name', 'ui.config_range.value.text')
+    scene.setField(valueText, 'name', prefix .. '.value.text')
     local vt = scene.addComponent(valueText, 'core.text')
     scene.setField(vt, 'font', uiFont)
     scene.setField(vt, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
@@ -426,6 +431,7 @@ function config.addRange(parent, width)
         flexOrder = {},
         markHandles = {},
         count = nil,
+        prefix = prefix,
         markup = nil,
     }
 
@@ -442,11 +448,13 @@ end
 ---@param width? integer Total row width in design pixels.
 ---@return SceneEntity handle
 ---@return integer id
+---@param name? string Override for the entity-name prefix (default `ui.config_list_item`).
 ---@return SceneEntity row Row entity - attach a ui.config_enum sub entity here.
-function config.addListItem(parent, x, y, width)
+function config.addListItem(parent, x, y, width, name)
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.config.addListItem: spawn failed')
-    scene.setField(handle, 'name', 'ui.config_list_item')
+    local prefix = name or 'ui.config_list_item'
+    scene.setField(handle, 'name', prefix)
     scene.setField(handle, 'x', x)
     scene.setField(handle, 'y', y)
     ecs.addComponent(id, 'ui.config_list_item')
@@ -459,7 +467,7 @@ function config.addListItem(parent, x, y, width)
     -- Selection box: takes all the space left of the diamond and stacks its
     -- layers ('none') by z order.
     local boxHandle, boxId = ecs.spawn(handle)
-    scene.setField(boxHandle, 'name', 'ui.config_list_item.selection_box')
+    scene.setField(boxHandle, 'name', prefix .. '.selection_box')
     addSize(boxHandle, 0, 0, 1)
     addFlex(boxHandle, 'none')
 
@@ -468,29 +476,29 @@ function config.addListItem(parent, x, y, width)
     -- first, then the literal-thickness line. Always visible; covered by
     -- the selection fill while selected.
     local underlay = ecs.spawn(boxHandle)
-    scene.setField(underlay, 'name', 'ui.config_list_item.underlay')
+    scene.setField(underlay, 'name', prefix .. '.underlay')
     addSize(underlay, 0, 0, 1)
     addFlex(underlay, 'vertical')
-    addSpacer(underlay, 'ui.config_list_item.underlay.push', 0, 0, 1)
-    addQuad(underlay, 'ui.config_list_item.bottom_border', width or 240, LINE_H, COLOR_LINE, Z_LINE)
+    addSpacer(underlay, prefix .. '.underlay.push', 0, 0, 1)
+    addQuad(underlay, prefix .. '.bottom_border', width or 240, LINE_H, COLOR_LINE, Z_LINE)
 
     -- Interior: fills the box and insets its children by the border width,
     -- so the blue selection fill drawn inside it leaves the white ring
     -- visible around every edge.
     local interior, interiorId = ecs.spawn(boxHandle)
-    scene.setField(interior, 'name', 'ui.config_list_item.interior')
+    scene.setField(interior, 'name', prefix .. '.interior')
     addSize(interior, 0, 0, 1)
     addFlex(interior, 'none', nil, BORDER_W)
 
     -- The row: weighted label | literal half-width enum, padded away from
     -- the selection ring by ITEM_PAD.
     local row, rowId = ecs.spawn(interior)
-    scene.setField(row, 'name', 'ui.config_list_item.row')
+    scene.setField(row, 'name', prefix .. '.row')
     addSize(row, 0, 0, 1)
     addFlex(row, 'horizontal', nil, ITEM_PAD)
 
     local labelHandle, labelId = ecs.spawn(row)
-    scene.setField(labelHandle, 'name', 'ui.config_list_item.label')
+    scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.text')
     scene.setField(t, 'font', uiFont)
     scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yMiddle)
@@ -500,7 +508,7 @@ function config.addListItem(parent, x, y, width)
     -- it keeps its size and centres vertically in the item. Its single 5x5
     -- white square sprite is shown by the system while `changed`.
     local diamondBox, diamondBoxId = ecs.spawn(handle)
-    scene.setField(diamondBox, 'name', 'ui.config_list_item.diamond')
+    scene.setField(diamondBox, 'name', prefix .. '.diamond')
     addSize(diamondBox, DIAMOND_SIZE, DIAMOND_SIZE)
     addFlex(diamondBox, 'none')
 
@@ -509,6 +517,7 @@ function config.addListItem(parent, x, y, width)
         labelId = labelId,
         boxId = boxId,
         interiorId = interiorId,
+        prefix = prefix,
         diamondBoxId = diamondBoxId,
         chromeIds = nil,
         diamondQuads = {},
@@ -532,11 +541,13 @@ end
 ---@param y number Canvas-space centre Y.
 ---@param width? integer Total row width in design pixels.
 ---@return SceneEntity handle
+---@param name? string Override for the entity-name prefix (default `ui.config_list_group`).
 ---@return integer id
-function config.addListGroup(parent, x, y, width)
+function config.addListGroup(parent, x, y, width, name)
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.config.addListGroup: spawn failed')
-    scene.setField(handle, 'name', 'ui.config_list_group')
+    local prefix = name or 'ui.config_list_group'
+    scene.setField(handle, 'name', prefix)
     scene.setField(handle, 'x', x)
     scene.setField(handle, 'y', y)
     ecs.addComponent(id, 'ui.config_list_group')
@@ -544,14 +555,14 @@ function config.addListGroup(parent, x, y, width)
     addFlex(handle, 'vertical', 0)
 
     -- Weighted top spacer; absorbs any rounding so the band + rule fill the row.
-    addSpacer(handle, 'ui.config_list_group.spacer', 0, 0, 1)
+    addSpacer(handle, prefix .. '.spacer', 0, 0, 1)
 
     -- Bottom band: horizontal flex, no padding, so the gray box sits flush with
     -- the left edge of the row. The gray box is a left-aligned tag half the row
     -- width; a trailing weighted spacer pins it to the left edge. Weight 1 lets
     -- the band fill the row above the rule.
     local bottom, bottomId = ecs.spawn(handle)
-    scene.setField(bottom, 'name', 'ui.config_list_group.bottom')
+    scene.setField(bottom, 'name', prefix .. '.bottom')
     addSize(bottom, 0, ITEM_H - LINE_H, 1)
     addFlex(bottom, 'horizontal', 0)
 
@@ -560,7 +571,7 @@ function config.addListGroup(parent, x, y, width)
     -- sprite (drawn behind the text) and the white category text; no dedicated
     -- background sub-entity is needed.
     local grayBack, grayBackId = ecs.spawn(bottom)
-    scene.setField(grayBack, 'name', 'ui.config_list_group.gray_back')
+    scene.setField(grayBack, 'name', prefix .. '.gray_back')
     addSize(grayBack, 0, TEXT_ROW_H + GROUP_PAD * 2, 1)
     addFlex(grayBack, 'none', nil, 1)
     -- Stretch to the band height; the weight shares the row 50:50 with the spacer.
@@ -570,7 +581,7 @@ function config.addListGroup(parent, x, y, width)
     scene.setField(sprite, 'z', Z_GROUP_BG)
 
     local labelHandle, labelId = ecs.spawn(grayBack)
-    scene.setField(labelHandle, 'name', 'ui.config_list_group.label')
+    scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.text')
     scene.setField(t, 'font', uiFont)
     scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yMiddle)
@@ -578,10 +589,10 @@ function config.addListGroup(parent, x, y, width)
 
     -- Trailing weighted spacer: shares the band 50:50 with the gray box and
     -- pins it to the left edge.
-    addSpacer(bottom, 'ui.config_list_group.trailing', 0, 0, 1)
+    addSpacer(bottom, prefix .. '.trailing', 0, 0, 1)
 
     -- Underline shared with the list items.
-    addQuad(handle, 'ui.config_list_group.rule', width or 240, LINE_H, COLOR_LINE, Z_LINE)
+    addQuad(handle, prefix .. '.rule', width or 240, LINE_H, COLOR_LINE, Z_LINE)
 
     groupTree[id] = {
         labelId = labelId,
@@ -604,16 +615,16 @@ config.ITEM_HEIGHT = ITEM_H
 -- fill). The interior's padding insets the blue rect by the border width,
 -- so the white shows through as a 1px ring around every edge. Returns the
 -- ids of the two subtree roots so the caller can destroy them again.
-local function buildSelection(boxHandle, interiorId)
+local function buildSelection(boxHandle, interiorId, prefix)
     local chromeIds = {}
 
-    local ring, ringId = addQuad(boxHandle, 'ui.config_list_item.sel_ring', 0, 0, COLOR_SEL_BORDER, Z_SEL_RING)
+    local ring, ringId = addQuad(boxHandle, prefix .. '.sel_ring', 0, 0, COLOR_SEL_BORDER, Z_SEL_RING)
     scene.setField(scene.component(ring, 'core.ui_size'), 'weight', 1)
     chromeIds[#chromeIds + 1] = ringId
 
     local interiorHandle = scene.entityFromId(interiorId)
     if interiorHandle ~= nil then
-        local fill, fillId = addQuad(interiorHandle, 'ui.config_list_item.sel_fill', 0, 0, COLOR_SEL_BG, Z_SEL_FILL)
+        local fill, fillId = addQuad(interiorHandle, prefix .. '.sel_fill', 0, 0, COLOR_SEL_BG, Z_SEL_FILL)
         scene.setField(scene.component(fill, 'core.ui_size'), 'weight', 1)
         chromeIds[#chromeIds + 1] = fillId
     end
@@ -648,7 +659,7 @@ local function ensureDiamond(tree, changed)
     end
     if changed then
         for _ = #tree.diamondQuads + 1, 1 do
-            local _, id = addQuad(boxHandle, 'ui.config_list_item.diamond.square',
+            local _, id = addQuad(boxHandle, prefix .. '.diamond.square',
                 DIAMOND_SIZE, DIAMOND_SIZE, COLOR_DIAMOND, Z_DIAMOND)
             tree.diamondQuads[#tree.diamondQuads + 1] = id
         end
@@ -692,7 +703,7 @@ ecs.registerSystem('ui.config_list_item', 900, function()
 
         -- Selection chrome overlay: built while selected, destroyed after.
         if selected and tree.chromeIds == nil then
-            tree.chromeIds = buildSelection(scene.entityFromId(tree.boxId), tree.interiorId)
+            tree.chromeIds = buildSelection(scene.entityFromId(tree.boxId), tree.interiorId, tree.prefix)
         elseif not selected and tree.chromeIds ~= nil then
             destroyChrome(tree)
         end
@@ -778,7 +789,7 @@ ecs.registerSystem('ui.config', 1000, function()
             local id = tree.bars[i]
             local barHandle = nil
             if id == nil or scene.entityFromId(id) == nil then
-                local newHandle, newId = addQuad(barsRowHandle, 'ui.config_enum.bar' .. i,
+                local newHandle, newId = addQuad(barsRowHandle, tree.prefix .. '.bar' .. i,
                     BAR_W, BAR_H, lit and COLOR_BAR_LIT or COLOR_BAR_OFF, Z_BAR)
                 tree.bars[i] = newId
                 barHandle = newHandle
@@ -829,11 +840,11 @@ ecs.registerSystem('ui.config', 1000, function()
                 for i = 0, count - 1 do
                     if i > 0 then
                         local _, sid = addSpacer(marksHandle,
-                            'ui.config_range.spacer' .. i, 0, 0, 1)
+                            tree.prefix .. '.spacer' .. i, 0, 0, 1)
                         tree.flexOrder[#tree.flexOrder + 1] = sid
                     end
                     local mh, mid = addQuad(marksHandle,
-                        'ui.config_range.mark' .. i, MARK_W, MARK_H * 2, COLOR_BAR_OFF, Z_MARK)
+                        tree.prefix .. '.mark' .. i, MARK_W, MARK_H * 2, COLOR_BAR_OFF, Z_MARK)
                     scene.setField(scene.component(mh, 'core.ui_size'), 'alignment', 'center')
                     tree.flexOrder[#tree.flexOrder + 1] = mid
                     tree.markHandles[i + 1] = mid

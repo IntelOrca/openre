@@ -149,15 +149,17 @@ local tabViews = {}
 ---@param x number Canvas-space centre X (offset from the parent origin).
 ---@param y number Canvas-space centre Y.
 ---@param level? integer 1 (default) or 2.
+---@param name? string Override for the entity-name prefix (default `ui.tab_strip`).
 ---@return SceneEntity handle
 ---@return integer id
-function tabs.addStrip(parent, x, y, level)
+function tabs.addStrip(parent, x, y, level, name)
     if level ~= 2 then
         level = 1
     end
+    local prefix = name or 'ui.tab_strip'
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.tabs.addStrip: spawn failed')
-    scene.setField(handle, 'name', 'ui.tab_strip')
+    scene.setField(handle, 'name', prefix)
     scene.setField(handle, 'x', x)
     scene.setField(handle, 'y', y)
     ecs.addComponent(id, 'ui.tab_strip')
@@ -174,13 +176,13 @@ function tabs.addStrip(parent, x, y, level)
     -- Tab row: hints hug the ends, the weighted band between them holds the
     -- tabs and stretches to fill.
     local row = ecs.spawn(handle)
-    scene.setField(row, 'name', 'ui.tab_strip.row')
+    scene.setField(row, 'name', prefix .. '.row')
     addSize(row, 0, 0, 25)
     addFlex(row, 'horizontal', ROW_GAP)
 
     local function addHint(key, command)
         local hintHandle, hintId = ecs.spawn(row)
-        scene.setField(hintHandle, 'name', 'ui.tab_strip.' .. key)
+        scene.setField(hintHandle, 'name', prefix .. '.' .. key)
         scene.setField(hintHandle, 'scale.x', 0.5)
         scene.setField(hintHandle, 'scale.y', 0.5)
         local hint = scene.addComponent(hintHandle, 'core.input_hint')
@@ -193,7 +195,7 @@ function tabs.addStrip(parent, x, y, level)
 
     -- Band between the hints: creation order defines the flex order.
     local band, bandId = ecs.spawn(row)
-    scene.setField(band, 'name', 'ui.tab_strip.band')
+    scene.setField(band, 'name', prefix .. '.band')
     addSize(band, 0, 0, 1)
     addFlex(band, 'horizontal')
 
@@ -204,35 +206,35 @@ function tabs.addStrip(parent, x, y, level)
     -- reads as sitting under the tabs. Both layers are weighted children of
     -- the 'none' container, so they fill the same box and stack by z order.
     local bottom = ecs.spawn(handle)
-    scene.setField(bottom, 'name', 'ui.tab_strip.bottom')
+    scene.setField(bottom, 'name', prefix .. '.bottom')
     addSize(bottom, 0, 0, 3)
     addFlex(bottom, 'vertical')
     local bottomSpacer = ecs.spawn(bottom)
-    scene.setField(bottomSpacer, 'name', 'ui.tab_strip.bottom_spacer')
+    scene.setField(bottomSpacer, 'name', prefix .. '.bottom_spacer')
     addSize(bottomSpacer, 0, 0, 1)
     local ruleArea = ecs.spawn(bottom)
-    scene.setField(ruleArea, 'name', 'ui.tab_strip.rule_area')
+    scene.setField(ruleArea, 'name', prefix .. '.rule_area')
     addSize(ruleArea, 0, 0, 1)
     addFlex(ruleArea, 'none')
-    addQuad(ruleArea, 'ui.tab_strip.rule', 0, 0, COLOR_RULE, Z_RULE, 1)
+    addQuad(ruleArea, prefix .. '.rule', 0, 0, COLOR_RULE, Z_RULE, 1)
 
     -- Underline layer: weighted so it fills the same box as the rule and
     -- stacks on top of it. Side insets mirror the tab band's insets (hint +
     -- row gap per side), so one weighted cell per tab lines up exactly
     -- under its tab.
     local underlay = ecs.spawn(ruleArea)
-    scene.setField(underlay, 'name', 'ui.tab_strip.underlay')
+    scene.setField(underlay, 'name', prefix .. '.underlay')
     addSize(underlay, 0, 0, 1)
     addFlex(underlay, 'horizontal')
     local underlayPadL = ecs.spawn(underlay)
-    scene.setField(underlayPadL, 'name', 'ui.tab_strip.underlay_pad_l')
+    scene.setField(underlayPadL, 'name', prefix .. '.underlay_pad_l')
     addSize(underlayPadL, SIDE_INSET, 0)
     local cells, cellsId = ecs.spawn(underlay)
-    scene.setField(cells, 'name', 'ui.tab_strip.cell_band')
+    scene.setField(cells, 'name', prefix .. '.cell_band')
     addSize(cells, 0, 0, 1)
     addFlex(cells, 'horizontal')
     local underlayPadR = ecs.spawn(underlay)
-    scene.setField(underlayPadR, 'name', 'ui.tab_strip.underlay_pad_r')
+    scene.setField(underlayPadR, 'name', prefix .. '.underlay_pad_r')
     addSize(underlayPadR, SIDE_INSET, 0)
 
     stripViews[id] = {
@@ -241,6 +243,7 @@ function tabs.addStrip(parent, x, y, level)
         cellIds = {},
         hintL = hintLHandle,
         hintR = hintRHandle,
+        prefix = prefix,
     }
     return handle, id
 end
@@ -254,9 +257,10 @@ function tabs.addTab(stripId, label)
     local view = stripViews[stripId]
     assert(view ~= nil, 'ui.tabs.addTab: unknown strip')
     local level = ecs.get(stripId, 'ui.tab_strip', 'level')
+    local prefix = view.prefix
 
     local tabHandle, tabId = ecs.spawn(scene.entityFromId(view.bandId))
-    scene.setField(tabHandle, 'name', 'ui.tab.' .. label)
+    scene.setField(tabHandle, 'name', prefix .. '.tab.' .. label)
 
     -- Weighted: the band splits its width evenly across every tab.
     addSize(tabHandle, 0, 0, 1)
@@ -269,16 +273,16 @@ function tabs.addTab(stripId, label)
     if level ~= 2 then
         addFlex(tabHandle, 'horizontal')
         if #view.cellIds == 0 then
-            addQuad(tabHandle, 'ui.tab.sepL', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
+            addQuad(tabHandle, prefix .. '.sepL', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
         end
         local labelHandle, labelChildId = ecs.spawn(tabHandle)
-        scene.setField(labelHandle, 'name', 'ui.tab.label')
+        scene.setField(labelHandle, 'name', prefix .. '.label')
         local t = scene.addComponent(labelHandle, 'core.text')
         scene.setField(t, 'font', uiFont)
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
         addSize(labelHandle, 0, 0, 1)
         labelId = labelChildId
-        addQuad(tabHandle, 'ui.tab.sepR', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
+        addQuad(tabHandle, prefix .. '.sepR', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
     else
         local t = scene.addComponent(tabHandle, 'core.text')
         scene.setField(t, 'font', uiFont)
@@ -290,7 +294,7 @@ function tabs.addTab(stripId, label)
 
     -- Matching underline cell, transparent until the tab is selected.
     local cellHandle, cellId = ecs.spawn(scene.entityFromId(view.cellsId))
-    scene.setField(cellHandle, 'name', 'ui.tab.underline.' .. label)
+    scene.setField(cellHandle, 'name', prefix .. '.tab.underline.' .. label)
     local sprite = scene.addComponent(cellHandle, 'core.sprite')
     scene.setField(sprite, 'color', COLOR_HIDDEN)
     scene.setField(sprite, 'z', Z_UNDERLINE)
