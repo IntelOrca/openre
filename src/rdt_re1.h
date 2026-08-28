@@ -14,4 +14,12 @@ namespace openre::rdt_re1
      * Returns the RE2 RDT bytes, or an empty vector on failure.
      */
     std::vector<uint8_t> convert_re1_rdt(const uint8_t* data, size_t size);
+
+    /**
+     * Converts an RE1 cut background pak (STAGE* / RC*.pak) into an RGB555
+     * pixel buffer. The pak is an LZ-compressed 16bpp TIM. Returns false on
+     * failure. On success the image dimensions are reported in w/h (camera
+     * cuts are 320x240; the one-off 316x236 menu screen has different ones).
+     */
+    bool convert_re1_background(const uint8_t* data, size_t size, std::vector<uint8_t>& rgb555, int& w, int& h);
 }

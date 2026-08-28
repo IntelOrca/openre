@@ -3,6 +3,7 @@
 #include "logger.h"
 
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <vector>
 
@@ -146,6 +147,98 @@ namespace openre::graphics
             logging::logError("[gfx_bmp] failed to write '{}'", path);
             return false;
         }
+        return true;
+    }
+
+    bool bmp_read_rgb555(const char* path, int& width, int& height, std::vector<uint16_t>& pixels)
+    {
+        width = 0;
+        height = 0;
+        pixels.clear();
+        if (!path)
+            return false;
+
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream)
+        {
+            logging::logError("[gfx_bmp] failed to open '{}' for reading", path);
+            return false;
+        }
+
+        BmpFileHeader fileHeader{};
+        BmpInfoHeader infoHeader{};
+        stream.read((char*)&fileHeader, sizeof(fileHeader));
+        stream.read((char*)&infoHeader, sizeof(infoHeader));
+        if (!stream || fileHeader.type != kBmpType || infoHeader.size < 40 || infoHeader.planes != 1 ||
+            infoHeader.compression != 0)
+        {
+            logging::logError("[gfx_bmp] '{}' is not a valid BI_RGB BMP", path);
+            return false;
+        }
+
+        if (infoHeader.bitCount != 8 && infoHeader.bitCount != 24)
+        {
+            logging::logError("[gfx_bmp] '{}' unsupported bit depth {}", path, infoHeader.bitCount);
+            return false;
+        }
+
+        const bool indexed = infoHeader.bitCount == 8;
+        const int w = std::abs(infoHeader.width);
+        const int h = std::abs(infoHeader.height);
+        if (w <= 0 || h <= 0)
+            return false;
+
+        // Read the palette (indexed images only), then position at the pixels.
+        std::vector<uint8_t> palette;
+        if (indexed)
+        {
+            stream.seekg(sizeof(BmpFileHeader) + sizeof(BmpInfoHeader), std::ios::beg);
+            const uint32_t clrUsed = infoHeader.clrUsed ? infoHeader.clrUsed : 256;
+            palette.resize((size_t)clrUsed * 4);
+            stream.read((char*)palette.data(), (std::streamsize)palette.size());
+            if (!stream)
+                return false;
+        }
+        stream.seekg(fileHeader.offset, std::ios::beg);
+
+        const uint32_t pitch = rowPitch(w, infoHeader.bitCount);
+        std::vector<uint8_t> row(pitch, 0);
+        pixels.resize((size_t)w * h);
+
+        // Rows are stored bottom-up.
+        for (int y = 0; y < h; y++)
+        {
+            const int srcY = infoHeader.height < 0 ? y : h - 1 - y;
+            stream.read((char*)row.data(), pitch);
+            if (!stream)
+                return false;
+
+            uint16_t* dst = pixels.data() + (size_t)srcY * w;
+            if (indexed)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    const uint8_t idx = row[x];
+                    if ((size_t)idx >= palette.size() / 4)
+                        return false;
+                    // Palette entries are BGRA; PIX color is R | G << 5 | B << 10.
+                    const uint8_t* bgra = palette.data() + (size_t)idx * 4;
+                    dst[x] = (uint16_t)((bgra[2] >> 3) | ((bgra[1] >> 3) << 5) | ((bgra[0] >> 3) << 10));
+                }
+            }
+            else
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    // BMP scanlines are BGR; PIX color is R | G << 5 | B << 10.
+                    const uint8_t* bgr = row.data() + (size_t)x * 3;
+                    dst[x] = (uint16_t)((bgr[2] >> 3) | ((bgr[1] >> 3) << 5) | ((bgr[0] >> 3) << 10));
+                }
+            }
+        }
+
+        width = w;
+        height = h;
         return true;
     }
 }

@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "error.h"
 #include "file.h"
+#include "gfx_bmp.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -28,6 +29,7 @@
 #include "sce.h"
 #include "scheduler.h"
 #include "script.h"
+#include "system_filesystem.h"
 #include "system_gpu.h"
 #include "system_window.h"
 #include "systems.h"
@@ -41,6 +43,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1334,9 +1338,77 @@ namespace openre
         return interop::call<int, int, uint8_t, uint8_t, uint8_t>(0x0043F750, pData, a2, a3, a4);
     }
 
+    // RE1 runtime background source: the RE1 room loader (re1-port) sets this
+    // to the currently loaded room's code (first 3 hex digits of the RDT name,
+    // e.g. "100" for ROOM1000/ROOM1001). When empty the engine runs RE2 data
+    // and bg_load uses the original common/bin/roomcut.bin path below.
+    static std::string gRe1RoomCode;
+
+    // Inverse of graphics::reorgAdt: restitches a 320x240 RGB555 image into
+    // the layered 256x256 + 128x64 + 128x64 layout that bg_to_surface expects
+    // (kAdtPage*2 = 163840 bytes). Used by the RE1 BMP-first background path.
+    static void reorg_inverse(const uint16_t* src320, uint8_t* dstLayered)
+    {
+        // Main 256x256 page: top 240 rows hold the full-width image.
+        for (int y = 0; y < 240; y++)
+        {
+            std::memcpy(dstLayered + y * 256 * 2, src320 + (size_t)y * 320, 256 * 2);
+        }
+
+        // Right side panels. reorgAdt reads the left 64 px of rows 0..127 and
+        // the right 64 px of rows 0..111 (128x64 + 128x64) from the tail.
+        const uint8_t* panels = dstLayered + 256 * 256 * 2;
+        for (int y = 0; y < 128; y++)
+        {
+            std::memcpy((uint8_t*)panels + (size_t)y * 128 * 2, src320 + (size_t)y * 320 + 256, 64 * 2);
+        }
+        for (int y = 0; y < 112; y++)
+        {
+            std::memcpy((uint8_t*)panels + (size_t)y * 128 * 2 + 64 * 2, src320 + (size_t)(y + 128) * 320 + 256, 64 * 2);
+        }
+    }
+
+    // Sets the current RE1 room code; empty disables the RE1 background path.
+    void set_re1_room_code(const char* code)
+    {
+        gRe1RoomCode = code ? code : "";
+    }
+
     // 0x004C4700
     void bg_load()
     {
+        // RE1 background: read roomcut/<room>_<cut>.bmp, split it into the
+        // layered layout in work_buffer and feed it to bg_to_surface. Falls
+        // back to the original roomcut.bin ADT path below when unavailable.
+        if (!gRe1RoomCode.empty())
+        {
+            char bmpPath[64];
+            std::snprintf(bmpPath, sizeof(bmpPath), "roomcut\\%s_%02x.bmp", gRe1RoomCode.c_str(), gGameTable.current_cut);
+
+            // The BMP is stored under the game data root; resolve data:// to a
+            // physical path since bmp_read_rgb555 opens files directly.
+            const std::string resolved = system::fs::resolve(("data://" + std::string(bmpPath)).c_str());
+
+            int w = 0;
+            int h = 0;
+            std::vector<uint16_t> pixels;
+            if (!resolved.empty() && graphics::bmp_read_rgb555(resolved.c_str(), w, h, pixels))
+            {
+                if (w == 320 && h == 240)
+                {
+                    reorg_inverse(pixels.data(), gGameTable.work_buffer);
+                    gGameTable.bg_colorized = 0;
+                    bg_to_surface(gGameTable.work_buffer);
+                    return;
+                }
+                logging::logWarning("[bg_load] RE1 background '{}' is {}x{}, expected 320x240", bmpPath, w, h);
+            }
+            else
+            {
+                logging::logDebug("[bg_load] RE1 background '{}' not found, falling back to roomcut.bin", bmpPath);
+            }
+        }
+
         if (gGameTable.cache_stage != (int32_t)gGameTable.current_stage
             || gGameTable.cache_room != (int32_t)gGameTable.current_room)
         {
@@ -2843,6 +2915,7 @@ void onAttach()
     interop::writeJmp(0x0050B930, &sub_50B930);
     interop::writeJmp(0x00441ED0, win_main);
     interop::writeJmp(0x004427E0, &update_timer);
+    interop::writeJmp(0x004C4700, &bg_load);
     interop::writeJmp(0x0050AA00, &operator_new);
     interop::writeJmp(0x0050AA10, &operator_delete);
 

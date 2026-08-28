@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace openre::graphics
 {
@@ -12,4 +13,11 @@ namespace openre::graphics
      * Returns true when the file was written successfully.
      */
     bool bmp_write_rgb555(const char* path, int width, int height, const uint16_t* pixels);
+
+    /**
+     * Reads a BMP file written by bmp_write_rgb555 (8bpp palettized or 24bpp)
+     * back into an RGB555 pixel buffer. Returns false on failure. On success
+     * the image dimensions are reported in width/height.
+     */
+    bool bmp_read_rgb555(const char* path, int& width, int& height, std::vector<uint16_t>& pixels);
 }

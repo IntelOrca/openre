@@ -202,6 +202,12 @@ namespace openre
     void font_create();
     void config_write();
     void bg_load();
+
+    /// Sets the current RE1 room code (first 3 hex digits of the loaded RDT
+    /// name, e.g. "100" for ROOM1000/ROOM1001). When set, bg_load reads the
+    /// roomcut/<room>_<cut>.bmp background instead of the RE2 roomcut.bin ADT.
+    /// Pass nullptr/empty to return to RE2 background loading.
+    void set_re1_room_code(const char* code);
     void movie_suspend_texture_use();
     void movie_resume_texture_use();
     void set_geom_screen(int prj);

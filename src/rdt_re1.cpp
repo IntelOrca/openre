@@ -763,4 +763,174 @@ namespace openre::rdt_re1
 
         return std::move(w.bytes);
     }
+
+    // --- RE1 cut backgrounds (STAGE*/RC*.pak) ---
+
+    // The RC pak files hold one LZ-compressed 16bpp TIM (320x240 RGB555) per
+    // camera cut. The compression is an LZW-style format (0x100 = EOF,
+    // 0x101 = widen, 0x102 = end of block) with a growing dictionary, decoded
+    // bit-serial MSB-first. Verified byte-for-byte against the original
+    // (FUN_0046cbb0): all 318 rooms round-trip through the RE2 background path.
+
+    // Decompresses an RE1 LZ stream (FUN_0046cbb0). Returns the raw decoded
+    // bytes (e.g. the 16bpp TIM image), or empty on failure.
+    static bool lz_decode(const uint8_t* src, size_t size, std::vector<uint8_t>& out)
+    {
+        if (!src || size == 0)
+            return false;
+
+        out.clear();
+        size_t inPos = 0;
+        uint8_t srcByte = 0;
+        uint8_t mask = 0x80;
+
+        std::vector<uint32_t> parent(0x10000, 0xFFFFFFFF);
+        std::vector<uint8_t> ch(0x10000, 0);
+        uint32_t dictSize = 0x103;
+        int width = 9;
+
+        auto readByte = [&]() -> uint8_t { return inPos < size ? src[inPos++] : 0; };
+        auto readCode = [&](int bits) -> uint32_t {
+            uint32_t v = 0;
+            for (int i = 0; i < bits; i++)
+            {
+                if (mask == 0x80)
+                    srcByte = readByte();
+                v = (v << 1) | ((srcByte & mask) ? 1 : 0);
+                mask >>= 1;
+                if (mask == 0)
+                    mask = 0x80;
+            }
+            return v;
+        };
+
+        std::vector<uint8_t> tmp(0x4000);
+
+        while (true)
+        {
+            // Reset the dictionary per block.
+            std::fill(parent.begin(), parent.end(), 0xFFFFFFFF);
+            dictSize = 0x103;
+            width = 9;
+
+            uint32_t code = readCode(width);
+            if (code == 0x100)
+                break; // EOF
+
+            out.push_back((uint8_t)code);
+            uint32_t prev = code;
+            uint8_t lastChar = (uint8_t)code;
+
+            while (true)
+            {
+                uint32_t u = readCode(width);
+                if (u == 0x100)
+                    return true; // EOF
+                if (u == 0x102)
+                    break; // end of block -> reset dict
+                if (u == 0x101)
+                {
+                    width++;
+                    continue;
+                }
+
+                uint32_t orig = u;
+                int start = 0;
+                if (dictSize <= u)
+                {
+                    // Code not in dictionary yet: predict the first char.
+                    tmp[0] = lastChar;
+                    start = 1;
+                    u = prev;
+                }
+
+                // Unwind the chain into tmp[start..].
+                int n = start;
+                uint32_t c = u;
+                if (c > 0xff)
+                {
+                    while (c > 0xff)
+                    {
+                        if (c >= parent.size())
+                            return false;
+                        tmp[n++] = ch[c];
+                        c = parent[c];
+                    }
+                }
+                tmp[n] = (uint8_t)c;
+                n++;
+
+                uint8_t cLast = tmp[n - 1];
+                lastChar = cLast;
+                for (int i = n; i >= 1; i--)
+                    out.push_back(tmp[i - 1]);
+
+                if (dictSize >= parent.size())
+                    return false;
+                parent[dictSize] = prev;
+                ch[dictSize] = cLast;
+                dictSize++;
+                prev = orig;
+            }
+        }
+        return true;
+    }
+
+    // Extracts the pixel payload of a 16bpp TIM buffer into an RGB555 image.
+    // Returns false if the buffer is not a 16bpp TIM.
+    bool tim16_to_rgb555(const uint8_t* tim, size_t size, int& width, int& height, std::vector<uint8_t>& pixels)
+    {
+        pixels.clear();
+        if (!tim || size < 20)
+            return false;
+
+        const uint32_t magic = *(const uint32_t*)(tim + 0);
+        if (magic != 0x10)
+            return false;
+        const uint32_t flags = *(const uint32_t*)(tim + 4);
+        if ((flags & 3) != 2) // not 16bpp
+            return false;
+
+        size_t p = 8;
+        if ((flags & 3) != 2)
+        {
+            uint32_t clutSize = *(const uint32_t*)(tim + p);
+            p += 4 + clutSize;
+        }
+
+        if (p + 12 > size)
+            return false;
+        const uint32_t imgSize = *(const uint32_t*)(tim + p);
+        p += 4;
+        const uint16_t w = *(const uint16_t*)(tim + p + 4);
+        const uint16_t h = *(const uint16_t*)(tim + p + 6);
+        (void)imgSize;
+        p += 8;
+
+        const size_t pxBytes = (size_t)w * h * 2;
+        if (p + pxBytes > size)
+            return false;
+
+        width = w;
+        height = h;
+        pixels.assign(tim + p, tim + p + pxBytes);
+        return true;
+    }
+
+    // --- Exported background conversion ---
+
+    // Converts an RE1 cut background pak (STAGE*/RC*.pak) into an RGB555
+    // pixel buffer. The pak is an LZ-compressed 16bpp TIM. Returns false on
+    // failure. On success the image dimensions are reported in w/h (camera
+    // cuts are 320x240; the one-off 316x236 menu screen has different ones).
+    bool convert_re1_background(const uint8_t* data, size_t size, std::vector<uint8_t>& rgb555, int& w, int& h)
+    {
+        std::vector<uint8_t> tim;
+        if (!lz_decode(data, size, tim))
+            return false;
+
+        if (!tim16_to_rgb555(tim.data(), tim.size(), w, h, rgb555))
+            return false;
+        return true;
+    }
 }

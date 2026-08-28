@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +15,7 @@
 #include <map>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <vector>
 
 #ifdef _WIN32
@@ -467,6 +469,91 @@ namespace openre
             ok = true;
             return code;
         }
+
+        // --- RE1 cut backgrounds (STAGE*/RC*.pak) ---
+
+        // An RC pak filename encodes the room code and cut directly:
+        // RC<room3><cut>.pak, e.g. RC1011.pak = room 101, cut 1 (shared by
+        // the ROOM1010/ROOM1011 pair). Scan them straight from the tree
+        // (pruning mod folders) rather than pairing via the RDTs.
+        struct Re1Background
+        {
+            fs::path path;
+            std::string roomCode; // 3 lowercase hex digits, e.g. "101"
+            int cut;              // 0..15
+        };
+
+        std::vector<Re1Background> find_re1_backgrounds(const fs::path& root)
+        {
+            std::vector<Re1Background> backgrounds;
+            std::error_code ec;
+            fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+            const fs::recursive_directory_iterator end;
+            while (it != end)
+            {
+                std::error_code typeEc;
+                if (it->is_regular_file(typeEc) && it->path().extension() == ".pak")
+                {
+                    const std::string name = it->path().filename().string();
+                    if (name.size() == 10 && name.rfind("RC", 0) == 0)
+                    {
+                        const std::string code = to_lower(name.substr(2, 3));
+                        const int cut = static_cast<int>(strtol(name.substr(5, 1).c_str(), nullptr, 16));
+                        if (code.size() == 3 && std::all_of(code.begin(), code.end(), [](char c) {
+                                return isxdigit((unsigned char)c);
+                            }))
+                        {
+                            backgrounds.push_back(Re1Background{ it->path(), code, cut });
+                        }
+                    }
+                }
+                else if (it->is_directory(typeEc) && is_pruned_directory(to_lower(it->path().filename().string())))
+                {
+                    it.disable_recursion_pending();
+                }
+                it.increment(ec);
+                if (ec)
+                    break;
+            }
+            std::sort(backgrounds.begin(), backgrounds.end(), [](const Re1Background& a, const Re1Background& b) {
+                return std::tie(a.roomCode, a.cut) < std::tie(b.roomCode, b.cut);
+            });
+            return backgrounds;
+        }
+
+        // Decompresses an RE1 cut background pak, converts the embedded 16bpp
+        // TIM to RGB555 and writes it as a BMP under roomcut/<room>_<cut>.bmp.
+        // Camera cuts are 320x240; paks of other sizes (e.g. the one-off
+        // 316x236 status screen) are not room backgrounds and are skipped.
+        // Returns 1 on success, 0 when skipped, -1 on failure.
+        int convert_re1_background(const Re1Background& bg, const fs::path& targetRoot)
+        {
+            auto bytes = read_file_bytes(bg.path);
+            if (bytes.empty())
+                return -1;
+
+            std::vector<uint8_t> rgb555;
+            int w = 0;
+            int h = 0;
+            if (!rdt_re1::convert_re1_background(bytes.data(), bytes.size(), rgb555, w, h))
+                return -1;
+            if (w != 320 || h != 240)
+                return 0;
+
+            char name[16];
+            std::snprintf(name, sizeof(name), "%s_%02x.bmp", bg.roomCode.c_str(), bg.cut);
+            const fs::path dest = targetRoot / "roomcut" / name;
+
+            std::error_code destEc;
+            fs::create_directories(dest.parent_path(), destEc);
+            if (destEc)
+                return -1;
+
+            return graphics::bmp_write_rgb555(
+                       dest.string().c_str(), 320, 240, reinterpret_cast<const uint16_t*>(rgb555.data()))
+                ? 1
+                : -1;
+        }
     }
 
     bool game_create_requested(const char** args, int argc)
@@ -749,6 +836,36 @@ namespace openre
                 }
             }
             std::cout << "converted " << roomsConverted << "/" << rooms.size() << " rooms\n";
+
+            // RE1 cut backgrounds: decompress every STAGE*/RC*.pak and write
+            // it as a BMP under roomcut/<room>_<cut>.bmp.
+            size_t bgsConverted = 0;
+            size_t bgFailures = 0;
+            size_t bgSkipped = 0;
+            auto backgrounds = find_re1_backgrounds(sourceRoot);
+            std::cout << "converting " << backgrounds.size() << " RE1 cut backgrounds...\n";
+            for (const auto& bg : backgrounds)
+            {
+                const int result = convert_re1_background(bg, targetRoot);
+                if (result > 0)
+                {
+                    bgsConverted++;
+                    std::cout << "  done  " << bg.roomCode << "_" << bg.cut << ".bmp\n";
+                }
+                else if (result == 0)
+                {
+                    bgSkipped++;
+                    std::cout << "  skip  " << bg.path.filename().string() << " (not 320x240)\n";
+                }
+                else
+                {
+                    bgFailures++;
+                    std::cout << "  fail  " << bg.path.filename().string() << "\n";
+                }
+            }
+            std::cout << "converted " << bgsConverted << "/" << backgrounds.size() << " cut backgrounds"
+                      << (bgSkipped ? " (" + std::to_string(bgSkipped) + " skipped)" : "") << "\n";
+            roomFailures += bgFailures;
         }
 
         return failures == 0 && roomFailures == 0 ? 0 : 1;
