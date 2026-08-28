@@ -2,6 +2,7 @@
 #include "re2.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -919,10 +920,60 @@ namespace openre::rdt_re1
 
     // --- Exported background conversion ---
 
+    // RE1 "shaking rooms" (lifts, boulders) store their 16bpp background 4 px
+    // smaller than the screen (316x236) packed as 316-wide rows, despite the
+    // TIM header claiming 320x240. pak2tim calls this the "-r4" format. The
+    // game re-reads the pixel data at 316 px/row and displays it centred in a
+    // 320x240 frame (the 2 px border is the shake margin).
+    //
+    // This detects such buffers and restitches them into the normal 320x240
+    // layout. Detection compares the row-to-row correlation of the pixel data
+    // read as 320-wide rows against 316-wide rows: an r4 buffer is incoherent
+    // at 320 px/row (each row starts 4 px into the next packed row) but
+    // coherent at 316 px/row.
+    namespace
+    {
+        // Average correlation between consecutive rows of `pixels` when read
+        // with `stride` pixels per row, over the green channel (5 bits).
+        double row_correlation(const uint16_t* px, size_t total, int stride, int rows)
+        {
+            double sum = 0;
+            int n = 0;
+            for (int y = 1; y < rows; y++)
+            {
+                double ma = 0;
+                double mb = 0;
+                for (int x = 0; x < stride; x++)
+                {
+                    ma += (px[(size_t)y * stride + x] >> 5) & 31;
+                    mb += (px[(size_t)(y - 1) * stride + x] >> 5) & 31;
+                }
+                ma /= stride;
+                mb /= stride;
+                double num = 0;
+                double da = 0;
+                double db = 0;
+                for (int x = 0; x < stride; x++)
+                {
+                    const double a = ((px[(size_t)y * stride + x] >> 5) & 31) - ma;
+                    const double b = ((px[(size_t)(y - 1) * stride + x] >> 5) & 31) - mb;
+                    num += a * b;
+                    da += a * a;
+                    db += b * b;
+                }
+                if (da > 0 && db > 0)
+                    sum += num / std::sqrt(da * db);
+                n++;
+            }
+            return n ? sum / n : 0.0;
+        }
+    }
+
     // Converts an RE1 cut background pak (STAGE*/RC*.pak) into an RGB555
     // pixel buffer. The pak is an LZ-compressed 16bpp TIM. Returns false on
     // failure. On success the image dimensions are reported in w/h (camera
     // cuts are 320x240; the one-off 316x236 menu screen has different ones).
+    // Shaking-room backgrounds ("-r4") are restitched to 320x240.
     bool convert_re1_background(const uint8_t* data, size_t size, std::vector<uint8_t>& rgb555, int& w, int& h)
     {
         std::vector<uint8_t> tim;
@@ -931,6 +982,26 @@ namespace openre::rdt_re1
 
         if (!tim16_to_rgb555(tim.data(), tim.size(), w, h, rgb555))
             return false;
+
+        // Restitch shaking-room backgrounds stored 4 px smaller.
+        if (w == 320 && h == 240)
+        {
+            const uint16_t* px = reinterpret_cast<const uint16_t*>(rgb555.data());
+            const double corr320 = row_correlation(px, rgb555.size() / 2, 320, 240);
+            const double corr316 = row_correlation(px, rgb555.size() / 2, 316, 236);
+            if (corr320 < 0.7 && corr316 > 0.7 && corr316 > corr320 + 0.15)
+            {
+                // Read the pixel data as 316-wide rows and place each into the
+                // destination at row+2, col+2 (pak2tim remove_4_pixels).
+                std::vector<uint8_t> reorg(320 * 240 * 2, 0);
+                uint16_t* dst = reinterpret_cast<uint16_t*>(reorg.data());
+                for (int y = 0; y < 236; y++)
+                {
+                    std::memcpy(dst + (size_t)(y + 2) * 320 + 2, px + (size_t)y * 316, 316 * 2);
+                }
+                rgb555 = std::move(reorg);
+            }
+        }
         return true;
     }
 }

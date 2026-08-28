@@ -34,6 +34,11 @@ whenever progress is merged back into the source branch (see
 - `openre.exe create-game` now also decompresses every `RC*.pak` and writes it
   as `roomcut/<room>_<cut:02x>.bmp` (8bpp palettized when <= 256 colors, else
   24bpp; the one-off 316x236 status screen is skipped).
+- Shaking rooms (lifts, boulders; rooms 306, 307, 30b, 30f, 515, 50d) store
+  their background 4px smaller (316x236) packed as 316-wide rows despite the
+  TIM claiming 320x240 (pak2tim `-r4`). The converter detects this from the
+  decoded pixel data (row correlation is low at 320 px/row but high at 316)
+  and restitches the rows into a normal 320x240 frame.
 - At runtime `bg_load` tries `roomcut/<room>_<cut>.bmp` first (room code set
   via `set_re1_room_code`), split into the layered 256x256 + panels layout in
   `work_buffer` and fed to the original `bg_to_surface`; falls back to the
