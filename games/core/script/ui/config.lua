@@ -659,7 +659,7 @@ local function ensureDiamond(tree, changed)
     end
     if changed then
         for _ = #tree.diamondQuads + 1, 1 do
-            local _, id = addQuad(boxHandle, prefix .. '.diamond.square',
+            local _, id = addQuad(boxHandle, tree.prefix .. '.diamond.square',
                 DIAMOND_SIZE, DIAMOND_SIZE, COLOR_DIAMOND, Z_DIAMOND)
             tree.diamondQuads[#tree.diamondQuads + 1] = id
         end
