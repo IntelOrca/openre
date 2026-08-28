@@ -52,7 +52,7 @@ local function span(color, text)
 end
 
 local function addSize(handle, w, h, weight)
-    local size = scene.addComponent(handle, 'core.ui_size')
+    local size = scene.addComponent(handle, 'core.UiSize')
     scene.setField(size, 'width', w)
     scene.setField(size, 'height', h)
     if weight ~= nil then
@@ -61,7 +61,7 @@ local function addSize(handle, w, h, weight)
 end
 
 local function addFlex(handle, orientation, gap, padding)
-    local flex = scene.addComponent(handle, 'core.ui_flex')
+    local flex = scene.addComponent(handle, 'core.UiFlex')
     scene.setField(flex, 'orientation', orientation)
     if gap ~= nil then
         scene.setField(flex, 'gap', gap)
@@ -77,7 +77,7 @@ local function addText(parentHandle, w, h, markup, small, flags, name)
     if name ~= nil then
         scene.setField(handle, 'name', name)
     end
-    local t = scene.addComponent(handle, 'core.text')
+    local t = scene.addComponent(handle, 'core.Text')
     scene.setField(t, 'font', small and smFont or stdFont)
     scene.setField(t, 'text', markup)
     scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
@@ -94,7 +94,7 @@ local function addQuad(parentHandle, cx, cy, w, h, color, z, name)
     end
     scene.setField(handle, 'x', cx)
     scene.setField(handle, 'y', cy)
-    local sprite = scene.addComponent(handle, 'core.sprite')
+    local sprite = scene.addComponent(handle, 'core.Sprite')
     scene.setField(sprite, 'color', color)
     scene.setField(handle, 'z', z)
     addSize(handle, w, h)
@@ -244,7 +244,7 @@ local function buildTree()
     -- options UI, dimming the menu to ~4% underneath the popup.
     backdrop = scene.createEntity(optionsHandle)
     scene.setField(backdrop, 'name', 'backdrop')
-    local backdropSprite = scene.addComponent(backdrop, 'core.sprite')
+    local backdropSprite = scene.addComponent(backdrop, 'core.Sprite')
     scene.setField(backdropSprite, 'color', { 0, 0, 0, 245 })
     scene.setField(backdrop, 'x', gfx.screenWidth() * 0.5)
     scene.setField(backdrop, 'y', gfx.screenHeight() * 0.5)
@@ -253,7 +253,7 @@ local function buildTree()
     -- Scaled canvas holding the design-space layout.
     canvasHandle = scene.createEntity(optionsHandle)
     scene.setField(canvasHandle, 'name', 'canvas')
-    frame = scene.addComponent(canvasHandle, 'core.scaled_frame')
+    frame = scene.addComponent(canvasHandle, 'core.ScaledFrame')
     scene.setField(frame, 'source.width', DESIGN_W)
     scene.setField(frame, 'source.height', DESIGN_H)
     scene.setField(frame, 'mode', 'contain')
@@ -273,7 +273,7 @@ local function buildTree()
     local mainStripHandle
     mainStripHandle, mainStripId = tabs.addStrip(ui, 0, 0, 1, 'main_strip')
     do
-        local size = scene.component(mainStripHandle, 'core.ui_size')
+        local size = scene.component(mainStripHandle, 'core.UiSize')
         scene.setField(size, 'width', DESIGN_W)
         scene.setField(size, 'height', STRIP_H)
     end
@@ -304,7 +304,7 @@ local function buildTree()
     do
         local handle = ecs.spawn(right)
         scene.setField(handle, 'name', 'pane_body')
-        local t = scene.addComponent(handle, 'core.text')
+        local t = scene.addComponent(handle, 'core.Text')
         scene.setField(t, 'font', smFont)
         scene.setField(t, 'text', '')
         scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yTop)
@@ -327,7 +327,7 @@ local function buildTree()
         scene.setField(hintHandle, 'name', 'back_hint')
         scene.setField(hintHandle, 'scale.x', 0.5)
         scene.setField(hintHandle, 'scale.y', 0.5)
-        local hint = scene.addComponent(hintHandle, 'core.input_hint')
+        local hint = scene.addComponent(hintHandle, 'core.InputHint')
         scene.setField(hint, 'device', 'ps')
         scene.setField(hint, 'command', 'cancel')
         scene.setField(hint, 'text', 'Back')
@@ -341,24 +341,24 @@ end
 
 local function pushRow(v)
     local row = v.src
-    ecs.set(v.id, 'ui.config_list_item', 'text', row.label)
-    ecs.set(v.id, 'ui.config_list_item', 'changed',
+    ecs.set(v.id, 'ui.config.ListItem', 'text', row.label)
+    ecs.set(v.id, 'ui.config.ListItem', 'changed',
         row.editable and row.index ~= row.defaultIndex)
     if row.def.kind == 'range' then
-        ecs.set(v.controlId, 'ui.config_range', 'min', row.def.min)
-        ecs.set(v.controlId, 'ui.config_range', 'max', row.def.max)
-        ecs.set(v.controlId, 'ui.config_range', 'step', row.def.step)
-        ecs.set(v.controlId, 'ui.config_range', 'value', indexToValue(row.def, row.index))
-        ecs.set(v.controlId, 'ui.config_range', 'text', tostring(row.options[row.index]))
+        ecs.set(v.controlId, 'ui.config.Range', 'min', row.def.min)
+        ecs.set(v.controlId, 'ui.config.Range', 'max', row.def.max)
+        ecs.set(v.controlId, 'ui.config.Range', 'step', row.def.step)
+        ecs.set(v.controlId, 'ui.config.Range', 'value', indexToValue(row.def, row.index))
+        ecs.set(v.controlId, 'ui.config.Range', 'text', tostring(row.options[row.index]))
     elseif row.editable then
-        ecs.set(v.controlId, 'ui.config_enum', 'count', #row.options)
-        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', row.index)
-        ecs.set(v.controlId, 'ui.config_enum', 'text', tostring(row.options[row.index]))
+        ecs.set(v.controlId, 'ui.config.Enum', 'count', #row.options)
+        ecs.set(v.controlId, 'ui.config.Enum', 'selected_index', row.index)
+        ecs.set(v.controlId, 'ui.config.Enum', 'text', tostring(row.options[row.index]))
     else
         -- External action entry: not value-editable.
-        ecs.set(v.controlId, 'ui.config_enum', 'count', 0)
-        ecs.set(v.controlId, 'ui.config_enum', 'selected_index', 1)
-        ecs.set(v.controlId, 'ui.config_enum', 'text', '')
+        ecs.set(v.controlId, 'ui.config.Enum', 'count', 0)
+        ecs.set(v.controlId, 'ui.config.Enum', 'selected_index', 1)
+        ecs.set(v.controlId, 'ui.config.Enum', 'text', '')
     end
 end
 
@@ -366,7 +366,7 @@ local function refreshSelection(sub)
     local sel = sub.rows[sub.cursor]
     for _, v in ipairs(sub.view) do
         if v.src ~= nil then
-            ecs.set(v.id, 'ui.config_list_item', 'selected', v.src == sel)
+            ecs.set(v.id, 'ui.config.ListItem', 'selected', v.src == sel)
         end
     end
 end
@@ -402,7 +402,7 @@ local function rebuildList(sub)
         if entry.kind == 'group' then
             -- Group header: same height as a list item, never selectable.
             local handle, id = config.addListGroup(activePanel.list, 0, 0, ITEM_WIDTH, 'list_group')
-            ecs.set(id, 'ui.config_list_group', 'text', entry.text)
+            ecs.set(id, 'ui.config.ListGroup', 'text', entry.text)
             sub.view[#sub.view + 1] = { entry = entry, handle = handle, id = id }
         else
             local src = entry
@@ -416,7 +416,7 @@ local function rebuildList(sub)
             local v = { src = src, handle = handle, id = id, controlId = controlId }
             sub.view[#sub.view + 1] = v
             pushRow(v)
-            ecs.set(id, 'ui.config_list_item', 'selected', src == sub.rows[sub.cursor])
+            ecs.set(id, 'ui.config.ListItem', 'selected', src == sub.rows[sub.cursor])
         end
     end
 
@@ -469,7 +469,7 @@ local function updateScroll(sub)
     local thumbH = math.max(14,
         math.floor(VIEW_H * math.min(entryCount, VISIBLE_ROWS) / entryCount))
     local frac = maxOffset > 0 and sub.offset / maxOffset or 0
-    local size = scene.component(sub.thumb, 'core.ui_size')
+    local size = scene.component(sub.thumb, 'core.UiSize')
     scene.setField(size, 'height', thumbH)
     scene.setField(sub.thumb, 'y', frac * (VIEW_H - thumbH) - VIEW_H * 0.5 + thumbH * 0.5)
 end
@@ -501,7 +501,7 @@ end
 -- parented to two roots so switching categories destroys exactly two nodes.
 local function buildPanel(cat)
     local subStripHandle, subStripId = tabs.addStrip(left, 0, 0, 2, 'sub_strip')
-    local subStripSize = scene.component(subStripHandle, 'core.ui_size')
+    local subStripSize = scene.component(subStripHandle, 'core.UiSize')
     scene.setField(subStripSize, 'width', DESIGN_W * 0.5)
     scene.setField(subStripSize, 'height', STRIP_H)
     for _, sub in ipairs(cat.subs) do

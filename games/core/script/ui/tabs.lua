@@ -3,14 +3,14 @@
 --
 -- A game only creates the entities and components:
 --
---     local strip = tabs.addStrip(root, x, y)   -- ui.tab_strip
---     local tab   = tabs.addTab(stripId, 'HUD') -- ui.tab
+--     local strip = tabs.addStrip(root, x, y)   -- ui.TabStrip
+--     local tab   = tabs.addTab(stripId, 'HUD') -- ui.Tab
 --
--- Everything else is produced by the registered 'ui.tabs' system: the LB/RB
+-- Everything else is produced by the registered 'ui.TabStrip' system: the LB/RB
 -- input hints flanking the strip, the grey rule under the whole row, each
 -- tab's label text and the white underline segment marking the selected tab.
--- State lives in the binary component rows: ui.tab_strip carries
--- selected_index plus the two hint command names, ui.tab carries the label
+-- State lives in the binary component rows: ui.TabStrip carries
+-- selected_index plus the two hint command names, ui.Tab carries the label
 -- and its mirrored `selected` bool.
 --
 -- Layout model (pure flex): addStrip builds a declarative tree -
@@ -71,7 +71,7 @@ local Z_UNDERLINE = 0
 -- Components -----------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-ecs.registerComponent('ui.tab_strip', {
+ecs.registerComponent('ui.TabStrip', {
     { name = 'selected_index', type = 'int', default = 1 },
     -- 1 = outer tab row: separators drawn, tab_left/tab_right commands.
     -- 2 = sub-row: no separators, operated with the subtab_left/subtab_right
@@ -81,7 +81,7 @@ ecs.registerComponent('ui.tab_strip', {
     { name = 'hint_command_r', type = 'string', default = 'tab_right' },
 })
 
-ecs.registerComponent('ui.tab', {
+ecs.registerComponent('ui.Tab', {
     { name = 'label', type = 'string', default = '' },
     { name = 'selected', type = 'bool', default = false },
 })
@@ -99,7 +99,7 @@ function tabs.setFont(font)
 end
 
 local function addSize(handle, w, h, weight)
-    local size = scene.addComponent(handle, 'core.ui_size')
+    local size = scene.addComponent(handle, 'core.UiSize')
     scene.setField(size, 'width', w)
     scene.setField(size, 'height', h)
     if weight ~= nil then
@@ -108,7 +108,7 @@ local function addSize(handle, w, h, weight)
 end
 
 local function addFlex(handle, orientation, gap, padding)
-    local flex = scene.addComponent(handle, 'core.ui_flex')
+    local flex = scene.addComponent(handle, 'core.UiFlex')
     scene.setField(flex, 'orientation', orientation)
     if gap ~= nil then
         scene.setField(flex, 'gap', gap)
@@ -121,7 +121,7 @@ end
 local function addQuad(parentHandle, name, w, h, color, z, weight)
     local handle = ecs.spawn(parentHandle)
     scene.setField(handle, 'name', name)
-    local sprite = scene.addComponent(handle, 'core.sprite')
+    local sprite = scene.addComponent(handle, 'core.Sprite')
     scene.setField(sprite, 'color', color)
     scene.setField(handle, 'z', z)
     addSize(handle, w, h, weight)
@@ -144,32 +144,32 @@ local tabViews = {}
 --- and it is operated with the tab_left/tab_right commands. Level 2 is a
 --- sub-row: no separators, operated with subtab_left/subtab_right. Returns
 --- the native handle and numeric id. The strip authors a default 560x28
---- box; resize it through its core.ui_size afterwards if needed.
+--- box; resize it through its core.UiSize afterwards if needed.
 ---@param parent SceneEntity
 ---@param x number Canvas-space centre X (offset from the parent origin).
 ---@param y number Canvas-space centre Y.
 ---@param level? integer 1 (default) or 2.
----@param name? string Override for the entity-name prefix (default `ui.tab_strip`).
+---@param name? string Override for the entity-name prefix (default `ui.TabStrip`).
 ---@return SceneEntity handle
 ---@return integer id
 function tabs.addStrip(parent, x, y, level, name)
     if level ~= 2 then
         level = 1
     end
-    local prefix = name or 'ui.tab_strip'
+    local prefix = name or 'ui.TabStrip'
     local handle, id = ecs.spawn(parent)
     assert(id ~= nil, 'ui.tabs.addStrip: spawn failed')
     scene.setField(handle, 'name', prefix)
     scene.setField(handle, 'x', x)
     scene.setField(handle, 'y', y)
-    ecs.addComponent(id, 'ui.tab_strip')
-    ecs.set(id, 'ui.tab_strip', 'level', level)
+    ecs.addComponent(id, 'ui.TabStrip')
+    ecs.set(id, 'ui.TabStrip', 'level', level)
     local cmdL, cmdR = 'tab_left', 'tab_right'
     if level == 2 then
         cmdL, cmdR = 'subtab_left', 'subtab_right'
     end
-    ecs.set(id, 'ui.tab_strip', 'hint_command_l', cmdL)
-    ecs.set(id, 'ui.tab_strip', 'hint_command_r', cmdR)
+    ecs.set(id, 'ui.TabStrip', 'hint_command_l', cmdL)
+    ecs.set(id, 'ui.TabStrip', 'hint_command_r', cmdR)
     addSize(handle, STRIP_W, STRIP_H)
     addFlex(handle, 'vertical')
 
@@ -185,7 +185,7 @@ function tabs.addStrip(parent, x, y, level, name)
         scene.setField(hintHandle, 'name', prefix .. '.' .. key)
         scene.setField(hintHandle, 'scale.x', 0.5)
         scene.setField(hintHandle, 'scale.y', 0.5)
-        local hint = scene.addComponent(hintHandle, 'core.input_hint')
+        local hint = scene.addComponent(hintHandle, 'core.InputHint')
         scene.setField(hint, 'device', 'ps')
         scene.setField(hint, 'command', command)
         addSize(hintHandle, HINT_SIZE, HINT_SIZE)
@@ -256,7 +256,7 @@ end
 function tabs.addTab(stripId, label)
     local view = stripViews[stripId]
     assert(view ~= nil, 'ui.tabs.addTab: unknown strip')
-    local level = ecs.get(stripId, 'ui.tab_strip', 'level')
+    local level = ecs.get(stripId, 'ui.TabStrip', 'level')
     local prefix = view.prefix
 
     local tabHandle, tabId = ecs.spawn(scene.entityFromId(view.bandId))
@@ -277,25 +277,25 @@ function tabs.addTab(stripId, label)
         end
         local labelHandle, labelChildId = ecs.spawn(tabHandle)
         scene.setField(labelHandle, 'name', prefix .. '.label')
-        local t = scene.addComponent(labelHandle, 'core.text')
+        local t = scene.addComponent(labelHandle, 'core.Text')
         scene.setField(t, 'font', uiFont)
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
         addSize(labelHandle, 0, 0, 1)
         labelId = labelChildId
         addQuad(tabHandle, prefix .. '.sepR', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
     else
-        local t = scene.addComponent(tabHandle, 'core.text')
+        local t = scene.addComponent(tabHandle, 'core.Text')
         scene.setField(t, 'font', uiFont)
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
     end
 
-    ecs.addComponent(tabId, 'ui.tab')
-    ecs.set(tabId, 'ui.tab', 'label', label)
+    ecs.addComponent(tabId, 'ui.Tab')
+    ecs.set(tabId, 'ui.Tab', 'label', label)
 
     -- Matching underline cell, transparent until the tab is selected.
     local cellHandle, cellId = ecs.spawn(scene.entityFromId(view.cellsId))
     scene.setField(cellHandle, 'name', prefix .. '.tab.underline.' .. label)
-    local sprite = scene.addComponent(cellHandle, 'core.sprite')
+    local sprite = scene.addComponent(cellHandle, 'core.Sprite')
     scene.setField(sprite, 'color', COLOR_HIDDEN)
     scene.setField(cellHandle, 'z', Z_UNDERLINE)
     addSize(cellHandle, 0, 0, 1)
@@ -309,18 +309,23 @@ end
 ---@param stripId number
 ---@return integer
 function tabs.selectedIndex(stripId)
-    return ecs.get(stripId, 'ui.tab_strip', 'selected_index')
+    return ecs.get(stripId, 'ui.TabStrip', 'selected_index')
 end
 
 function tabs.setSelectedIndex(stripId, index)
-    ecs.set(stripId, 'ui.tab_strip', 'selected_index', index)
+    ecs.set(stripId, 'ui.TabStrip', 'selected_index', index)
 end
 
 -------------------------------------------------------------------------------
 -- System ---------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-ecs.registerSystem('ui.tabs', 1000, function()
+-- Tab strip system: keeps the per-strip overlay state and hint commands in
+-- sync with the binary component rows.
+ecs.registerSystem('ui.TabStrip', {
+    after = { 'core.LegacyGame' },
+    before = { 'core.ScaledFrame' },
+}, function()
     -- Drop derived-view bookkeeping for entities that no longer exist.
     local function sweep(views)
         for id in pairs(views) do
@@ -332,7 +337,7 @@ ecs.registerSystem('ui.tabs', 1000, function()
     sweep(stripViews)
     sweep(tabViews)
 
-    ecs.each('ui.tab_strip', function(stripId)
+    ecs.each('ui.TabStrip', function(stripId)
         local view = stripViews[stripId]
         local stripHandle = scene.entityFromId(stripId)
         if view == nil or stripHandle == nil then
@@ -341,7 +346,7 @@ ecs.registerSystem('ui.tabs', 1000, function()
 
         -- Tabs parented to this strip's band, in creation order.
         local tabsInBand = {}
-        ecs.each('ui.tab', function(tabId)
+        ecs.each('ui.Tab', function(tabId)
             local tabHandle = scene.entityFromId(tabId)
             if tabHandle ~= nil and scene.parent(tabHandle) == view.bandId then
                 tabsInBand[#tabsInBand + 1] = tabId
@@ -351,38 +356,38 @@ ecs.registerSystem('ui.tabs', 1000, function()
 
         -- Selection input: wrap in both directions.
         local selectedIndex = count > 0
-            and math.max(1, math.min(count, ecs.get(stripId, 'ui.tab_strip', 'selected_index')))
+            and math.max(1, math.min(count, ecs.get(stripId, 'ui.TabStrip', 'selected_index')))
             or 1
         if count > 0 then
-            local cmdL = ecs.get(stripId, 'ui.tab_strip', 'hint_command_l')
-            local cmdR = ecs.get(stripId, 'ui.tab_strip', 'hint_command_r')
+            local cmdL = ecs.get(stripId, 'ui.TabStrip', 'hint_command_l')
+            local cmdR = ecs.get(stripId, 'ui.TabStrip', 'hint_command_r')
             if input.pressed(cmdL) then
                 selectedIndex = ((selectedIndex - 2 + count) % count) + 1
             elseif input.pressed(cmdR) then
                 selectedIndex = (selectedIndex % count) + 1
             end
-            ecs.set(stripId, 'ui.tab_strip', 'selected_index', selectedIndex)
+            ecs.set(stripId, 'ui.TabStrip', 'selected_index', selectedIndex)
 
             scene.setField(
-                scene.component(view.hintL, 'core.input_hint'), 'command', cmdL)
+                scene.component(view.hintL, 'core.InputHint'), 'command', cmdL)
             scene.setField(
-                scene.component(view.hintR, 'core.input_hint'), 'command', cmdR)
+                scene.component(view.hintR, 'core.InputHint'), 'command', cmdR)
         end
 
         -- Mirror state into the labels and underline cells.
         for i, tabId in ipairs(tabsInBand) do
             local selected = i == selectedIndex
-            ecs.set(tabId, 'ui.tab', 'selected', selected)
+            ecs.set(tabId, 'ui.Tab', 'selected', selected)
 
             local tv = tabViews[tabId]
             if tv ~= nil then
-                local label = ecs.get(tabId, 'ui.tab', 'label')
+                local label = ecs.get(tabId, 'ui.Tab', 'label')
                 local markup = '<span color="'
                     .. (selected and SELECTED_COLOR or DIM_COLOR) .. '">' .. label .. '</span>'
                 if markup ~= tv.markup then
                     local labelHandle = scene.entityFromId(tv.labelId)
                     if labelHandle ~= nil then
-                        scene.setField(scene.component(labelHandle, 'core.text'), 'text', markup)
+                        scene.setField(scene.component(labelHandle, 'core.Text'), 'text', markup)
                     end
                     tv.markup = markup
                 end
@@ -392,7 +397,7 @@ ecs.registerSystem('ui.tabs', 1000, function()
             if cellId ~= nil then
                 local cellHandle = scene.entityFromId(cellId)
                 if cellHandle ~= nil then
-                    scene.setField(scene.component(cellHandle, 'core.sprite'), 'color',
+                    scene.setField(scene.component(cellHandle, 'core.Sprite'), 'color',
                         selected and COLOR_UNDERLINE or COLOR_HIDDEN)
                 end
             end

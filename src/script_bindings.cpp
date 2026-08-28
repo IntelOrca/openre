@@ -20,6 +20,7 @@
 #include "system_audio.h"
 #include "system_filesystem.h"
 #include "system_input.h"
+#include "system_registry.h"
 #include "system_window.h"
 #include "systems.h"
 #include "text_layout.h"
@@ -398,6 +399,131 @@ namespace openre::script
             return 0;
         }
 
+        // ── system registry bridge (native + Lua-managed systems) ─────────
+
+        // Pushes a Lua string array at index `arg` (stack: table) into `out`.
+        void readStringArray(lua_State* L, int arg, std::vector<std::string>& out)
+        {
+            if (!lua_istable(L, arg))
+                return;
+            const lua_Integer count = lua_rawlen(L, arg);
+            out.reserve(static_cast<size_t>(count));
+            for (lua_Integer i = 1; i <= count; i++)
+            {
+                lua_rawgeti(L, arg, i);
+                if (lua_isstring(L, -1))
+                    out.emplace_back(lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+        }
+
+        // Pushes `items` as a Lua string array on top of the stack.
+        void pushStringArray(lua_State* L, const std::vector<std::string>& items)
+        {
+            lua_newtable(L);
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                lua_pushstring(L, items[i].c_str());
+                lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+            }
+        }
+
+        SystemPlacement systemPlacementFromString(const char* text)
+        {
+            if (text != nullptr && strcmp(text, "early") == 0)
+                return SystemPlacement::Early;
+            if (text != nullptr && strcmp(text, "late") == 0)
+                return SystemPlacement::Late;
+            return SystemPlacement::Default;
+        }
+
+        // re.systems() - returns the unified mixed system list (native +
+        // Lua-managed) in resolved dispatch order. Each entry is
+        // { name, kind, placement, after, before }.
+        int apiSystems(lua_State* L)
+        {
+            const auto& systems = openre::systemRegistry().ordered();
+            lua_newtable(L);
+            lua_Integer n = 0;
+            for (const auto* def : systems)
+            {
+                lua_newtable(L);
+                lua_pushstring(L, def->name.c_str());
+                lua_setfield(L, -2, "name");
+                lua_pushstring(L, def->kind == SystemKind::Native ? "native" : "lua");
+                lua_setfield(L, -2, "kind");
+                switch (def->placement)
+                {
+                case SystemPlacement::Early: lua_pushstring(L, "early"); break;
+                case SystemPlacement::Late: lua_pushstring(L, "late"); break;
+                default: lua_pushstring(L, "default"); break;
+                }
+                lua_setfield(L, -2, "placement");
+                pushStringArray(L, def->after);
+                lua_setfield(L, -2, "after");
+                pushStringArray(L, def->before);
+                lua_setfield(L, -2, "before");
+                lua_rawseti(L, -2, ++n);
+            }
+            return 1;
+        }
+
+        // re.registerSystem(name, after, before, placement, managedId) -
+        // registers a Lua-managed ECS system with the shared registry. Called
+        // by ecs.registerSystem.
+        int apiRegisterSystem(lua_State* L)
+        {
+            const char* name = luaL_checkstring(L, 1);
+            std::vector<std::string> after, before;
+            readStringArray(L, 2, after);
+            readStringArray(L, 3, before);
+            const auto placement = systemPlacementFromString(luaL_optstring(L, 4, "default"));
+            const int managedId = static_cast<int>(luaL_checkinteger(L, 5));
+            openre::systemRegistry().registerManaged(name, std::move(after), std::move(before), placement, managedId);
+            return 0;
+        }
+
+        int apiResetManagedSystems(lua_State* L)
+        {
+            openre::systemRegistry().clearManaged();
+            return 0;
+        }
+
+        // The system runner callback installed by re.setSystemRunner, invoked
+        // by the registry when a Lua-managed system is dispatched.
+        LuaVm* gSystemRunnerVm = nullptr;
+        int gSystemRunnerRef = LUA_NOREF;
+
+        void dispatchManagedSystem(int managedId)
+        {
+            if (gSystemRunnerVm == nullptr || gSystemRunnerRef == LUA_NOREF)
+                return;
+            lua_State* L = gSystemRunnerVm->state();
+            lua_rawgeti(L, LUA_REGISTRYINDEX, gSystemRunnerRef);
+            lua_pushinteger(L, managedId);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            {
+                const char* msg = lua_tostring(L, -1);
+                openre::logging::logWarning(
+                    "[script] {}: system runner failed: {}", gSystemRunnerVm->name(), msg != nullptr ? msg : "(unknown error)");
+                lua_pop(L, 1);
+            }
+        }
+
+        // re.setSystemRunner(fn) - installs the callback that dispatches a
+        // managed system by its id. Set once by the Lua ECS module; the
+        // callback resolves the fn in the module's own systems table.
+        int apiSetSystemRunner(lua_State* L)
+        {
+            auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
+            luaL_checktype(L, 1, LUA_TFUNCTION);
+            lua_pushvalue(L, 1);
+            gSystemRunnerRef = luaL_ref(L, LUA_REGISTRYINDEX);
+            gSystemRunnerVm = vm;
+            openre::systemRegistry().setManagedRunner(&dispatchManagedSystem);
+            return 0;
+        }
+
         int apiLog(lua_State* L)
         {
             auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
@@ -719,7 +845,7 @@ namespace openre::script
             }
 
             int32_t kind = 0;
-            if (strcmp(name, "core.sprite") == 0)
+            if (strcmp(name, "core.Sprite") == 0)
             {
                 if (scene->tryGetComponent<ecs::SpriteComponent>(handle->entity) == nullptr)
                 {
@@ -727,11 +853,11 @@ namespace openre::script
                 }
                 kind = ComponentKind::sprite;
             }
-            else if (strcmp(name, "core.transform") == 0)
+            else if (strcmp(name, "core.Transform") == 0)
             {
                 kind = ComponentKind::transform; // implicit on every entity
             }
-            else if (strcmp(name, "core.text") == 0)
+            else if (strcmp(name, "core.Text") == 0)
             {
                 // Optional font cookie (a gfx.loadFont value) as a 3rd arg.
                 if (scene->tryGetComponent<ecs::TextComponent>(handle->entity) == nullptr)
@@ -740,7 +866,7 @@ namespace openre::script
                 }
                 kind = ComponentKind::text;
             }
-            else if (strcmp(name, "core.audio_emitter") == 0)
+            else if (strcmp(name, "core.AudioEmitter") == 0)
             {
                 if (scene->tryGetComponent<ecs::AudioEmitterComponent>(handle->entity) == nullptr)
                 {
@@ -748,7 +874,7 @@ namespace openre::script
                 }
                 kind = ComponentKind::audio_emitter;
             }
-            else if (strcmp(name, "core.scaled_frame") == 0)
+            else if (strcmp(name, "core.ScaledFrame") == 0)
             {
                 if (scene->tryGetComponent<ecs::ScaledFrameComponent>(handle->entity) == nullptr)
                 {
@@ -756,7 +882,7 @@ namespace openre::script
                 }
                 kind = ComponentKind::scaled_frame;
             }
-            else if (strcmp(name, "core.input_hint") == 0)
+            else if (strcmp(name, "core.InputHint") == 0)
             {
                 if (scene->tryGetComponent<ecs::InputHintComponent>(handle->entity) == nullptr)
                 {
@@ -764,7 +890,7 @@ namespace openre::script
                 }
                 kind = ComponentKind::input_hint;
             }
-            else if (strcmp(name, "core.ui_size") == 0)
+            else if (strcmp(name, "core.UiSize") == 0)
             {
                 if (scene->tryGetComponent<ecs::UiSizeComponent>(handle->entity) == nullptr)
                 {
@@ -772,7 +898,7 @@ namespace openre::script
                 }
                 kind = ComponentKind::ui_size;
             }
-            else if (strcmp(name, "core.ui_flex") == 0)
+            else if (strcmp(name, "core.UiFlex") == 0)
             {
                 if (scene->tryGetComponent<ecs::UiFlexComponent>(handle->entity) == nullptr)
                 {
@@ -1805,27 +1931,201 @@ namespace openre::script
         // Resolve a component type name to its ComponentKind (0 if unknown).
         int32_t componentKindFromName(const char* name)
         {
-            if (strcmp(name, "core.transform") == 0)
+            if (strcmp(name, "core.Transform") == 0)
                 return ComponentKind::transform;
-            if (strcmp(name, "core.sprite") == 0)
+            if (strcmp(name, "core.Sprite") == 0)
                 return ComponentKind::sprite;
-            if (strcmp(name, "core.text") == 0)
+            if (strcmp(name, "core.Text") == 0)
                 return ComponentKind::text;
-            if (strcmp(name, "core.legacy") == 0)
+            if (strcmp(name, "core.Legacy") == 0)
                 return ComponentKind::legacy;
-            if (strcmp(name, "core.video") == 0)
+            if (strcmp(name, "core.Video") == 0)
                 return ComponentKind::video;
-            if (strcmp(name, "core.audio_emitter") == 0)
+            if (strcmp(name, "core.AudioEmitter") == 0)
                 return ComponentKind::audio_emitter;
-            if (strcmp(name, "core.scaled_frame") == 0)
+            if (strcmp(name, "core.ScaledFrame") == 0)
                 return ComponentKind::scaled_frame;
-            if (strcmp(name, "core.input_hint") == 0)
+            if (strcmp(name, "core.InputHint") == 0)
                 return ComponentKind::input_hint;
-            if (strcmp(name, "core.ui_size") == 0)
+            if (strcmp(name, "core.UiSize") == 0)
                 return ComponentKind::ui_size;
-            if (strcmp(name, "core.ui_flex") == 0)
+            if (strcmp(name, "core.UiFlex") == 0)
                 return ComponentKind::ui_flex;
             return 0;
+        }
+
+        // One field of a built-in component, used by the debug web UI to
+        // display the registered fields and their types.
+        struct ComponentFieldInfo
+        {
+            const char* name;
+            const char* type; // "int" | "float" | "bool" | "string"
+            const char* def;  // textual default, e.g. "1" / "true" / ""
+        };
+
+        // Field tables for the built-in core.* components. Hand-maintained
+        // alongside the get/set-field switch (keep in sync).
+        static const ComponentFieldInfo kTransformFields[] = {
+            { "name", "string", "" },    { "x", "float", "0" },       { "y", "float", "0" },       { "z", "float", "0" },
+            { "scale.x", "float", "1" }, { "scale.y", "float", "1" }, { "scale.z", "float", "1" },
+        };
+        static const ComponentFieldInfo kSpriteFields[] = {
+            { "src.x", "float", "0" },
+            { "src.y", "float", "0" },
+            { "src.width", "float", "0" },
+            { "src.height", "float", "0" },
+            { "texture", "int", "0" },
+            { "flags", "int", "3" },
+            { "color", "string", "255,255,255,255" },
+        };
+        static const ComponentFieldInfo kTextFields[] = {
+            { "text", "string", "" },
+            { "flags", "int", "0" },
+            { "font", "int", "0" },
+        };
+        static const ComponentFieldInfo kLegacyFields[] = {
+            { "enabled", "bool", "true" },
+            { "size.width", "float", "0" },
+            { "size.height", "float", "0" },
+        };
+        static const ComponentFieldInfo kVideoFields[] = {
+            { "status", "int", "0" },      { "position", "float", "0" }, { "videoWidth", "int", "0" },
+            { "videoHeight", "int", "0" }, { "movie", "int", "0" },
+        };
+        static const ComponentFieldInfo kAudioEmitterFields[] = {
+            { "category", "string", "sfx" }, { "state", "string", "stopped" },
+            { "volume", "float", "100" },    { "pan", "float", "0" },
+            { "loop", "bool", "true" },      { "status", "string", "stopped" },
+            { "fadeFrames", "int", "0" },    { "fadeTargetVolume", "float", "100" },
+            { "sound", "int", "0" },         { "trigger", "int", "0" },
+        };
+        static const ComponentFieldInfo kScaledFrameFields[] = {
+            { "source.width", "float", "0" },  { "source.height", "float", "0" }, { "target.width", "float", "0" },
+            { "target.height", "float", "0" }, { "mode", "string", "contain" },   { "increment", "float", "0" },
+        };
+        static const ComponentFieldInfo kInputHintFields[] = {
+            { "command", "string", "" },
+            { "device", "string", "kbm" },
+            { "text", "string", "" },
+            { "font", "int", "0" },
+        };
+        static const ComponentFieldInfo kUiSizeFields[] = {
+            { "width", "float", "0" },
+            { "height", "float", "0" },
+            { "weight", "float", "0" },
+            { "alignment", "string", "stretch" },
+        };
+        static const ComponentFieldInfo kUiFlexFields[] = {
+            { "orientation", "string", "none" },
+            { "gap", "float", "0" },
+            { "padding", "float", "0" },
+        };
+
+        struct NativeComponentInfo
+        {
+            const char* name;
+            const ComponentFieldInfo* fields;
+            size_t fieldCount;
+        };
+        static const NativeComponentInfo kNativeComponents[] = {
+            { "core.Transform", kTransformFields, sizeof(kTransformFields) / sizeof(kTransformFields[0]) },
+            { "core.Sprite", kSpriteFields, sizeof(kSpriteFields) / sizeof(kSpriteFields[0]) },
+            { "core.Text", kTextFields, sizeof(kTextFields) / sizeof(kTextFields[0]) },
+            { "core.Legacy", kLegacyFields, sizeof(kLegacyFields) / sizeof(kLegacyFields[0]) },
+            { "core.Video", kVideoFields, sizeof(kVideoFields) / sizeof(kVideoFields[0]) },
+            { "core.AudioEmitter", kAudioEmitterFields, sizeof(kAudioEmitterFields) / sizeof(kAudioEmitterFields[0]) },
+            { "core.ScaledFrame", kScaledFrameFields, sizeof(kScaledFrameFields) / sizeof(kScaledFrameFields[0]) },
+            { "core.InputHint", kInputHintFields, sizeof(kInputHintFields) / sizeof(kInputHintFields[0]) },
+            { "core.UiSize", kUiSizeFields, sizeof(kUiSizeFields) / sizeof(kUiSizeFields[0]) },
+            { "core.UiFlex", kUiFlexFields, sizeof(kUiFlexFields) / sizeof(kUiFlexFields[0]) },
+        };
+
+        const char* runtimeFieldTypeName(ecs::RuntimeFieldType type)
+        {
+            switch (type)
+            {
+            case ecs::RuntimeFieldType::Float: return "float";
+            case ecs::RuntimeFieldType::Bool: return "bool";
+            case ecs::RuntimeFieldType::String: return "string";
+            default: return "int";
+            }
+        }
+
+        void pushFieldInfo(lua_State* L, const char* name, const char* type, const char* def)
+        {
+            lua_newtable(L);
+            lua_pushstring(L, name);
+            lua_setfield(L, -2, "name");
+            lua_pushstring(L, type);
+            lua_setfield(L, -2, "type");
+            lua_pushstring(L, def);
+            lua_setfield(L, -2, "default");
+        }
+
+        // Appends a { name, kind, fields = { { name, type, default }, ... } }
+        // spy entry at index `index` in the table on top of the stack.
+        void pushComponentInfo(lua_State* L, int& index, const char* name, const char* kind)
+        {
+            lua_newtable(L);
+            lua_pushstring(L, name);
+            lua_setfield(L, -2, "name");
+            lua_pushstring(L, kind);
+            lua_setfield(L, -2, "kind");
+            lua_newtable(L);
+            int fieldIndex = 0;
+            if (strcmp(kind, "native") == 0)
+            {
+                for (const auto& info : kNativeComponents)
+                {
+                    if (strcmp(info.name, name) != 0)
+                        continue;
+                    for (size_t i = 0; i < info.fieldCount; i++)
+                    {
+                        fieldIndex++;
+                        pushFieldInfo(L, info.fields[i].name, info.fields[i].type, info.fields[i].def);
+                        lua_rawseti(L, -2, fieldIndex);
+                    }
+                }
+            }
+            else if (const ecs::RuntimeComponentDef* def = ecs::findRuntimeComponent(name); def != nullptr)
+            {
+                for (size_t i = 0; i < def->fields.size(); i++)
+                {
+                    fieldIndex++;
+                    // Marshal the default value into a compact string.
+                    std::string defString;
+                    if (i < def->defaults.size())
+                    {
+                        std::visit(
+                            [&](const auto& v) {
+                                using T = std::decay_t<decltype(v)>;
+                                if constexpr (std::is_same_v<T, std::string>)
+                                    defString = v;
+                                else
+                                    defString = std::to_string(v);
+                            },
+                            def->defaults[i]);
+                    }
+                    pushFieldInfo(L, def->fields[i].name.c_str(), runtimeFieldTypeName(def->fields[i].type), defString.c_str());
+                    lua_rawseti(L, -2, fieldIndex);
+                }
+            }
+            lua_setfield(L, -2, "fields");
+            lua_rawseti(L, -2, index++);
+        }
+
+        // re.components() - returns the registered components (built-in core.*
+        // plus Lua-defined runtime components) with their fields and types, for
+        // the debug web UI.
+        int apiComponents(lua_State* L)
+        {
+            lua_newtable(L);
+            int index = 1;
+            for (const auto& info : kNativeComponents)
+                pushComponentInfo(L, index, info.name, "native");
+            for (const ecs::RuntimeComponentDef* def : ecs::runtimeComponents())
+                pushComponentInfo(L, index, def->name.c_str(), "runtime");
+            return 1;
         }
 
         // ── runtime (Lua-defined) components ─────────────────────────────
@@ -2019,25 +2319,25 @@ namespace openre::script
                 lua_pushlstring(L, name, strlen(name));
                 lua_rawseti(L, -2, n);
             };
-            push("core.transform");
+            push("core.Transform");
             if (scene->hasComponent<ecs::SpriteComponent>(h->entity))
-                push("core.sprite");
+                push("core.Sprite");
             if (scene->hasComponent<ecs::TextComponent>(h->entity))
-                push("core.text");
+                push("core.Text");
             if (scene->hasComponent<ecs::LegacyGameComponent>(h->entity))
-                push("core.legacy");
+                push("core.Legacy");
             if (scene->hasComponent<ecs::VideoComponent>(h->entity))
-                push("core.video");
+                push("core.Video");
             if (scene->hasComponent<ecs::AudioEmitterComponent>(h->entity))
-                push("core.audio_emitter");
+                push("core.AudioEmitter");
             if (scene->hasComponent<ecs::ScaledFrameComponent>(h->entity))
-                push("core.scaled_frame");
+                push("core.ScaledFrame");
             if (scene->hasComponent<ecs::InputHintComponent>(h->entity))
-                push("core.input_hint");
+                push("core.InputHint");
             if (scene->hasComponent<ecs::UiSizeComponent>(h->entity))
-                push("core.ui_size");
+                push("core.UiSize");
             if (scene->hasComponent<ecs::UiFlexComponent>(h->entity))
-                push("core.ui_flex");
+                push("core.UiFlex");
             for (const auto& runtimeName : scene->runtimeComponentsOf(h->entity))
                 push(runtimeName.c_str());
             return 1;
@@ -2762,6 +3062,11 @@ namespace openre::script
         setGlobalWithVm(L, "print", apiPrint, vm);
 
         setGlobalWithVm(L, "re.subscribe", apiSubscribe, vm);
+        setGlobal(L, "re.systems", apiSystems);
+        setGlobal(L, "re.registerSystem", apiRegisterSystem);
+        setGlobal(L, "re.resetManagedSystems", apiResetManagedSystems);
+        setGlobal(L, "re.components", apiComponents);
+        setGlobalWithVm(L, "re.setSystemRunner", apiSetSystemRunner, vm);
         setGlobal(L, "re.getFlag", apiGetFlag);
         setGlobal(L, "re.setFlag", apiSetFlag);
         setGlobal(L, "re.getEntity", apiGetEntity);

@@ -9,18 +9,22 @@
 -- inspector and readable/writable through the regular scene.component /
 -- scene.getField / scene.setField APIs.
 --
--- Systems are registered with a name and a priority; this module subscribes
--- once to HookKind.post_tick and dispatches them in ascending priority order
--- (lower runs first) every frame. The late phase matters: game tick hooks run
--- first and may spawn or destroy entities, so running the systems afterwards
--- means a new entity's populated children exist before TextLayoutSystem /
--- RenderSystem read the scene and it never renders a frame unpopulated.
+-- Systems are registered with a name and an options table
+-- ({ after = {...}, before = {...}, placement = "early"|"default"|"late" })
+-- into the engine's shared system registry, which interleaves them with the
+-- native app-shell systems in one computed order. Managed systems default to
+-- running after the game tick (core.LegacyGame) and before the native layout
+-- systems (core.ScaledFrame), mirroring the old post_tick dispatch slot.
 --
 -- Entities are addressed by their numeric scene id (what scene.children /
 -- scene.parent return). Use ecs.spawn() to create one and get both the
 -- native handle (for scene.setField etc.) and its id (for the ecs API).
 
 local ecs = {}
+
+-- Clear any managed systems from a previous game-module load. Registration
+-- and the runner are refreshed below.
+re.resetManagedSystems()
 
 -------------------------------------------------------------------------------
 -- Component registry ---------------------------------------------------------
@@ -36,7 +40,7 @@ local FIELD_TYPES = {
 --- Register a component type. `fields` is an array of
 --- `{ name = ..., type = 'int'|'float'|'bool'|'string' [, default = ...] }`.
 --- Field order defines the row layout; do not reorder once shipped.
----@param name string e.g. 'ui.tab_strip'
+---@param name string e.g. 'ui.config.Enum'
 ---@param fields table[]
 function ecs.registerComponent(name, fields)
     assert(type(name) == 'string' and #name > 0, 'component name required')
@@ -150,34 +154,46 @@ end
 -- Systems --------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-local systems = {} -- sorted array of { name, priority, order, fn }
-local nextSystemOrder = 0
+-- Managed systems dispatcher: the engine calls this with the id it assigned
+-- at registration; we look up the Lua fn in our own table.
+local systemsById = {}
+local nextSystemId = 0
 
---- Register a system executed every frame. Lower `priority` runs first;
---- ties keep registration order.
----@param name string Diagnostic label only.
----@param priority number
+--- Register a system executed every frame. Ordering between systems is
+--- constraint-based: `after` names systems that must run before this one,
+--- `before` names systems this one must run before, and `placement` is
+--- "early", "default" or "late" (how eagerly the system claims its spot).
+---@param name string Canonical name, e.g. 'ui.config.ListItem' (no "system").
+---@param opts? table { after = string[], before = string[], placement = string }
 ---@param fn function()
-function ecs.registerSystem(name, priority, fn)
-    nextSystemOrder = nextSystemOrder + 1
-    systems[#systems + 1] = { name = name, priority = priority, order = nextSystemOrder, fn = fn }
-    table.sort(systems, function(a, b)
-        if a.priority ~= b.priority then
-            return a.priority < b.priority
-        end
-        return a.order < b.order
-    end)
+function ecs.registerSystem(name, opts, fn)
+    if type(opts) == 'function' then
+        fn = opts
+        opts = {}
+    end
+    opts = opts or {}
+    nextSystemId = nextSystemId + 1
+    systemsById[nextSystemId] = fn
+    re.registerSystem(
+        name,
+        opts.after or {},
+        opts.before or {},
+        opts.placement or 'default',
+        nextSystemId)
 end
 
-local function runSystems()
-    for _, system in ipairs(systems) do
-        local ok, err = xpcall(system.fn, tostring)
+local function runSystem(id)
+    local fn = systemsById[id]
+    if fn then
+        local ok, err = xpcall(fn, tostring)
         if not ok then
-            re.log(LogLevel.error, ("[ecs] system '%s' failed: %s"):format(system.name, tostring(err)))
+            re.log(LogLevel.error, ("[ecs] managed system '%d' failed: %s"):format(id, tostring(err)))
         end
     end
 end
 
-re.subscribe(HookKind.post_tick, runSystems)
+-- The engine dispatches managed systems through this single callback, in the
+-- order computed by its shared system registry.
+re.setSystemRunner(runSystem)
 
 return ecs

@@ -137,6 +137,37 @@ local re = {}
 ---@param fn function Called on the hook event.
 function re.subscribe(kind, fn) end
 
+--- All registered systems (native `core.*` and Lua-managed) in resolved
+--- dispatch order. Each entry is
+--- `{ name, kind = "native"|"lua", placement = "early"|"default"|"late", after = string[], before = string[] }`.
+--- Used by the debug web inspector.
+---@return {name:string, kind:string, placement:string, after:string[], before:string[]}[]
+function re.systems() end
+
+--- Register a Lua-managed ECS system with the engine for inspection and
+--- dispatch. Called by `ecs.registerSystem`.
+---@param name string Canonical system name (e.g. `ui.config.ListItem`).
+---@param after string[] Systems this must run after.
+---@param before string[] Systems this must run before.
+---@param placement string `"early"`, `"default"` or `"late"`.
+---@param managedId integer Opaque id resolving the runner callback.
+function re.registerSystem(name, after, before, placement, managedId) end
+
+--- Clear the Lua-managed system registry (called when the game module reloads).
+function re.resetManagedSystems() end
+
+--- Install the callback used to dispatch a Lua-managed system by its id. Set
+--- once by the ECS module; the callback resolves the id to a function.
+---@param fn function Called with the managed system id.
+function re.setSystemRunner(fn) end
+
+--- Every registered component's registered fields and their types.
+--- Native components are `core.*`, Lua-defined ones are runtime components.
+--- Each entry is `{ name, kind = "native"|"runtime", fields = { { name, type, default } } }`.
+--- Used by the debug web inspector.
+---@return {name:string, kind:string, fields:{name:string, type:string, default:string}[]}[]
+function re.components() end
+
 --- Read a bit flag. Bit indexes use MSB-first numbering
 --- (index 0 = 0x80000000, index 31 = 0x00000001).
 ---@param group FlagGroup
@@ -313,12 +344,12 @@ function scene.setParent(child, parent) end
 
 --- Add a component to an entity and return a component handle. Built-in
 --- components are namespaced `core.*`; `app.*` names are reserved for future
---- Lua-defined components. `core.transform` is implicit on every entity.
---- `core.text` accepts the font (a `gfx.loadFont` value) as the component's
+--- Lua-defined components. `core.Transform` is implicit on every entity.
+--- `core.Text` accepts the font (a `gfx.loadFont` value) as the component's
 --- initial value, or set it later with `scene.setField(handle, 'font', f)`.
 ---@param entity SceneEntity
----@param name string e.g. "core.sprite", "core.text", "core.audio_emitter"
----  or "core.transform"
+---@param name string e.g. "core.Sprite", "core.Text", "core.AudioEmitter"
+---  or "core.Transform"
 ---@return SceneComponent|nil
 function scene.addComponent(entity, name) end
 
@@ -341,16 +372,16 @@ function scene.addComponent(entity, name) end
 --- A sprite is
 --- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
 --- place the entity where you want the centre of the sprite; its drawn size
---- comes from the entity's `core.ui_size` component. Text fields:
+--- comes from the entity's `core.UiSize` component. Text fields:
 --- `text` (UTF-8 string; supports `<span color="#ff0">` markup plus the
 --- `#rrggbb` and `#rrggbbaa` forms — the last two hex digits are the alpha
 --- channel, 0-255), `font` (a
 --- Font or nil) and `flags` (a bitmask of TextFlags values combined with
 --- `|`); the bounds the text aligns within come from the entity's
---- `core.ui_size` component.
---- UI size fields (`core.ui_size`): `width` / `height` (the entity's visual
+--- `core.UiSize` component.
+--- UI size fields (`core.UiSize`): `width` / `height` (the entity's visual
 --- size in window pixels — every sprite, text band and video reads them),
---- plus `weight` for flex layouts (see core.ui_flex) and `alignment` for the
+--- plus `weight` for flex layouts (see core.UiFlex) and `alignment` for the
 --- cross-axis placement. `alignment` is one of "begin", "center", "end" or
 --- "stretch" (default "stretch") and controls the axis the parent flex does
 --- *not* flow along: in a horizontal flex it governs the child's height
@@ -366,7 +397,7 @@ function scene.addComponent(entity, name) end
 --- `fadeFrames` / `fadeTargetVolume`, the read-only `status`, plus the
 --- resident one-shot pair `sound` / `trigger` (see the audio emitter section
 --- below for details).
---- Scaled frame fields (`core.scaled_frame`): `source.width` / `source.height`
+--- Scaled frame fields (`core.ScaledFrame`): `source.width` / `source.height`
 --- (authored design-space size), `target.width` / `target.height`
 --- (window-pixel area to map onto), `mode` ("contain" fits the whole source
 --- inside the target with letterbox margins, "cover" fills the target and
@@ -374,20 +405,20 @@ function scene.addComponent(entity, name) end
 --- snaps the scale DOWN to whole multiples of itself, e.g. 0.5 allows only
 --- 0.5, 1.0, 1.5, ...). The engine writes the computed uniform scale to the
 --- entity's transform every frame; position the entity yourself.
---- Input hint fields (`core.input_hint`): `command` (a registered input
+--- Input hint fields (`core.InputHint`): `command` (a registered input
 --- command name like "pause" — its current bindings are shown as icons; a
 --- single key name like "p" or an icon alias also works), `device` ("kbm",
 --- "ps", "x" or "n"), `text` (optional label drawn right of the icons) and
 --- `font` (optional label font). The icons are fixed 32x32 sprites; scale
 --- the entity's transform to resize the whole hint.
---- Flex fields (`core.ui_flex`): `orientation` ("none", "horizontal" or
+--- Flex fields (`core.UiFlex`): `orientation` ("none", "horizontal" or
 --- "vertical"; default "none"), `gap` (space between consecutive children in
 --- the flow orientations) and `padding` (inset applied to every edge of the
 --- content box). Every immediate child of a flex entity is laid out each
---- frame: `weight` (on `core.ui_size`, default 0) is the main-axis share —
+--- frame: `weight` (on `core.UiSize`, default 0) is the main-axis share —
 --- children with positive weight grab a proportional slice of the leftover
 --- main-axis space. The child's cross-axis behaviour is set by its
---- `core.ui_size` `alignment` ("begin", "center", "end" or "stretch";
+--- `core.UiSize` `alignment` ("begin", "center", "end" or "stretch";
 --- default "stretch") and applies to every child regardless of weight. When
 --- fixed content overflows, every literal size and the gap shrink by the same
 --- factor so the run fits exactly; when no child has weight the whole run is
@@ -421,9 +452,9 @@ function scene.allEntities() end
 function scene.entityFromId(id) end
 
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
---- one of "core.transform", "core.sprite", "core.text", "core.legacy",
---- "core.video", "core.audio_emitter", "core.scaled_frame",
---- "core.input_hint", "core.ui_size", "core.ui_flex" or a runtime component
+--- one of "core.Transform", "core.Sprite", "core.Text", "core.Legacy",
+--- "core.Video", "core.AudioEmitter", "core.ScaledFrame",
+--- "core.InputHint", "core.UiSize", "core.UiFlex" or a runtime component
 --- name registered via `scene.defineComponent`. Returns nil when the entity
 --- lacks that component.
 ---@param entity SceneEntity
@@ -437,7 +468,7 @@ function scene.component(entity, typeName) end
 --- Registered components behave exactly like core.* ones afterwards: add
 --- them with `scene.addComponent`, read/write them with scene.getField /
 --- scene.setField, and they appear in the debug web inspector.
----@param name string e.g. "ui.tab_strip"
+---@param name string e.g. "ui.TabStrip"
 ---@param fields table[]
 function scene.defineComponent(name, fields) end
 
@@ -454,7 +485,7 @@ function scene.removeComponent(entity, name) end
 function scene.entitiesWithComponent(name) end
 
 --- Return a table of the component type names present on an entity (always
---- including "core.transform").
+--- including "core.Transform").
 ---@param entity SceneEntity
 ---@return string[]
 function scene.getComponents(entity) end
@@ -472,10 +503,10 @@ function scene.children(entity) end
 --- Request the application to exit.
 function scene.exit() end
 
---[[ Audio emitters (core.audio_emitter) ]]
+--[[ Audio emitters (core.AudioEmitter) ]]
 
 --- A sound emitter mixed by the native SDL3 audio layer. Add it with
---- `scene.addComponent(e, "core.audio_emitter")` and configure its fields
+--- `scene.addComponent(e, "core.AudioEmitter")` and configure its fields
 --- with `scene.setField`. The emitter plays the sound resource referenced by
 --- its `sound` field, a Sound handle from `audio.loadAudio` (small sources
 --- are decoded fully into memory, large ones such as BGM tracks stream from
@@ -509,10 +540,10 @@ function scene.exit() end
 ---   set it back to 0 first to run the same fade again later.
 --- * `fadeTargetVolume` — 0-100 target of the ramp.
 
---[[ Scaled frames (core.scaled_frame) ]]
+--[[ Scaled frames (core.ScaledFrame) ]]
 
 --- Declarative window-fit scaling. Add it with
---- `scene.addComponent(e, "core.scaled_frame")`; every frame the engine
+--- `scene.addComponent(e, "core.ScaledFrame")`; every frame the engine
 --- computes a uniform scale mapping `source` onto `target` and writes it to
 --- the entity's transform scale, so children laid out in the source's design
 --- space track the target (typically the window). The entity position is not
@@ -532,10 +563,10 @@ function scene.exit() end
 ---   1.5, ...) so UI art never renders at arbitrary fractions; the minimum
 ---   applied scale is one increment.
 
---[[ Input hints (core.input_hint) ]]
+--[[ Input hints (core.InputHint) ]]
 --- Declarative input hint: the icon(s) for a command's current binding on a
 --- chosen input device plus an optional text label. Add it with
---- `scene.addComponent(e, "core.input_hint")`; every frame the engine
+--- `scene.addComponent(e, "core.InputHint")`; every frame the engine
 --- materialises the icons and label as child entities and relayouts only
 --- when the fields or the command bindings change. The first icon is drawn
 --- centred on the entity's `(x, y)` origin, further icons continue to the
@@ -601,7 +632,7 @@ function gfx.loadTexture(path, width, height, timIndex) end
 --- Load an RE2 font and return a Font handle, or nil on failure. The same
 --- path probing as gfx.loadTexture applies. The font atlas's index-0 colour
 --- is treated as transparent so glyphs render with a clear background. Use it
---- with a `core.text` component's `font` field.
+--- with a `core.Text` component's `font` field.
 ---
 --- A path ending in `.fnt` selects the OpenRE binary font format: explicit
 --- per-character records with kerning and one or more texture atlases,

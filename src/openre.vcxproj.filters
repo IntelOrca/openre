@@ -135,6 +135,9 @@
     <ClCompile Include="str.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="system_registry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="tim.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -156,6 +159,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="app.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="system_registry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="openre.h">

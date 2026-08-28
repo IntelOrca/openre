@@ -63,6 +63,14 @@ header .sub{color:var(--muted);font-size:12px;}
 .card-h{padding:8px 12px;background:var(--panel2);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);color:var(--accent2);}
 .field{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid rgba(48,54,61,.5);}
 .field:last-child{border-bottom:none;}
+.sys-row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-size:12px;}
+.sys-row:last-child{border-bottom:none;}
+.sys-order{flex:0 0 42px;color:var(--muted);font-family:ui-monospace,monospace;}
+.sys-name{flex:1;font-family:ui-monospace,monospace;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sys-prio{flex:0 0 auto;color:var(--muted);font-family:ui-monospace,monospace;font-size:11px;}
+.sys-kind{flex:0 0 auto;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.sys-kind-native{background:rgba(63,185,80,.15);color:var(--accent2);border:1px solid rgba(63,185,80,.35);}
+.sys-kind-lua{background:rgba(163,113,247,.15);color:#a371f7;border:1px solid rgba(163,113,247,.35);}
 .field label{flex:0 0 150px;color:var(--muted);font-family:ui-monospace,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .fval{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-family:ui-monospace,monospace;font-size:12px;min-width:0;}
 .fval:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(88,166,255,.25);}
@@ -92,6 +100,8 @@ header .sub{color:var(--muted);font-size:12px;}
   <nav class="sidebar">
     <div class="menu-item active" data-view="scene"><span class="dot"></span>Scene</div>
     <div class="menu-item" data-view="resources"><span class="dot"></span>Resources</div>
+    <div class="menu-item" data-view="systems"><span class="dot"></span>Systems</div>
+    <div class="menu-item" data-view="components"><span class="dot"></span>Components</div>
     <div class="menu-item" data-view="shot"><span class="dot"></span>Screenshot</div>
     <div class="foot">poll: <span id="pollLabel"></span>ms</div>
   </nav>
@@ -102,6 +112,14 @@ header .sub{color:var(--muted);font-size:12px;}
   <section class="view" id="resourcesView">
     <div class="reslist-panel"><h2>Resources</h2><div id="reslist"></div></div>
     <div class="preview" id="preview"><div class="empty">Select a resource to preview.</div></div>
+  </section>
+  <section class="view" id="systemsView">
+    <div class="tree-panel" style="max-width:none;flex:1 1 auto;"><h2>Running Systems</h2><div id="systems"></div></div>
+    <div class="comp-panel" style="flex:0 0 340px;border-left:1px solid var(--border);overflow:auto;padding:12px;" id="systemsInspector"></div>
+  </section>
+  <section class="view" id="componentsView">
+    <div class="reslist-panel" style="width:360px;"><h2>Components</h2><div id="components"></div></div>
+    <div class="comp-panel" style="flex:1;overflow:auto;padding:16px;" id="componentInspector"><div class="empty">Select a component to see its fields.</div></div>
   </section>
   <section class="view" id="shotView">
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border);">
@@ -119,14 +137,14 @@ let POLL_MS = ]] .. tostring(pollMs) .. [[;
 const pm = new URLSearchParams(location.search).get('poll');
 if (pm) POLL_MS = parseInt(pm, 10) || POLL_MS;
 const LS_KEY = 'openre.inspector.v1';
-let state = { view:'scene', selected:null, expanded:{}, resSelected:null,
-  lastTreeHash:'', lastResHash:'', lastInspectorKey:'none' };
-let scene = null, resources = null;
+let state = { view:'scene', selected:null, expanded:{}, resSelected:null, compSelected:null, sysSel:null,
+  lastTreeHash:'', lastResHash:'', lastInspectorKey:'none', lastSysHash:'' , lastCompHash:''};
+let scene = null, resources = null, systems = null, components = null;
 let inspectorInputs = {};
 let previewCookie = null;
 try { const s = JSON.parse(localStorage.getItem(LS_KEY)); if (s) Object.assign(state, s); } catch(_) {}
 function saveState(){
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ view:state.view, selected:state.selected, expanded:state.expanded, resSelected:state.resSelected })); } catch(_) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ view:state.view, selected:state.selected, expanded:state.expanded, resSelected:state.resSelected, compSelected:state.compSelected, sysSel:state.sysSel })); } catch(_) {}
 }
 document.getElementById('pollLabel').textContent = POLL_MS;
 function switchView(v){
@@ -134,9 +152,13 @@ function switchView(v){
   document.querySelectorAll('.menu-item').forEach(e=>e.classList.toggle('active', e.dataset.view===v));
   document.getElementById('sceneView').classList.toggle('active', v==='scene');
   document.getElementById('resourcesView').classList.toggle('active', v==='resources');
+  document.getElementById('systemsView').classList.toggle('active', v==='systems');
+  document.getElementById('componentsView').classList.toggle('active', v==='components');
   document.getElementById('shotView').classList.toggle('active', v==='shot');
   if (v==='resources') previewCookie=null;
   if (v==='shot') refreshShot();
+  if (v==='systems') renderSystems();
+  if (v==='components') renderComponents();
 }
 document.querySelectorAll('.menu-item').forEach(m=>m.onclick=()=>switchView(m.dataset.view));
 if (state.view!=='scene') switchView(state.view);
@@ -154,6 +176,81 @@ function treeHash(){
 function resHash(){
   if(!resources) return 'none';
   return (resources.resources||[]).map(r=>r.resource+':'+r.type+':'+r.path+':'+(r.cookies||[]).join(',')).join(';');
+}
+function sysHash(){
+  if(!systems) return 'none';
+  return (systems.systems||[]).map(s=>s.name+':'+s.kind+':'+s.placement+':'+(s.before||[]).join('|')+':'+(s.after||[]).join('&')).join(';');
+}
+function compHash(){
+  if(!components) return 'none';
+  return (components.components||[]).map(c=>c.name+':'+c.kind+':'+(c.fields||[]).map(f=>f.name+':'+f.type).join(',')).join(';');
+}
+function renderSystems(){
+  const el=document.getElementById('systems');
+  if(!systems){ el.innerHTML='<div class="empty">No system data.</div>'; return; }
+  const list=(systems.systems||[]);
+  let html='<div class="card"><div class="card-h">All Systems · '+list.length+'</div>';
+  if(list.length===0){ html+='<div class="empty" style="padding:12px">none registered</div>'; }
+  for(let i=0;i<list.length;i++){
+    const s=list[i];
+    const constraints=[];
+    if(s.placement && s.placement!=='default') constraints.push(s.placement);
+    if(s.after&&s.after.length>0) constraints.push('after: '+s.after.join(', '));
+    if(s.before&&s.before.length>0) constraints.push('before: '+s.before.join(', '));
+    html+='<div class="sys-row" onclick="selectSystem('+i+')" style="cursor:pointer">'
+      +'<span class="sys-order">#'+(i+1)+'</span>'
+      +'<span class="sys-name" title="'+(constraints.length?escapeHtml(constraints.join(' · ')):'no constraints')+'">'+escapeHtml(s.name)+'</span>'
+      +(s.placement&&s.placement!=='default'?'<span class="sys-prio">'+escapeHtml(s.placement)+'</span>':'')
+      +'<span class="sys-kind '+(s.kind==='lua'?'sys-kind-lua':'sys-kind-native')+'">'+escapeHtml(s.kind)+'</span></div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+  renderSystemsInspector();
+}
+function renderSystemsInspector(){
+  const el=document.getElementById('systemsInspector');
+  const s=(systems&&systems.systems||[])[state.sysSel];
+  if(!s){ el.innerHTML='<div class="empty">Select a system for details.</div>'; return; }
+  let html='<div class="insp-title">'+escapeHtml(s.name)+'</div>';
+  html+='<div class="card"><div class="field"><label>kind</label><div class="fval" style="flex:1">'+escapeHtml(s.kind)+'</div></div>';
+  html+='<div class="field"><label>placement</label><div class="fval" style="flex:1">'+escapeHtml(s.placement||'default')+'</div></div>';
+  html+='<div class="field"><label>after</label><div class="fval" style="flex:1">'+(s.after&&s.after.length?escapeHtml(s.after.join(', ')):'<em>—</em>')+'</div></div>';
+  html+='<div class="field"><label>before</label><div class="fval" style="flex:1">'+(s.before&&s.before.length?escapeHtml(s.before.join(', ')):'<em>—</em>')+'</div></div></div>';
+  el.innerHTML=html;
+}
+function selectSystem(i){
+  state.sysSel=i; saveState(); renderSystemsInspector();
+}
+function renderComponents(){
+  const el=document.getElementById('components');
+  const list=(components?components.components:[]);
+  el.innerHTML='';
+  for(let i=0;i<list.length;i++){
+    const c=list[i];
+    const row=document.createElement('div'); row.className='res-row'+(state.compSelected===c.name?' selected':'');
+    row.innerHTML='<span class="res-path" style="flex:1">'+escapeHtml(c.name)+'</span>'
+      +'<span class="sys-kind '+(c.kind==='runtime'?'sys-kind-lua':'sys-kind-native')+'">'+escapeHtml(c.kind)+'</span>';
+    row.onclick=()=>{ state.compSelected=c.name; saveState(); buildCompList(); renderComponentInspector(); };
+    el.appendChild(row);
+  }
+}
+function buildCompList(){ renderComponents(); }
+function renderComponentInspector(){
+  const el=document.getElementById('componentInspector');
+  const c=(components?components.components:[]).find(x=>x.name===state.compSelected);
+  if(!c){ el.innerHTML='<div class="empty">Select a component to see its fields.</div>'; return; }
+  let html='<div class="insp-title">'+escapeHtml(c.name)+'</div>';
+  html+='<div class="card"><div class="field"><label>kind</label><div class="fval" style="flex:1">'+escapeHtml(c.kind)+'</div></div></div>';
+  html+='<div class="card"><div class="card-h">Fields · '+(c.fields||[]).length+'</div>';
+  if(!c.fields||c.fields.length===0){ html+='<div class="empty" style="padding:12px">no fields</div>'; }
+  for(const f of (c.fields||[])){
+    html+='<div class="field"><label>'+escapeHtml(f.name)+'</label>';
+    html+='<span class="sys-kind sys-prio" style="background:rgba(88,166,255,.12);color:var(--accent);border:1px solid rgba(88,166,255,.3)">'+escapeHtml(f.type)+'</span>';
+    if(f.default!==undefined&&f.default!=='') html+='<span class="fval" style="flex:1" title="default">'+escapeHtml(String(f.default))+'</span>';
+    html+='</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
 }
 function inspectorKey(e){
   if(!e) return 'none';
@@ -307,11 +404,19 @@ async function poll(){
       const h=treeHash();
       if(h!==state.lastTreeHash){ state.lastTreeHash=h; buildTree(); }
       renderInspector();
-    } else {
+    } else if(state.view==='resources'){
       const j=await (await fetch('/api/resources')).json(); resources=j;
       const h=resHash();
       if(h!==state.lastResHash){ state.lastResHash=h; buildResList(); }
       renderPreview();
+    } else if(state.view==='systems'){
+      const j=await (await fetch('/api/systems')).json(); systems=j;
+      const h=sysHash();
+      if(h!==state.lastSysHash){ state.lastSysHash=h; renderSystems(); }
+    } else if(state.view==='components'){
+      const j=await (await fetch('/api/components')).json(); components=j;
+      const h=compHash();
+      if(h!==state.lastCompHash){ state.lastCompHash=h; buildCompList(); renderComponentInspector(); }
     }
   }catch(e){}
 }
@@ -648,6 +753,16 @@ local function handle(sock, req)
     elseif method == "GET" and base == "/api/resources" then
         local ok, rs = pcall(buildResources)
         respond(sock, "200 OK", "application/json", jsonEncode(ok and rs or { resources = {} }))
+    elseif method == "GET" and base == "/api/systems" then
+        -- Native app-shell systems and Lua-managed ECS systems share one
+        -- registry, so a single list is enough.
+        local ok, sys = pcall(re.systems)
+        local out = { systems = ok and type(sys) == "table" and sys or {} }
+        respond(sock, "200 OK", "application/json", jsonEncode(out))
+    elseif method == "GET" and base == "/api/components" then
+        local ok, comps = pcall(re.components)
+        local out = { components = ok and type(comps) == "table" and comps or {} }
+        respond(sock, "200 OK", "application/json", jsonEncode(out))
     elseif method == "GET" and base == "/api/resource/image" then
         local cookie = tonumber(params.cookie or "")
         if not cookie then

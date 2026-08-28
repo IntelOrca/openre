@@ -8,6 +8,7 @@
 #include "marni_renderer.h"
 #include "openre.h"
 #include "system_audio.h"
+#include "system_registry.h"
 #include "system_window.h"
 #include "systems.h"
 
@@ -31,13 +32,24 @@ static char* str_lwr(char* s)
 
 namespace openre
 {
-    // App shell systems, run in this order every frame.
-    // ModuleSystem drives the loaded game module when OPENRE_GAME is set;
-    // otherwise it is a no-op and LegacyGameSystem drives the original game.
-    const SystemFn gAppSystems[] = {
-        system_window,   system_input,     ModuleSystem, LegacyGameSystem, ScaledFrameSystem, UiFlexSystem,
-        InputHintSystem, TextLayoutSystem, VideoSystem,  AudioSystem,      RenderSystem,
-    };
+    // App shell systems, run in this order every frame. Registered once on
+    // boot into the shared SystemRegistry, which interleaves them with any
+    // Lua-managed ECS systems.
+    void register_app_systems()
+    {
+        auto& registry = systemRegistry();
+        registry.registerNative("core.Window", {}, {}, SystemPlacement::Early, system_window);
+        registry.registerNative("core.Input", { "core.Window" }, {}, SystemPlacement::Default, system_input);
+        registry.registerNative("core.Module", { "core.Input" }, {}, SystemPlacement::Default, ModuleSystem);
+        registry.registerNative("core.LegacyGame", { "core.Module" }, {}, SystemPlacement::Default, LegacyGameSystem);
+        registry.registerNative("core.ScaledFrame", { "core.LegacyGame" }, {}, SystemPlacement::Default, ScaledFrameSystem);
+        registry.registerNative("core.UiFlex", { "core.ScaledFrame" }, {}, SystemPlacement::Default, UiFlexSystem);
+        registry.registerNative("core.InputHint", { "core.UiFlex" }, {}, SystemPlacement::Default, InputHintSystem);
+        registry.registerNative("core.TextLayout", { "core.InputHint" }, {}, SystemPlacement::Default, TextLayoutSystem);
+        registry.registerNative("core.Video", { "core.TextLayout" }, {}, SystemPlacement::Default, VideoSystem);
+        registry.registerNative("core.Audio", { "core.Video" }, {}, SystemPlacement::Default, AudioSystem);
+        registry.registerNative("core.Render", { "core.Audio" }, {}, SystemPlacement::Late, RenderSystem);
+    }
 
     // The resolved game module directory (set once at boot below).
     namespace
@@ -258,6 +270,8 @@ namespace openre
         ecs::system_boot_scene(app.scene);
         s_currentScene = &app.scene;
 
+        register_app_systems();
+
         if (system::window::is_screensaver_enabled())
         {
             gGameTable.byte_680590 = 1;
@@ -266,17 +280,17 @@ namespace openre
 
         while (app.running())
         {
-            for (auto system : gAppSystems)
-            {
-                system(app);
-            }
+            systemRegistry().run(app);
         }
 
         // Closing pass, in reverse order.
         app.beginClose();
-        for (auto it = std::rbegin(gAppSystems); it != std::rend(gAppSystems); ++it)
+        const auto& closingOrder = systemRegistry().ordered();
+        for (auto it = closingOrder.rbegin(); it != closingOrder.rend(); ++it)
         {
-            (*it)(app);
+            SystemDef* def = *it;
+            if (def->kind == SystemKind::Native && def->nativeFn != nullptr)
+                def->nativeFn(app);
         }
 
         return app.exitCode();
