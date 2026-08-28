@@ -1004,4 +1004,26 @@ namespace openre::rdt_re1
         }
         return true;
     }
+
+    // Runtime RE1 room addressing. The game names rooms ROOM<stage><room>
+    // <variant>.RDT (4 hex digits); the engine's room loader needs the pack
+    // path of the converted room plus the cut-background room code (first 3
+    // digits, shared by the room and its A/B variant).
+    bool re1_room_info(int stage, int room, int variant, Re1RoomInfo& out)
+    {
+        if (stage < 0 || stage > 6 || room < 0 || room > 0x1F || (variant != 0 && variant != 1))
+            return false;
+
+        const char hex[] = "0123456789abcdef";
+        char name[8];
+        name[0] = hex[stage + 1]; // STAGE1..7 -> digit 1..7
+        name[1] = hex[room >> 4];
+        name[2] = hex[room & 0xF];
+        name[3] = hex[variant];
+        name[4] = '\0';
+
+        out.roomPath = std::string("room\\room") + name + ".rdt";
+        out.roomCode.assign(name, 3);
+        return true;
+    }
 }

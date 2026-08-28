@@ -43,8 +43,14 @@ whenever progress is merged back into the source branch (see
   via `set_re1_room_code`), split into the layered 256x256 + panels layout in
   `work_buffer` and fed to the original `bg_to_surface`; falls back to the
   RE2 `roomcut.bin` ADT path. `bg_load` is now hooked (0x004C4700).
-- The RE1 room loader does not exist yet, so `set_re1_room_code` is the seam
-  that will feed it the current room code (B4).
+- The RE1 room loader (`re1_room_load_path`, B4) is wired into `room_set`
+  case 0: when the data root is an RE1 pack (detected once by the presence of
+  `room/room1000.rdt`), it maps the engine's (stage, room, variant) onto the
+  converted room path (`room/room<S><RR><V>.rdt`) and feeds `set_re1_room_code`
+  the 3-digit room code. The rest of the RE2 room state machine then loads the
+  RE2-format converted room unchanged. `set_re1_room_variant` selects the
+  ROOM<S><RR>0/1 A/B variant. Room codes match the original's
+  `d:/horr/jpn/stage*/room<S><RR><V>.rdt` path builder (sub_41B690).
 
 ## Workflow reminder
 

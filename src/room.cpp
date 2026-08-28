@@ -119,22 +119,36 @@ namespace openre::room
                 {
                     std::memcpy(gGameTable.stage_font_name, font2, 22);
                 }
-                if (check_flag(FlagGroup::Status, FG_STATUS_PLAYER))
-                {
-                    ++gGameTable.room_path[2];
-                    ++gGameTable.room_path[15];
-                }
+
+                // RE1 room loader: derive the converted room's pack path from
+                // the current stage/room/variant and feed bg_load the room
+                // code. The rest of the state machine (RDT read, relocation,
+                // cut_change, ...) then works unchanged on the RE2-format
+                // converted room.
                 gGameTable.p_em = &gGameTable.pl;
-                gGameTable.room_path[12] = gStageSymbols[(gGameTable.byte_98E798) + gGameTable.current_stage];
-                gGameTable.room_path[13] += gGameTable.current_room / 16;
-                const auto mod = gGameTable.current_room % 16;
-                if (mod >= 10)
+                if (const std::string re1Path = re1_room_load_path(); !re1Path.empty())
                 {
-                    gGameTable.room_path[14] = mod + 87;
+                    std::strncpy(gGameTable.room_path, re1Path.c_str(), sizeof(gGameTable.room_path) - 1);
+                    gGameTable.room_path[sizeof(gGameTable.room_path) - 1] = '\0';
                 }
                 else
                 {
-                    gGameTable.room_path[14] = mod + 48;
+                    if (check_flag(FlagGroup::Status, FG_STATUS_PLAYER))
+                    {
+                        ++gGameTable.room_path[2];
+                        ++gGameTable.room_path[15];
+                    }
+                    gGameTable.room_path[12] = gStageSymbols[(gGameTable.byte_98E798) + gGameTable.current_stage];
+                    gGameTable.room_path[13] += gGameTable.current_room / 16;
+                    const auto mod = gGameTable.current_room % 16;
+                    if (mod >= 10)
+                    {
+                        gGameTable.room_path[14] = mod + 87;
+                    }
+                    else
+                    {
+                        gGameTable.room_path[14] = mod + 48;
+                    }
                 }
 
                 switch (gGameTable.current_stage)

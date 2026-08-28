@@ -23,6 +23,7 @@
 #include "model.h"
 #include "player.h"
 #include "rdt.h"
+#include "rdt_re1.h"
 #include "re2.h"
 #include "save.h"
 #include "scd.h"
@@ -1372,6 +1373,45 @@ namespace openre
     void set_re1_room_code(const char* code)
     {
         gRe1RoomCode = code ? code : "";
+    }
+
+    // RE1 room A/B variant (ROOM1000 vs ROOM1001): mirrors the original's
+    // selection of the fourth room-name digit.
+    static int gRe1RoomVariant = 0;
+
+    void set_re1_room_variant(int variant)
+    {
+        gRe1RoomVariant = variant != 0 ? 1 : 0;
+    }
+
+    // True once the data root is detected to be an RE1 pack. Detection is
+    // cheap and done once: RE1 packs store converted rooms at
+    // room/room1000.rdt, while RE2 data keeps them under Pl0\Rdt\room1000.rdt.
+    bool re1_mode()
+    {
+        static const bool detected = [] {
+            return system::fs::info("data://room\\room1000.rdt").kind == system::fs::FileKind::file;
+        }();
+        return detected;
+    }
+
+    // RE1 room loader (B4). Maps the engine's (stage, room, variant) onto the
+    // converted RE1 room in the pack and feeds bg_load the room code so it
+    // serves roomcut/<code>_<cut>.bmp. Returns the pack-relative room path
+    // ("" when not RE1 mode or the triple is out of range). room_set uses the
+    // returned path for the RDT read; if the file does not exist the read
+    // fails and room loading aborts through the normal file_error path.
+    std::string re1_room_load_path()
+    {
+        if (!re1_mode())
+            return {};
+
+        rdt_re1::Re1RoomInfo info;
+        if (!rdt_re1::re1_room_info(gGameTable.current_stage, gGameTable.current_room, gRe1RoomVariant, info))
+            return {};
+
+        set_re1_room_code(info.roomCode.c_str());
+        return info.roomPath;
     }
 
     // 0x004C4700

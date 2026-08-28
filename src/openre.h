@@ -4,6 +4,7 @@
 #include "interop.hpp"
 #include "re2.h"
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #define OPENRE_VERSION "0.1.0"
@@ -208,6 +209,20 @@ namespace openre
     /// roomcut/<room>_<cut>.bmp background instead of the RE2 roomcut.bin ADT.
     /// Pass nullptr/empty to return to RE2 background loading.
     void set_re1_room_code(const char* code);
+
+    /// True once the game data root is detected to be an RE1 pack (it stores
+    /// converted rooms at room/room1000.rdt; RE2 data uses Pl0\Rdt\...).
+    bool re1_mode();
+
+    /// RE1 room loader (B4): when in RE1 mode, derives the converted room's
+    /// pack-relative path from the current stage/room/variant, feeds the room
+    /// code to set_re1_room_code (so bg_load serves the roomcut BMP) and
+    /// returns the path for room loading. Returns "" when not RE1 mode or the
+    /// triple is out of range.
+    std::string re1_room_load_path();
+
+    /// Selects the RE1 room A/B variant (0/1) used by the next re1_room_load_path.
+    void set_re1_room_variant(int variant);
     void movie_suspend_texture_use();
     void movie_resume_texture_use();
     void set_geom_screen(int prj);
