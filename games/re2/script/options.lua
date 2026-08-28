@@ -96,7 +96,7 @@ local function addQuad(parentHandle, cx, cy, w, h, color, z, name)
     scene.setField(handle, 'y', cy)
     local sprite = scene.addComponent(handle, 'core.sprite')
     scene.setField(sprite, 'color', color)
-    scene.setField(sprite, 'z', z)
+    scene.setField(handle, 'z', z)
     addSize(handle, w, h)
     return handle
 end

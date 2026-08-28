@@ -118,8 +118,6 @@ local GROUP_PAD = 6        -- vertical padding of the gray back box around its t
 -- higher z sorts further back / draws earlier. Back-to-front: underline,
 -- selection ring, blue interior fill, enum internals, diamond, glyphs.
 local Z_LINE = 0
-local Z_SEL_RING = 0
-local Z_SEL_FILL = 0
 local Z_ARROW = 0
 local Z_BAR = 0
 local Z_DIAMOND = 0
@@ -216,7 +214,7 @@ local function addQuad(parent, name, w, h, color, z)
     scene.setField(handle, 'name', name)
     local sprite = scene.addComponent(handle, 'core.sprite')
     scene.setField(sprite, 'color', color)
-    scene.setField(sprite, 'z', z)
+    scene.setField(handle, 'z', z)
     addSize(handle, w, h)
     return handle, id
 end
@@ -255,7 +253,7 @@ local function addArrow(parent, dir, name)
     scene.setField(sprite, 'src.width', ARROW_W)
     scene.setField(sprite, 'src.height', ARROW_H)
     scene.setField(sprite, 'color', COLOR_ARROW)
-    scene.setField(sprite, 'z', Z_ARROW)
+    scene.setField(arrow, 'z', Z_ARROW)
     addSize(arrow, ARROW_W, ARROW_H)
     scene.setField(scene.component(arrow, 'core.ui_size'), 'alignment', 'center')
     return arrow
@@ -283,8 +281,8 @@ end
 -- Per-frame view state, kept out of the binary rows: these describe derived
 -- entities rather than authored data.
 --   enumTree[id] = { labelId, barsRowId, bars[], markup }
---   itemTree[id] = { rowId, labelId, interiorId,
---                    chromeIds[]|nil, diamondQuads{}, markup }
+--   itemTree[id] = { rowId, labelId, interiorId, boxId,
+--                    ringId, fillId, diamondQuads{}, markup }
 local enumTree = {}
 local itemTree = {}
 local rangeTree = {}
@@ -471,6 +469,12 @@ function config.addListItem(parent, x, y, width, name)
     addSize(boxHandle, 0, 0, 1)
     addFlex(boxHandle, 'none')
 
+    -- Selection ring: a white rect filling the whole selection box. It is the
+    -- first child of the box, so tree-depth paint order puts it furthest back
+    -- (behind the fill and the content). Hidden until selected (weight 0).
+    local ring, ringId = addQuad(boxHandle, prefix .. '.sel_ring', 0, 0, COLOR_SEL_BORDER, 0)
+    scene.setField(scene.component(ring, 'core.ui_size'), 'weight', 0)
+
     -- Underlay: a weighted wrapper whose vertical flex pins the bottom
     -- border (the row underline) to the bottom edge - a weighted spacer
     -- first, then the literal-thickness line. Always visible; covered by
@@ -489,6 +493,12 @@ function config.addListItem(parent, x, y, width, name)
     scene.setField(interior, 'name', prefix .. '.interior')
     addSize(interior, 0, 0, 1)
     addFlex(interior, 'none', nil, BORDER_W)
+
+    -- Selection fill: a blue rect inside the padded interior. It is the first
+    -- child of the interior, so it paints between the ring and the content.
+    -- Hidden until selected (weight 0).
+    local fill, fillId = addQuad(interior, prefix .. '.sel_fill', 0, 0, COLOR_SEL_BG, 0)
+    scene.setField(scene.component(fill, 'core.ui_size'), 'weight', 0)
 
     -- The row: weighted label | literal half-width enum, padded away from
     -- the selection ring by ITEM_PAD.
@@ -519,7 +529,8 @@ function config.addListItem(parent, x, y, width, name)
         interiorId = interiorId,
         prefix = prefix,
         diamondBoxId = diamondBoxId,
-        chromeIds = nil,
+        ringId = ringId,
+        fillId = fillId,
         diamondQuads = {},
         markup = nil,
     }
@@ -578,7 +589,7 @@ function config.addListGroup(parent, x, y, width, name)
     scene.setField(scene.component(grayBack, 'core.ui_size'), 'alignment', 'stretch')
     local sprite = scene.addComponent(grayBack, 'core.sprite')
     scene.setField(sprite, 'color', COLOR_GROUP_BG)
-    scene.setField(sprite, 'z', Z_GROUP_BG)
+    scene.setField(grayBack, 'z', Z_GROUP_BG)
 
     local labelHandle, labelId = ecs.spawn(grayBack)
     scene.setField(labelHandle, 'name', prefix .. '.label')
@@ -609,38 +620,6 @@ config.ITEM_HEIGHT = ITEM_H
 -------------------------------------------------------------------------------
 -- Derived-entity builders (used by the systems below) ------------------------
 -------------------------------------------------------------------------------
-
--- Selection chrome as two rects: an unpadded white rect filling the whole
--- selection box (the ring) plus a blue rect inside the padded interior (the
--- fill). The interior's padding insets the blue rect by the border width,
--- so the white shows through as a 1px ring around every edge. Returns the
--- ids of the two subtree roots so the caller can destroy them again.
-local function buildSelection(boxHandle, interiorId, prefix)
-    local chromeIds = {}
-
-    local ring, ringId = addQuad(boxHandle, prefix .. '.sel_ring', 0, 0, COLOR_SEL_BORDER, Z_SEL_RING)
-    scene.setField(scene.component(ring, 'core.ui_size'), 'weight', 1)
-    chromeIds[#chromeIds + 1] = ringId
-
-    local interiorHandle = scene.entityFromId(interiorId)
-    if interiorHandle ~= nil then
-        local fill, fillId = addQuad(interiorHandle, prefix .. '.sel_fill', 0, 0, COLOR_SEL_BG, Z_SEL_FILL)
-        scene.setField(scene.component(fill, 'core.ui_size'), 'weight', 1)
-        chromeIds[#chromeIds + 1] = fillId
-    end
-
-    return chromeIds
-end
-
-local function destroyChrome(tree)
-    for _, childId in ipairs(tree.chromeIds or {}) do
-        local childHandle = scene.entityFromId(childId)
-        if childHandle ~= nil then
-            ecs.destroyEntity(childHandle)
-        end
-    end
-    tree.chromeIds = nil
-end
 
 -- Fills or empties the reserved diamond box with a single 5x5 white square
 -- sprite, shown while the value differs from its default.
@@ -701,11 +680,17 @@ ecs.registerSystem('ui.config_list_item', 900, function()
             tree.markup = markup
         end
 
-        -- Selection chrome overlay: built while selected, destroyed after.
-        if selected and tree.chromeIds == nil then
-            tree.chromeIds = buildSelection(scene.entityFromId(tree.boxId), tree.interiorId, tree.prefix)
-        elseif not selected and tree.chromeIds ~= nil then
-            destroyChrome(tree)
+        -- Selection chrome is built eagerly in addListItem; show/hide it by
+        -- toggling the rects' flex weight (weight 0 -> 0 size -> hidden, weight
+        -- 1 -> fills the box). Tree-depth paint order already layers them
+        -- ring (back) -> fill -> content (front), so no z is needed.
+        local ringHandle = scene.entityFromId(tree.ringId)
+        if ringHandle ~= nil then
+            scene.setField(scene.component(ringHandle, 'core.ui_size'), 'weight', selected and 1 or 0)
+        end
+        local fillHandle = scene.entityFromId(tree.fillId)
+        if fillHandle ~= nil then
+            scene.setField(scene.component(fillHandle, 'core.ui_size'), 'weight', selected and 1 or 0)
         end
 
         -- Changed diamond fills its reserved slot while the value differs

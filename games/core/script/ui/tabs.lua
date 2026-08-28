@@ -123,7 +123,7 @@ local function addQuad(parentHandle, name, w, h, color, z, weight)
     scene.setField(handle, 'name', name)
     local sprite = scene.addComponent(handle, 'core.sprite')
     scene.setField(sprite, 'color', color)
-    scene.setField(sprite, 'z', z)
+    scene.setField(handle, 'z', z)
     addSize(handle, w, h, weight)
     return handle
 end
@@ -297,7 +297,7 @@ function tabs.addTab(stripId, label)
     scene.setField(cellHandle, 'name', prefix .. '.tab.underline.' .. label)
     local sprite = scene.addComponent(cellHandle, 'core.sprite')
     scene.setField(sprite, 'color', COLOR_HIDDEN)
-    scene.setField(sprite, 'z', Z_UNDERLINE)
+    scene.setField(cellHandle, 'z', Z_UNDERLINE)
     addSize(cellHandle, 0, 0, 1)
     view.cellIds[#view.cellIds + 1] = cellId
 

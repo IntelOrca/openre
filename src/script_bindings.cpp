@@ -918,10 +918,6 @@ namespace openre::script
                     }
                     sprite->color = ecs::Color{ channels[0], channels[1], channels[2], channels[3] };
                 }
-                else if (strcmp(name, "opacity") == 0)
-                    sprite->color.a = readByteChannel(L, 3);
-                else if (strcmp(name, "z") == 0)
-                    sprite->z = static_cast<int>(luaL_checkinteger(L, 3));
                 else
                     return luaL_error(L, "scene.setField: unknown sprite field '%s'", name);
                 return 0;
@@ -1272,10 +1268,6 @@ namespace openre::script
                         lua_rawseti(L, -2, i + 1);
                     }
                 }
-                else if (strcmp(name, "opacity") == 0)
-                    lua_pushinteger(L, sprite->color.a);
-                else if (strcmp(name, "z") == 0)
-                    lua_pushinteger(L, sprite->z);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -2083,8 +2075,6 @@ namespace openre::script
                 push("texture");
                 push("flags");
                 push("color");
-                push("opacity");
-                push("z");
                 break;
             case ComponentKind::text:
                 push("text");

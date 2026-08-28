@@ -331,11 +331,13 @@ function scene.addComponent(entity, name) end
 --- its children (offsets and rendered sizes both scale). Sprite fields mirror the layout of the underlying C++
 --- struct: `src.x`, `src.y`, `src.width`, `src.height` (source rect in texture
 --- pixels; 0-sized means "full texture"), `texture` (a Texture or nil),
---- `flags` (a bitmask of SpriteFlags values combined with `|`), `color` (an
---- RGBA tint/opacity table `{r, g, b, a}` with each channel 0-255; defaults
---- to opaque white) and `opacity` (an alias for `color[4]`, 0-255). `z` is the
---- draw priority: sprites paint back-to-front, so a higher `z` renders further
---- behind and a lower `z` renders in front (equal `z` keeps creation order).
+--- `flags` (a bitmask of SpriteFlags values combined with `|`) and `color`
+--- (an RGBA tint/opacity table `{r, g, b, a}` with each channel 0-255; the `a`
+--- channel is the sprite's opacity; defaults to opaque white). The draw
+--- priority is the entity's transform `z` (set with
+--- `scene.setField(entity, "z", value)`): sprites paint back-to-front, so a
+--- higher `z` renders further behind and a lower `z` renders in front (equal
+--- `z` keeps creation order).
 --- A sprite is
 --- drawn centred on its entity's `(x, y)` position (not top-left anchored), so
 --- place the entity where you want the centre of the sprite; its drawn size

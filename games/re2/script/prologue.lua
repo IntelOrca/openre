@@ -554,7 +554,7 @@ local function buildScene(c)
         scene.setField(bgSize, 'width', 0) -- hidden
         scene.setField(bgSize, 'height', 0)
         scene.setField(bgS, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
-                scene.setField(bgS, 'z', BACKDROP_Z)
+        scene.setField(bgE, 'z', BACKDROP_Z)
                 c.backdrop = bgS
                 c.backdropSize = bgSize
 
@@ -567,7 +567,7 @@ local function buildScene(c)
                 scene.setField(bgtSize, 'width', 0) -- hidden until a cross-fade starts
                 scene.setField(bgtSize, 'height', 0)
                 scene.setField(bgtS, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
-                scene.setField(bgtS, 'z', BACKDROP_TOP_Z)
+                scene.setField(bgtE, 'z', BACKDROP_TOP_Z)
                 c.backdropTop = bgtS
                 c.backdropTopSize = bgtSize
 
@@ -600,7 +600,7 @@ local function buildScene(c)
             entry.lvl = 0
             entry.y = rec.y
         end
-                scene.setField(s, 'z', Z_SPRITE[rec.type])
+                scene.setField(e, 'z', Z_SPRITE[rec.type])
                 scene.setField(s, 'texture', entry.tex)
         scene.setField(s, 'src.x', entry.src.x)
         scene.setField(s, 'src.y', entry.src.y)

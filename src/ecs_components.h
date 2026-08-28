@@ -122,11 +122,6 @@ namespace openre::ecs
         Rect2f src;
         uint32_t flags = static_cast<uint32_t>(SpriteFlags::StretchX) | static_cast<uint32_t>(SpriteFlags::StretchY);
         Color color{ 255, 255, 255, 255 };
-        // Draw priority: sprites are rendered back-to-front grouped by this
-        // value. Higher z sorts earlier (further back); sprites with equal z
-        // keep their creation order. The scene renderer draws the whole list
-        // in array order, so late array entries end up on top.
-        int z = 0;
     };
 
     /// A sound emitter mixed by the native SDL3 audio layer (AudioSystem).

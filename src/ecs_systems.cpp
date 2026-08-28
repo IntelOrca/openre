@@ -1379,6 +1379,29 @@ namespace openre
             // are drawn by the self-contained render2d renderer directly into
             // the window. No marni, no ordering tables, no guest framebuffer.
             std::vector<render2d::SpriteDraw> draws;
+
+            // Painter's order follows the scene tree (pre-order DFS): a parent
+            // draws behind its children and an earlier sibling behind a later
+            // one. z remains a global priority override; equal-z entities fall
+            // back to tree order, which fixes sibling layering that the old
+            // ECS-creation-order tie-break got wrong.
+            std::unordered_map<ecs::Entity, int> treeOrder;
+            {
+                int nextOrder = 0;
+                std::function<void(ecs::Entity)> visit = [&](ecs::Entity e) {
+                    treeOrder[e] = nextOrder++;
+                    const auto* t = app.scene.tryGetComponent<ecs::TransformComponent>(e);
+                    if (t == nullptr)
+                        return;
+                    for (ecs::Entity c = t->firstChild; c != ecs::NullEntity;
+                         c = app.scene.getComponent<ecs::TransformComponent>(c).nextSibling)
+                    {
+                        visit(c);
+                    }
+                };
+                visit(app.scene.root());
+            }
+
             app.scene.each<ecs::SpriteComponent>([&](ecs::Entity entity, ecs::SpriteComponent& sprite) {
                 const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
                 const float x = world.m[3][0];
@@ -1412,16 +1435,21 @@ namespace openre
                 d.g = sprite.color.g;
                 d.b = sprite.color.b;
                 d.a = sprite.color.a;
-                d.z = sprite.z;
+                // Draw priority comes from the entity's world transform z
+                // (composed via worldMatrix); equal-z entities are ordered by
+                // their pre-order scene-tree index (computed above).
+                d.z = static_cast<int>(world.m[3][2]);
+                d.order = treeOrder[entity];
                 draws.push_back(d);
             });
 
-            // Sprites draw back-to-front by z (higher z first / further back).
-            // The stable sort keeps equal-z entities in creation order, so the
-            // painter's-algorithm pass below mirrors the original ordering
-            // table (primitives were sorted by their z the same way).
+            // Sprites draw back-to-front: higher z first (further back), and
+            // equal z in scene-tree (pre-order DFS) order so a parent sits
+            // behind its children and an earlier sibling behind a later one.
             std::stable_sort(draws.begin(), draws.end(), [](const render2d::SpriteDraw& a, const render2d::SpriteDraw& b) {
-                return a.z > b.z;
+                if (a.z != b.z)
+                    return a.z > b.z;
+                return a.order < b.order;
             });
 
             // Video entities: letterbox the decoded frame into the entity
