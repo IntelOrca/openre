@@ -237,6 +237,7 @@ namespace openre
     namespace ecs
     {
         class Scene;
+        struct InputFrame;
     }
 
     /// Returns the active ECS scene or null before the app has booted it.

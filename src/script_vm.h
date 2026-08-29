@@ -71,4 +71,9 @@ namespace openre::script
     };
 
     std::unique_ptr<LuaVm> createLuaVm(std::string name, std::vector<std::filesystem::path> searchPaths);
+
+    // Whether `vm` is currently alive (constructed, not yet destroyed). Used
+    // by engine hooks that captured a LuaVm pointer (e.g. input handler
+    // callbacks) to avoid dispatching into a destroyed VM.
+    bool isVmAlive(const LuaVm* vm);
 }

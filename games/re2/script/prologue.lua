@@ -14,6 +14,15 @@
 
 local util = require('script/util')
 
+local function containsCommand(list, name)
+    for i = 1, #list do
+        if list[i] == name then
+            return true
+        end
+    end
+    return false
+end
+
 -- ---------------------------------------------------------------------------
 -- Constants
 -- ---------------------------------------------------------------------------
@@ -541,6 +550,19 @@ local function buildScene(c)
     scene.setField(canvas, 'name', 'prologue.canvas')
     util.fitCanvas(canvas)
     c.canvas = canvas
+
+    -- Input handler: snapshots the skip keys out of the frame during the
+    -- input walk (which runs before the script tick), so the tick below can
+    -- test the snapshot rather than the removed input.pressed(). The frame is
+    -- not touched, matching the old input.pressed() behaviour: the prologue
+    -- is the topmost screen and nothing downstream reacts while it is up.
+    c.skipNav = { accept = false, menu = false }
+    local progHandler = scene.addComponent(canvas, 'core.InputHandler')
+    scene.setField(progHandler, 'callback', function(frame)
+        local nav = c.skipNav
+        nav.accept = containsCommand(frame.press, 'accept')
+        nav.menu = containsCommand(frame.press, 'menu')
+    end)
 
     -- Two full-screen still layers behind every sprite: the base backdrop and,
         -- above it, a top layer used to cross-fade a new still over the current
@@ -1107,8 +1129,10 @@ local function updateRun(c)
                 skipPressed(c)
             end
             if c.phase ~= 'done' then
-                -- A held skip key behaves like a single press each press.
-                if c.allowSkip and (input.pressed('accept') or input.pressed('menu')) then
+                -- A held skip key behaves like a single press each press. The
+                -- skip snapshot was written during the input walk (before the
+                -- tick); the web-tester hook sets requestSkip directly.
+                if c.allowSkip and (c.skipNav.accept or c.skipNav.menu) then
                     skipPressed(c)
                     if c.finished then return end
                 end

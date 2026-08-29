@@ -78,6 +78,15 @@ local FADE_FRAMES       = 10
 -- ??? scenario slots (Leon B / Claire B).
 local DEBUG_UNLOCK      = re.getEnv('OPENRE_MENU_UNLOCK') ~= nil
 
+local function containsCommand(list, name)
+    for i = 1, #list do
+        if list[i] == name then
+            return true
+        end
+    end
+    return false
+end
+
 -------------------------------------------------------------------------------
 -- Colour helpers -------------------------------------------------------------
 -- <span color="#rrggbbaa"> markup: the last two hex digits are the alpha
@@ -702,8 +711,10 @@ local function update(self)
     -- tick runs BEFORE ours within each frame. When cancel closes the overlay
     -- on frame N, our tick that same frame sees isOpen() == false and returns
     -- to STATE_MENU having polled nothing; the cancel edge expires with frame
-    -- N (input.pressed reports per-frame rising edges), so STATE_MENU polling
-    -- resumes clean on frame N+1 with no double-handling.
+    -- N, so STATE_MENU polling resumes clean on frame N+1 with no
+    -- double-handling. (The menu's InputHandler snapshot is also empty while
+    -- the overlay is open: the overlay's handler runs earlier in the walk and
+    -- nulls the frame.)
     if self.state == STATE_OPTIONS then
         if not options.isOpen() then
             self.state = STATE_MENU
@@ -743,7 +754,7 @@ local function update(self)
             return
         end
         -- Start -> menu.
-        if input.pressed('accept') or input.pressed('menu') then
+        if self.nav.accept or self.nav.menu then
             playSfx(self, self.sfx.accept)
             enterMenu(self)
             return
@@ -757,14 +768,14 @@ local function update(self)
                 return
             end
         refreshItem(self, self.selected)
-        if input.pressed('up') or input.pressed('left') then
+        if self.nav.up or self.nav.left then
             moveCursor(self, -1)
-        elseif input.pressed('down') or input.pressed('right') then
+        elseif self.nav.down or self.nav.right then
             moveCursor(self, 1)
         end
-        if input.pressed('accept') then
+        if self.nav.accept then
             selectItem(self)
-        elseif input.pressed('cancel') then
+        elseif self.nav.cancel then
             if #self.stack > 0 then
                 goBack(self)
             else
@@ -883,6 +894,27 @@ function Title:new(opts)
     instance.backdrop = backdrop
     instance.backdropSprite = backdropSprite
     instance.backdropSize = backdropSize
+
+    -- Input handler: snapshots the menu's nav presses out of the frame during
+    -- the input walk (which runs before the script tick), so update() reads
+    -- the snapshot rather than the removed input.pressed(). The frame is not
+    -- touched, so the game fan-out still receives the press. While the options
+    -- overlay is open, its handler (a later-created sibling of this menu's
+    -- entities under the user root) runs first and nulls the frame, so this
+    -- handler sees nothing until the overlay closes - matching the old
+    -- STATE_OPTIONS self.state gating below.
+    instance.nav = { accept = false, menu = false, up = false, down = false, left = false, right = false, cancel = false }
+    local menuHandler = scene.addComponent(backdrop, 'core.InputHandler')
+    scene.setField(menuHandler, 'callback', function(frame)
+        local nav = instance.nav
+        nav.accept = containsCommand(frame.press, 'accept')
+        nav.menu = containsCommand(frame.press, 'menu')
+        nav.up = containsCommand(frame.press, 'up')
+        nav.down = containsCommand(frame.press, 'down')
+        nav.left = containsCommand(frame.press, 'left')
+        nav.right = containsCommand(frame.press, 'right')
+        nav.cancel = containsCommand(frame.press, 'cancel')
+    end)
 
     instance.back, instance.backFrame = createLayer('menu.back', 0)
     instance.front, instance.frontFrame = createLayer('menu.front', SCALE_STEP)

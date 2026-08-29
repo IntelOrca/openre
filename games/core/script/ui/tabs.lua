@@ -38,6 +38,23 @@ local ecs = require('ecs')
 
 local tabs = {}
 
+-- Per-frame selection input snapshot. Each strip entity gets a tiny
+-- core.InputHandler that runs during the input walk (deepest-first, so any
+-- strip is visited before an overlay owner nulls the frame) and records
+-- whether the strip's left/right select commands were pressed. The system
+-- consumes this snapshot instead of the removed global input.pressed().
+--   stripNav[stripId] = { left = bool, right = bool }
+local stripNav = {}
+
+local function containsCommand(list, name)
+    for i = 1, #list do
+        if list[i] == name then
+            return true
+        end
+    end
+    return false
+end
+
 -------------------------------------------------------------------------------
 -- Layout / style constants ---------------------------------------------------
 -------------------------------------------------------------------------------
@@ -245,6 +262,19 @@ function tabs.addStrip(parent, x, y, level, name)
         hintR = hintRHandle,
         prefix = prefix,
     }
+
+    -- Input handler: snapshots the strip's select presses out of the frame
+    -- each turn of the input walk (which runs before the script tick, so the
+    -- snapshot is fresh when the system reads it). The handler runs during
+    -- the walk even when an overlay owner (e.g. options) nulls the frame
+    -- afterwards, keeping tab navigation working underneath modals.
+    local nav = { left = false, right = false }
+    stripNav[id] = nav
+    local stripHandler = scene.addComponent(handle, 'core.InputHandler')
+    scene.setField(stripHandler, 'callback', function(frame)
+        nav.left = containsCommand(frame.press, cmdL)
+        nav.right = containsCommand(frame.press, cmdR)
+    end)
     return handle, id
 end
 
@@ -336,6 +366,7 @@ ecs.registerSystem('ui.TabStrip', {
     end
     sweep(stripViews)
     sweep(tabViews)
+    sweep(stripNav)
 
     ecs.each('ui.TabStrip', function(stripId)
         local view = stripViews[stripId]
@@ -361,9 +392,13 @@ ecs.registerSystem('ui.TabStrip', {
         if count > 0 then
             local cmdL = ecs.get(stripId, 'ui.TabStrip', 'hint_command_l')
             local cmdR = ecs.get(stripId, 'ui.TabStrip', 'hint_command_r')
-            if input.pressed(cmdL) then
+            -- Presses come from the strip's own InputHandler snapshot (see
+            -- addStrip); the frame itself may already be nulled by an overlay
+            -- owner further up the tree, so read the snapshot, not input.*.
+            local nav = stripNav[stripId]
+            if nav ~= nil and nav.left then
                 selectedIndex = ((selectedIndex - 2 + count) % count) + 1
-            elseif input.pressed(cmdR) then
+            elseif nav ~= nil and nav.right then
                 selectedIndex = (selectedIndex % count) + 1
             end
             ecs.set(stripId, 'ui.TabStrip', 'selected_index', selectedIndex)

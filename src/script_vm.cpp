@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <lua.hpp>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,13 @@ namespace openre::script
     namespace
     {
         constexpr const char* MODULE_CACHE_KEY = "openre.script.module_cache";
+
+        // All currently-alive LuaVm instances, so engine code holding a raw
+        // LuaVm* (e.g. a Lua input handler callback captured by a scene
+        // component) can check it is still safe to dispatch into. The game
+        // module VM is destroyed on hot-reload while scene components may
+        // still reference it for a moment.
+        std::unordered_set<const LuaVm*> g_liveVms;
 
         constexpr luaL_Reg kStandardLibraries[] = {
             { "_G", luaopen_base },
@@ -151,11 +159,19 @@ namespace openre::script
         }
         lua_pushcclosure(_state, requireModule, 2);
         lua_setglobal(_state, "require");
+
+        g_liveVms.insert(this);
     }
 
     LuaVm::~LuaVm()
     {
+        g_liveVms.erase(this);
         dispose();
+    }
+
+    bool isVmAlive(const LuaVm* vm)
+    {
+        return vm != nullptr && g_liveVms.find(vm) != g_liveVms.end();
     }
 
     void LuaVm::dispose()

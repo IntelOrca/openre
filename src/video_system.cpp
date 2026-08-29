@@ -143,6 +143,12 @@ namespace openre
         videoSize.width = static_cast<float>(ws.width);
         videoSize.height = static_cast<float>(ws.height);
 
+        // The movie is interruptible through the input middleware: carry an
+        // InputHandler so scripts and the web plugin can inspect/replace the
+        // frame while the movie plays (the blocking movie loop in apiPlayMovie
+        // polls input via movie_input_poll and runs this walk).
+        scene.addComponent<ecs::InputHandlerComponent>(entity);
+
         auto* decoder = new VideoDecoder();
         if (!decoder->open(resolved))
         {

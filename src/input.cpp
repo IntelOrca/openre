@@ -1,4 +1,5 @@
 #include "input.h"
+#include "ecs_scene.h"
 #include "interop.hpp"
 #include "logger.h"
 #include "marni.h"
@@ -196,9 +197,9 @@ namespace openre::input
             /* map        */ { 0x4000, 0, 0, 0, 0 },
             /* change_target */ { 0, 0, 0x4, 0x4, 0x4 },
             /* quick_turn */ { 0x400, 0, 0, 0, 0 },
-            // UI-only commands (options screen tab navigation): zero legacy
-            // output bits; consumed via command_state/command_edge by the Lua
-            // input.down()/input.pressed() API.
+            // UI-only commands (options screen tab navigation): zero legacy output
+            // bits; they reach the UI through the input handler walk
+            // (core.InputHandler frame context) instead.
             /* tab_left      */ { 0, 0, 0, 0, 0 },
             /* tab_right     */ { 0, 0, 0, 0, 0 },
             /* subtab_left   */ { 0, 0, 0, 0, 0 },
@@ -266,8 +267,23 @@ namespace openre::input
         }
 
         CommandBindings s_commandBindings;
+        // The PRE-WALK real command state from the previous frame, used to
+        // compute this frame's presses. Handlers never touch these - they only
+        // edit the per-frame `state`/`press` copy published to
+        // s_commandFrameState / s_commandFrameEdge.
         uint32_t s_commandState = 0;
-        uint32_t s_commandEdge = 0;
+        // Published post-walk command state / press set for this frame, as
+        // reported by command_state() / command_edge(). Derived from the final
+        // frame after the input handler walk, so handlers that replace the
+        // frame also reshape what native consumers and the legacy game see.
+        uint32_t s_commandFrameState = 0;
+        uint32_t s_commandFrameEdge = 0;
+        // Demo replay: the legacy raw bits of the frame currently being
+        // replayed (set by pad_set's demo branch), and the previous converted
+        // command state so presses can be synthesised per-frame (Q2: presses
+        // are never auto-derived from substituted state).
+        uint16_t s_demoRaw = 0;
+        uint32_t s_demoCommandState = 0;
         // Bumped whenever s_commandBindings is (re)loaded so consumers can
         // detect changes without diffing every binding.
         uint32_t s_bindingsRevision = 0;
@@ -877,6 +893,152 @@ namespace openre::input
         interop::thiscall<int, Input*>(0x004103F0, self);
     }
 
+    // Walks a scene subtree in input-handler order: deepest first, last
+    // child first, then the node itself (root last). Every entity carrying
+    // a core.InputHandler component gets the mutable frame context; handlers
+    // only read/replace the frame values and cannot stop the chain.
+    static void input_walk_handlers(ecs::Scene& scene, ecs::Entity entity, ecs::InputFrame& frame)
+    {
+        // Children first, iterated last-created first. Siblings are linked
+        // in creation order (oldest -> newest) via nextSibling, so collect
+        // them and recurse in reverse.
+        const auto* transform = scene.tryGetComponent<ecs::TransformComponent>(entity);
+        if (transform == nullptr)
+            return;
+        std::vector<ecs::Entity> children;
+        for (ecs::Entity child = transform->firstChild; child != ecs::NullEntity;
+             child = scene.getComponent<ecs::TransformComponent>(child).nextSibling)
+        {
+            children.push_back(child);
+        }
+        for (auto it = children.rbegin(); it != children.rend(); ++it)
+            input_walk_handlers(scene, *it, frame);
+
+        // Then the entity itself.
+        if (auto* handler = scene.tryGetComponent<ecs::InputHandlerComponent>(entity))
+        {
+            if (handler->callback)
+                handler->callback(frame);
+        }
+    }
+
+    // The per-frame input walk over the canonical scene. Every entity
+    // carrying core.InputHandler is invoked in tree order (deepest, last
+    // child first, root last), sharing the one mutable `frame`.
+    static void input_walk(ecs::InputFrame& frame)
+    {
+        auto* scene = openre::current_scene();
+        if (scene == nullptr)
+            return;
+        input_walk_handlers(*scene, scene->root(), frame);
+    }
+
+    // ---- movie-loop input ----
+
+    // The demo replay handler (defined below) participates in the movie poll
+    // exactly as it does in pad_set.
+    static void demo_input_handler(ecs::InputFrame& frame);
+
+    // Previous real command state for the movie loop's dedicated edge
+    // computation. Kept separate from s_commandState so the movie's own
+    // polling cannot corrupt the main pad_set press tracking. The first poll
+    // seeds it from the current real state so a key held when a movie starts
+    // (e.g. the splash screen's skip key) does not skip it immediately.
+    static uint32_t s_moviePrevState = 0;
+    static bool s_movieSeeded = false;
+
+    void movie_input_begin()
+    {
+        s_moviePrevState = 0;
+        s_movieSeeded = false;
+    }
+
+    // Builds the real command state from all devices, computes the rising
+    // edge against the previous movie poll, and runs the full input-handler
+    // walk over the scene. Used by the blocking movie loop, which cannot run
+    // pad_set (the module tick never advances while a movie plays). Handlers
+    // participate exactly as they do in pad_set: web injection can replace
+    // the frame, and any InputHandler placed on the movie entity (added in
+    // video_play) can permit or reject the skip.
+    ecs::InputFrame movie_input_poll()
+    {
+        update_gamepads();
+
+        const uint32_t realState
+            = transform_keyboard(s_commandBindings) | transform_gamepad(s_commandBindings) | transform_mouse(s_commandBindings);
+
+        // First poll of a movie: seed the edge baseline from the current real
+        // state so held keys are not treated as fresh presses.
+        if (!s_movieSeeded)
+        {
+            s_movieSeeded = true;
+            s_moviePrevState = realState;
+            ecs::InputFrame seeded{ realState, 0 };
+            if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                demo_input_handler(seeded);
+            input_walk(seeded);
+            return seeded;
+        }
+
+        const uint32_t cmdEdge = rising_edge(realState, s_moviePrevState);
+        s_moviePrevState = realState;
+
+        ecs::InputFrame frame{ realState, cmdEdge };
+
+        if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+            demo_input_handler(frame);
+
+        input_walk(frame);
+        return frame;
+    }
+
+    // Converts one frame of recorded demo input (legacy raw bits) into a
+    // command bitmask. Mirrors the original demo branch: raw bits are mapped
+    // onto the 16 logical keys via the input_mapping_table row selected by
+    // key_idx, then inverted through the command output gKey column so the
+    // commands those logical keys produce are the ones replayed. Commands
+    // sharing a gKey bit (e.g. right/turn_right) are all set.
+    static uint32_t demo_commands_from_raw(uint16_t raw)
+    {
+        uint32_t logical = 0;
+        const auto* mapping = &gGameTable.input_mapping_table[16 * gGameTable.input_mapping_idx];
+        for (int i = 0; i < 16; i++)
+        {
+            if (mapping[i] & raw)
+                logical |= 1u << i;
+        }
+        uint32_t commands = 0;
+        for (int cmd = 0; cmd < COMMAND_COUNT; cmd++)
+        {
+            if (kCommandOutput[cmd].gKey & logical)
+                commands |= 1u << cmd;
+        }
+        return commands;
+    }
+
+    // The demo replay input handler. A real press cancels the demo; otherwise
+    // the frame is replaced with the recorded demo input converted on the fly
+    // from the legacy raw bits to commands. Presses are synthesized from the
+    // recorded state and never auto-derived from substituted input (Q2). A
+    // cancelled or finished demo leaves the frame empty.
+    static void demo_input_handler(ecs::InputFrame& frame)
+    {
+        // Any real press cancels the demo: suppress the frame entirely so the
+        // cancelled demo does not inject input into the game.
+        if (frame.press != 0 || gGameTable.demo_ended != 0 || gGameTable.demo_frame > gGameTable.pdemo.frames)
+        {
+            frame.state = 0;
+            frame.press = 0;
+            s_demoCommandState = 0;
+            return;
+        }
+        const uint32_t state = demo_commands_from_raw(s_demoRaw);
+        const uint32_t press = state & ~s_demoCommandState;
+        s_demoCommandState = state;
+        frame.state = state;
+        frame.press = press;
+    }
+
     // 0x004D0F30
     void pad_set()
     {
@@ -925,6 +1087,7 @@ namespace openre::input
             else if (check_flag(FlagGroup::System, FG_SYSTEM_1))
             {
                 rawInput = gGameTable.pdemo.input[gGameTable.demo_frame];
+                s_demoRaw = static_cast<uint16_t>(rawInput);
                 gGameTable.demo_frame++;
                 gGameTable.raw_state = rawInput;
             }
@@ -940,21 +1103,13 @@ namespace openre::input
         uint32_t keyTrgExtra = 0; // key_trg bits that are not part of g_key (change_target, quick_turn)
         uint32_t cmdEdge = 0;     // rising edge of the merged command state
 
-        if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
-        {
-            // Demo replay: map raw input bits to logical key bits via the
-            // legacy table (input_mapping_idx selects the keyboard/gamepad row).
-            auto* mapping = &gGameTable.input_mapping_table[16 * gGameTable.input_mapping_idx];
-            for (int i = 0; i < 16; i++)
-            {
-                if (mapping[i] & rawInput)
-                    newKey |= (1 << i);
-            }
-            gGameTable.g_key = newKey;
-            rawTrigger = rising_edge(rawInput, prevInput);
-            feEdge = rawTrigger & 0xFFFF;
-        }
-        else if (s_rebindLockout)
+        // Published post-walk frame for native consumers (command_state() /
+        // command_edge()). The rebind-capture path bypasses the walk entirely,
+        // so it publishes the empty frame initialized here.
+        s_commandFrameState = 0;
+        s_commandFrameEdge = 0;
+
+        if (s_rebindLockout)
         {
             // The config screen is capturing a key. Suppress only the game
             // command outputs (g_key); the original Pad_set wrote the raw
@@ -971,14 +1126,33 @@ namespace openre::input
         else
         {
             // Command engine: merge per-device command states (mouse, keyboard,
-            // gamepad), compute the rising edge once on the merged state, then
-            // fan out to the legacy outputs.
+            // gamepad), compute the rising edge once on the REAL merged state
+            // (pre-walk), let the input handler walk reshape the frame, then
+            // fan the final frame out to the legacy outputs.
             gGameTable.raw_state = 0;
-            uint32_t cmdState = transform_keyboard(s_commandBindings);
-            cmdState |= transform_gamepad(s_commandBindings);
-            cmdState |= transform_mouse(s_commandBindings);
-            cmdEdge = rising_edge(cmdState, s_commandState);
-            s_commandState = cmdState;
+            uint32_t realState = transform_keyboard(s_commandBindings);
+            realState |= transform_gamepad(s_commandBindings);
+            realState |= transform_mouse(s_commandBindings);
+            cmdEdge = rising_edge(realState, s_commandState);
+            // Track the pre-walk real state (NOT the final frame) so handler
+            // edits never corrupt next frame's press computation.
+            s_commandState = realState;
+
+            ecs::InputFrame frame{ realState, cmdEdge };
+
+            // Demo replay runs as the earliest input handler: it receives the
+            // real press (to cancel the demo on any input) and otherwise
+            // replaces the frame with the recorded demo input converted to
+            // commands. The scene walk then sees the demo-driven frame.
+            if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
+                demo_input_handler(frame);
+
+            input_walk(frame);
+
+            const uint32_t cmdState = frame.state; // final frame state
+            const uint32_t cmdPress = frame.press; // final frame press
+            s_commandFrameState = cmdState;
+            s_commandFrameEdge = cmdPress;
 
             for (int cmd = 0; cmd < COMMAND_COUNT; cmd++)
             {
@@ -988,7 +1162,7 @@ namespace openre::input
                     newKey |= kCommandOutput[cmd].gKey;
                     gGameTable.raw_state |= kCommandOutput[cmd].rawState;
                 }
-                if (cmdEdge & bit)
+                if (cmdPress & bit)
                 {
                     rawTrigger |= kCommandOutput[cmd].rawEdgeF8;
                     feEdge |= kCommandOutput[cmd].rawEdgeFE;
@@ -997,9 +1171,6 @@ namespace openre::input
             }
             gGameTable.g_key = newKey;
         }
-
-        // Publish the merged command state for UI / script consumers.
-        s_commandEdge = cmdEdge;
 
         // Stop flag handling: if input is blocked, only allow directional keys
         if (gGameTable.fg_stop & 0x1000000)
@@ -1110,12 +1281,12 @@ namespace openre::input
 
     uint32_t command_state()
     {
-        return s_commandState;
+        return s_commandFrameState;
     }
 
     uint32_t command_edge()
     {
-        return s_commandEdge;
+        return s_commandFrameEdge;
     }
 
     uint32_t bindings_revision()

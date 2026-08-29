@@ -5,6 +5,7 @@
 #include "resmgr.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -319,5 +320,41 @@ namespace openre::ecs
     {
         bool enabled = true;
         Size2f size;
+    };
+
+    /// The mutable per-frame input context handed to every input handler
+    /// during the input walk. Command state is stored as a bitmask (bit N ==
+    /// Command N active). `state` is the set of commands currently held this
+    /// frame; `press` is the set of commands that rose (rising edge) this
+    /// frame. Handlers read and may replace either value.
+    struct InputFrame
+    {
+        uint32_t state = 0;
+        uint32_t press = 0;
+    };
+
+    /// Makes the entity take part in the per-frame input walk.
+    ///
+    /// The engine walks the scene tree in deepest / last-child-first /
+    /// root-last order and invokes the `callback` of every entity carrying
+    /// this component with the shared frame context. There is no consume
+    /// flag: every handler is always called, in tree order, and handlers only
+    /// update the frame values ("nulling" the input = writing back an empty
+    /// frame). A Lua callback is stored via the script bindings (see
+    /// `core.InputHandler`), which holds the LuaVm + registry ref needed to
+    /// dispatch it.
+    struct InputHandlerComponent
+    {
+        // Native callback. For Lua-registered handlers this is set by the
+        // script bindings to a forwarder that dispatches into Lua.
+        std::function<void(InputFrame&)> callback;
+
+        // When the callback came from Lua (scene.setField(h, "callback",
+        // fn)) these track the owning VM and registry ref so getField can
+        // restore the function and the bindings can release the ref when the
+        // component dies. Stored opaquely to keep this header free of Lua
+        // types.
+        void* luaVm = nullptr;
+        int32_t luaRef = -1;
     };
 }

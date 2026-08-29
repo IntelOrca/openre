@@ -552,7 +552,13 @@ namespace openre::text
         const float lineH = (font->fromFnt || font->fromTtf) ? static_cast<float>(font->lineHeight()) : cellSize;
         auto runs = decodeText(text.text, font, cellSize, lineH);
         if (runs.empty())
+        {
+            // No drawable runs (e.g. the text was cleared to ''): drop any
+            // previous glyphs so stale sprites do not linger behind the
+            // current screen.
+            destroyGlyphs(scene, text);
             return;
+        }
 
         const float totalW = measureWidth(runs);
         // Stacked line breaks: the box height is lineH per line.

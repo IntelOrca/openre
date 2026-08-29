@@ -28,6 +28,15 @@ local loadMethods        = {}
 local refresh
 local update
 
+local function containsCommand(list, name)
+    for i = 1, #list do
+        if list[i] == name then
+            return true
+        end
+    end
+    return false
+end
+
 local CANVAS_W           = 320
 local CANVAS_H           = 240
 local SCALE_STEP         = 0.5                   -- UI scale quantum (front layer)
@@ -193,6 +202,21 @@ function LoadScreen:new(opts)
     -- front carries the UI (half-step snapped scale).
     instance.back, instance.backFrame = createLayer(instance.userRoot, 'load.back', 0)
     instance.front, instance.frontFrame = createLayer(instance.userRoot, 'load.front', SCALE_STEP)
+
+    -- Input handler: snapshots the nav presses out of the frame during the
+    -- input walk (which runs before the script tick), so update() reads the
+    -- snapshot rather than the removed input.pressed(). The frame is not
+    -- touched, so the game fan-out still receives the press; the load screen
+    -- is the only screen alive here so nothing downstream reacts anyway.
+    instance.nav = { up = false, down = false, accept = false, cancel = false }
+    local loadHandler = scene.addComponent(instance.front, 'core.InputHandler')
+    scene.setField(loadHandler, 'callback', function(frame)
+        local nav = instance.nav
+        nav.up = containsCommand(frame.press, 'up')
+        nav.down = containsCommand(frame.press, 'down')
+        nav.accept = containsCommand(frame.press, 'accept')
+        nav.cancel = containsCommand(frame.press, 'cancel')
+    end)
 
     -- Fonts and textures must stay referenced or they unload on GC.
     instance.font = gfx.loadFont('fonts/std.fnt')
@@ -379,18 +403,18 @@ update = function(self)
         return
     end
 
-    if input.pressed('up') then
+    if self.nav.up then
         moveCursor(self, -1)
-    elseif input.pressed('down') then
+    elseif self.nav.down then
         moveCursor(self, 1)
-    elseif input.pressed('accept') then
+    elseif self.nav.accept then
         -- UI-only for now: selection is tracked, nothing loads yet.
         if #self.entries > 0 then
             playSfx(self, self.sfx.accept)
         else
             playSfx(self, self.sfx.invalid)
         end
-    elseif input.pressed('cancel') then
+    elseif self.nav.cancel then
         beginClose(self)
     end
 end

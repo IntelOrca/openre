@@ -348,8 +348,8 @@ function scene.setParent(child, parent) end
 --- `core.Text` accepts the font (a `gfx.loadFont` value) as the component's
 --- initial value, or set it later with `scene.setField(handle, 'font', f)`.
 ---@param entity SceneEntity
----@param name string e.g. "core.Sprite", "core.Text", "core.AudioEmitter"
----  or "core.Transform"
+---@param name string e.g. "core.Sprite", "core.Text", "core.AudioEmitter",
+---  "core.InputHandler" or "core.Transform"
 ---@return SceneComponent|nil
 function scene.addComponent(entity, name) end
 
@@ -454,7 +454,8 @@ function scene.entityFromId(id) end
 --- Build a SceneComponent handle for `(entity, typeName)` where `typeName` is
 --- one of "core.Transform", "core.Sprite", "core.Text", "core.Legacy",
 --- "core.Video", "core.AudioEmitter", "core.ScaledFrame",
---- "core.InputHint", "core.UiSize", "core.UiFlex" or a runtime component
+--- "core.InputHint", "core.UiSize", "core.UiFlex", "core.InputHandler"
+--- or a runtime component
 --- name registered via `scene.defineComponent`. Returns nil when the entity
 --- lacks that component.
 ---@param entity SceneEntity
@@ -586,13 +587,12 @@ function scene.exit() end
 ---   - A registered input command name ("accept", "cancel", "fire",
 ---     "inventory", "map", "run", "up", ...) renders one icon per binding
 ---     that command currently has on the hint's device, straight from the
----     [input] INI section (see input.bindings). Rebinds update hints live;
+---     [input] INI section. Rebinds update hints live;
 ---     a command with no binding on the device shows no icon.
 ---   - A single letter or digit ("a", "5") shows that key (kbm only).
 ---   - Icon aliases pick a glyph directly, e.g. "esc", "enter", "space",
 ---     "lshift", "arrow_up", "mouse_left", "wheel_up" (kbm) or "dpad",
 ---     "dpad_up", "ls", "rs_click", "lt", "rt", "l1", "select" (pads).
----   - Unknown commands drop the icons but still show the label.
 ---   - Unknown commands drop the icons but still show the label.
 --- * `device` — which atlas / button set: "kbm" (default), "ps", "x" or
 ---   "n". Writing it relayouts the hint in place.
@@ -806,42 +806,42 @@ function core.loadMovie(path) end
 ---@return boolean|nil
 function core.playMovie(movie, captions) end
 
---[[ input — runtime command state ]]
+--[[ InputHandler — the only way to receive input ]]
 
----@class input
-input = {}
+-- The old global input.down / input.pressed / input.commands /
+-- input.bindings API is REMOVED. The only way to retrieve input is a
+-- `core.InputHandler` scene component; the engine walks the scene tree every
+-- frame (deepest first, last-created child first, root last) and invokes the
+-- callback of every entity that carries one, sharing one mutable InputFrame.
+-- Tree position IS the ordering: a handler on a deep, late-created overlay
+-- entity runs before the game intake, and writing empty state/press there
+-- blocks everything behind it (a modal). A plugin that injects automated
+-- input sits on an entity at the earliest walk position and replaces
+-- state/press wholesale. Register one with:
+--
+--   local handler = scene.addComponent(e, "core.InputHandler")
+--   scene.setField(handler, "callback", function(frame) ... end)
+--
+-- Screens typically snapshot the commands they care about in the callback
+-- (the walk runs before the script tick) and consume that snapshot in their
+-- tick handler. See games/re2/script/options.lua (a modal that nulls the
+-- frame), games/re2/script/menu.lua / load.lua / prologue.lua and
+-- scripts/web.lua (OPENRE_WEB_INPUT=1; automated input injection) for worked
+-- examples.
 
---- Whether a game command is currently held this frame.
----@param name string|integer INI command name ("up", "accept", "menu", "cancel",
----  "left", "right", "down", "tab_left", "tab_right", "subtab_left",
----  "subtab_right", ...) or a numeric Command index.
----@return boolean
-function input.down(name) end
-
---- Whether a game command rose (edge) this frame — i.e. it was not held last
---- frame but is held now. Use this for one-shot menu actions (select, navigate,
---- confirm, switch tabs with "tab_left"/"tab_right" or sub-tabs with
---- "subtab_left"/"subtab_right") so a held key does not repeat every frame.
----@param name string|integer INI command name or numeric Command index.
----@return boolean
-function input.pressed(name) end
-
---- The registered command names in engine order ("cancel", "accept", "up",
---- ...). Combined with input.bindings this drives binding UIs and hint
---- displays (see the options screen at games/re2/script/options.lua for a
---- full example).
----@return string[]
-function input.commands() end
-
---- The current bindings of a command, loaded from the [input] INI section.
---- Each entry is `{ device = "kb" | "gp" | "mu", key = <name> }` where `key`
---- is a keyboard key name ("escape", "w"), a gamepad source name ("south",
---- "dpad_up", "l_trigger", "axis_left_y-", ...) or a mouse button name
---- ("left"). Keyboard/mouse names are accepted directly as input_hint
---- commands; gamepad source names resolve per style on the ps/x/n devices.
----@param name string|integer INI command name or numeric Command index.
----@return table[]
-function input.bindings(name) end
+---@class InputFrame
+--- The per-frame context passed to every `core.InputHandler` callback. It is a
+--- plain table with two command-name arrays:
+---
+---   { state = { "up", "fire" }, press = { "accept" } }
+---
+--- `state` lists every command currently held; `press` lists the commands that
+--- just went down this frame. A handler may read, replace or clear either
+--- array (assign a fresh table literal, table.remove to drop one entry, etc).
+--- Handlers never consume input: every handler in the tree runs, and values
+--- flow downstream, so "nulling the input" is writing empty tables
+--- (state = {}, press = {}).
+local InputFrame = {}
 
 --[[ options — engine-wide settings registry ]]
 

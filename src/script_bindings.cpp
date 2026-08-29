@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <lua.hpp>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -595,6 +596,7 @@ namespace openre::script
             // A runtime (Lua-defined) component; the definition name lives in
             // SceneComponentHandle::runtimeName.
             constexpr int32_t runtime = 9;
+            constexpr int32_t input_handler = 12;
         }
 
         struct SceneEntityHandle
@@ -906,6 +908,14 @@ namespace openre::script
                 }
                 kind = ComponentKind::ui_flex;
             }
+            else if (strcmp(name, "core.InputHandler") == 0)
+            {
+                if (scene->tryGetComponent<ecs::InputHandlerComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::InputHandlerComponent>(handle->entity);
+                }
+                kind = ComponentKind::input_handler;
+            }
             else if (ecs::findRuntimeComponent(name) != nullptr)
             {
                 // Runtime (Lua-defined) component: add a default-initialised
@@ -945,6 +955,172 @@ namespace openre::script
             if (value > 255)
                 value = 255;
             return static_cast<uint8_t>(value);
+        }
+
+        // ── core.InputHandler Lua dispatch ────────────────────────────────
+
+        // Ownership of a Lua callback function reference held by an
+        // InputHandlerComponent. Released when the component is destroyed
+        // (or its callback is replaced), guarded against a VM that was
+        // destroyed first (module hot-reload closes the VM after clearing the
+        // scene, so the release is normally safe).
+        struct LuaInputHandlerState
+        {
+            LuaVm* vm = nullptr;
+            int ref = LUA_NOREF;
+            // The per-walk frame context table, reused each dispatch so
+            // handlers do not accumulate per-frame garbage. Created lazily.
+            int frameTableRef = LUA_NOREF;
+
+            ~LuaInputHandlerState()
+            {
+                if (vm != nullptr && isVmAlive(vm))
+                {
+                    lua_State* L = vm->state();
+                    if (L != nullptr)
+                    {
+                        if (ref != LUA_NOREF)
+                            luaL_unref(L, LUA_REGISTRYINDEX, ref);
+                        if (frameTableRef != LUA_NOREF)
+                            luaL_unref(L, LUA_REGISTRYINDEX, frameTableRef);
+                    }
+                }
+            }
+        };
+
+        // Pushes a command-name array from a command bitmask:
+        // { "up", "fire", ... } for every set bit. Deterministic command
+        // order (ascending Command index).
+        void pushCommandArray(lua_State* L, uint32_t mask)
+        {
+            lua_newtable(L);
+            int n = 0;
+            for (int cmd = 0; cmd < openre::input::COMMAND_COUNT; cmd++)
+            {
+                if (mask & (1u << cmd))
+                {
+                    n++;
+                    lua_pushstring(L, openre::input::command_name(static_cast<openre::input::Command>(cmd)));
+                    lua_rawseti(L, -2, n);
+                }
+            }
+        }
+
+        // Reads a command-name array back into a command bitmask. Unknown
+        // names are skipped.
+        uint32_t readCommandArray(lua_State* L, int index)
+        {
+            uint32_t mask = 0;
+            if (!lua_istable(L, index))
+                return mask;
+            const lua_Integer count = lua_rawlen(L, index);
+            for (lua_Integer i = 1; i <= count; i++)
+            {
+                lua_rawgeti(L, index, i);
+                if (lua_isstring(L, -1))
+                {
+                    auto cmd = openre::input::command_from_name(lua_tostring(L, -1));
+                    if (cmd != openre::input::COMMAND_COUNT)
+                        mask |= 1u << static_cast<uint32_t>(cmd);
+                }
+                lua_pop(L, 1);
+            }
+            return mask;
+        }
+
+        // Builds the per-turn frame context table in the registry slot held
+        // by `state`, dispatches the handler with it, then reads back any
+        // edits. The frame table is { state = {...}, press = {...} } where
+        // each entry is a command-name array; handlers read, replace or clear
+        // them. Reuses the same registry table each call to avoid per-frame
+        // garbage.
+        void dispatchInputHandler(const std::shared_ptr<LuaInputHandlerState>& state, ecs::InputFrame& frame)
+        {
+            if (state == nullptr || state->vm == nullptr || !isVmAlive(state->vm))
+                return;
+            lua_State* L = state->vm->state();
+            if (L == nullptr)
+                return;
+            // This can be invoked from within the game module's own Lua tick
+            // (the movie playback loop polls input and walks the scene while
+            // inside apiPlayMovie), so never clobber the caller's stack: only
+            // wind back to the depth we started at, never `lua_settop(L, 0)`.
+            const int base = lua_gettop(L);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, state->ref);
+            if (!lua_isfunction(L, -1))
+            {
+                lua_settop(L, base);
+                return;
+            }
+
+            // Frame context table (reused): { state = {...}, press = {...} }.
+            // Only the invalid frame-table entry is popped here: the function
+            // pushed above stays on the stack (pushing a fresh table + ref then
+            // re-pushing it must NOT reset the whole stack to `base`).
+            lua_rawgeti(L, LUA_REGISTRYINDEX, state->frameTableRef);
+            if (!lua_istable(L, -1))
+            {
+                lua_pop(L, 1);
+                lua_newtable(L);
+                state->frameTableRef = luaL_ref(L, LUA_REGISTRYINDEX);
+                lua_rawgeti(L, LUA_REGISTRYINDEX, state->frameTableRef);
+            }
+            lua_pushstring(L, "state");
+            pushCommandArray(L, frame.state);
+            lua_settable(L, -3);
+            lua_pushstring(L, "press");
+            pushCommandArray(L, frame.press);
+            lua_settable(L, -3);
+
+            // Duplicate the frame table as the call argument, then move the
+            // copy beneath the function so the call stack is
+            // { frame, func, frame }: pcall calls func (at -2) with the frame
+            // copy (at -1) as its argument, and the original frame stays below
+            // the function so we can read edits back after the call (the
+            // handler mutates the same table object).
+            lua_pushvalue(L, -1);
+            lua_insert(L, -3);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            {
+                const char* msg = lua_tostring(L, -1);
+                openre::logging::logWarning(
+                    "[script] {}: input handler failed: {}", state->vm->name(), msg != nullptr ? msg : "(unknown error)");
+                lua_settop(L, base);
+                return;
+            }
+
+            // Read back the (possibly replaced / cleared) frame values.
+            lua_getfield(L, -1, "state");
+            frame.state = readCommandArray(L, -1);
+            lua_pop(L, 1);
+            lua_getfield(L, -1, "press");
+            frame.press = readCommandArray(L, -1);
+            lua_pop(L, 1);
+            lua_pop(L, 1); // the frame table
+            lua_settop(L, base);
+        }
+
+        // Installs `component`'s Lua callback from the function at stack
+        // index `funcIndex` (nil clears it).
+        void
+        setInputHandlerCallback(lua_State* L, LuaVm* vm, int funcIndex, ecs::Scene& scene, ecs::InputHandlerComponent& handler)
+        {
+            if (lua_isnil(L, funcIndex))
+            {
+                handler.callback = nullptr;
+                handler.luaVm = nullptr;
+                handler.luaRef = -1;
+                return;
+            }
+            luaL_checktype(L, funcIndex, LUA_TFUNCTION);
+            lua_pushvalue(L, funcIndex);
+            const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+            auto state = std::make_shared<LuaInputHandlerState>();
+            state->vm = vm;
+            state->ref = ref;
+            handler.luaVm = vm;
+            handler.luaRef = ref;
+            handler.callback = [state](ecs::InputFrame& frame) { dispatchInputHandler(state, frame); };
         }
 
         int sceneSetField(lua_State* L)
@@ -1307,6 +1483,26 @@ namespace openre::script
                 return 0;
             }
 
+            if (comp->kind == ComponentKind::input_handler)
+            {
+                auto* handler = scene->tryGetComponent<ecs::InputHandlerComponent>(entity);
+                if (handler == nullptr)
+                {
+                    return luaL_error(L, "scene.setField: entity has no input_handler component");
+                }
+                if (strcmp(name, "callback") == 0)
+                {
+                    // Restore the field-name set when the callback is
+                    // installed so getField can find it; the callback itself
+                    // is stored as a function-valued field.
+                    auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
+                    setInputHandlerCallback(L, vm, 3, *scene, *handler);
+                }
+                else
+                    return luaL_error(L, "scene.setField: unknown input_handler field '%s'", name);
+                return 0;
+            }
+
             if (comp->kind == ComponentKind::runtime)
             {
                 const int32_t fieldIndex = runtimeFieldIndex(*scene, *comp, name);
@@ -1609,6 +1805,39 @@ namespace openre::script
                     lua_pushnumber(L, flex->gap);
                 else if (strcmp(name, "padding") == 0)
                     lua_pushnumber(L, flex->padding);
+                else
+                    lua_pushnil(L);
+                return 1;
+            }
+
+            if (comp->kind == ComponentKind::input_handler)
+            {
+                auto* handler = scene->tryGetComponent<ecs::InputHandlerComponent>(entity);
+                if (handler == nullptr)
+                {
+                    lua_pushnil(L);
+                    return 1;
+                }
+                if (strcmp(name, "callback") == 0)
+                {
+                    // The function only lives in the owning VM's registry; the
+                    // owning VM gets the actual callable. Other VMs (e.g. the
+                    // web inspector) cannot call it, so they get a readable
+                    // marker instead of nil.
+                    if (handler->luaVm != nullptr
+                        && handler->luaVm == static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1))))
+                    {
+                        lua_rawgeti(L, LUA_REGISTRYINDEX, handler->luaRef);
+                    }
+                    else if (handler->luaVm != nullptr)
+                    {
+                        lua_pushstring(L, "[Managed Function]");
+                    }
+                    else
+                    {
+                        lua_pushnil(L);
+                    }
+                }
                 else
                     lua_pushnil(L);
                 return 1;
@@ -1955,6 +2184,8 @@ namespace openre::script
                 return ComponentKind::ui_size;
             if (strcmp(name, "core.UiFlex") == 0)
                 return ComponentKind::ui_flex;
+            if (strcmp(name, "core.InputHandler") == 0)
+                return ComponentKind::input_handler;
             return 0;
         }
 
@@ -2024,6 +2255,9 @@ namespace openre::script
             { "gap", "float", "0" },
             { "padding", "float", "0" },
         };
+        static const ComponentFieldInfo kInputHandlerFields[] = {
+            { "callback", "function", "" },
+        };
 
         struct NativeComponentInfo
         {
@@ -2042,6 +2276,7 @@ namespace openre::script
             { "core.InputHint", kInputHintFields, sizeof(kInputHintFields) / sizeof(kInputHintFields[0]) },
             { "core.UiSize", kUiSizeFields, sizeof(kUiSizeFields) / sizeof(kUiSizeFields[0]) },
             { "core.UiFlex", kUiFlexFields, sizeof(kUiFlexFields) / sizeof(kUiFlexFields[0]) },
+            { "core.InputHandler", kInputHandlerFields, sizeof(kInputHandlerFields) / sizeof(kInputHandlerFields[0]) },
         };
 
         const char* runtimeFieldTypeName(ecs::RuntimeFieldType type)
@@ -2295,6 +2530,7 @@ namespace openre::script
             case ComponentKind::input_hint: present = scene->hasComponent<ecs::InputHintComponent>(h->entity); break;
             case ComponentKind::ui_size: present = scene->hasComponent<ecs::UiSizeComponent>(h->entity); break;
             case ComponentKind::ui_flex: present = scene->hasComponent<ecs::UiFlexComponent>(h->entity); break;
+            case ComponentKind::input_handler: present = scene->hasComponent<ecs::InputHandlerComponent>(h->entity); break;
             }
             if (!present)
             {
@@ -2342,6 +2578,8 @@ namespace openre::script
                 push("core.UiSize");
             if (scene->hasComponent<ecs::UiFlexComponent>(h->entity))
                 push("core.UiFlex");
+            if (scene->hasComponent<ecs::InputHandlerComponent>(h->entity))
+                push("core.InputHandler");
             for (const auto& runtimeName : scene->runtimeComponentsOf(h->entity))
                 push(runtimeName.c_str());
             return 1;
@@ -2432,6 +2670,7 @@ namespace openre::script
                 push("gap");
                 push("padding");
                 break;
+            case ComponentKind::input_handler: push("callback"); break;
             case ComponentKind::runtime:
             {
                 if (auto* def = ecs::findRuntimeComponent(comp->runtimeName))
@@ -2553,83 +2792,6 @@ namespace openre::script
             if (auto* font = rm.fromCookie<FontResource>(cookie))
                 return pushTex(rm.fromCookie<TextureResource>(font->atlas));
             lua_pushnil(L);
-            return 1;
-        }
-
-        // input.down(name) / input.pressed(name) - read the runtime command
-        // state so game scripts can drive menus / title screens from the same
-        // bindings as gameplay. `name` is an INI command name ("up", "accept",
-        // "menu", ...) or a numeric Command index. `down` reports the command
-        // active this frame; `pressed` reports a rising edge (just pressed).
-        int inputCommandState(lua_State* L, uint32_t mask)
-        {
-            int cmd;
-            if (lua_type(L, 1) == LUA_TSTRING)
-                cmd = static_cast<int>(openre::input::command_from_name(lua_tostring(L, 1)));
-            else
-                cmd = static_cast<int>(luaL_checknumber(L, 1));
-            bool active = cmd >= 0 && cmd < openre::input::COMMAND_COUNT && (mask & (1u << cmd)) != 0;
-            lua_pushboolean(L, active);
-            return 1;
-        }
-
-        int inputCommandDown(lua_State* L)
-        {
-            return inputCommandState(L, openre::input::command_state());
-        }
-
-        int inputCommandPressed(lua_State* L)
-        {
-            return inputCommandState(L, openre::input::command_edge());
-        }
-
-        // input.commands() - the registered command INI names in engine order
-        // ("cancel", "accept", "up", ...).
-        int inputCommands(lua_State* L)
-        {
-            lua_newtable(L);
-            const auto count = openre::input::command_count();
-            for (int32_t i = 0; i < count; i++)
-            {
-                lua_pushstring(L, openre::input::command_name(static_cast<openre::input::Command>(i)));
-                lua_rawseti(L, -2, i + 1);
-            }
-            return 1;
-        }
-
-        // input.bindings(name) - the current bindings of a command as an
-        // array of { device = "kb" | "gp" | "mu", key = <name> } tables,
-        // where key is a keyboard key name ("escape", "w"), a gamepad source
-        // name ("south", "dpad_up") or a mouse button name ("left").
-        int inputBindings(lua_State* L)
-        {
-            auto resolve = [&L]() -> openre::input::Command {
-                if (lua_type(L, 1) == LUA_TSTRING)
-                    return openre::input::command_from_name(lua_tostring(L, 1));
-                return static_cast<openre::input::Command>(luaL_checkinteger(L, 1));
-            };
-            const auto cmd = resolve();
-            if (cmd < 0 || cmd >= openre::input::COMMAND_COUNT)
-                return luaL_error(L, "input.bindings: unknown command");
-
-            lua_newtable(L);
-            const auto bindings = openre::input::command_bindings(cmd);
-            for (size_t i = 0; i < bindings.size(); i++)
-            {
-                lua_newtable(L);
-                const char* device;
-                switch (bindings[i].device)
-                {
-                case openre::input::BindingDevice::Keyboard: device = "kb"; break;
-                case openre::input::BindingDevice::Gamepad: device = "gp"; break;
-                default: device = "mu"; break;
-                }
-                lua_pushstring(L, device);
-                lua_setfield(L, -2, "device");
-                lua_pushstring(L, bindings[i].name.c_str());
-                lua_setfield(L, -2, "key");
-                lua_rawseti(L, -2, static_cast<int>(i + 1));
-            }
             return 1;
         }
 
@@ -2871,12 +3033,14 @@ namespace openre::script
 
             bool skipped = false;
 
-            // Edge-detect input so a key already held from the splash does not
-            // skip the movie immediately. Seed the previous state with the
-            // current state so only presses after start count.
-            uint8_t prevKb[256];
-            system::input::get_keyboard_state(prevKb);
-            uint8_t prevMb = system::input::get_mouse_buttons();
+            // The movie loop owns its own input polling: it cannot call
+            // pad_set (that runs from the module tick, which never advances
+            // while this blocking loop occupies the main thread), so it builds
+            // the real command state, computes the rising edge against the
+            // previous movie poll, and runs the full input-handler walk over
+            // the scene. Edge-detect against a fresh baseline so a key already
+            // held from the splash does not skip the movie immediately.
+            openre::input::movie_input_begin();
 
             while (true)
             {
@@ -2899,19 +3063,14 @@ namespace openre::script
                     }
                 }
 
-                // Skip on a fresh key/button press (edge since movie start).
-                uint8_t kb[256];
-                system::input::get_keyboard_state(kb);
-                uint8_t mb = system::input::get_mouse_buttons();
-                for (int i = 0; i < 256; i++)
-                {
-                    if (kb[i] && !prevKb[i])
-                        skip = true;
-                }
-                if (mb && !prevMb)
+                // Poll input through the middleware chain: the real devices are
+                // transformed into commands, then the scene walk lets every
+                // InputHandler (web plugin, the movie entity's own handler,
+                // the demo replay handler) reshape the frame. Any press left
+                // after the chain interrupts the movie.
+                const ecs::InputFrame frame = openre::input::movie_input_poll();
+                if (frame.press != 0)
                     skip = true;
-                std::memcpy(prevKb, kb, sizeof(prevKb));
-                prevMb = mb;
 
                 if (skip)
                 {
@@ -3119,8 +3278,8 @@ namespace openre::script
         setGlobal(L, "scene.setParent", sceneSetParent);
         setGlobal(L, "scene.destroy", sceneDestroy);
         setGlobal(L, "scene.addComponent", sceneAddComponent);
-        setGlobal(L, "scene.setField", sceneSetField);
-        setGlobal(L, "scene.getField", sceneGetField);
+        setGlobalWithVm(L, "scene.setField", sceneSetField, vm);
+        setGlobalWithVm(L, "scene.getField", sceneGetField, vm);
         setGlobal(L, "scene.exit", sceneExit);
         setGlobal(L, "scene.allEntities", sceneAllEntities);
         setGlobal(L, "scene.entityFromId", sceneEntityFromId);
@@ -3154,12 +3313,6 @@ namespace openre::script
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
-
-        // input.* - runtime command state for menu / title-screen navigation.
-        setGlobal(L, "input.down", inputCommandDown);
-        setGlobal(L, "input.pressed", inputCommandPressed);
-        setGlobal(L, "input.commands", inputCommands);
-        setGlobal(L, "input.bindings", inputBindings);
 
         // options.* - engine-wide settings registry (menu screens).
         setGlobal(L, "options.list", optionsList);

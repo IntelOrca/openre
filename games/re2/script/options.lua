@@ -33,6 +33,18 @@ local canvasHandle = nil
 local backdrop = nil
 local frame = nil
 
+-- Per-frame navigation snapshot. The input handler below reads the real
+-- presses during the input walk (which runs before the script tick), then
+-- clears the frame so the menu behind and the game fan-out receive nothing.
+-- The tick drives navigation off this snapshot instead of input.pressed().
+local nav = {
+    up = false,
+    down = false,
+    left = false,
+    right = false,
+    cancel = false,
+}
+
 -- Built on open(); read by the tick while the overlay is open.
 local CATALOG = {}
 local activePanel = nil
@@ -230,12 +242,25 @@ local function fitCanvas()
     scene.setField(canvasHandle, 'y', gfx.screenHeight() * 0.5)
 end
 
+-- Per-frame navigation snapshot updated by the onInput handler (defined below
+-- in the "Per-frame input" section). Forward-declared here so buildTree can
+-- attach it as the overlay's InputHandler: Lua locals are only in scope from
+-- their declaration, so a reference before `local function onInput` would
+-- resolve to the global (nil) and silently clear the callback.
+local onInput
+
 -- Builds the canvas + static flex tree under a fresh root entity.
 local function buildTree()
     -- Owner node for the whole overlay; both the backdrop and the scaled
     -- canvas hang off it so the popup is a single destroyable subtree.
     optionsHandle = scene.createEntity(root)
     scene.setField(optionsHandle, 'name', 'options')
+
+    -- Input handler: reads the real nav presses during the input walk (which
+    -- runs before the script tick), snapshots them for the tick, then clears
+    -- the frame so the menu behind and the game fan-out receive nothing.
+    local handler = scene.addComponent(optionsHandle, 'core.InputHandler')
+    scene.setField(handler, 'callback', onInput)
 
     -- 96%-opacity black backdrop covering the whole screen. It is a child of
     -- the options owner (not the scaled canvas), so it is never letterboxed,
@@ -611,6 +636,32 @@ local function isOpen()
     return isOpenFlag
 end
 
+local function containsCommand(list, name)
+    for i = 1, #list do
+        if list[i] == name then
+            return true
+        end
+    end
+    return false
+end
+
+-- Input handler for the overlay: reads the real nav presses out of the frame
+-- context, snapshots them for the tick (which runs after the walk), then
+-- clears the frame so the menu behind and the game fan-out receive nothing.
+-- (`function onInput` rather than `local function onInput` so this assigns to
+-- the local forward-declared above, which buildTree closes over.)
+function onInput(frame)
+    nav.up = containsCommand(frame.press, 'up')
+    nav.down = containsCommand(frame.press, 'down')
+    nav.left = containsCommand(frame.press, 'left')
+    nav.right = containsCommand(frame.press, 'right')
+    nav.cancel = containsCommand(frame.press, 'cancel')
+    -- Null the input: everything downstream (menu, game fan-out, other
+    -- handlers) sees an empty frame this frame.
+    frame.state = {}
+    frame.press = {}
+end
+
 -------------------------------------------------------------------------------
 -- Per-frame input ------------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -646,29 +697,29 @@ re.subscribe(HookKind.tick, function()
     end
 
     -- Back/cancel closes the popup, flushing any pending value changes.
-    if input.pressed('cancel') then
+    if nav.cancel then
         options.flush()
         close()
         return
     end
 
-    if input.pressed('up') then
+    if nav.up then
         sub.cursor = wrap(sub.cursor, -1, #sub.rows)
         refreshSelection(sub)
         updateScroll(sub)
         refreshPane()
-    elseif input.pressed('down') then
+    elseif nav.down then
         sub.cursor = wrap(sub.cursor, 1, #sub.rows)
         refreshSelection(sub)
         updateScroll(sub)
         refreshPane()
     end
 
-    if input.pressed('left') or input.pressed('right') then
+    if nav.left or nav.right then
         local v = cursorView(sub)
         if v ~= nil and v.src.editable then
             -- Value selection never wraps: clamp to the first/last option.
-            local delta = input.pressed('right') and 1 or -1
+            local delta = nav.right and 1 or -1
             v.src.index = math.max(1, math.min(#v.src.options, v.src.index + delta))
             -- Persist into the native options registry.
             options.set(v.src.def.id, indexToValue(v.src.def, v.src.index))

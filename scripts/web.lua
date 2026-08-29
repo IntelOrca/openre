@@ -1,5 +1,9 @@
 -- web.lua — minimal debug web server for the OpenRE Live Console: serves a
 -- self-contained HTML page with live game state and a Lua eval box.
+-- Also a worked example of the InputHandler middleware: with
+-- OPENRE_WEB_INPUT=1 it installs a hidden entity at the earliest walk
+-- position whose handler replaces the frame with automated input, removing
+-- all manual input (see the InputHandler sample section below).
 
 -- FlagGroup enum values (see docs/openre.lua for the full list).
 local FlagGroup = { Status = 1 }
@@ -16,6 +20,52 @@ if not ok then
 end
 
 print("listening on 127.0.0.1:" .. port)
+
+-- ── InputHandler sample ──────────────────────────────────────────────
+-- Worked example of the InputHandler middleware for plugin authors. When
+-- enabled (OPENRE_WEB_INPUT=1) a hidden entity is placed directly under
+-- the scene root — the earliest walk position, visited before every
+-- sub-root — carrying a core.InputHandler whose callback replaces the
+-- frame's state/press with the commands posted over HTTP, so all manual
+-- input is removed and only the injected input reaches the game.
+--
+--   POST /api/input/set  {"state":["up","fire"],"press":["accept"]}
+--   POST /api/input/clear
+--   GET  /api/input
+--
+-- Handlers are always invoked (there is no consume), so the only way to
+-- "consume" the manual input is to replace the frame values, which is what
+-- this callback does when injection is active. Clearing posts empty state
+-- so the following handlers/game see no input.
+local webInput = {
+    active = false,
+    state = {},
+    press = {},
+    entity = nil,
+}
+local webInputEnabled = (re.getEnv("OPENRE_WEB_INPUT") or "") == "1"
+
+local function installWebInputHandler()
+    if not webInputEnabled or webInput.entity ~= nil then return end
+    local ok, err = pcall(function()
+        -- No parent arg → a direct child of the scene root, so the walk
+        -- (deepest, last child first, root last) reaches it before every
+        -- sub-root: the earliest handler in the chain.
+        local ent = scene.createEntity()
+        scene.setField(ent, "name", "web_input")
+        local handler = scene.addComponent(ent, "core.InputHandler")
+        scene.setField(handler, "callback", function(frame)
+            if webInput.active then
+                frame.state = webInput.state
+                frame.press = webInput.press
+            end
+        end)
+        webInput.entity = ent
+    end)
+    if not ok then
+        print("web: could not install input handler: " .. tostring(err))
+    end
+end
 
 -- Self-contained page served at GET /. The page is generated per request so
 -- the configured poll interval (pollMs) can be embedded. The scene tree and
@@ -288,6 +338,7 @@ function makeInput(key, val){
   if(typeof val==='boolean'){ input=document.createElement('input'); input.type='checkbox'; input.checked=!!val; input.onchange=()=>setField(key, input.checked); }
   else if(typeof val==='number'){ input=document.createElement('input'); input.type='number'; input.step='any'; input.value=String(val); input.onchange=()=>setField(key, parseFloat(input.value)); }
   else if(val==null){ input=document.createElement('input'); input.type='text'; input.value='(null)'; input.disabled=true; }
+  else if(val==='[Managed Function]'){ input=document.createElement('input'); input.type='text'; input.value=val; input.disabled=true; }
   else { input=document.createElement('input'); input.type='text'; input.value=String(val); input.onchange=()=>setField(key, input.value); }
   input.className='fval'; input.dataset.key=key;
   return input;
@@ -485,6 +536,8 @@ local function jsonEncode(v)
         return string.format("%.6g", v)
     elseif t == "boolean" then
         return v and "true" or "false"
+    elseif t == "function" then
+        return '"[Managed Function]"'
     elseif t == "table" then
         if isArray(v) then
             local parts = {}
@@ -822,6 +875,29 @@ local function handle(sock, req)
             body = '{"ok":false,"error":"re.eval is only available in debug builds"}'
         end
         respond(sock, "200 OK", "application/json", body)
+    elseif method == "POST" and base == "/api/input/set" then
+        -- Arms automated input injection (see the InputHandler sample).
+        if webInputEnabled then
+            local okj, obj = pcall(jsonDecode, requestBody(req))
+            if okj and type(obj) == "table" then
+                webInput.active = true
+                webInput.state = type(obj.state) == "table" and obj.state or {}
+                webInput.press = type(obj.press) == "table" and obj.press or {}
+                respond(sock, "200 OK", "application/json", '{"ok":true}')
+            else
+                respond(sock, "400 Bad Request", "application/json", '{"ok":false,"error":"bad body"}')
+            end
+        else
+            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"input injection disabled (set OPENRE_WEB_INPUT=1)"}')
+        end
+    elseif method == "POST" and base == "/api/input/clear" then
+        webInput.active = false
+        webInput.state = {}
+        webInput.press = {}
+        respond(sock, "200 OK", "application/json", '{"ok":true}')
+    elseif method == "GET" and base == "/api/input" then
+        respond(sock, "200 OK", "application/json",
+            jsonEncode({ enabled = webInputEnabled, active = webInput.active, state = webInput.state, press = webInput.press }))
     elseif method == "GET" and base == "/api/prologue/status" then
         -- Live prologue state from the game module vm as a JSON string.
         local code = [[local ok,p=pcall(require,'script/prologue');
@@ -890,6 +966,9 @@ end
 local inflight = {}
 
 re.subscribe(HookKind.tick, function()
+    -- Install the InputHandler sample once the scene exists.
+    installWebInputHandler()
+
     -- Serve a requested screenshot once the renderer has grabbed the frame.
     if pendingShot and gfx.takeScreenshot then
         local ok, shot = pcall(gfx.takeScreenshot)
