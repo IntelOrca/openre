@@ -290,11 +290,14 @@ local MAIN_STORY_MENU = {
     },
 }
 
+-- 4th survivor and To-fu are locked by default: they display as greyed-out
+-- '???' rows (see the locked handling in itemLabel/refreshItem) until the
+-- game is completed, which is exactly what the tooltip tells the player.
 local EXTRA_GAMES_MENU = {
     items = {
-        { label = '4th Survivor', tooltip = 'Escape the city as HUNK.',       action = noop },
-        { label = 'To-fu',        tooltip = 'Escape the city as Tofu.',       action = noop },
-        { label = 'Ex. Battle',   tooltip = 'Battle mode against enemy squads.', action = noop },
+        { label = '4th Survivor', locked = true, tooltip = 'Complete the game to unlock.', action = noop },
+        { label = 'To-fu',        locked = true, tooltip = 'Complete the game to unlock.', action = noop },
+        { label = 'Ex. Battle',           tooltip = 'Battle mode against enemy squads.',   action = noop },
     },
 }
 
