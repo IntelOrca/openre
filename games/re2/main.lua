@@ -70,9 +70,16 @@ end
 -- reloaded at runtime): skip the splash and title movie entirely and drop
 -- straight back on the title menu. menu.lua then reopens the options overlay
 -- from the cross-VM `shared` table if it was open before the reload.
+--
+-- OPENRE_SKIP_INTRO (testing boot override, separate from the engine-set
+-- hot-reload flag) skips the splash and intro movie the same way so a test
+-- boot lands on the title menu as fast as possible instead of waiting out
+-- pl0\zmovie\title_l.bin.
 local fastReload = re.getEnv('OPENRE_FAST_RELOAD')
-if fastReload then
-    print('[main] fast reload: skipping splash/movie')
+local skipIntro = re.getEnv('OPENRE_SKIP_INTRO')
+if fastReload or skipIntro then
+    print('[main] skipping splash/intro movie' ..
+        (skipIntro and ' (boot override)' or ' (fast reload)'))
     scheduler:exec(function()
         Title:new()
     end)

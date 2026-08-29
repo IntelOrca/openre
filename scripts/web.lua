@@ -30,6 +30,7 @@ print("listening on 127.0.0.1:" .. port)
 -- input is removed and only the injected input reaches the game.
 --
 --   POST /api/input/set  {"state":["up","fire"],"press":["accept"]}
+--   POST /api/input/tap   {"press":["accept"],"ms":200}  (auto-clearing edge)
 --   POST /api/input/clear
 --   GET  /api/input
 --
@@ -37,10 +38,17 @@ print("listening on 127.0.0.1:" .. port)
 -- "consume" the manual input is to replace the frame values, which is what
 -- this callback does when injection is active. Clearing posts empty state
 -- so the following handlers/game see no input.
+--
+-- /api/input/set holds until /api/input/clear (a held key). That is wrong for
+-- menus where one edge per frame is consumed — a held press cascades through
+-- multiple items. /api/input/tap arms the commands for a short window (default
+-- 200ms, enough to register while menus lock input during transitions) and
+-- auto-clears when the window elapses, so a caller gets exactly one edge.
 local webInput = {
     active = false,
     state = {},
     press = {},
+    tapTicks = 0, -- frames remaining in an armed tap; 0 when none
     entity = nil,
 }
 local webInputEnabled = (re.getEnv("OPENRE_WEB_INPUT") or "") == "1"
@@ -717,67 +725,6 @@ local function respond(sock, status, contentType, body, headers)
     sock:dispose()
 end
 
-local function renderProloguePage()
-    return [[<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenRE · Prologue Tester</title>
-<style>
-body{background:#0d1117;color:#c9d1d9;font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:24px;}
-h1{font-size:18px;} h2{font-size:13px;text-transform:uppercase;color:#8b949e;}
-button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:10px 16px;margin:4px;cursor:pointer;font-weight:600;}
-button:hover{background:#1c2230;border-color:#58a6ff;}
-.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:16px;}
-.row{display:flex;gap:18px;flex-wrap:wrap;}
-.kv{font-family:ui-monospace,monospace;font-size:13px;}
-.kv b{color:#58a6ff;}
-pre{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;overflow:auto;font-size:12px;}
-</style></head>
-<body>
-<h1>Prologue Tester</h1>
-<p>Start a prologue variant, then watch the live state below. The slideshow + movies play on screen;
-this page only reports the script's internal progress so you can confirm it without frame-grabbing.</p>
-<div>
-  <button onclick="start('leon','a')">Start · Leon A</button>
-  <button onclick="start('claire','a')">Start · Claire A</button>
-  <button onclick="start('leon','b')">Start · Leon B</button>
-  <button onclick="start('claire','b')">Start · Claire B</button>
-</div>
-<div class="card"><h2>Live status</h2><div class="row">
-  <div class="kv">active: <b id="active">-</b></div>
-  <div class="kv">finished: <b id="finished">-</b></div>
-  <div class="kv">skipped: <b id="skipped">-</b></div>
-  <div class="kv">variant: <b id="variant">-</b></div>
-  <div class="kv">substate: <b id="substate">-</b></div>
-  <div class="kv">frame: <b id="frame">-</b></div>
-  <div class="kv">bgm: <b id="bgmStarted">-</b></div>
-</div>
-<div class="kv" style="margin-top:8px">voices fired: <b id="voices">-</b></div>
-<div class="kv">movies played: <pre id="movies" style="margin-top:4px">-</pre></div>
-</div>
-<script>
-function start(ch, sc){
-  fetch('/api/prologue/start?character='+ch+'&scenario='+sc).then(r=>r.json()).then(j=>{
-    console.log('start result', j);
-  });
-}
-async function refresh(){
-  try{
-    const r = await fetch('/api/prologue/status');
-    const s = await r.json();
-    const set=(id,v)=>{document.getElementById(id).textContent=v;};
-    set('active', s.active); set('finished', s.finished); set('skipped', s.skipped);
-    set('variant', s.variant); set('substate', s.substate); set('frame', s.frame);
-    set('bgmStarted', s.bgmStarted);
-    set('voices', (s.voices||[]).join(', '));
-    set('movies', (s.movies||[]).join('\n'));
-  }catch(e){}
-}
-setInterval(refresh, 500); refresh();
-</script>
-</body></html>]]
-end
-
 -- A socket awaiting the screenshot requested on a previous tick (the grab
 -- completes inside the next present, handled on a later tick). Declared
 -- before handle() so the route can park its socket in it. The grab takes one
@@ -876,7 +823,8 @@ local function handle(sock, req)
         end
         respond(sock, "200 OK", "application/json", body)
     elseif method == "POST" and base == "/api/input/set" then
-        -- Arms automated input injection (see the InputHandler sample).
+        -- Arms automated input injection (see the InputHandler sample). The
+        -- commands stay active until /api/input/clear — a held key.
         if webInputEnabled then
             local okj, obj = pcall(jsonDecode, requestBody(req))
             if okj and type(obj) == "table" then
@@ -890,71 +838,53 @@ local function handle(sock, req)
         else
             respond(sock, "200 OK", "application/json", '{"ok":false,"error":"input injection disabled (set OPENRE_WEB_INPUT=1)"}')
         end
+    elseif method == "POST" and base == "/api/input/tap" then
+        -- Arms a single auto-clearing edge: the commands are injected for a
+        -- short window, then cleared automatically. Exactly the set/clear
+        -- dance a test driver would otherwise perform by hand.
+        if webInputEnabled then
+            local okj, obj = pcall(jsonDecode, requestBody(req))
+            if okj and type(obj) == "table" then
+                -- ms is converted to frames at a nominal 60fps; a caller that
+                -- knows the real frame rate can pass exact ticks instead.
+                local ms = tonumber(obj.ms) or 200
+                local ticks = tonumber(obj.ticks) or math.max(1, math.floor(ms / (1000 / 60)))
+                -- Default to "accept" so a bare POST /api/input/tap steps one
+                -- menu item, matching how drivers historically used set+clear.
+                webInput.state = type(obj.state) == "table" and obj.state or {}
+                webInput.press = type(obj.press) == "table" and obj.press or { "accept" }
+                webInput.active = true
+                webInput.tapTicks = ticks
+                respond(sock, "200 OK", "application/json",
+                    '{"ok":true,"press":"' .. table.concat(webInput.press, ",") .. '","ticks":' .. ticks .. '}')
+            else
+                respond(sock, "400 Bad Request", "application/json", '{"ok":false,"error":"bad body"}')
+            end
+        else
+            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"input injection disabled (set OPENRE_WEB_INPUT=1)"}')
+        end
     elseif method == "POST" and base == "/api/input/clear" then
         webInput.active = false
         webInput.state = {}
         webInput.press = {}
+        webInput.tapTicks = 0
         respond(sock, "200 OK", "application/json", '{"ok":true}')
     elseif method == "GET" and base == "/api/input" then
         respond(sock, "200 OK", "application/json",
             jsonEncode({ enabled = webInputEnabled, active = webInput.active, state = webInput.state, press = webInput.press }))
-    elseif method == "GET" and base == "/api/prologue/status" then
-        -- Live prologue state from the game module vm as a JSON string.
-        local code = [[local ok,p=pcall(require,'script/prologue');
-if not ok or type(p.status)~='function' then return '{"loaded":false}' end;
-local s=p.status();
-local q=function(x)
-  if x==nil then return 'null' end
-  if type(x)=='boolean' then return tostring(x) end
-  if type(x)=='number' then return tostring(x) end
-  return '"'..tostring(x)..'"'
-end;
-local joins=function(t)
-  local a={} for i=1,#t do a[i]=q(t[i]) end
-  return table.concat(a,',')
-end;
-return '{'
-  ..'"active":'..q(s.active)
-  ..',"finished":'..q(s.finished)
-  ..',"skipped":'..q(s.skipped)
-  ..',"character":'..q(s.character)
-  ..',"scenario":'..q(s.scenario)
-  ..',"variant":'..q(s.variant)
-  ..',"substate":'..q(s.substate)
-  ..',"frame":'..q(s.frame)
-  ..',"bgmStarted":'..q(s.bgmStarted)
-  ..',"voices":['..joins(s.voices)..']'
-  ..',"movies":['..joins(s.movies)..']}']]
-        local ok, eok, val = pcall(re.evalIn, "module.game", code)
-        if eok then
-            respond(sock, "200 OK", "application/json", val)
+    elseif method == "GET" and base == "/api/health" then
+        respond(sock, "200 OK", "application/json",
+            jsonEncode({ ok = true, port = port, pollMs = pollMs, input = webInputEnabled }))
+    elseif method == "POST" and base == "/api/quit" then
+        -- Graceful shutdown for test drivers: lets the engine unwind and the
+        -- process exit cleanly, instead of leaving a detached game orphaned.
+        local ok, err = pcall(scene.exit)
+        if ok then
+            respond(sock, "200 OK", "application/json", '{"ok":true,"quitting":true}')
         else
-            respond(sock, "200 OK", "application/json", '{"loaded":false,"error":"' .. jsonEscape(tostring(val)) .. '"}')
+            respond(sock, "200 OK", "application/json",
+                '{"ok":false,"error":"' .. jsonEscape(tostring(err)) .. '"}')
         end
-    elseif method == "GET" and base == "/api/prologue/start" then
-        -- Start a prologue variant in the GAME module vm (where prologue.lua
-        -- is already loaded via menu.lua) using the cross-VM debug bridge.
-        local character = params.character or "leon"
-        local scenario = params.scenario or "a"
-        local code = "local p=require('script/prologue');"
-            .. "p.start{character='" .. character .. "',scenario='" .. scenario
-            .. "',onFinished=function() end}; return 'started'"
-        local ok, eok, val = pcall(re.evalIn, "module.game", code)
-        if type(val) == "string" and (val:find("no script VM") or val:find("not found")) then
-            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"' .. jsonEscape(val) .. '"}')
-        elseif eok then
-            respond(sock, "200 OK", "application/json", '{"ok":true,"result":"' .. jsonEscape(val) .. '"}')
-        else
-            respond(sock, "200 OK", "application/json", '{"ok":false,"error":"' .. jsonEscape(tostring(val)) .. '"}')
-        end
-    elseif method == "GET" and base == "/api/prologue/skip" then
-        local code = [[local ok,p=pcall(require,'script/prologue');
-if ok and p.skip then p.skip() return 'skipped' end
-return 'no-prologue']]
-        local ok, eok, val = pcall(re.evalIn, "module.game", code)
-        respond(sock, "200 OK", "application/json", eok and ('{"ok":true,"result":"' .. jsonEscape(val) .. '"}') or ('{"ok":false,"error":"' .. jsonEscape(tostring(val)) .. '"}'))
-    elseif method == "GET" and base == "/prologue" then
-        respond(sock, "200 OK", "text/html; charset=utf-8", renderProloguePage())
     else
         respond(sock, "404 Not Found", "text/plain", "404 not found")
     end
@@ -968,6 +898,18 @@ local inflight = {}
 re.subscribe(HookKind.tick, function()
     -- Install the InputHandler sample once the scene exists.
     installWebInputHandler()
+
+    -- Auto-clear an armed tap once its window elapses (see /api/input/tap).
+    -- Decremented before requests are handled below, so a tap landed on this
+    -- tick keeps its full window from the next tick on.
+    if webInput.tapTicks > 0 then
+        webInput.tapTicks = webInput.tapTicks - 1
+        if webInput.tapTicks == 0 then
+            webInput.active = false
+            webInput.state = {}
+            webInput.press = {}
+        end
+    end
 
     -- Serve a requested screenshot once the renderer has grabbed the frame.
     if pendingShot and gfx.takeScreenshot then

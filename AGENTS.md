@@ -51,6 +51,24 @@ If you can't figure out what the function does, just name it, e.g. `sub_432080`.
 * When adding new source files, update `src\openre.vcxproj`.
 * Avoid labels as much as possible, extract small sections of code to functions if that helps avoid them. Use [[fallthrough]] in switch blocks.
 
+## Realtime testing
+
+Drive the running game over HTTP. Web plugin = `scripts/web.lua` (port
+`OPENRE_WEB_PORT`, default 8080). Driver = `tools\driver.py`.
+
+- Boot: `python tools\driver.py launch --wait` — auto free port,
+  `OPENRE_SKIP_INTRO=1` skips splash+movie, lands on title menu.
+- Drive: `wait_entity menu.pressStart`, `tap accept`, `wait_entity menu.item.1`
+- Assert: `scene --names` → check entity names (`menu.*`, `options`).
+  Component fields (e.g. `core.Text` `text`) carry labels, colour/alpha
+  markup — assert those in the tree; screenshots last.
+- Taps only for menu input (`/api/input/tap` auto-clears; held input cascades).
+- Never leak the game: use `with d.launch() as g:` in scripts, or
+  `python tools\driver.py kill` after CLI runs. Zombies hold the port
+  and lock the DLL for rebuild.
+- Example: `python tools\test_menu_nav.py`.
+- Detail: `docs\realtime-testing.md`
+
 ## Building
 * Run `format.bat` to format all code in the repo
 * Run `build.bat`
