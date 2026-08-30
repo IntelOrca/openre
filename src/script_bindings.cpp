@@ -3205,7 +3205,7 @@ namespace openre::script
             }
 
             auto info = system::fs::info(target.c_str());
-            if (info.physicalPath.empty() || !openre::save::cmdline_load_save(info.physicalPath.c_str()))
+            if (info.physicalPath.empty() || !openre::save::cmdline_read_save(info.physicalPath.c_str()))
             {
                 logging::logWarning("[core] loadGame: failed to load save file '{}'", target);
                 lua_pushboolean(L, 0);
@@ -3215,7 +3215,9 @@ namespace openre::script
             // Title_main_load's success path: clear the "continue" flag so
             // title_game_init restores the saved position (instead of treating
             // the session as a fresh file), and latch the boot chain to skip
-            // the native title/prologue.
+            // the native title/prologue. The save image itself is applied in
+            // title_game_init (apply_saved_image), after the boot chain's
+            // init_global() wipe, so the restored stage/room/position survive.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             gGameTable.dword_99CF6C = 1;
             openre::legacy_request_game_start();

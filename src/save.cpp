@@ -1838,11 +1838,9 @@ namespace openre::save
         return save_path_string()->data;
     }
 
-    // Loads a save file specified on the command line before entering gameplay.
-    // Mirrors the CARD_STATE_LOAD recipe: read the 0x800-byte save image, copy the
-    // first 0x798 bytes into the global table, then restore the saved state.
-    // Returns false (and leaves the game state untouched) when the file is unreadable.
-    bool cmdline_load_save(const char* path)
+    // Reads a save file into the card buffer without touching the live game
+    // table. Shares the path resolution and I/O of cmdline_load_save.
+    bool cmdline_read_save(const char* path)
     {
         if (!path || !path[0])
             return false;
@@ -1863,6 +1861,18 @@ namespace openre::save
             logging::logError("[cmdline] Failed to load save file: {}", absPath);
             return false;
         }
+        return true;
+    }
+
+    // Copies the save image previously read into the card buffer (see
+    // cmdline_read_save) into the live game table and restores the saved state.
+    // Mirrors the CARD_STATE_LOAD recipe. This must run after the boot chain's
+    // init_global() wiped the table region, so module load-game defers it here
+    // from title_game_init (a title-screen load) instead of applying it in
+    // core.loadGame where the boot would discard it.
+    void apply_saved_image()
+    {
+        gGameTable.p_card_work = gGameTable.card_work;
         std::memcpy(&gGameTable.table_start, gGameTable.p_card_work + 500, 0x798);
         load_pop();
         if (gGameTable.byte_98EF2E != 0)
@@ -1878,6 +1888,17 @@ namespace openre::save
         gGameTable.dword_989EC4 = gGameTable.dword_98EF20;
         gGameTable.dword_989EC8 = gGameTable.dword_98EF24;
         gGameTable.dword_989ECC = gGameTable.dword_98EF28;
+    }
+
+    // Loads a save file specified on the command line before entering gameplay.
+    // Mirrors the CARD_STATE_LOAD recipe: read the 0x800-byte save image, copy the
+    // first 0x798 bytes into the global table, then restore the saved state.
+    // Returns false (and leaves the game state untouched) when the file is unreadable.
+    bool cmdline_load_save(const char* path)
+    {
+        if (!cmdline_read_save(path))
+            return false;
+        apply_saved_image();
         return true;
     }
 

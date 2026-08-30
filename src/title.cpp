@@ -743,6 +743,13 @@ namespace openre::title
                 else
                 {
                     // New game Scenario B or Load Game
+                    // Module load game: the save image was read into the card
+                    // buffer by core.loadGame, but the boot chain's
+                    // init_global() wiped the table afterwards. Re-apply it here
+                    // so the restored stage/room/position from the file survive
+                    // (mirrors the ordering of a title-screen memcard load).
+                    if (legacy_game_start_requested())
+                        apply_saved_image();
                     gGameTable.pl.m.pos.x = gGameTable.word_98E9BE;
                     gGameTable.pl.id = gGameTable.byte_98E9A6;
                     gGameTable.pl.m.pos.y = gGameTable.word_98E9C0;
