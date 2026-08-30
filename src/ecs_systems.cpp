@@ -53,8 +53,8 @@ namespace openre::ecs
         // legacy game.
         Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
-        legacy.enabled = false;
-        const auto windowSize = system::config::get_window_size();
+legacy.enabled = false;
+        const auto windowSize = system::config::get_screen_resolution();
         legacy.size = { (float)windowSize.width, (float)windowSize.height };
     }
 

@@ -100,7 +100,15 @@ namespace openre::render2d
         // Clears the window and draws the given sprites, then presents.
         void present(const SpriteDraw* sprites, size_t count);
 
-        // Current window size in pixels.
+        // Sets the scene render canvas size (the [video] screen_resolution).
+        // Sprites are authored in this space; the present pass contain-fits
+        // and centres it onto the physical window. Defaults to the window
+        // size until set. Recreating or resizing textures is deferred to the
+        // next present().
+        void setSceneSize(int width, int height);
+
+        // Current scene canvas size in pixels (the screen_resolution, not
+        // the physical SDL window).
         int screenWidth() const;
         int screenHeight() const;
 

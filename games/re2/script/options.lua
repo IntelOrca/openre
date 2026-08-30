@@ -732,6 +732,18 @@ re.subscribe(HookKind.tick, function()
             if v.src.def.id == 'font' then
                 require('ui.font').refresh()
             end
+            -- Widescreen swaps the Screen Resolution list for the matching
+            -- aspect ratio (and snaps the value natively): rebuild the
+            -- catalog and panel so the row labels follow, then drop the
+            -- nav processing for this frame.
+            if v.src.def.id == 'widescreen' then
+                buildCatalog()
+                destroyPanel()
+                buildPanel(CATALOG[mainSel])
+                lastSubSel = 1
+                refreshPane()
+                return
+            end
             pushRow(v)
         end
     end

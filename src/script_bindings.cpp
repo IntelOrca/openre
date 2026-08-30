@@ -2864,6 +2864,7 @@ namespace openre::script
             };
 
             lua_newtable(L);
+            options::refresh();
             const auto count = options::count();
             for (auto i = 0; i < count; i++)
             {

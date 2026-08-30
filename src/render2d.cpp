@@ -241,11 +241,17 @@ namespace openre::render2d
         FadeState fade;
 
         // Offscreen copy of the last presented frame. The scene renders
-        // directly into this texture (the swapchain is write-only), and the
-        // screenshot endpoint downloads from it.
+        // directly into this texture at the scene canvas size (the
+        // screen_resolution), the present pass contain-fits it onto the
+        // swapchain, and the screenshot endpoint downloads from it.
         SDL_GPUTexture* captureTexture = nullptr;
         Uint32 captureWidth = 0;
         Uint32 captureHeight = 0;
+
+        // Scene canvas size (the [video] screen_resolution). Zero means
+        // "unset": fall back to the current SDL window size.
+        int sceneWidth = 0;
+        int sceneHeight = 0;
 
         // Backbuffer readback. The requester (Lua script tick, main thread)
         // only flags the request here; the download is recorded into the
@@ -896,8 +902,12 @@ namespace openre::render2d
         // to the swapchain. The swapchain is write-only (render target /
         // blit destination), so it must never be sampled or copied from -
         // keeping a renderable copy also gives the screenshot endpoint
-        // something to download.
-        if (!impl->ensureCaptureTexture(dev, winW, winH))
+        // something to download. The scene canvas (impl->sceneWidth/Height)
+        // is authored at the [video] screen_resolution; the window itself can
+        // be larger in fullscreen.
+        const Uint32 sceneW = impl->sceneWidth > 0 ? (Uint32)impl->sceneWidth : winW;
+        const Uint32 sceneH = impl->sceneHeight > 0 ? (Uint32)impl->sceneHeight : winH;
+        if (!impl->ensureCaptureTexture(dev, sceneW, sceneH))
         {
             SDL_CancelGPUCommandBuffer(cmd);
             return;
@@ -941,8 +951,8 @@ namespace openre::render2d
         SDL_GPUViewport vp{};
         vp.x = 0.0f;
         vp.y = 0.0f;
-        vp.w = (float)winW;
-        vp.h = (float)winH;
+        vp.w = (float)sceneW;
+        vp.h = (float)sceneH;
         vp.min_depth = 0.0f;
         vp.max_depth = 1.0f;
 
@@ -963,7 +973,7 @@ namespace openre::render2d
         }
         SDL_SetGPUViewport(pass, &vp);
 
-        const float viewportData[4] = { 0.0f, 0.0f, (float)winW, (float)winH };
+        const float viewportData[4] = { 0.0f, 0.0f, (float)sceneW, (float)sceneH };
         SDL_PushGPUVertexUniformData(cmd, 0, viewportData, sizeof(viewportData));
 
         for (size_t i = 0; i < count; i++)
@@ -995,49 +1005,68 @@ namespace openre::render2d
 
         SDL_EndGPURenderPass(pass);
 
-        // Upload the fullscreen presentation quad. This happens AFTER the
-        // scene render pass closes - passes cannot nest on one command buffer.
-        if (!impl->ensureVertexBuffer(dev, 4))
+        // Present: draw the rendered scene texture onto the swapchain. The
+        // scene canvas is authored at screen_resolution; contain-fit it into
+        // the physical window (centred, preserving aspect ratio). When the
+        // sizes are equal (windowed), this is a 1:1 fullscreen quad. The
+        // swapchain is only ever written here (never sampled or copied from),
+        // which is all it supports.
         {
-            SDL_CancelGPUCommandBuffer(cmd);
-            return;
-        }
-        {
-            Vertex quad[4]{};
-            quad[0] = { 0.0f, 0.0f, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 0.0f };
-            quad[1] = { vp.w, 0.0f, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 0.0f };
-            quad[2] = { 0.0f, vp.h, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 1.0f };
-            quad[3] = { vp.w, vp.h, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 1.0f };
-            void* mappedQuad = SDL_MapGPUTransferBuffer(dev, impl->vertexTransfer, true);
-            if (!mappedQuad)
+            // Contain-fit target rect inside the window.
+            const float scale = std::min((float)winW / sceneW, (float)winH / sceneH);
+            const float dstW = sceneW * scale;
+            const float dstH = sceneH * scale;
+            const float dstX = ((float)winW - dstW) * 0.5f;
+            const float dstY = ((float)winH - dstH) * 0.5f;
+
+            SDL_GPUViewport presentVp{};
+            presentVp.x = 0.0f;
+            presentVp.y = 0.0f;
+            presentVp.w = (float)winW;
+            presentVp.h = (float)winH;
+            presentVp.min_depth = 0.0f;
+            presentVp.max_depth = 1.0f;
+            const float presentViewportData[4] = { 0.0f, 0.0f, (float)winW, (float)winH };
+
+            // Upload the four fit-quad vertices. This happens BEFORE the
+            // present render pass starts - passes cannot nest on one command
+            // buffer (the copy pass must not open while a render pass is
+            // active).
+            if (!impl->ensureVertexBuffer(dev, 4))
             {
-                logging::logError("[render2d] present: map quad vertices failed: {}", SDL_GetError());
                 SDL_CancelGPUCommandBuffer(cmd);
                 return;
             }
-            std::memcpy(mappedQuad, quad, sizeof(quad));
+            Vertex fitQuad[4]{};
+            fitQuad[0] = { dstX, dstY, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 0.0f };
+            fitQuad[1] = { dstX + dstW, dstY, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 0.0f };
+            fitQuad[2] = { dstX, dstY + dstH, 0.5f, 1.0f, 255, 255, 255, 255, {}, 0.0f, 1.0f };
+            fitQuad[3] = { dstX + dstW, dstY + dstH, 0.5f, 1.0f, 255, 255, 255, 255, {}, 1.0f, 1.0f };
+            void* mappedFit = SDL_MapGPUTransferBuffer(dev, impl->vertexTransfer, true);
+            if (!mappedFit)
+            {
+                logging::logError("[render2d] present: map fit quad vertices failed: {}", SDL_GetError());
+                SDL_CancelGPUCommandBuffer(cmd);
+                return;
+            }
+            std::memcpy(mappedFit, fitQuad, sizeof(fitQuad));
             SDL_UnmapGPUTransferBuffer(dev, impl->vertexTransfer);
 
-            SDL_GPUCopyPass* quadCopy = SDL_BeginGPUCopyPass(cmd);
-            if (!quadCopy)
+            SDL_GPUCopyPass* fitCopy = SDL_BeginGPUCopyPass(cmd);
+            if (!fitCopy)
             {
                 SDL_CancelGPUCommandBuffer(cmd);
                 return;
             }
-            SDL_GPUTransferBufferLocation quadSrc{ impl->vertexTransfer, 0 };
-            SDL_GPUBufferRegion quadDst{ impl->vertexBuffer, 0, sizeof(quad) };
-            SDL_UploadToGPUBuffer(quadCopy, &quadSrc, &quadDst, true);
-            SDL_EndGPUCopyPass(quadCopy);
-        }
+            SDL_GPUTransferBufferLocation fitSrc{ impl->vertexTransfer, 0 };
+            SDL_GPUBufferRegion fitDst{ impl->vertexBuffer, 0, sizeof(fitQuad) };
+            SDL_UploadToGPUBuffer(fitCopy, &fitSrc, &fitDst, true);
+            SDL_EndGPUCopyPass(fitCopy);
 
-        // Present: draw the rendered frame onto the swapchain as a fullscreen
-        // textured quad. The swapchain is only ever written here (never
-        // sampled or copied from), which is all it supports.
-        {
             SDL_GPUColorTargetInfo swapTarget{};
             swapTarget.texture = swapTex;
             swapTarget.clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
-            swapTarget.load_op = SDL_GPU_LOADOP_DONT_CARE;
+            swapTarget.load_op = SDL_GPU_LOADOP_CLEAR;
             swapTarget.store_op = SDL_GPU_STOREOP_STORE;
 
             SDL_GPURenderPass* presentPass = SDL_BeginGPURenderPass(cmd, &swapTarget, 1, nullptr);
@@ -1047,8 +1076,8 @@ namespace openre::render2d
                 SDL_CancelGPUCommandBuffer(cmd);
                 return;
             }
-            SDL_SetGPUViewport(presentPass, &vp);
-            SDL_PushGPUVertexUniformData(cmd, 0, viewportData, sizeof(viewportData));
+            SDL_SetGPUViewport(presentPass, &presentVp);
+            SDL_PushGPUVertexUniformData(cmd, 0, presentViewportData, sizeof(presentViewportData));
             SDL_BindGPUGraphicsPipeline(presentPass, impl->presentPipeline);
 
             SDL_GPUTextureSamplerBinding captureBinding{};
@@ -1243,8 +1272,16 @@ namespace openre::render2d
         return true;
     }
 
+    void SpriteRenderer::setSceneSize(int width, int height)
+    {
+        impl->sceneWidth = width;
+        impl->sceneHeight = height;
+    }
+
     int SpriteRenderer::screenWidth() const
     {
+        if (impl->sceneWidth > 0)
+            return impl->sceneWidth;
         SDL_Window* win = (SDL_Window*)system::gpu::window();
         if (!win)
             return 0;
@@ -1256,6 +1293,8 @@ namespace openre::render2d
 
     int SpriteRenderer::screenHeight() const
     {
+        if (impl->sceneHeight > 0)
+            return impl->sceneHeight;
         SDL_Window* win = (SDL_Window*)system::gpu::window();
         if (!win)
             return 0;

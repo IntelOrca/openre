@@ -56,8 +56,25 @@ namespace openre::system::config
     // Stores `value` under `group`.`name` as a "WxH" string.
     void set_resolution(std::string_view group, std::string_view name, const Resolution& value);
 
-    // Convenience accessors for the [video] section (defaults "800x600" /
-    // "640x480").
-    Resolution get_window_size();
+    // Convenience accessors for the [video] section.
+    //
+    // fullscreen: 0 = windowed, 1 = borderless fullscreen (default 0)
+    int32_t get_fullscreen();
+    void set_fullscreen(int32_t value);
+
+    // widescreen: 0 = 4:3, 1 = 16:9 (default 0)
+    int32_t get_widescreen();
+    void set_widescreen(int32_t value);
+
+    // monitor: 1-based display index (default 1)
+    int32_t get_monitor();
+    void set_monitor(int32_t value);
+
+    // screen_resolution: the scene render texture size (default derived from
+    // widescreen: 1280x720 for 16:9 / 1280x960 for 4:3).
+    Resolution get_screen_resolution();
+    void set_screen_resolution(const Resolution& value);
+
+    // render_resolution: legacy guest framebuffer size (default "640x480").
     Resolution get_render_resolution();
 }

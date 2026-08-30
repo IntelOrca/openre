@@ -81,8 +81,9 @@ namespace openre::system::config
             return count;
         }
 
-        const Resolution kDefaultWindowSize{ 800, 600 };
         const Resolution kDefaultRenderResolution{ 640, 480 };
+        const Resolution kDefaultScreenResolution16x9{ 1280, 720 };
+        const Resolution kDefaultScreenResolution4x3{ 1280, 960 };
 
         // Parse a "WxH" value (e.g. "800x600") into a Resolution. Returns
         // false when the value is malformed (non-numeric, missing separator,
@@ -116,11 +117,18 @@ namespace openre::system::config
             return true;
         }
 
-        // Ensure the [video] section carries both resolution keys, defaulting
+        // Ensure the [video] section carries the display keys, defaulting
         // when absent or malformed, so any save() round-trips them.
         void ensure_video_defaults()
         {
-            auto ensure = [](const char* key, const Resolution& defaultValue) {
+            auto ensureInt = [](const char* key, int32_t defaultValue) {
+                auto fullKey = std::string("video.") + key;
+                if (s_config.find(fullKey) == s_config.end())
+                {
+                    addKey("video", key, std::to_string(defaultValue));
+                }
+            };
+            auto ensureRes = [](const char* key, const Resolution& defaultValue) {
                 Resolution parsed;
                 auto it = s_config.find(std::string("video.") + key);
                 if (it == s_config.end() || !parse_resolution(it->second, parsed))
@@ -128,8 +136,20 @@ namespace openre::system::config
                     addKey("video", key, std::to_string(defaultValue.width) + "x" + std::to_string(defaultValue.height));
                 }
             };
-            ensure("window_size", kDefaultWindowSize);
-            ensure("render_resolution", kDefaultRenderResolution);
+
+            ensureInt("fullscreen", 0);
+            ensureInt("widescreen", 0);
+            ensureInt("monitor", 1);
+
+            // screen_resolution defaults are derived from the widescreen key.
+            // A stale window_size key is dropped.
+            int32_t widescreen = 0;
+            auto widescreenIt = s_config.find("video.widescreen");
+            if (widescreenIt != s_config.end())
+                widescreen = static_cast<int32_t>(std::strtol(widescreenIt->second.c_str(), nullptr, 10));
+            ensureRes("screen_resolution", widescreen ? kDefaultScreenResolution16x9 : kDefaultScreenResolution4x3);
+            ensureRes("render_resolution", kDefaultRenderResolution);
+            remove_key("video", "window_size");
         }
     }
 
@@ -480,9 +500,45 @@ namespace openre::system::config
         addKey(std::string(group), std::string(name), std::to_string(value.width) + "x" + std::to_string(value.height));
     }
 
-    Resolution get_window_size()
+    int32_t get_fullscreen()
     {
-        return get_resolution("video", "window_size", kDefaultWindowSize);
+        return get<int32_t>("video", "fullscreen", 0);
+    }
+
+    void set_fullscreen(int32_t value)
+    {
+        set<int32_t>("video", "fullscreen", value);
+    }
+
+    int32_t get_widescreen()
+    {
+        return get<int32_t>("video", "widescreen", 0);
+    }
+
+    void set_widescreen(int32_t value)
+    {
+        set<int32_t>("video", "widescreen", value);
+    }
+
+    int32_t get_monitor()
+    {
+        return get<int32_t>("video", "monitor", 1);
+    }
+
+    void set_monitor(int32_t value)
+    {
+        set<int32_t>("video", "monitor", value);
+    }
+
+    Resolution get_screen_resolution()
+    {
+        const auto defaultRes = get_widescreen() ? kDefaultScreenResolution16x9 : kDefaultScreenResolution4x3;
+        return get_resolution("video", "screen_resolution", defaultRes);
+    }
+
+    void set_screen_resolution(const Resolution& value)
+    {
+        set_resolution("video", "screen_resolution", value);
     }
 
     Resolution get_render_resolution()

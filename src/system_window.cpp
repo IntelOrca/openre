@@ -2,6 +2,7 @@
 
 #include "app.h"
 #include "audio.h"
+#include "display.h"
 #include "error.h"
 #include "input.h"
 #include "logger.h"
@@ -138,11 +139,11 @@ namespace openre::system::window
             title = envTitle;
         }
 
-        // The window is created resizable at the configured [video] window_size
-        // and is decoupled from the internal render resolution: F8 only changes
-        // the render target, never the window.
-        const auto windowSize = system::config::get_window_size();
-        gWindow = SDL_CreateWindow(title, windowSize.width, windowSize.height, SDL_WINDOW_RESIZABLE);
+        // The window is created fixed-size at the configured [video]
+        // screen_resolution. It is never freely resizable: the display
+        // options own the client size (and thus the aspect ratio).
+        const auto screenRes = system::config::get_screen_resolution();
+        gWindow = SDL_CreateWindow(title, screenRes.width, screenRes.height, 0);
         if (!gWindow)
         {
             logging::logError("[SDL3] SDL_CreateWindow failed: {}", SDL_GetError());
@@ -179,6 +180,84 @@ namespace openre::system::window
         if (!gWindow)
             return false;
         return SDL_SetWindowFullscreen(gWindow, fullscreen);
+    }
+
+    void set_window_size(int width, int height)
+    {
+        if (!gWindow)
+            return;
+        SDL_SetWindowSize(gWindow, width, height);
+    }
+
+    void set_window_position(int x, int y)
+    {
+        if (!gWindow)
+            return;
+        SDL_SetWindowPosition(gWindow, x, y);
+    }
+
+    void set_window_position_centered(int displayIndex)
+    {
+        if (!gWindow)
+            return;
+        int count = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&count);
+        if (!displays || displayIndex < 0 || displayIndex >= count)
+        {
+            SDL_free(displays);
+            return;
+        }
+        const SDL_DisplayID displayId = displays[displayIndex];
+        SDL_free(displays);
+        // SDL resolves the centred magic to a position that accounts for the
+        // window frame (it centres the frame, not just the client area), so
+        // the title bar stays reachable after boot, on resolution changes and
+        // on monitor switches.
+        SDL_SetWindowPosition(gWindow, SDL_WINDOWPOS_CENTERED_DISPLAY(displayId), SDL_WINDOWPOS_CENTERED_DISPLAY(displayId));
+    }
+
+    int display_count()
+    {
+        int count = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&count);
+        SDL_free(displays);
+        return count;
+    }
+
+    bool display_bounds(int index, int& x, int& y, int& width, int& height)
+    {
+        int count = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&count);
+        if (!displays || index < 0 || index >= count)
+        {
+            SDL_free(displays);
+            return false;
+        }
+        SDL_Rect rect{};
+        bool ok = SDL_GetDisplayBounds(displays[index], &rect);
+        SDL_free(displays);
+        if (!ok)
+            return false;
+        x = rect.x;
+        y = rect.y;
+        width = rect.w;
+        height = rect.h;
+        return true;
+    }
+
+    std::string display_name(int index)
+    {
+        int count = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&count);
+        if (!displays || index < 0 || index >= count)
+        {
+            SDL_free(displays);
+            return {};
+        }
+        const char* name = SDL_GetDisplayName(displays[index]);
+        std::string result = name ? name : "";
+        SDL_free(displays);
+        return result;
     }
 
     void* get_hinstance()
@@ -346,6 +425,10 @@ namespace openre
             // (normally only created on resolution change / card access).
             gGameTable.is_480p = gGameTable.pMarni->xsize != 320;
             font_create();
+
+            // Apply the [video] display settings to the window (size, aspect,
+            // monitor, fullscreen) and the renderer's scene canvas.
+            display::apply();
 
             s_windowInitialised = true;
         }

@@ -3,6 +3,7 @@
 #include "audio.h"
 #include "camera.h"
 #include "debug.h"
+#include "display.h"
 #include "door.h"
 #include "enemy.h"
 #include "entity.h"
@@ -2510,7 +2511,7 @@ namespace openre
         case VK_F8:
             if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0) // gallery
             {
-                if (marni::g_renderer->changeResolution())
+                if (display::cycle_resolution())
                     after_resolution_change();
                 else
                     marni::out("???", "winmain.cpp");

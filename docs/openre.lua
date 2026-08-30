@@ -667,11 +667,13 @@ function gfx.loadFont(path, size) end
 ---@return number height
 function gfx.measureText(Font, text) end
 
---- Current window width in pixels.
+--- Current scene canvas width in pixels (the configured screen_resolution,
+--- not the physical SDL window).
 ---@return integer
 function gfx.screenWidth() end
 
---- Current window height in pixels.
+--- Current scene canvas height in pixels (the configured screen_resolution,
+--- not the physical SDL window).
 ---@return integer
 function gfx.screenHeight() end
 

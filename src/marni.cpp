@@ -660,7 +660,10 @@ namespace openre::marni
     static int __stdcall init_all(Marni* self)
     {
         const auto& r = self->resolutions[self->modes];
-        if (r.fullscreen <= 0)
+        // The [video] fullscreen key is the single source of truth for the
+        // display state; the mode-list fullscreen concept is legacy and is
+        // never used to enter fullscreen anymore.
+        if (system::config::get_fullscreen() == 0)
             self->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
         else
             self->gpu_flag |= GpuFlags::GPU_FULLSCREEN;
@@ -1786,13 +1789,19 @@ namespace openre::marni
     // 0x00406450
     static void move(Marni* marni)
     {
-        if (marni->gpu_flag & GpuFlags::GPU_FULLSCREEN)
+        // The [video] fullscreen key is the single source of truth for the
+        // display state. The raw GPU_FULLSCREEN flag lags behind for the very
+        // event that follows the SDL fullscreen toggle, so decide from config
+        // and sync the flag.
+        if (system::config::get_fullscreen() != 0)
         {
+            marni->gpu_flag |= GpuFlags::GPU_FULLSCREEN;
             // Borderless fullscreen moves the window to the display origin; keep
             // the letterboxed presentation rect instead of the full client area.
             compute_fullscreen_window_rect(marni);
             return;
         }
+        marni->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
         // Windowed: recompute the letterboxed presentation rect for the new
         // window position (the rect is in screen coordinates, so it shifts with
         // the client origin).
@@ -1830,6 +1839,15 @@ namespace openre::marni
             return 1;
         }
 
+        // The [video] fullscreen key is the single source of truth for the
+        // display state. The raw GPU_FULLSCREEN flag lags behind for the very
+        // event that follows the SDL fullscreen toggle, so decide from config
+        // and sync the flag.
+        const bool fullscreen = system::config::get_fullscreen() != 0;
+        if (fullscreen)
+            marni->gpu_flag |= GpuFlags::GPU_FULLSCREEN;
+        else
+            marni->gpu_flag &= ~GpuFlags::GPU_FULLSCREEN;
         auto gpu_flg = marni->gpu_flag;
         if (gpu_flg & GpuFlags::GPU_FULLSCREEN)
         {

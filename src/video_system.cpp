@@ -128,7 +128,7 @@ namespace openre
         const std::string& resolved = resource->path;
         auto& scene = app.scene;
         ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
-        const auto ws = system::config::get_window_size();
+        const auto ws = system::config::get_screen_resolution();
         auto& videoTransform = scene.getComponent<ecs::TransformComponent>(entity);
         videoTransform.name = "movie";
         // Sprites (and thus the video) are centred on their transform (see

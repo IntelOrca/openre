@@ -63,6 +63,9 @@
     <ClCompile Include="door.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="display.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ecs_math.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -204,6 +207,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="door.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="display.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="marni.h">

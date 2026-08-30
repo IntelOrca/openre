@@ -76,6 +76,7 @@
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="debug.cpp" />
+    <ClCompile Include="display.cpp" />
     <ClCompile Include="door.cpp" />
     <ClCompile Include="ecs_math.cpp" />
     <ClCompile Include="ecs_scene.cpp" />
@@ -147,6 +148,7 @@
     <ClInclude Include="cmdline.h" />
     <ClInclude Include="data.hpp" />
     <ClInclude Include="debug.h" />
+    <ClInclude Include="display.h" />
     <ClInclude Include="door.h" />
     <ClInclude Include="ecs.h" />
     <ClInclude Include="ecs_components.h" />

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace openre::system::window
 {
@@ -35,6 +36,25 @@ namespace openre::system::window
 
     // Toggles borderless desktop fullscreen on the game window.
     bool set_fullscreen(bool fullscreen);
+
+    // Sizes the window's client area (windowed mode only).
+    void set_window_size(int width, int height);
+    // Moves the window so its client top-left sits at the given screen
+    // coordinates (windowed mode only).
+    void set_window_position(int x, int y);
+    // Centres the window on the given display (SDL_WINDOWPOS_CENTERED_DISPLAY).
+    // Also selects that display for a subsequent set_fullscreen(true).
+    void set_window_position_centered(int displayIndex);
+
+    // Number of connected displays (SDL display enumeration).
+    int display_count();
+    // Bounds of the given display in physical pixels; returns false when the
+    // index is out of range. Doubles as the "which boundaries" query the
+    // borderless fullscreen path needs.
+    bool display_bounds(int index, int& x, int& y, int& width, int& height);
+    // Human-readable name of the given display (e.g. "1. \\.\DISPLAY1");
+    // returns an empty string for out-of-range indexes.
+    std::string display_name(int index);
 
     // Underlying Win32 window handle (never SDL_Window*).
     void* get_hwnd();

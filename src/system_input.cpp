@@ -1,6 +1,7 @@
 #include "system_input.h"
 
 #include "app.h"
+#include "display.h"
 #include "input.h"
 #include "logger.h"
 #include "marni_renderer.h"
@@ -407,7 +408,7 @@ namespace openre
                     // the last window position/size.
                     if (!gGameTable.byte_68059B && gGameTable.tasks[1].fn != (void*)0x004BF760 && !gGameTable.movie_r0)
                     {
-                        if (marni::g_renderer->toggleFullscreen())
+                        if (display::toggle_fullscreen())
                             after_resolution_change();
                     }
                 }

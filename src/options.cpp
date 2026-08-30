@@ -1,8 +1,10 @@
 #include "options.h"
+#include "display.h"
 #include "logger.h"
 #include "system_config.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <initializer_list>
 #include <string>
 #include <unordered_map>
@@ -210,74 +212,60 @@ namespace openre::options
                 { "QWERTY (English)" },
                 0);
             // GRAPHICS / Display
-            add_enum(
-                make_def(
+            {
+                Def def = make_def(
                     "GRAPHICS",
                     "Display",
                     "Display",
-                    "gfx_display_mode",
+                    "fullscreen",
                     "Display Mode",
-                    "Runs the game in a window or switches to a fullscreen presentation."),
-                { "Window", "Fullscreen" },
-                1);
-            add_external(make_def(
-                "GRAPHICS",
-                "Display",
-                "Display",
-                "gfx_display_area",
-                "Display Area",
-                "Opens the screen for adjusting the visible picture area."));
-            add_external(make_def(
-                "GRAPHICS", "Display", "Display", "gfx_brightness", "Brightness", "Opens the brightness calibration screen."));
-            add_enum(
-                make_def(
+                    "Runs the game in a window or switches to a borderless fullscreen presentation on the selected monitor.");
+                def.section = "video";
+                def.kind = OptionKind::Enum;
+                def.labels = { "Window", "Fullscreen" };
+                def.defaultValue = 0;
+                def.onChanged = [](int32_t value) { display::set_fullscreen(value); };
+                register_option(def);
+            }
+            {
+                Def def = make_def(
                     "GRAPHICS",
                     "Display",
                     "Display",
-                    "gfx_hdr_mode",
-                    "HDR Mode",
-                    "Enables HDR output when the display reports support, otherwise off."),
-                { "Auto", "Off" },
-                0);
-            add_enum(
-                make_def(
+                    "widescreen",
+                    "Widescreen",
+                    "Switches the picture between the 4:3 and 16:9 aspect ratios, snapping the resolution to match.");
+                def.section = "video";
+                def.kind = OptionKind::Toggle;
+                def.labels = { "Off", "On" };
+                def.defaultValue = 0;
+                def.onChanged = [](int32_t value) { display::set_widescreen(value); };
+                register_option(def);
+            }
+            {
+                Def def = make_def(
                     "GRAPHICS",
                     "Display",
                     "Display",
-                    "gfx_output_display",
+                    "monitor",
                     "Output Display Settings",
-                    "Selects which connected monitor the game is presented on."),
-                { "1. Monitor 1", "2. Monitor 2" },
-                0);
-            add_enum(
-                make_def(
-                    "GRAPHICS",
-                    "Display",
-                    "Display",
-                    "gfx_color_space",
-                    "Color Space",
-                    "Color space used when rendering HDR output."),
-                { "Rec. 2020" },
-                0);
-            add_toggle(
-                make_def(
-                    "GRAPHICS",
-                    "Display",
-                    "Display",
-                    "gfx_vertical_synchronization",
-                    "Vertical Synchronization",
-                    "Synchronizes presentation with the display refresh to prevent tearing."),
-                1);
-            add_enum(
-                make_def(
-                    "GRAPHICS",
-                    "Display",
-                    "Display",
-                    "gfx_style",
-                    "Style",
-                    "Switches between the modern presentation and the original retro look."),
-                { "Normal", "Retro" },
-                0);
+                    "Selects which connected monitor the game is presented on.");
+                def.section = "video";
+                def.kind = OptionKind::Enum;
+                def.defaultValue = 0;
+                // Labels enumerate the connected monitors each time the menu lists them.
+                def.refresh = [](Def& d) { d.labels = display::monitor_labels(); };
+                // The [video] key is a 1-based display index.
+                def.encode = [](int32_t value) { return std::to_string(value + 1); };
+                def.decode = [](const std::string& text) {
+                    int32_t value = 0;
+                    if (std::sscanf(text.c_str(), "%d", &value) == 1 && value >= 1)
+                        return value - 1;
+                    return 0;
+                };
+                def.onChanged = [](int32_t value) { display::set_monitor(value); };
+                register_option(def);
+            }
             add_enum(
                 make_def(
                     "GRAPHICS",
@@ -289,45 +277,26 @@ namespace openre::options
                 { "Retro", "Modern" },
                 0);
             // GRAPHICS / Image
-            add_enum(
-                make_def(
+            {
+                Def def = make_def(
                     "GRAPHICS",
                     "Image",
-                    "Graphics Quality",
-                    "gfx_texture_quality",
-                    "Texture Quality",
-                    "Resolution of streamed textures. Higher settings use more video memory."),
-                { "Low", "Medium", "High" },
-                2);
-            add_enum(
-                make_def(
-                    "GRAPHICS",
-                    "Image",
-                    "Graphics Quality",
-                    "gfx_texture_filter_quality",
-                    "Texture Filter Quality",
-                    "Anisotropic filtering applied to textures at oblique angles."),
-                { "Low", "Medium", "High" },
-                1);
-            add_enum(
-                make_def(
-                    "GRAPHICS",
-                    "Image",
-                    "Graphics Quality",
-                    "gfx_antialiasing",
-                    "Anti-aliasing",
-                    "Smooths jagged edges. MSAA trades performance for quality."),
-                { "Off", "MSAA" },
-                0);
-            add_toggle(
-                make_def(
-                    "GRAPHICS",
-                    "Image",
-                    "Graphics Quality",
-                    "gfx_blood",
-                    "Blood",
-                    "Enables blood and gore effects during gameplay."),
-                1);
+                    "General",
+                    "screen_resolution",
+                    "Screen Resolution",
+                    "Resolution the game renders the scene at before it is scaled to the display. Lists follow the current "
+                    "aspect ratio.");
+                def.section = "video";
+                def.kind = OptionKind::Enum;
+                def.defaultValue = 0;
+                // Labels follow the current widescreen aspect-ratio list.
+                def.refresh = [](Def& d) { d.labels = display::resolution_labels(); };
+                // The [video] key is the literal "1280x720" string.
+                def.encode = [](int32_t value) { return display::resolution_string(value); };
+                def.decode = [](const std::string& text) { return display::resolution_index(text); };
+                def.onChanged = [](int32_t value) { display::set_screen_resolution(value); };
+                register_option(def);
+            }
             // AUDIO / General
             add_range(
                 make_def(
@@ -492,13 +461,22 @@ namespace openre::options
             return;
 
         register_seed_data();
+        refresh();
 
         // Apply persisted values so restarts round-trip. Values written by us
         // are already valid, but hand-edited INIs fall back to the default.
         // register_option seeded every slot with its default value already.
         for (size_t i = 0; i < s_defs.size(); i++)
         {
-            auto value = system::config::get<int32_t>("options", s_defs[i].id, s_defs[i].defaultValue);
+            int32_t value;
+            if (s_defs[i].decode)
+            {
+                value = s_defs[i].decode(system::config::get<std::string>(s_defs[i].section, s_defs[i].id, ""));
+            }
+            else
+            {
+                value = system::config::get<int32_t>(s_defs[i].section, s_defs[i].id, s_defs[i].defaultValue);
+            }
             if (!sanitize(s_defs[i], value))
                 value = s_defs[i].defaultValue;
             s_values[i] = value;
@@ -529,6 +507,15 @@ namespace openre::options
         return s_defs.at(index);
     }
 
+    void refresh()
+    {
+        for (auto& def : s_defs)
+        {
+            if (def.refresh)
+                def.refresh(def);
+        }
+    }
+
     int index_of(std::string_view id)
     {
         auto it = s_indexById.find(std::string(id));
@@ -553,13 +540,18 @@ namespace openre::options
         auto index = index_of(id);
         if (index < 0)
             return false;
-        if (!sanitize(s_defs[index], value))
+        auto& def = s_defs[index];
+        if (def.refresh)
+            def.refresh(def);
+        if (!sanitize(def, value))
             return false;
         if (s_values[index] != value)
         {
             s_values[index] = value;
             s_dirty[index] = true;
         }
+        if (def.onChanged)
+            def.onChanged(s_values[index]);
         return true;
     }
 
@@ -577,7 +569,10 @@ namespace openre::options
         {
             if (!s_dirty[i])
                 continue;
-            system::config::set<int32_t>("options", s_defs[i].id, s_values[i]);
+            if (s_defs[i].encode)
+                system::config::set<std::string>(s_defs[i].section, s_defs[i].id, s_defs[i].encode(s_values[i]));
+            else
+                system::config::set<int32_t>(s_defs[i].section, s_defs[i].id, s_values[i]);
             s_dirty[i] = false;
             wroteAny = true;
         }

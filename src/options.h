@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +44,25 @@ namespace openre::options
         int32_t step = 1;
         // Value applied on first run and when nothing valid was persisted.
         int32_t defaultValue = 0;
+
+        // INI section this option persists under (default "options"). Display
+        // options persist to "video" so they share the real [video] keys.
+        std::string section = "options";
+
+        // Optional dynamic-label refresher. Called by options::refresh()
+        // (before a listing) and by set() (before sanitizing). Lets an Enum
+        // rebuild its labels from live state, e.g. the connected monitors.
+        std::function<void(Def&)> refresh = nullptr;
+
+        // Optional value codec. When encode/decode are set, init() reads the
+        // persisted value as a string via decode(string) and flush() writes
+        // encode(value); otherwise plain int32_t persistence is used. Used by
+        // screen_resolution ("1280x720") and monitor ("2").
+        std::function<std::string(int32_t)> encode = nullptr;
+        std::function<int32_t(const std::string&)> decode = nullptr;
+
+        // Optional live-apply hook, called after a new value is stored.
+        std::function<void(int32_t)> onChanged = nullptr;
     };
 
     // Registers the seed data and applies persisted values from the
@@ -62,6 +82,10 @@ namespace openre::options
 
     // Registration index for an option id, or -1 when unknown.
     int index_of(std::string_view id);
+
+    // Rebuilds every dynamic label (monitors, resolution list) so a listing
+    // reflects the current state.
+    void refresh();
 
     // Current value by id (canonical) or by registration index. Returns 0
     // for unknown ids and out-of-range indexes.
