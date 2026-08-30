@@ -417,3 +417,6 @@ games/*/sound/
 games/*/texture/
 games/*/room/
 
+
+# CMake native Linux build
+build-linux/

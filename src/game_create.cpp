@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <string>
 #include <system_error>
 #include <tuple>
@@ -121,6 +122,10 @@ namespace openre
             "data/title.pix",
         };
 
+        const char* const kRe2Signatures[] = {
+            "data/bio2.exe",
+        };
+
         const ImportEntry kRe1Imports[] = {
             { "movie/capcom.avi", "movie/capcom.avi", 0x87c277a448919f85ull, ImportAction::copy },
             { "movie/oj.avi", "movie/pretitle.avi", 0x5b566196fdc0b96bull, ImportAction::copy },
@@ -138,6 +143,7 @@ namespace openre
 
         const GameDefinition kGames[] = {
             { "re1", kRe1Signatures, std::size(kRe1Signatures), kRe1Imports, std::size(kRe1Imports) },
+            { "re2", kRe2Signatures, std::size(kRe2Signatures), nullptr, 0 },
         };
 
         // --- source file search ---
@@ -434,6 +440,54 @@ namespace openre
             return rooms;
         }
 
+        // Finds RE2 room files in Pl0/Rdt/ and Pl1/Rdt/ directories.
+        // Returns a list of room paths with their scenario prefix for deduplication.
+        struct Re2Room
+        {
+            fs::path path;
+            std::string scenario; // "Pl0" or "Pl1"
+            std::string filename; // e.g., "ROOM1000.RDT"
+        };
+
+        std::vector<Re2Room> find_re2_rooms(const fs::path& root)
+        {
+            std::vector<Re2Room> rooms;
+            const char* scenarios[] = { "Pl0", "Pl1" };
+
+            for (const auto& scenario : scenarios)
+            {
+                const fs::path rdtDir = root / "data" / scenario / "Rdt";
+                std::error_code ec;
+                if (!fs::is_directory(rdtDir, ec))
+                    continue;
+
+                fs::directory_iterator it(rdtDir, fs::directory_options::skip_permission_denied, ec);
+                const fs::directory_iterator end;
+                while (it != end)
+                {
+                    std::error_code typeEc;
+                    if (it->is_regular_file(typeEc) && it->path().extension() == ".RDT")
+                    {
+                        const std::string name = to_lower(it->path().filename().string());
+                        if (name.rfind("room", 0) == 0 && name.size() > 4 && isxdigit((unsigned char)name[4]))
+                        {
+                            rooms.push_back(Re2Room{ it->path(), scenario, it->path().filename().string() });
+                        }
+                    }
+                    it.increment(ec);
+                    if (ec)
+                        break;
+                }
+            }
+
+            // Sort by filename for consistent ordering; Pl0 comes before Pl1
+            // alphabetically, so it will be processed first for deduplication.
+            std::sort(rooms.begin(), rooms.end(), [](const Re2Room& a, const Re2Room& b) {
+                return a.filename < b.filename;
+            });
+            return rooms;
+        }
+
         // Converts an RE1 room file into RE2 RDT format and writes it to the
         // game pack under room/<roomcode>.rdt. Returns the RE2 room code (e.g.
         // "room1000") or empty on failure.
@@ -464,6 +518,33 @@ namespace openre
                 return {};
             out.write((const char*)converted.data(), (std::streamsize)converted.size());
             if (!out)
+                return {};
+
+            ok = true;
+            return code;
+        }
+
+        // Copies an RE2 room file as-is to the game pack under room/<roomcode>.rdt.
+        // The filename is lowercased. Returns the room code (e.g., "room1000")
+        // or empty on failure.
+        std::string copy_re2_room(const Re2Room& room, const fs::path& targetRoot, bool& ok)
+        {
+            ok = false;
+
+            // Lowercase the filename for the destination
+            const std::string name = to_lower(room.filename);
+            const std::string code = name.substr(0, name.size() - 4); // Remove .RDT extension
+            const fs::path dest = targetRoot / "room" / (code + ".rdt");
+
+            std::error_code destEc;
+            fs::create_directories(dest.parent_path(), destEc);
+            if (destEc)
+                return {};
+
+            // Copy the file as-is
+            std::error_code copyEc;
+            fs::copy_file(room.path, dest, fs::copy_options::overwrite_existing, copyEc);
+            if (copyEc)
                 return {};
 
             ok = true;
@@ -738,7 +819,9 @@ namespace openre
                   << results.size() << " entries: " << verified << " verified, " << mismatched << " hash mismatches, "
                   << missing << " missing\n";
 
-        if (verified + mismatched == 0)
+        // Skip the "no files found" error for games that have no static
+        // imports (e.g. RE2, which only copies rooms dynamically).
+        if (verified + mismatched == 0 && game->importCount > 0)
         {
             std::cerr << "error: none of the expected files could be found in '" << sourceArg << "'\n";
             return 1;
@@ -868,6 +951,43 @@ namespace openre
             roomFailures += bgFailures;
         }
 
-        return failures == 0 && roomFailures == 0 ? 0 : 1;
+        // RE2 rooms: copy every Pl*/Rdt/ROOM*.RDT into the game pack under
+        // room/<roomcode>.rdt with lowercased filenames.
+        size_t re2RoomsCopied = 0;
+        size_t re2RoomFailures = 0;
+        if (std::strcmp(game->id, "re2") == 0)
+        {
+            auto rooms = find_re2_rooms(sourceRoot);
+            std::set<std::string> seen; // For deduplication: Pl0 wins
+            std::cout << "copying " << rooms.size() << " RE2 rooms...\n";
+            for (const auto& room : rooms)
+            {
+                const std::string name = to_lower(room.filename);
+                const std::string code = name.substr(0, name.size() - 4);
+
+                // Skip if already seen (Pl0 wins over Pl1)
+                if (!seen.insert(code).second)
+                {
+                    std::cout << "  skip  " << code << ".rdt (duplicate from " << room.scenario << ")\n";
+                    continue;
+                }
+
+                bool ok = false;
+                const std::string result = copy_re2_room(room, targetRoot, ok);
+                if (ok)
+                {
+                    re2RoomsCopied++;
+                    std::cout << "  done  " << result << ".rdt\n";
+                }
+                else
+                {
+                    re2RoomFailures++;
+                    std::cout << "  fail  " << room.filename << "\n";
+                }
+            }
+            std::cout << "copied " << re2RoomsCopied << "/" << rooms.size() << " RE2 rooms\n";
+        }
+
+        return failures == 0 && roomFailures == 0 && re2RoomFailures == 0 ? 0 : 1;
     }
 }
