@@ -11,7 +11,9 @@
 #include "options.h"
 #include "render2d.h"
 #include "resmgr.h"
+#include "save.h"
 #include "sce.h"
+#include "scheduler.h"
 #include "script.h"
 #include "script_manager.h"
 #include "script_network.h"
@@ -3163,6 +3165,148 @@ namespace openre::script
             return 1;
         }
 
+        // core.loadGame(name) - loads a save file from the save folder before
+        // entering gameplay with core.runGame(). `name` is the entry name from
+        // save.list() (the filename without extension). The save image is
+        // restored into the game table (mirroring CARD_STATE_LOAD and the
+        // native command-line divert) and the game is latched to start as a
+        // load-game session: the boot chain skips the native title/prologue and
+        // title_game_init takes the save-restore branch. Returns true on
+        // success; false (leaving the game state untouched) when no matching
+        // save file exists or it cannot be read.
+        int coreLoadGame(lua_State* L)
+        {
+            auto* name = luaL_checkstring(L, 1);
+
+            // save files live in the save:// folder as <base>.BIOHAZARD2 (or
+            // RESIDENT2 variants); match on the base name so casing and
+            // extensions resolve.
+            std::string target;
+            auto entries = system::fs::getDirectoryContents("save://", "*");
+            for (const auto& entry : entries)
+            {
+                if (!entry.empty() && entry[0] == '.')
+                    continue;
+                auto base = entry;
+                auto dot = base.rfind('.');
+                if (dot != std::string::npos)
+                    base.resize(dot);
+                if (base == name)
+                {
+                    target = "save://" + entry;
+                    break;
+                }
+            }
+            if (target.empty())
+            {
+                logging::logWarning("[core] loadGame: no save file named '{}'", name);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            auto info = system::fs::info(target.c_str());
+            if (info.physicalPath.empty() || !openre::save::cmdline_load_save(info.physicalPath.c_str()))
+            {
+                logging::logWarning("[core] loadGame: failed to load save file '{}'", target);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            // Title_main_load's success path: clear the "continue" flag so
+            // title_game_init restores the saved position (instead of treating
+            // the session as a fresh file), and latch the boot chain to skip
+            // the native title/prologue.
+            gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
+            gGameTable.dword_99CF6C = 1;
+            openre::legacy_request_game_start();
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.runGame() - hands the frame to the legacy game and blocks until
+        // the game returns to the menu (or the app closes), mirroring
+        // core.playMovie: this call runs inside a Lua tick hook and the rest of
+        // the frame pipeline is suspended until it returns. The module's script
+        // tick still runs from the legacy update (nested), so remaining
+        // Lua-owned systems (web inspector etc.) keep responding.
+        //
+        // The first call boots the legacy game (psx_main -> init_system ->
+        // init_main), which chains straight into game_loop when core.loadGame
+        // latched a start. After a previous session returned to the menu, task
+        // 0 is re-kicked into game_loop directly. Returns when the legacy game
+        // signals return-to-menu; always leaves the LegacyGame node disabled so
+        // the module renders again.
+        int coreRunGame(lua_State* L)
+        {
+            auto* app = openre::current_app();
+            auto* scene = openre::current_scene();
+            if (app == nullptr || scene == nullptr)
+            {
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            // Enable the LegacyGame node so the legacy systems drive the frame.
+            auto legacyEntity = scene->find<ecs::LegacyGameComponent>();
+            if (legacyEntity == ecs::NullEntity)
+            {
+                // Boot normally creates the node; recreate a fallback so a
+                // removed core.Legacy node can never wedge the call.
+                legacyEntity = scene->createEntity(scene->getRoot(ecs::Scene::RootKind::Game));
+                auto& legacy = scene->addComponent<ecs::LegacyGameComponent>(legacyEntity);
+                legacy.enabled = true;
+                legacy.size = {
+                    (float)render2d::SpriteRenderer::get().screenWidth(),
+                    (float)render2d::SpriteRenderer::get().screenHeight(),
+                };
+            }
+            else
+            {
+                scene->getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled = true;
+            }
+
+            // First boot runs psx_main -> init_system -> init_main inside the
+            // next update_game(); a module-driven start latches init_main into
+            // chaining game_loop (skipping the native title). After a previous
+            // session returned to the menu, re-kick task 0 into game_loop.
+            if (gGameTable.systemInitialized)
+                openre::task_execute(0, openre::game_loop);
+
+            app->legacyReturnToMenu = false;
+
+            while (app->running() && !app->closing() && !app->legacyReturnToMenu)
+            {
+                // Feed the window + SDL input pipeline (the same systems the
+                // app shell runs every frame).
+                openre::system_window(*app);
+                if (!app->running() || app->closing() || app->legacyReturnToMenu)
+                    break;
+                openre::system_input(*app);
+
+                // Advance the legacy game (frame throttle + special states +
+                // psx_main via update_game).
+                LegacyGameSystem(*app);
+
+                // Present whatever the game produced this frame.
+                RenderSystem(*app);
+
+                // Keep the web inspector responsive while this blocking loop
+                // occupies the main thread.
+                openre::script::pumpScript("web");
+
+                system::window::delay(8);
+            }
+
+            // Hand the frame back to the module.
+            if (legacyEntity != ecs::NullEntity)
+                scene->getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled = false;
+            app->frameActive = false;
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
 #ifdef DEBUG
         int apiEval(lua_State* L)
         {
@@ -3343,6 +3487,8 @@ namespace openre::script
         setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
         setGlobal(L, "core.setRoleFont", coreSetRoleFont);
+        setGlobal(L, "core.loadGame", coreLoadGame);
+        setGlobal(L, "core.runGame", coreRunGame);
 
         // options.* - engine-wide settings registry (menu screens).
         setGlobal(L, "options.list", optionsList);

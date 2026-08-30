@@ -35,6 +35,17 @@ namespace openre
         // RenderSystem so it only presents frames the game actually advanced.
         bool frameActive = false;
 
+        // Handoff latches bridging the Lua menu to the legacy game (see
+        // core.runGame in script_bindings.cpp).
+        //   legacyGameStartRequested: set before a module-initiated game; makes
+        //     the boot task chain straight into game_loop (skipping the native
+        //     title) and title_game_init skip the prologue/setup warps.
+        //   legacyReturnToMenu: set by the native "return to title" sites
+        //     (repointed from task_chain(title::title)); polled by core.runGame
+        //     to end the blocking session and hand control back to the module.
+        bool legacyGameStartRequested = false;
+        bool legacyReturnToMenu = false;
+
     private:
         bool m_running = true;
         bool m_closing = false;

@@ -1034,8 +1034,17 @@ namespace openre
             break;
 
         case kInitDisclaimer:
-            gGameTable.byte_98F1B9 = 0;
-            task_execute(1, load_disclaimer);
+            if (!legacy_game_start_requested())
+            {
+                gGameTable.byte_98F1B9 = 0;
+                task_execute(1, load_disclaimer);
+            }
+            else
+            {
+                // Module-driven start: the Lua menu owns the boot intro, so
+                // skip the disclaimer overlay (and its input wait) entirely.
+                gGameTable.byte_98F1B9 = 1;
+            }
             task.var_08 = kInitFontsAndTex;
             [[fallthrough]];
 
@@ -1141,6 +1150,13 @@ namespace openre
             gGameTable.dword_988610 = 0xD20FF024;
             audio::snd_sys_stereo();
             gGameTable.fg_system |= 2;
+            if (legacy_game_start_requested())
+            {
+                // The module set up a game session (see core.runGame): chain
+                // straight into gameplay, bypassing the native title flow.
+                task_chain(game_loop);
+                return;
+            }
             task_chain(title::title);
             return;
 
@@ -1663,6 +1679,26 @@ namespace openre
         }
     }
 
+    // ── Module <-> legacy game handoff ───────────────────────────────────
+
+    void legacy_request_game_start()
+    {
+        if (auto* app = current_app())
+            app->legacyGameStartRequested = true;
+    }
+
+    bool legacy_game_start_requested()
+    {
+        auto* app = current_app();
+        return app != nullptr && app->legacyGameStartRequested;
+    }
+
+    void legacy_request_return_to_menu()
+    {
+        if (auto* app = current_app())
+            app->legacyReturnToMenu = true;
+    }
+
     // 0x004BF810
     void game_loop()
     {
@@ -1714,7 +1750,7 @@ namespace openre
             init_global();
             gGameTable.byte_680598 = 0;
             gGameTable.word_98E78C = 0;
-            task_chain(title::title);
+            legacy_request_return_to_menu();
             return;
         }
 
@@ -2057,7 +2093,7 @@ namespace openre
                 {
                     gGameTable.demo_ended = 1;
                     init_global();
-                    task_chain(title::title);
+                    legacy_request_return_to_menu();
                     ctcb.var_08 = 0;
                 }
                 else
@@ -2066,7 +2102,7 @@ namespace openre
                     gGameTable.byte_98F1B9 = 0;
                     set_flag(FlagGroup::System, FG_SYSTEM_30, true);
                     task_execute(1, sub_4C0820);
-                    task_chain(title::title);
+                    legacy_request_return_to_menu();
                     ctcb.var_08 = 0;
                 }
             }

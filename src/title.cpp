@@ -654,9 +654,10 @@ namespace openre::title
         case 1: goto LABEL_53;
         case 2:
         {
-            // Skip prologue when starting from the command line or when playing
-            // extreme battle, 4th survivor or demo
-            if (cmdline_start_active() || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE)
+            // Skip prologue when the module set up the game (core.runGame),
+            // when starting from the command line, or when playing extreme
+            // battle, 4th survivor or demo
+            if (legacy_game_start_requested() || cmdline_start_active() || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE)
                 || check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
             {
                 goto LABEL_5;
@@ -673,7 +674,7 @@ namespace openre::title
 
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
-                if (cmdline_start_active() && !cmdline_save_requested())
+                if (!legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())
                 {
                     // Command line room warp (-p / -r)
                     title_game_warp_init();

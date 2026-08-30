@@ -47,17 +47,13 @@ namespace openre::ecs
 {
     void system_boot_scene(Scene& scene)
     {
-        // With a game module active the module builds its own entities; there
-        // is no legacy game node and the legacy systems are skipped entirely.
-        if (game_module_active())
-            return;
-
-        // The hidden root already exists (Scene ctor). Add one child under the
-        // "game" sub-root that carries the LegacyGameComponent, sized to the
-        // configured window.
+        // The scene always carries a LegacyGame node. In module mode it starts
+        // disabled (the module builds its own entities and the legacy systems
+        // skip it); core.runGame() re-enables it to hand the frame back to the
+        // legacy game.
         Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
-        legacy.enabled = true;
+        legacy.enabled = !game_module_active();
         const auto windowSize = system::config::get_window_size();
         legacy.size = { (float)windowSize.width, (float)windowSize.height };
     }
@@ -91,8 +87,14 @@ namespace openre
         if (app.closing() || !app.running())
             return;
 
-        // A game module drives the frame instead of the legacy game.
-        if (game_module_active())
+        // The legacy game only drives the frame while its node is enabled; in
+        // module mode it stays disabled until core.runGame() hands over.
+        auto legacyEntity = app.scene.find<ecs::LegacyGameComponent>();
+        if (legacyEntity == ecs::NullEntity)
+            return;
+
+        const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
+        if (!legacy.enabled)
             return;
 
         // Mirror the OG loop's window-inactive sleep: the systems keep
@@ -112,24 +114,16 @@ namespace openre
             return;
         }
 
-        auto legacyEntity = app.scene.find<ecs::LegacyGameComponent>();
-        if (legacyEntity == ecs::NullEntity)
-            return;
-
-        const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
-        if (legacy.enabled)
+        // Special states (movie / reset) consume the frame, but we still
+        // tick scripts so the web inspector server keeps responding while
+        // a movie plays (otherwise HTTP requests hang until it finishes).
+        if (handle_special_states())
         {
-            // Special states (movie / reset) consume the frame, but we still
-            // tick scripts so the web inspector server keeps responding while
-            // a movie plays (otherwise HTTP requests hang until it finishes).
-            if (handle_special_states())
-            {
-                openre::script::tick();
-                return;
-            }
-
-            update_game();
+            openre::script::tick();
+            return;
         }
+
+        update_game();
 
         // Keep OG-visible timer fields updated for other hooks.
         gGameTable.timer_last = now;
@@ -1412,11 +1406,19 @@ namespace openre
 
     void RenderSystem(AppContext& app)
     {
+        // The legacy game owns the frame while its node is enabled, regardless
+        // of module state (core.runGame() enables it to hand over the frame);
+        // otherwise the scene tree (module) renders.
+        const auto legacyEntity = app.scene.find<ecs::LegacyGameComponent>();
+        const bool legacyEnabled
+            = legacyEntity != ecs::NullEntity && app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled;
+
         if (app.closing())
         {
             // Release the scene-tree renderer's GPU resources before the
-            // window/device teardown that follows in the closing pass.
-            if (game_module_active())
+            // window/device teardown that follows in the closing pass. The
+            // legacy renderer (marni) is torn down by system_window.
+            if (!legacyEnabled)
             {
                 // Destroy every TextureResource while the GPU is still alive.
                 // This also makes any later Lua __gc release a safe no-op
@@ -1430,172 +1432,159 @@ namespace openre
         if (!app.frameActive)
             return;
 
-        if (game_module_active())
+        if (legacyEnabled)
         {
-            // Scene-tree rendering: the module's entities (SpriteComponent)
-            // are drawn by the self-contained render2d renderer directly into
-            // the window. No marni, no ordering tables, no guest framebuffer.
-            std::vector<render2d::SpriteDraw> draws;
+            // Render the game into the rectangle described by the LegacyGame
+            // node: world transform position (top-left) + size (width/height
+            // in window pixels).
+            const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
+            const ecs::Mat4 world = ecs::worldMatrix(app.scene, legacyEntity);
+            const int x = (int)world.m[3][0];
+            const int y = (int)world.m[3][1];
+            const int w = (int)legacy.size.width;
+            const int h = (int)legacy.size.height;
 
-            // Painter's order follows the scene tree (pre-order DFS): a parent
-            // draws behind its children and an earlier sibling behind a later
-            // one. z remains a global priority override; equal-z entities fall
-            // back to tree order, which fixes sibling layering that the old
-            // ECS-creation-order tie-break got wrong.
-            std::unordered_map<ecs::Entity, int> treeOrder;
-            {
-                int nextOrder = 0;
-                std::function<void(ecs::Entity)> visit = [&](ecs::Entity e) {
-                    treeOrder[e] = nextOrder++;
-                    const auto* t = app.scene.tryGetComponent<ecs::TransformComponent>(e);
-                    if (t == nullptr)
-                        return;
-                    for (ecs::Entity c = t->firstChild; c != ecs::NullEntity;
-                         c = app.scene.getComponent<ecs::TransformComponent>(c).nextSibling)
-                    {
-                        visit(c);
-                    }
-                };
-                visit(app.scene.root());
-            }
-
-            app.scene.each<ecs::SpriteComponent>([&](ecs::Entity entity, ecs::SpriteComponent& sprite) {
-                const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
-                const float x = world.m[3][0];
-                const float y = world.m[3][1];
-                // Axis-aligned scale inherited from ancestor transforms (e.g. a
-                // scaled parent). Extracted from the world matrix columns.
-                const float sx
-                    = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
-                const float sy
-                    = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
-
-                // The draw size comes from the entity's UiSize component.
-                const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
-                const float sizeW = uiSize != nullptr ? uiSize->width : 0.0f;
-                const float sizeH = uiSize != nullptr ? uiSize->height : 0.0f;
-
-                TextureResource* tex = nullptr;
-                if (sprite.texture != 0)
-                {
-                    tex = ResourceManager::get().fromCookie<TextureResource>(sprite.texture);
-                    if (tex == nullptr)
-                        return; // texture released underneath us - skip
-                }
-
-                render2d::SpriteDraw d{};
-                d.textureHandle = tex ? tex->textureHandle : 0;
-                d.src = { sprite.src.x, sprite.src.y, sprite.src.width, sprite.src.height };
-                d.dst = { x, y, sizeW * sx, sizeH * sy };
-                d.flags = sprite.flags;
-                d.r = sprite.color.r;
-                d.g = sprite.color.g;
-                d.b = sprite.color.b;
-                d.a = sprite.color.a;
-                // Draw priority comes from the entity's world transform z
-                // (composed via worldMatrix); equal-z entities are ordered by
-                // their pre-order scene-tree index (computed above).
-                d.z = static_cast<int>(world.m[3][2]);
-                d.order = treeOrder[entity];
-                draws.push_back(d);
-            });
-
-            // Sprites draw back-to-front: higher z first (further back), and
-            // equal z in scene-tree (pre-order DFS) order so a parent sits
-            // behind its children and an earlier sibling behind a later one.
-            std::stable_sort(draws.begin(), draws.end(), [](const render2d::SpriteDraw& a, const render2d::SpriteDraw& b) {
-                if (a.z != b.z)
-                    return a.z > b.z;
-                return a.order < b.order;
-            });
-
-            // Video entities: letterbox the decoded frame into the entity
-            // bounds (preserving aspect ratio) and draw it like a texture.
-            app.scene.each<ecs::VideoComponent>([&](ecs::Entity entity, ecs::VideoComponent& video) {
-                if (video.status != ecs::VideoStatus::Playing || video.texture == 0)
-                    return;
-                if (video.videoWidth <= 0 || video.videoHeight <= 0)
-                    return;
-
-                const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
-                const float x = world.m[3][0];
-                const float y = world.m[3][1];
-                const float sx
-                    = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
-                const float sy
-                    = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
-
-                const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
-                const float boundsW = (uiSize != nullptr ? uiSize->width : 0.0f) * sx;
-                const float boundsH = (uiSize != nullptr ? uiSize->height : 0.0f) * sy;
-                const float vw = static_cast<float>(video.videoWidth);
-                const float vh = static_cast<float>(video.videoHeight);
-                const float scale = std::min(boundsW / vw, boundsH / vh);
-                const float dw = vw * scale;
-                const float dh = vh * scale;
-                // The sprite is centred on its transform (see render2d), so
-                // anchor the letterboxed video on the entity position.
-                render2d::SpriteDraw d{};
-                d.textureHandle = video.texture;
-                d.src = { 0, 0, 0, 0 };
-                d.dst = { x, y, dw, dh };
-                d.flags = render2d::kStretchX | render2d::kStretchY;
-                d.r = 255;
-                d.g = 255;
-                d.b = 255;
-                d.a = 255;
-                draws.push_back(d);
-            });
-
-            // Full-window fade overlay set this frame (Lua gfx.fade).
-            const auto fade = render2d::SpriteRenderer::get().takeFade();
-            if (fade.active && fade.a > 0)
-            {
-                const float w = (float)render2d::SpriteRenderer::get().screenWidth();
-                const float h = (float)render2d::SpriteRenderer::get().screenHeight();
-                render2d::SpriteDraw d{};
-                d.textureHandle = 0;
-                // Sprites are centred on their position (see render2d), so anchor
-                // the full-window fade on the screen centre.
-                d.dst = { w * 0.5f, h * 0.5f, w, h };
-                d.r = fade.r;
-                d.g = fade.g;
-                d.b = fade.b;
-                d.a = fade.a;
-                draws.push_back(d);
-            }
-
-            render2d::SpriteRenderer::get().present(draws.data(), draws.size());
-            app.frameActive = false;
-            return;
-        }
-
-        auto legacyEntity = app.scene.find<ecs::LegacyGameComponent>();
-        if (legacyEntity == ecs::NullEntity)
-            return;
-
-        const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
-        if (!legacy.enabled)
-        {
-            // Disabled game (or missing node): present black.
-            marni::g_renderer->setPresentRect(0, 0, 0, 0);
-            marni::g_renderer->flip();
+            marni::g_renderer->setPresentRect(x, y, w, h);
+            render_frame();
             marni::g_renderer->resetPresentRect();
             app.frameActive = false;
             return;
         }
 
-        // Render the game into the rectangle described by the LegacyGame node:
-        // world transform position (top-left) + size (width/height in pixels).
-        const ecs::Mat4 world = ecs::worldMatrix(app.scene, legacyEntity);
-        const int x = (int)world.m[3][0];
-        const int y = (int)world.m[3][1];
-        const int w = (int)legacy.size.width;
-        const int h = (int)legacy.size.height;
+        // Scene-tree rendering: the module's entities (SpriteComponent) are
+        // drawn by the self-contained render2d renderer directly into the
+        // window. No marni, no ordering tables, no guest framebuffer.
+        std::vector<render2d::SpriteDraw> draws;
 
-        marni::g_renderer->setPresentRect(x, y, w, h);
-        render_frame();
-        marni::g_renderer->resetPresentRect();
+        // Painter's order follows the scene tree (pre-order DFS): a parent
+        // draws behind its children and an earlier sibling behind a later
+        // one. z remains a global priority override; equal-z entities fall
+        // back to tree order, which fixes sibling layering that the old
+        // ECS-creation-order tie-break got wrong.
+        std::unordered_map<ecs::Entity, int> treeOrder;
+        {
+            int nextOrder = 0;
+            std::function<void(ecs::Entity)> visit = [&](ecs::Entity e) {
+                treeOrder[e] = nextOrder++;
+                const auto* t = app.scene.tryGetComponent<ecs::TransformComponent>(e);
+                if (t == nullptr)
+                    return;
+                for (ecs::Entity c = t->firstChild; c != ecs::NullEntity;
+                     c = app.scene.getComponent<ecs::TransformComponent>(c).nextSibling)
+                {
+                    visit(c);
+                }
+            };
+            visit(app.scene.root());
+        }
+
+        app.scene.each<ecs::SpriteComponent>([&](ecs::Entity entity, ecs::SpriteComponent& sprite) {
+            const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
+            const float x = world.m[3][0];
+            const float y = world.m[3][1];
+            // Axis-aligned scale inherited from ancestor transforms (e.g. a
+            // scaled parent). Extracted from the world matrix columns.
+            const float sx
+                = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
+            const float sy
+                = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
+
+            // The draw size comes from the entity's UiSize component.
+            const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
+            const float sizeW = uiSize != nullptr ? uiSize->width : 0.0f;
+            const float sizeH = uiSize != nullptr ? uiSize->height : 0.0f;
+
+            TextureResource* tex = nullptr;
+            if (sprite.texture != 0)
+            {
+                tex = ResourceManager::get().fromCookie<TextureResource>(sprite.texture);
+                if (tex == nullptr)
+                    return; // texture released underneath us - skip
+            }
+
+            render2d::SpriteDraw d{};
+            d.textureHandle = tex ? tex->textureHandle : 0;
+            d.src = { sprite.src.x, sprite.src.y, sprite.src.width, sprite.src.height };
+            d.dst = { x, y, sizeW * sx, sizeH * sy };
+            d.flags = sprite.flags;
+            d.r = sprite.color.r;
+            d.g = sprite.color.g;
+            d.b = sprite.color.b;
+            d.a = sprite.color.a;
+            // Draw priority comes from the entity's world transform z
+            // (composed via worldMatrix); equal-z entities are ordered by
+            // their pre-order scene-tree index (computed above).
+            d.z = static_cast<int>(world.m[3][2]);
+            d.order = treeOrder[entity];
+            draws.push_back(d);
+        });
+
+        // Sprites draw back-to-front: higher z first (further back), and
+        // equal z in scene-tree (pre-order DFS) order so a parent sits
+        // behind its children and an earlier sibling behind a later one.
+        std::stable_sort(draws.begin(), draws.end(), [](const render2d::SpriteDraw& a, const render2d::SpriteDraw& b) {
+            if (a.z != b.z)
+                return a.z > b.z;
+            return a.order < b.order;
+        });
+
+        // Video entities: letterbox the decoded frame into the entity
+        // bounds (preserving aspect ratio) and draw it like a texture.
+        app.scene.each<ecs::VideoComponent>([&](ecs::Entity entity, ecs::VideoComponent& video) {
+            if (video.status != ecs::VideoStatus::Playing || video.texture == 0)
+                return;
+            if (video.videoWidth <= 0 || video.videoHeight <= 0)
+                return;
+
+            const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
+            const float x = world.m[3][0];
+            const float y = world.m[3][1];
+            const float sx
+                = std::sqrt(world.m[0][0] * world.m[0][0] + world.m[1][0] * world.m[1][0] + world.m[2][0] * world.m[2][0]);
+            const float sy
+                = std::sqrt(world.m[0][1] * world.m[0][1] + world.m[1][1] * world.m[1][1] + world.m[2][1] * world.m[2][1]);
+
+            const auto* uiSize = app.scene.tryGetComponent<ecs::UiSizeComponent>(entity);
+            const float boundsW = (uiSize != nullptr ? uiSize->width : 0.0f) * sx;
+            const float boundsH = (uiSize != nullptr ? uiSize->height : 0.0f) * sy;
+            const float vw = static_cast<float>(video.videoWidth);
+            const float vh = static_cast<float>(video.videoHeight);
+            const float scale = std::min(boundsW / vw, boundsH / vh);
+            const float dw = vw * scale;
+            const float dh = vh * scale;
+            // The sprite is centred on its transform (see render2d), so
+            // anchor the letterboxed video on the entity position.
+            render2d::SpriteDraw d{};
+            d.textureHandle = video.texture;
+            d.src = { 0, 0, 0, 0 };
+            d.dst = { x, y, dw, dh };
+            d.flags = render2d::kStretchX | render2d::kStretchY;
+            d.r = 255;
+            d.g = 255;
+            d.b = 255;
+            d.a = 255;
+            draws.push_back(d);
+        });
+
+        // Full-window fade overlay set this frame (Lua gfx.fade).
+        const auto fade = render2d::SpriteRenderer::get().takeFade();
+        if (fade.active && fade.a > 0)
+        {
+            const float w = (float)render2d::SpriteRenderer::get().screenWidth();
+            const float h = (float)render2d::SpriteRenderer::get().screenHeight();
+            render2d::SpriteDraw d{};
+            d.textureHandle = 0;
+            // Sprites are centred on their position (see render2d), so anchor
+            // the full-window fade on the screen centre.
+            d.dst = { w * 0.5f, h * 0.5f, w, h };
+            d.r = fade.r;
+            d.g = fade.g;
+            d.b = fade.b;
+            d.a = fade.a;
+            draws.push_back(d);
+        }
+
+        render2d::SpriteRenderer::get().present(draws.data(), draws.size());
         app.frameActive = false;
     }
 }

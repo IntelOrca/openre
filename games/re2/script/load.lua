@@ -14,9 +14,12 @@
 --     count>/<room>", with the character part coloured blue for Leon / red
 --     for Claire, the shade darkening with difficulty.
 --
--- The screen is UI-only for now: accept plays a sound and cancel returns to
--- the title menu (recreated straight at Main Story / Load Game). A `mode`
--- parameter is reserved so a future save variant can reuse the component.
+-- The screen tracks selection and loads the chosen save: accept calls
+-- core.loadGame (restores the save image into the game) and blocks inside
+-- core.runGame(), which drives the legacy game until it returns to the menu.
+-- Cancel returns to the title menu (recreated straight at Main Story / Load
+-- Game). A `mode` parameter is reserved so a future save variant can reuse
+-- the component.
 
 local Scheduler = require('script/scheduler')
 
@@ -177,6 +180,8 @@ function LoadScreen:new(opts)
     instance.age = 0
     instance.closing = false
     instance.closed = false
+    instance.enteringGame = false
+    instance.fadeRemaining = 0
     instance.entries = save.list() or {}
 
     -- Cursor over the FULL list (1-based); `offset` is the first visible row.
@@ -385,6 +390,19 @@ local function beginClose(self)
         :fadeIn(FADE_FRAMES)
 end
 
+-- Starts the selected save: fade to black (driven frame-by-frame here because
+-- core.runGame below blocks the scheduler), then destroy the screen, restore
+-- the save via core.loadGame and block inside core.runGame until the game
+-- returns to the menu. When it does, recreate the title menu so the player
+-- lands back at Main Story / Load Game.
+local function startLoad(self)
+    if self.closing or self.enteringGame then
+        return
+    end
+    self.enteringGame = true
+    self.fadeRemaining = FADE_FRAMES
+end
+
 -------------------------------------------------------------------------------
 -- Tick ------------------------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -404,14 +422,39 @@ update = function(self)
         return
     end
 
+    -- Enter-the-game fade: accept was pressed, so fade to black over
+    -- FADE_FRAMES, then hand over to the legacy game. core.runGame blocks
+    -- until the game returns to the menu, so everything after it runs once
+    -- the session ends.
+    if self.enteringGame then
+        self.fadeRemaining = self.fadeRemaining - 1
+        local progress = math.max(0, math.min(1, 1 - self.fadeRemaining / FADE_FRAMES))
+        gfx.fade(0, 0, 0, math.floor(progress * 255))
+        if self.fadeRemaining > 0 then
+            return
+        end
+        self.enteringGame = false
+        local entry = self.entries[self.cursor]
+        self:destroy()
+        local ok = entry ~= nil and core.loadGame(entry.name) or false
+        if not ok then
+            print('[load] failed to load save ' .. tostring(entry and entry.name or '?'))
+        else
+            core.runGame()
+        end
+        local Title = require('script/menu')
+        Title:new({ mainStory = true })
+        return
+    end
+
     if self.nav.up then
         moveCursor(self, -1)
     elseif self.nav.down then
         moveCursor(self, 1)
     elseif self.nav.accept then
-        -- UI-only for now: selection is tracked, nothing loads yet.
         if #self.entries > 0 then
             playSfx(self, self.sfx.accept)
+            self:startLoad()
         else
             playSfx(self, self.sfx.invalid)
         end
@@ -448,6 +491,7 @@ loadMethods = {
     refresh = refresh,
     moveCursor = moveCursor,
     beginClose = beginClose,
+    startLoad = startLoad,
     destroy = destroy,
 }
 

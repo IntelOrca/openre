@@ -806,6 +806,38 @@ function core.loadMovie(path) end
 ---@return boolean|nil
 function core.playMovie(movie, captions) end
 
+--- Load a save file from the save folder before entering gameplay with
+--- `core.runGame()`. `name` is the entry name from `save.list()` (the save
+--- file's base name, without the `.BIOHAZARD2` extension).
+---
+--- The save image (the first 0x798 bytes of the 0x800-byte file) is restored
+--- into the game table exactly like a memory-card load, so the session resumes
+--- with the saved flags, inventory, position and health. Returns `true` on
+--- success; `false` (leaving the game state untouched) when no save file
+--- matches `name` or it cannot be read.
+---
+--- After a successful load, call `core.runGame()` to actually start the game.
+------@param name string a save.list() entry name
+---@return boolean
+function core.loadGame(name) end
+
+--- Hand the frame to the legacy game and block until it returns to the menu.
+---
+--- The first call boots the legacy game (fonts, audio, room tables) and
+--- chains straight into gameplay, skipping the native title screen and
+--- prologue. When a save was loaded with `core.loadGame`, the session resumes
+--- from it; otherwise the game starts as the current player/scenario settings
+--- dictate. On return the legacy game has signalled "return to menu" (or the
+--- app is closing), the LegacyGame node is disabled again and the module
+--- scene renders once more - the caller usually recreates the menu.
+---
+--- Like `core.playMovie`, this runs inside a Lua tick hook and suspends the
+--- rest of the frame pipeline until it returns; the module's own script tick
+--- still runs from the legacy update (nested) so the web inspector and other
+--- Lua-owned systems keep responding.
+---@return boolean
+function core.runGame() end
+
 --- Pin a font handle onto one of the standard UI font roles and return nothing.
 ---
 --- The native text system addresses logical fonts by **role** (`'big'` /
