@@ -803,6 +803,14 @@ function core.loadMovie(path) end
 --- an overlay centred near the bottom of the window; entries are evaluated in
 --- order and the first match wins. Captions need a loadable font resource to
 --- be visible; without one they are silently skipped (never a crash).
+---
+--- `core.playMovie` drives playback itself, so it runs inside a tick hook and
+--- suspends the frame pipeline until it returns. For async playback from a
+--- registered ECS system, instead give an entity a `core.Video` component
+--- (set `movie` then `status` = 1 / Playing) and let the native VideoSystem
+--- auto-start the decoder on the next pass. Destroying that entity is the
+--- whole teardown: the decoder and dynamic texture are released by the
+--- system's mark-and-sweep. Keep the Movie handle referenced while playing.
 ---@param movie Movie a movie from core.loadMovie
 ---@param captions? { from: number, to: number, text: string }[]
 ---@return boolean|nil

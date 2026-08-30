@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace openre
@@ -113,49 +114,38 @@ namespace openre
         return cookie;
     }
 
-    ecs::Entity video_play(AppContext& app, ResourceCookie movie)
+    // Bootstraps playback state onto `entity`, which already carries a
+    // VideoComponent with a movie cookie set. Opens the decoder, creates the
+    // dynamic texture (pre-filled black) and inserts an s_videoStates row so
+    // VideoSystem drives it. Returns false (leaving the component Stopped)
+    // when the movie cannot play; no entity is destroyed here.
+    static bool video_begin_playback(AppContext& app, ecs::Entity entity, ecs::VideoComponent& video)
     {
-        if (!game_module_active())
-            return ecs::NullEntity;
-
-        auto* resource = ResourceManager::get().fromCookie<MovieResource>(movie);
+        auto* resource = ResourceManager::get().fromCookie<MovieResource>(video.movie);
         if (resource == nullptr || resource->path.empty())
         {
-            logging::logWarning("[video] video_play: cookie {} is not a loaded movie", movie);
-            return ecs::NullEntity;
+            logging::logWarning("[video] auto-start: cookie {} is not a loaded movie", video.movie);
+            video.status = ecs::VideoStatus::Stopped;
+            return false;
         }
 
         const std::string& resolved = resource->path;
         auto& scene = app.scene;
-        ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
-        const auto ws = system::config::get_screen_resolution();
-        auto& videoTransform = scene.getComponent<ecs::TransformComponent>(entity);
-        videoTransform.name = "movie";
-        // Sprites (and thus the video) are centred on their transform (see
-        // render2d), so anchor the full-window movie on the screen centre.
-        videoTransform.position.x = ws.width * 0.5f;
-        videoTransform.position.y = ws.height * 0.5f;
-        auto& video = scene.addComponent<ecs::VideoComponent>(entity);
-        video.movie = movie;
-        video.status = ecs::VideoStatus::Playing;
-
-        auto& videoSize = scene.addComponent<ecs::UiSizeComponent>(entity);
-        videoSize.width = static_cast<float>(ws.width);
-        videoSize.height = static_cast<float>(ws.height);
 
         // The movie is interruptible through the input middleware: carry an
         // InputHandler so scripts and the web plugin can inspect/replace the
-        // frame while the movie plays (the blocking movie loop in apiPlayMovie
-        // polls input via movie_input_poll and runs this walk).
-        scene.addComponent<ecs::InputHandlerComponent>(entity);
+        // frame while it plays. The blocking movie loop polls input via
+        // movie_input_poll and runs this walk over the scene.
+        if (!scene.hasComponent<ecs::InputHandlerComponent>(entity))
+            scene.addComponent<ecs::InputHandlerComponent>(entity);
 
         auto* decoder = new VideoDecoder();
         if (!decoder->open(resolved))
         {
             logging::logWarning("[video] failed to open movie: {}", resolved.c_str());
             delete decoder;
-            scene.destroyEntity(entity);
-            return ecs::NullEntity;
+            video.status = ecs::VideoStatus::Stopped;
+            return false;
         }
 
         video.videoWidth = decoder->videoWidth();
@@ -177,6 +167,43 @@ namespace openre
         state.label = resolved;
         s_videoStates[entity] = std::move(state);
         video.texture = tex;
+        return true;
+    }
+
+    ecs::Entity video_play(AppContext& app, ResourceCookie movie)
+    {
+        if (!game_module_active())
+            return ecs::NullEntity;
+
+        auto* resource = ResourceManager::get().fromCookie<MovieResource>(movie);
+        if (resource == nullptr || resource->path.empty())
+        {
+            logging::logWarning("[video] video_play: cookie {} is not a loaded movie", movie);
+            return ecs::NullEntity;
+        }
+
+        const auto ws = system::config::get_screen_resolution();
+        auto& scene = app.scene;
+        ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
+        auto& videoTransform = scene.getComponent<ecs::TransformComponent>(entity);
+        videoTransform.name = "movie";
+        // Sprites (and thus the video) are centred on their transform (see
+        // render2d), so anchor the full-window movie on the screen centre.
+        videoTransform.position.x = ws.width * 0.5f;
+        videoTransform.position.y = ws.height * 0.5f;
+        auto& video = scene.addComponent<ecs::VideoComponent>(entity);
+        video.movie = movie;
+        video.status = ecs::VideoStatus::Playing;
+
+        auto& videoSize = scene.addComponent<ecs::UiSizeComponent>(entity);
+        videoSize.width = static_cast<float>(ws.width);
+        videoSize.height = static_cast<float>(ws.height);
+
+        if (!video_begin_playback(app, entity, video))
+        {
+            scene.destroyEntity(entity);
+            return ecs::NullEntity;
+        }
         return entity;
     }
 
@@ -218,10 +245,28 @@ namespace openre
         if (scene == nullptr)
             return;
 
+        // Entities carrying a VideoComponent this pass. Any s_videoStates row
+        // whose entity is NOT in this set is orphaned (its entity was
+        // destroyed or lost the component), so its decoder and texture are
+        // released below. This makes entity destruction the entire teardown
+        // for async movies: a script that simply destroys a movie entity gets
+        // the decode thread and texture cleaned up on the next pass.
+        std::vector<ecs::Entity> alive;
+
         scene->each<ecs::VideoComponent>([&](ecs::Entity entity, ecs::VideoComponent& video) {
+            alive.push_back(entity);
+
             auto it = s_videoStates.find(entity);
             if (it == s_videoStates.end())
+            {
+                // Auto-start: an entity gained a movie cookie with no playback
+                // state yet (async movie created from Lua). Bootstrap the
+                // decoder on the spot so enumerating it on the next pass
+                // progresses playback.
+                if (video.movie != 0 && video.status == ecs::VideoStatus::Playing)
+                    video_begin_playback(app, entity, video);
                 return;
+            }
             VideoState& st = it->second;
 
             // Stopped (finished or skipped): release everything.
@@ -263,5 +308,41 @@ namespace openre
             if (st.decoder->finished())
                 st.stop = true; // released on the next VideoSystem pass
         });
+
+        // Mark-and-sweep: dispose every playback row whose entity was not
+        // enumerated above (destroyed or component removed). The text update
+        // mirrors the release path above; the component may already be gone,
+        // so guard with isValid + hasComponent.
+        if (!alive.empty() || !s_videoStates.empty())
+        {
+            std::unordered_set<ecs::Entity> aliveSet(alive.begin(), alive.end());
+            for (auto it = s_videoStates.begin(); it != s_videoStates.end();)
+            {
+                if (aliveSet.count(it->first) != 0)
+                {
+                    ++it;
+                    continue;
+                }
+                VideoState& st = it->second;
+                if (st.decoder != nullptr)
+                {
+                    st.decoder->close();
+                    delete st.decoder;
+                    st.decoder = nullptr;
+                }
+                if (st.texture != 0)
+                {
+                    render2d::SpriteRenderer::get().unloadTexture(st.texture);
+                    st.texture = 0;
+                }
+                if (scene->isValid(it->first) && scene->hasComponent<ecs::VideoComponent>(it->first))
+                {
+                    auto& video = scene->getComponent<ecs::VideoComponent>(it->first);
+                    video.texture = 0;
+                    video.status = ecs::VideoStatus::Stopped;
+                }
+                s_videoStates.erase(it);
+            }
+        }
     }
 }
