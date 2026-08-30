@@ -3220,10 +3220,44 @@ namespace openre::script
             // init_global() wipe, so the restored stage/room/position survive.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             gGameTable.dword_99CF6C = 1;
-            // Clear a stale demo/new-game latch so a previous module session
-            // cannot hijack this resume.
+            // Clear a stale demo/new-game/warp latch so a previous module
+            // session cannot hijack this resume.
             openre::legacy_clear_demo_requested();
             openre::legacy_clear_new_game_requested();
+            openre::legacy_clear_warp_requested();
+            openre::legacy_request_game_start();
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.loadSave(path) - loads a save file by explicit path before
+        // entering gameplay with core.runGame(). The path form of core.loadGame
+        // (which matches save.list() entry names): the command-line save
+        // argument is a full path that may live anywhere. Returns true on
+        // success; false when the file cannot be read. The save image is read
+        // into the card buffer and re-applied by title_game_init after the
+        // boot wipe, exactly like core.loadGame.
+        int coreLoadSave(lua_State* L)
+        {
+            auto* path = luaL_checkstring(L, 1);
+
+            if (!openre::save::cmdline_read_save(path))
+            {
+                logging::logWarning("[core] loadSave: failed to load save file '{}'", path);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            // Same latch recipe as core.loadGame: clear the "continue" flag so
+            // title_game_init restores the saved position, clear stale
+            // demo/new-game/warp latches, and latch the boot chain to skip the
+            // native title/prologue.
+            gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
+            gGameTable.dword_99CF6C = 1;
+            openre::legacy_clear_demo_requested();
+            openre::legacy_clear_new_game_requested();
+            openre::legacy_clear_warp_requested();
             openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
@@ -3262,8 +3296,9 @@ namespace openre::script
             // Clear the "continue" latch so title_game_init does not treat
             // the session as a save restore, then latch the demo start.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
-            openre::legacy_request_demo();
             openre::legacy_clear_new_game_requested();
+            openre::legacy_clear_warp_requested();
+            openre::legacy_request_demo();
             openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
@@ -3317,9 +3352,10 @@ namespace openre::script
                 return 1;
             }
 
-            // Clear a stale demo latch so a previous idle-triggered demo
-            // cannot hijack this fresh start.
+            // Clear a stale demo/warp latch so a previous idle-triggered demo
+            // or warp cannot hijack this fresh start.
             openre::legacy_clear_demo_requested();
+            openre::legacy_clear_warp_requested();
             openre::legacy_request_new_game(p, s, d);
             openre::legacy_request_game_start();
 
@@ -3407,6 +3443,62 @@ namespace openre::script
             app->frameActive = false;
 
             lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.startRoomWarp(player, stage, room) - the command-line -p/-r room
+        // warp translated onto the module boot path: places the player at the
+        // room's spawn point with a fresh new-game inventory before entering
+        // gameplay with core.runGame(). `player` is a PLD_* id (0 = Leon,
+        // 1 = Claire, ...), `stage` a 0-based stage and `room` a room map
+        // number (e.g. 0 for room 1000, 0xC for room 10C0). The placement is
+        // latched and re-applied by title_game_init after the boot wipe (same
+        // recipe as the native -r warp). Returns true on success.
+        int coreStartRoomWarp(lua_State* L)
+        {
+            const auto player = static_cast<int32_t>(luaL_checkinteger(L, 1));
+            const auto stage = static_cast<int32_t>(luaL_checkinteger(L, 2));
+            const auto room = static_cast<int32_t>(luaL_checkinteger(L, 3));
+
+            // Clear stale demo/new-game latches so a previous module session
+            // cannot hijack this warp, then latch the warp + game start.
+            openre::legacy_clear_demo_requested();
+            openre::legacy_clear_new_game_requested();
+            openre::legacy_request_warp(player, stage, room);
+            openre::legacy_request_game_start();
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.cmdline() - exposes the parsed command-line options
+        // (openre.exe <savefile> -p <player> -r <roomcode> -s <scenario>) to
+        // scripts so the module can translate a command-line start into the
+        // module-driven setup APIs + core.runGame (replacing the native
+        // title() divert). Returns a table:
+        //   { startRequested, saveRequested, savePath, player, stage, room,
+        //     scenario }
+        // startRequested is true when the command line asked to start a game
+        // (a save file, -p and/or -r). player/stage/room/scenario are -1 when
+        // not given.
+        int coreCmdline(lua_State* L)
+        {
+            const auto& opts = openre::cmdline_options();
+            lua_createtable(L, 0, 7);
+            lua_pushboolean(L, opts.startRequested() ? 1 : 0);
+            lua_setfield(L, -2, "startRequested");
+            lua_pushboolean(L, opts.saveRequested ? 1 : 0);
+            lua_setfield(L, -2, "saveRequested");
+            lua_pushstring(L, opts.savePath.c_str());
+            lua_setfield(L, -2, "savePath");
+            lua_pushinteger(L, opts.player);
+            lua_setfield(L, -2, "player");
+            lua_pushinteger(L, opts.stage);
+            lua_setfield(L, -2, "stage");
+            lua_pushinteger(L, opts.room);
+            lua_setfield(L, -2, "room");
+            lua_pushinteger(L, opts.scenario);
+            lua_setfield(L, -2, "scenario");
             return 1;
         }
 
@@ -3591,9 +3683,12 @@ namespace openre::script
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
         setGlobal(L, "core.setRoleFont", coreSetRoleFont);
         setGlobal(L, "core.loadGame", coreLoadGame);
+        setGlobal(L, "core.loadSave", coreLoadSave);
         setGlobal(L, "core.loadDemo", coreLoadDemo);
+        setGlobal(L, "core.startRoomWarp", coreStartRoomWarp);
         setGlobal(L, "core.startNewGame", coreStartNewGame);
         setGlobal(L, "core.runGame", coreRunGame);
+        setGlobal(L, "core.cmdline", coreCmdline);
 
         // options.* - engine-wide settings registry (menu screens).
         setGlobal(L, "options.list", optionsList);

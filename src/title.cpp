@@ -584,15 +584,18 @@ namespace openre::title
         interop::call(0x004EA320);
     }
 
-    // Sets up a room warp requested from the command line (-p/-r). Mirrors the
-    // demo branch of title_game_init but sources the values from the command
-    // line instead of the demo file. FG_SYSTEM_DEMO is deliberately NOT set so
-    // input playback, demo timeout and BGM suppression stay inactive.
-    static void title_game_warp_init()
+    // Room-warp placement: puts the player at a room's spawn point with the
+    // same fresh inventory as a new game. Mirrors the demo branch of
+    // title_game_init but sources the values from the arguments instead of
+    // the demo file; FG_SYSTEM_DEMO is deliberately NOT set so input
+    // playback, demo timeout and BGM suppression stay inactive. Shared by
+    // the native command-line warp (title_game_warp_init) and the
+    // module-driven warp latch (core.startRoomWarp ->
+    // legacy_request_warp), re-applied in title_game_init LABEL_5 after
+    // the boot wipe.
+    // 0x00506750 (part of title_game_init)
+    static void title_game_setup_warp(int32_t stage, int32_t room, int32_t player)
     {
-        const auto stage = cmdline_stage() >= 0 ? cmdline_stage() : 0;
-        const auto room = cmdline_room() >= 0 ? cmdline_room() : 0;
-        const auto player = cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0;
         logging::logDebug("[cmdline] warp init stage={} room={} player={}", stage, room, player);
 
         gGameTable.current_stage = stage;
@@ -645,8 +648,127 @@ namespace openre::title
         gGameTable.dword_99CF6C = 0;
     }
 
+    // Command-line room warp (-p / -r): native entry that sources the
+    // placement from the parsed command-line options.
+    static void title_game_warp_init()
+    {
+        title_game_setup_warp(
+            cmdline_stage() >= 0 ? cmdline_stage() : 0,
+            cmdline_room() >= 0 ? cmdline_room() : 0,
+            cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0);
+    }
+
+    // Demo session setup: position/inventory come from the demo header in
+    // gGameTable.pdemo (read by core.loadDemo; outside the boot wipe range).
+    // Re-applied in title_game_init LABEL_5 when FG_SYSTEM_DEMO is latched.
+    // 0x00506750 (part of title_game_init)
+    static void title_game_setup_demo()
+    {
+        auto& pdemo = gGameTable.pdemo;
+
+        gGameTable.current_stage = pdemo.stage_no;
+        set_flag(FlagGroup::System, FG_SYSTEM_EASY, false);
+        gGameTable.word_989EB4 = pdemo.equip_id;
+        gGameTable.byte_691F6A = pdemo.equip_id;
+        gGameTable.current_room = pdemo.room_no;
+        gGameTable.byte_691F68 = pdemo.equip_no;
+        gGameTable.current_cut = pdemo.cut_no;
+        gGameTable.pl.id = pdemo.id;
+        gGameTable.pl.m.pos.x = pdemo.pos.x;
+        gGameTable.pl.cdir.y = pdemo.pos.y;
+        gGameTable.pl.m.pos.z = pdemo.pos.z;
+        gGameTable.pl.m.pos.y = pdemo.pos.y;
+        gGameTable.pl.cdir.y = static_cast<int16_t>(pdemo.cdir_y);
+        auto mul = static_cast<int64_t>(0x6E5D4C3B) * pdemo.pos.y;
+        auto hi32 = static_cast<int32_t>(mul >> 32);
+        auto diff = hi32 - pdemo.pos.y;
+        auto floorDiv = diff >> 10;
+        auto correction = (diff >> 31) & 1;
+        gGameTable.pl.nFloor = floorDiv + correction;
+        set_flag(FlagGroup::Status, FG_STATUS_EASY, false);
+        gGameTable.inventory_size = 8;
+        std::memcpy(gGameTable.inventory, &pdemo.inventory, 44);
+        gGameTable.byte_99270E = gGameTable.input_mapping_idx;
+        gGameTable.input_mapping_idx = pdemo.key_idx;
+        gGameTable.word_98E9B6 = 200;
+        gGameTable.pl.life = 200;
+        gGameTable.demo_ended = 0;
+        gGameTable.dword_99CF6C = 0;
+    }
+
+    // Save restore / scenario-B new game: position, inventory and flags come
+    // from the save image in the card buffer (apply_saved_image restores the
+    // table after the boot wipe for a module load-game; a native title-screen
+    // load applied it earlier and skips the copy).
+    // 0x00506750 (part of title_game_init)
+    static void title_game_setup_load()
+    {
+        // Module load game: the save image was read into the card buffer by
+        // core.loadGame, but the boot chain's init_global() wiped the table
+        // afterwards. Re-apply it here so the restored stage/room/position
+        // from the file survive (mirrors the ordering of a title-screen load).
+        if (legacy_game_start_requested())
+            apply_saved_image();
+        gGameTable.pl.m.pos.x = gGameTable.word_98E9BE;
+        gGameTable.pl.id = gGameTable.byte_98E9A6;
+        gGameTable.pl.m.pos.y = gGameTable.word_98E9C0;
+        gGameTable.pl.m.pos.z = gGameTable.word_98E9C2;
+        gGameTable.pl.cdir.y = gGameTable.word_98EE78;
+        gGameTable.pl.nFloor = ((int)(((uint64_t)(0x6E5D4C3B * gGameTable.word_98E9C0) >> 32) - gGameTable.word_98E9C0) < 0)
+            + +((int)(((uint64_t)(0x6E5D4C3B * gGameTable.word_98E9C0) >> 32) - gGameTable.word_98E9C0) >> 10);
+        gGameTable.pl.life = gGameTable.word_98E9B6;
+        if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
+        {
+            gGameTable.byte_98E798 = 9;
+        }
+        gGameTable.hard_mode = gGameTable.byte_98EF2C;
+        gGameTable.censorship_off = gGameTable.byte_98EF2D;
+        if (gGameTable.byte_98EF2D)
+        {
+            set_flag(FlagGroup::System, FG_SYSTEM_ARRANGE, true);
+        }
+        else
+        {
+            // TODO: Use check_flag
+            gGameTable.fg_system &= 0xFFFFFFBF;
+        }
+    }
+
+    // Fresh-game placement for the FG_SYSTEM_14 new-game branch: stage 0, the
+    // scenario A/B start room and the character's starting position.
+    // 0x00506750 (part of title_game_init)
+    static void title_game_setup_new_game()
+    {
+        gGameTable.pl.nFloor = 0;
+        gGameTable.pl.m.pos.y = 0;
+        gGameTable.current_cut = 0;
+        gGameTable.current_stage = 0;
+
+        if (check_flag(FlagGroup::Status, FG_STATUS_SCENARIO))
+        {
+            gGameTable.current_room = 4;
+            gGameTable.pl.m.pos.x = -17920;
+            gGameTable.pl.m.pos.z = -21722;
+            gGameTable.pl.cdir.y = 400;
+        }
+        // Scenario A
+        else
+        {
+            gGameTable.current_room = 0;
+            gGameTable.pl.m.pos.x = 18802;
+            gGameTable.pl.m.pos.z = -3164;
+            gGameTable.pl.cdir.y = 2048;
+        }
+
+        gGameTable.byte_98EE7B = 0;
+        gGameTable.saved_splayer_health = 200;
+        gGameTable.pl.id = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
+        gGameTable.word_98E9B6 = 200;
+        gGameTable.pl.life = 200;
+    }
+
     // 0x00506750
-    void title_game_init()
+    void title_game_init(bool moduleOnly)
     {
         auto& ctcb = *gGameTable.ctcb;
         switch (ctcb.var_09)
@@ -654,11 +776,13 @@ namespace openre::title
         case 1: goto LABEL_53;
         case 2:
         {
-            // Skip prologue when the module set up the game (core.runGame),
-            // when starting from the command line, or when playing extreme
+            // Skip prologue when the module set up the game (core.runGame /
+            // command-line start translated into the module APIs), when
+            // starting from the native command line, or when playing extreme
             // battle, 4th survivor or demo
-            if (legacy_game_start_requested() || cmdline_start_active() || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE)
-                || check_flag(FlagGroup::System, FG_SYSTEM_DEMO) || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
+            if (moduleOnly || legacy_game_start_requested() || cmdline_start_active()
+                || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) || check_flag(FlagGroup::System, FG_SYSTEM_DEMO)
+                || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
             {
                 goto LABEL_5;
             }
@@ -699,45 +823,28 @@ namespace openre::title
 
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
-                if (!legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())
+                // Module room warp (core.startRoomWarp): the command-line
+                // -p/-r warp translated onto the module boot path. The
+                // player/scenario flags the native title() divert used to set
+                // before game_loop are re-applied here after the boot wipe.
+                if (legacy_warp_requested())
                 {
-                    // Command line room warp (-p / -r)
+                    const auto player = legacy_warp_player();
+                    set_flag(FlagGroup::Status, FG_STATUS_PLAYER, (player & 1) != 0);
+                    set_flag(FlagGroup::Status, FG_STATUS_SCENARIO, player == PLD_LEON_1 || player == PLD_CLAIRE_1);
+                    title_game_setup_warp(legacy_warp_stage(), legacy_warp_room(), player);
+                    legacy_clear_warp_requested();
+                }
+                else if (!moduleOnly && !legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())
+                {
+                    // Native command line room warp (-p / -r)
                     title_game_warp_init();
                 }
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
                 {
-                    auto& pdemo = gGameTable.pdemo;
-
-                    gGameTable.current_stage = pdemo.stage_no;
-                    set_flag(FlagGroup::System, FG_SYSTEM_EASY, false);
-                    gGameTable.word_989EB4 = pdemo.equip_id;
-                    gGameTable.byte_691F6A = pdemo.equip_id;
-                    gGameTable.current_room = pdemo.room_no;
-                    gGameTable.byte_691F68 = pdemo.equip_no;
-                    gGameTable.current_cut = pdemo.cut_no;
-                    gGameTable.pl.id = pdemo.id;
-                    gGameTable.pl.m.pos.x = pdemo.pos.x;
-                    gGameTable.pl.cdir.y = pdemo.pos.y;
-                    gGameTable.pl.m.pos.z = pdemo.pos.z;
-                    gGameTable.pl.m.pos.y = pdemo.pos.y;
-                    gGameTable.pl.cdir.y = static_cast<int16_t>(pdemo.cdir_y);
-                    auto mul = static_cast<int64_t>(0x6E5D4C3B) * pdemo.pos.y;
-                    auto hi32 = static_cast<int32_t>(mul >> 32);
-                    auto diff = hi32 - pdemo.pos.y;
-                    auto floorDiv = diff >> 10;
-                    auto correction = (diff >> 31) & 1;
-                    gGameTable.pl.nFloor = floorDiv + correction;
-                    set_flag(FlagGroup::Status, FG_STATUS_EASY, false);
-                    gGameTable.inventory_size = 8;
-                    std::memcpy(gGameTable.inventory, &pdemo.inventory, 44);
-                    gGameTable.byte_99270E = gGameTable.input_mapping_idx;
-                    gGameTable.input_mapping_idx = pdemo.key_idx;
-                    gGameTable.word_98E9B6 = 200;
-                    gGameTable.pl.life = 200;
-                    gGameTable.demo_ended = 0;
-                    gGameTable.dword_99CF6C = 0;
+                    title_game_setup_demo();
                 }
-                else if (check_flag(FlagGroup::System, FG_SYSTEM_4))
+                else if (!moduleOnly && check_flag(FlagGroup::System, FG_SYSTEM_4))
                 {
                     gGameTable.pl.sca_old_x = 18802;
                     gGameTable.pl.old_pos.x = 18802;
@@ -767,38 +874,7 @@ namespace openre::title
                 }
                 else
                 {
-                    // New game Scenario B or Load Game
-                    // Module load game: the save image was read into the card
-                    // buffer by core.loadGame, but the boot chain's
-                    // init_global() wiped the table afterwards. Re-apply it here
-                    // so the restored stage/room/position from the file survive
-                    // (mirrors the ordering of a title-screen memcard load).
-                    if (legacy_game_start_requested())
-                        apply_saved_image();
-                    gGameTable.pl.m.pos.x = gGameTable.word_98E9BE;
-                    gGameTable.pl.id = gGameTable.byte_98E9A6;
-                    gGameTable.pl.m.pos.y = gGameTable.word_98E9C0;
-                    gGameTable.pl.m.pos.z = gGameTable.word_98E9C2;
-                    gGameTable.pl.cdir.y = gGameTable.word_98EE78;
-                    gGameTable.pl.nFloor
-                        = ((int)(((uint64_t)(0x6E5D4C3B * gGameTable.word_98E9C0) >> 32) - gGameTable.word_98E9C0) < 0)
-                        + +((int)(((uint64_t)(0x6E5D4C3B * gGameTable.word_98E9C0) >> 32) - gGameTable.word_98E9C0) >> 10);
-                    gGameTable.pl.life = gGameTable.word_98E9B6;
-                    if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
-                    {
-                        gGameTable.byte_98E798 = 9;
-                    }
-                    gGameTable.hard_mode = gGameTable.byte_98EF2C;
-                    gGameTable.censorship_off = gGameTable.byte_98EF2D;
-                    if (gGameTable.byte_98EF2D)
-                    {
-                        set_flag(FlagGroup::System, FG_SYSTEM_ARRANGE, true);
-                    }
-                    else
-                    {
-                        // TODO: Use check_flag
-                        gGameTable.fg_system &= 0xFFFFFFBF;
-                    }
+                    title_game_setup_load();
                 }
 
                 gGameTable.last_cut = 255;
@@ -864,32 +940,7 @@ namespace openre::title
                 // New game
                 else
                 {
-                    gGameTable.pl.nFloor = 0;
-                    gGameTable.pl.m.pos.y = 0;
-                    gGameTable.current_cut = 0;
-                    gGameTable.current_stage = 0;
-
-                    if (check_flag(FlagGroup::Status, FG_STATUS_SCENARIO))
-                    {
-                        gGameTable.current_room = 4;
-                        gGameTable.pl.m.pos.x = -17920;
-                        gGameTable.pl.m.pos.z = -21722;
-                        gGameTable.pl.cdir.y = 400;
-                    }
-                    // Scenario A
-                    else
-                    {
-                        gGameTable.current_room = 0;
-                        gGameTable.pl.m.pos.x = 18802;
-                        gGameTable.pl.m.pos.z = -3164;
-                        gGameTable.pl.cdir.y = 2048;
-                    }
-
-                    gGameTable.byte_98EE7B = 0;
-                    gGameTable.saved_splayer_health = 200;
-                    gGameTable.pl.id = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
-                    gGameTable.word_98E9B6 = 200;
-                    gGameTable.pl.life = 200;
+                    title_game_setup_new_game();
                 }
 
                 gGameTable.pl.old_pos.x = gGameTable.pl.m.pos.x;

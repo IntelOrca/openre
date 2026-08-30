@@ -1765,6 +1765,52 @@ namespace openre
         return 0;
     }
 
+    void legacy_request_warp(int player, int stage, int room)
+    {
+        if (auto* app = current_app())
+        {
+            app->legacyWarpRequested = true;
+            app->warpPlayer = player;
+            app->warpStage = stage;
+            app->warpRoom = room;
+        }
+    }
+
+    bool legacy_warp_requested()
+    {
+        auto* app = current_app();
+        return app != nullptr && app->legacyWarpRequested;
+    }
+
+    // Consumes the warp latch so a later non-warp start after this module
+    // session is not hijacked by the warp placement branch.
+    void legacy_clear_warp_requested()
+    {
+        if (auto* app = current_app())
+            app->legacyWarpRequested = false;
+    }
+
+    int legacy_warp_player()
+    {
+        if (auto* app = current_app())
+            return app->warpPlayer;
+        return 0;
+    }
+
+    int legacy_warp_stage()
+    {
+        if (auto* app = current_app())
+            return app->warpStage;
+        return 0;
+    }
+
+    int legacy_warp_room()
+    {
+        if (auto* app = current_app())
+            return app->warpRoom;
+        return 0;
+    }
+
     // 0x004BF810
     void game_loop()
     {
@@ -1828,7 +1874,11 @@ namespace openre
         switch (ctcb.var_08)
         {
         case 0:
-            title_game_init();
+            // A module start (core.runGame) drives the setup via its own
+            // APIs, so only take the module branches of the init state
+            // machine (skip the native prologue, command-line warp and other
+            // legacy setup paths).
+            title_game_init(legacy_game_start_requested());
             if (!ctcb.var_13)
             {
                 ctcb.var_08 = 1;

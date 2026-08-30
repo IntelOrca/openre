@@ -153,11 +153,13 @@ class Game:
 
 
 def launch(exe=None, port=None, data_dir=None, skip_intro=True,
-           web_input=True, wait=True, timeout=60):
+           web_input=True, wait=True, timeout=60, extra_args=None):
     """Launch the engine detached with the web plugin enabled.
 
     Inherits the calling environment (so OPENRE_RE2_DATA etc. either pass
-    through or can be overridden via data_dir). Returns a Game handle.
+    through or can be overridden via data_dir). `extra_args` are appended to
+    the engine command line (e.g. a command-line start:
+    extra_args=["-r", "100"]). Returns a Game handle.
     """
     if port is None:
         port = find_free_port()
@@ -177,6 +179,8 @@ def launch(exe=None, port=None, data_dir=None, skip_intro=True,
     env.setdefault("OPENRE_SCRIPTS", DEFAULT_SCRIPT_DIR)
 
     cmd = [exe or DEFAULT_EXE]
+    if extra_args:
+        cmd += list(extra_args)
     # The engine resolves the game module (games/<game>/main.lua) from the
     # process cwd or the exe's base directory (src/app.cpp), so the child must
     # run from the repo root — mirroring run.bat — or only an empty scene

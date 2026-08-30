@@ -257,6 +257,16 @@ namespace openre
     int legacy_new_game_player();
     int legacy_new_game_scenario();
     int legacy_new_game_difficulty();
+    //   - legacy_request_warp() is set by core.startRoomWarp (the command-line
+    //     -p/-r warp translated onto the module boot path); title_game_init
+    //     re-applies the player/scenario flags and places the player at the
+    //     room's spawn point (warp placement survives the boot wipe).
+    void legacy_request_warp(int player, int stage, int room);
+    bool legacy_warp_requested();
+    void legacy_clear_warp_requested();
+    int legacy_warp_player();
+    int legacy_warp_stage();
+    int legacy_warp_room();
 
     // ── App shell / ECS bridge ────────────────────────────────────────────
 

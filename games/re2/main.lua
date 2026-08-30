@@ -66,6 +66,37 @@ local function showTitle()
         :fadeIn(60)
 end
 
+-- Command-line start (openre.exe <savefile> -p <player> -r <roomcode>
+-- -s <scenario>): reach gameplay through the module-driven setup APIs +
+-- core.runGame, replacing the native title() divert this flow translates.
+-- Runs while the scheduler owns the frame so the blocking runGame can hand
+-- control back to the menu (showTitle) when the game returns.
+-- Returns true when a start was kicked off, false to keep the normal boot.
+local function cmdlineBootStart()
+    local cmd = core.cmdline()
+    if not cmd or not cmd.startRequested then
+        return false
+    end
+
+    if cmd.saveRequested then
+        if core.loadSave(cmd.savePath) then
+            core.runGame()
+            showTitle()
+            return true
+        end
+        print('[main] cmdline save "' .. cmd.savePath .. '" could not be loaded; entering menu')
+    elseif cmd.stage and cmd.stage >= 0 then
+        local player = cmd.player >= 0 and cmd.player or 0
+        local room = cmd.room >= 0 and cmd.room or 0
+        if core.startRoomWarp(player, cmd.stage, room) then
+            core.runGame()
+            showTitle()
+            return true
+        end
+    end
+    return false
+end
+
 -- Hot reload (OPENRE_FAST_RELOAD, set by the engine when the game module is
 -- reloaded at runtime): skip the splash and title movie entirely and drop
 -- straight back on the title menu. menu.lua then reopens the options overlay
@@ -81,7 +112,9 @@ if fastReload or skipIntro then
     print('[main] skipping splash/intro movie' ..
         (skipIntro and ' (boot override)' or ' (fast reload)'))
     scheduler:exec(function()
-        Title:new()
+        if not cmdlineBootStart() then
+            Title:new()
+        end
     end)
 else
     scheduler
@@ -94,6 +127,9 @@ else
         :exec(hideSplash)
         :holdBlack(60)
         :exec(function()
+            if cmdlineBootStart() then
+                return
+            end
             if bootPrologue then
                 local ch, sc = bootPrologue:match('(%w+),(%w+)')
                 if ch and sc then

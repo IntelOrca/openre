@@ -57,6 +57,14 @@ namespace openre
         int newGamePlayer = 0;     // 0 = leon, 1 = claire
         int newGameScenario = 0;   // 0 = scenario A, 1 = scenario B
         int newGameDifficulty = 0; // 0 = standard, 1 = casual, 2 = hardcore
+        //   legacyWarpRequested + options: set by core.startRoomWarp (the
+        //     command-line -p/-r warp translated onto the module boot path);
+        //     title_game_init re-applies the player/scenario flags and places
+        //     the player at the room's spawn with a fresh new-game inventory.
+        bool legacyWarpRequested = false;
+        int warpPlayer = 0; // PLD_* id
+        int warpStage = 0;  // 0-based stage
+        int warpRoom = 0;   // room number
 
     private:
         bool m_running = true;

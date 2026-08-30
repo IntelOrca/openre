@@ -15,8 +15,12 @@ namespace openre::title
     void title();
 
     /// Initialises a new game or loads a save before entering game_loop (0x00506750)
+    /// When `moduleOnly` is set the state machine only takes the module-driven
+    /// branches (demo / save restore / new game / room warp); the native
+    /// prologue and the legacy branches (command-line warp, FG_SYSTEM_4) are
+    /// skipped. game_loop passes legacy_game_start_requested().
     // 0x00506750
-    void title_game_init();
+    void title_game_init(bool moduleOnly);
 
     void title_init_hooks();
 }

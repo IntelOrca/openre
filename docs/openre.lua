@@ -821,6 +821,19 @@ function core.playMovie(movie, captions) end
 ---@return boolean
 function core.loadGame(name) end
 
+--- Load a save file by explicit path before entering gameplay with
+--- `core.runGame()`. The path form of `core.loadGame`: used by the
+--- command-line save argument (`openre.exe <savefile>`), whose path may live
+--- anywhere rather than in the save folder. Behaviour is otherwise identical
+--- to `core.loadGame` (the save image is restored like a memory-card load).
+--- Returns `true` on success; `false` (leaving the game state untouched) when
+--- the file cannot be read.
+---
+--- After a successful load, call `core.runGame()` to actually start the game.
+---@param path string a path to a 0x800-byte save file
+---@return boolean
+function core.loadSave(path) end
+
 --- Load a recorded demo before entering gameplay with `core.runGame()`.
 --- `name` is the demo file base name (e.g. `'PDEMO00'` for
 --- `data://Pl0/Pld/PDEMO00.DAT`).
@@ -853,6 +866,30 @@ function core.loadDemo(name) end
 ---@param difficulty string 'casual' | 'standard' | 'hardcore'
 ---@return boolean
 function core.startNewGame(player, scenario, difficulty) end
+
+--- Get the parsed command-line options. The module translates a command-line
+--- start (`openre.exe <savefile> -p <player> -r <roomcode> -s <scenario>`)
+--- into the module-driven setup APIs + `core.runGame()` at boot (replacing
+--- the native `title()` divert). Returns a table:
+--- `{ startRequested, saveRequested, savePath, player, stage, room,
+--- scenario }`; `player`/`stage`/`room`/`scenario` are -1 when the argument
+--- was not given.
+---@return { startRequested: boolean, saveRequested: boolean, savePath: string, player: integer, stage: integer, room: integer, scenario: integer }
+function core.cmdline() end
+
+--- Place the player at a room's spawn point with a fresh new-game inventory
+--- before entering gameplay with `core.runGame()`. This is the command-line
+--- `-p` / `-r` room warp translated onto the module boot path. `player` is a
+--- PLD_* id (0 = Leon, 1 = Claire, ...), `stage` a 0-based stage and `room` a
+--- room map number (e.g. 0 for room 1000, 0xC for room 10C0). Returns `true`
+--- on success; `false` when a previous session's latches could not be cleared.
+---
+--- After a successful start, call `core.runGame()` to actually start the game.
+---@param player integer PLD_* id (0 = Leon)
+---@param stage integer 0-based stage number
+---@param room integer room map number
+---@return boolean
+function core.startRoomWarp(player, stage, room) end
 
 --- Hand the frame to the legacy game and block until it returns to the menu.
 ---
