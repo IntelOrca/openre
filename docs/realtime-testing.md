@@ -68,6 +68,7 @@ answers ~1s later).
 | `POST /api/eval` | run Lua in the web VM (body is raw Lua, not JSON). Reach game-module state with `re.evalIn("module.game", "return ...")` |
 | `GET /api/screenshot` | raw BMP — last resort, prefer scene assertions |
 | `POST /api/quit` | graceful shutdown (`scene.exit`) — lets the engine unwind instead of force-killing |
+| `POST /api/inspector/select` | set which entity the in-game guide lines track: `{"entity":<id>}` or `{"entity":null}` to clear |
 | `GET /api/resources`·`/api/systems`·`/api/components` | inspector data for the web page |
 
 ## Driver reference

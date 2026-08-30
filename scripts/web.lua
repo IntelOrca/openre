@@ -75,6 +75,158 @@ local function installWebInputHandler()
     end
 end
 
+-- ── Inspector overlay ────────────────────────────────────────────────
+-- Draws live guide lines in the game around the entity selected in the
+-- web UI (the tree click posts to /api/inspector/select). The tree is
+-- built lazily under the "overlay" sub-root and refreshed every tick:
+--
+--   overlay → inspector → entity_lines → { line_left, line_right,
+--   line_top, line_bottom }
+--
+-- Each line is a texture-less white sprite (render2d paints a sprite
+-- without a texture as a solid quad). The two vertical lines run the
+-- full window height at the box's left/right edge and the two horizontal
+-- lines run the full window width at its top/bottom edge; the box is the
+-- selected entity's real UiSize (its UiSize scaled by the world
+-- transform composed up the parent chain, exactly as render2d computes
+-- draw size).
+local inspectorSel = nil -- selected entity id (nil = none)
+local inspectorTree = { root = nil, lines = {} }
+local INSPECT_LINE_COLOR = { 255, 255, 255, 255 }
+local INSPECT_LINE_THICKNESS = 2
+local INSPECT_LINE_Z = -10000 -- always in front of game UI
+local INSPECT_LINES = { "line_left", "line_right", "line_top", "line_bottom" }
+
+-- Create an entity under `parent` and return the native handle plus its
+-- scene id (scene.createEntity does not return the id).
+local function spawnWithId(parent)
+    local seen = {}
+    for _, id in ipairs(scene.children(parent)) do
+        seen[id] = true
+    end
+    local handle = scene.createEntity(parent)
+    if handle == nil then return nil, nil end
+    for _, id in ipairs(scene.children(parent)) do
+        if not seen[id] then return handle, id end
+    end
+    return handle, nil
+end
+
+-- Build (or rebuild) the inspector tree under the overlay root. Stale
+-- ids mean the scene was rebuilt, so the old subtree is destroyed and
+-- recreated once; returns false when no scene is active.
+local function ensureInspectorTree()
+    local rootId = inspectorTree.root
+    if rootId ~= nil and scene.entityFromId(rootId) ~= nil then
+        local allLive = #inspectorTree.lines == #INSPECT_LINES
+        for _, id in ipairs(inspectorTree.lines) do
+            if scene.entityFromId(id) == nil then allLive = false break end
+        end
+        if allLive then return true end
+    end
+    if rootId ~= nil then
+        local stale = scene.entityFromId(rootId)
+        if stale ~= nil then scene.destroy(stale) end -- destroys the whole subtree
+    end
+    local overlayRoot = scene.getRoot("overlay")
+    if overlayRoot == nil then return false end
+    local inspector, inspectorId = spawnWithId(overlayRoot)
+    if inspector == nil then return false end
+    scene.setField(inspector, "name", "inspector")
+    -- Commit now: a later partial build failure leaves a stale subtree that
+    -- the stale-id check above destroys on the next tick.
+    inspectorTree.root = inspectorId
+    inspectorTree.lines = {}
+    local entityLines = spawnWithId(inspector)
+    if entityLines == nil then return false end
+    scene.setField(entityLines, "name", "entity_lines")
+    for _, lineName in ipairs(INSPECT_LINES) do
+        local line, lineId = spawnWithId(entityLines)
+        if line == nil then return false end
+        scene.setField(line, "name", lineName)
+        scene.setField(line, "z", INSPECT_LINE_Z)
+        local sprite = scene.addComponent(line, "core.Sprite")
+        scene.setField(sprite, "color", INSPECT_LINE_COLOR)
+        local size = scene.addComponent(line, "core.UiSize")
+        scene.setField(size, "width", 0) -- hidden until a selection lands
+        scene.setField(size, "height", 0)
+        inspectorTree.lines[#inspectorTree.lines + 1] = lineId
+    end
+    return true
+end
+
+local function readNumber(handle, name)
+    return tonumber(scene.getField(handle, name)) or 0
+end
+
+local function readScale(handle, name)
+    return tonumber(scene.getField(handle, name)) or 1
+end
+
+-- Position one line sprite; a 0 size hides it.
+local function placeLine(lineId, x, y, w, h)
+    local line = scene.entityFromId(lineId)
+    if line == nil then return end
+    scene.setField(line, "x", x)
+    scene.setField(line, "y", y)
+    local size = scene.component(line, "core.UiSize")
+    if size ~= nil then
+        scene.setField(size, "width", w)
+        scene.setField(size, "height", h)
+    end
+end
+
+-- Centre, width and height of the selected entity's real box in window
+-- pixels, or nil when nothing is selected or the entity is gone. This
+-- mirrors render2d::worldMatrix (row-vector TRS, UI has no rotation):
+-- the world position is the local positions accumulated up the parent
+-- chain (each scaled by its ancestors' scales) and the world size is
+-- UiSize scaled by the chain's product of scales.
+local function selectedBox()
+    if inspectorSel == nil then return nil end
+    local ent = scene.entityFromId(inspectorSel)
+    if ent == nil then return nil end
+    local selected = ent
+    local chain = {}
+    while ent ~= nil do
+        chain[#chain + 1] = ent
+        local pid = scene.parent(ent) -- nil at the scene root
+        if pid == nil then break end
+        ent = scene.entityFromId(pid)
+    end
+    local wx, wy, wsx, wsy = 0, 0, 1, 1
+    for i = #chain, 1, -1 do
+        local node = chain[i]
+        wx = wx + readNumber(node, "x") * wsx
+        wy = wy + readNumber(node, "y") * wsy
+        wsx = wsx * readScale(node, "scale.x")
+        wsy = wsy * readScale(node, "scale.y")
+    end
+    local size = scene.component(selected, "core.UiSize")
+    local w = size ~= nil and readNumber(size, "width") or 0
+    local h = size ~= nil and readNumber(size, "height") or 0
+    return wx, wy, w * wsx, h * wsy
+end
+
+local function updateInspectorOverlay()
+    if not ensureInspectorTree() then return end
+    local sw, sh = gfx.screenWidth(), gfx.screenHeight()
+    local cx, cy, w, h = selectedBox()
+    if cx == nil then
+        for _, lineId in ipairs(inspectorTree.lines) do
+            placeLine(lineId, 0, 0, 0, 0)
+        end
+        return
+    end
+    local t = INSPECT_LINE_THICKNESS
+    local x0, y0 = cx - w * 0.5, cy - h * 0.5
+    local x1, y1 = cx + w * 0.5, cy + h * 0.5
+    placeLine(inspectorTree.lines[1], x0, sh * 0.5, t, sh) -- line_left
+    placeLine(inspectorTree.lines[2], x1, sh * 0.5, t, sh) -- line_right
+    placeLine(inspectorTree.lines[3], sw * 0.5, y0, sw, t) -- line_top
+    placeLine(inspectorTree.lines[4], sw * 0.5, y1, sw, t) -- line_bottom
+end
+
 -- Self-contained page served at GET /. The page is generated per request so
 -- the configured poll interval (pollMs) can be embedded. The scene tree and
 -- resource browser poll the JSON APIs and re-render live (pollMs <= 1000ms by
@@ -205,6 +357,11 @@ function saveState(){
   try { localStorage.setItem(LS_KEY, JSON.stringify({ view:state.view, selected:state.selected, expanded:state.expanded, resSelected:state.resSelected, compSelected:state.compSelected, sysSel:state.sysSel })); } catch(_) {}
 }
 document.getElementById('pollLabel').textContent = POLL_MS;
+// Re-arm the in-game inspector guide lines for a selection restored from
+// localStorage, so they survive a page reload.
+if (state.selected != null) {
+  fetch('/api/inspector/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entity:state.selected})}).catch(()=>{});
+}
 function switchView(v){
   state.view=v; saveState();
   document.querySelectorAll('.menu-item').forEach(e=>e.classList.toggle('active', e.dataset.view===v));
@@ -339,6 +496,7 @@ function treeNode(e,depth){
 }
 function selectEntity(id){
   state.selected=id; saveState(); buildTree(); renderInspector();
+  fetch('/api/inspector/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entity:id})}).catch(()=>{});
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function makeInput(key, val){
@@ -746,7 +904,10 @@ local function handle(sock, req)
     local base, params = splitPath(path)
 
     if method == "GET" and base == "/" then
-        respond(sock, "200 OK", "text/html; charset=utf-8", renderPage(pollMs))
+        -- Never cache the page: the served JS/CSS changes whenever web.lua is
+        -- edited (and hot-reloaded), so a stale cache copy silently loses new
+        -- behaviour (e.g. the /api/inspector/select POST).
+        respond(sock, "200 OK", "text/html; charset=utf-8", renderPage(pollMs), { "Cache-Control: no-store" })
     elseif method == "GET" and base == "/api/scene" then
         local ok, sc = pcall(buildScene)
         respond(sock, "200 OK", "application/json", jsonEncode(ok and sc or { entities = {} }))
@@ -872,6 +1033,16 @@ local function handle(sock, req)
     elseif method == "GET" and base == "/api/input" then
         respond(sock, "200 OK", "application/json",
             jsonEncode({ enabled = webInputEnabled, active = webInput.active, state = webInput.state, press = webInput.press }))
+    elseif method == "POST" and base == "/api/inspector/select" then
+        -- Sets the entity the in-game inspector guide lines track, or clears
+        -- them when `entity` is null (or the scene is rebuilt under it).
+        local okj, obj = pcall(jsonDecode, requestBody(req))
+        if not okj or type(obj) ~= "table" then
+            respond(sock, "400 Bad Request", "application/json", '{"ok":false,"error":"bad body"}')
+        else
+            inspectorSel = tonumber(obj.entity) or nil
+            respond(sock, "200 OK", "application/json", '{"ok":true}')
+        end
     elseif method == "GET" and base == "/api/health" then
         respond(sock, "200 OK", "application/json",
             jsonEncode({ ok = true, port = port, pollMs = pollMs, input = webInputEnabled }))
@@ -898,6 +1069,12 @@ local inflight = {}
 re.subscribe(HookKind.tick, function()
     -- Install the InputHandler sample once the scene exists.
     installWebInputHandler()
+
+    -- Keep the inspector guide lines on the selected entity.
+    local iok, ierr = pcall(updateInspectorOverlay)
+    if not iok then
+        print("web: inspector overlay error: " .. tostring(ierr))
+    end
 
     -- Auto-clear an armed tap once its window elapses (see /api/input/tap).
     -- Decremented before requests are handled below, so a tap landed on this
