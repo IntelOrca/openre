@@ -1580,18 +1580,6 @@ namespace openre
 
     // ── Module <-> legacy game handoff ───────────────────────────────────
 
-    void legacy_request_game_start()
-    {
-        if (auto* app = current_app())
-            app->legacyGameStartRequested = true;
-    }
-
-    bool legacy_game_start_requested()
-    {
-        auto* app = current_app();
-        return app != nullptr && app->legacyGameStartRequested;
-    }
-
     void legacy_request_return_to_menu()
     {
         if (auto* app = current_app())

@@ -234,8 +234,6 @@ namespace openre
     // The Lua menu drives the legacy game through core.runGame(). These
     // latches bridge it to the boot chain (the native boot screens are gone;
     // every start is module-driven):
-    //   - legacy_request_game_start() marks a module-initiated start; the boot
-    //     task (init_main) always chains straight into game_loop.
     //   - legacy_request_return_to_menu() is called from the native sites that
     //     used to chain the legacy boot task; core.runGame() observes its latch
     //     to stop pumping and hand control back to the module.
@@ -245,8 +243,6 @@ namespace openre
     //   - legacy_request_new_game() is set by core.startNewGame();
     //     game_boot_init re-applies the FG_SYSTEM_14 new-game path and the
     //     chosen player/scenario/difficulty flags (also wiped by the boot).
-    void legacy_request_game_start();
-    bool legacy_game_start_requested();
     void legacy_request_return_to_menu();
     void legacy_request_demo();
     bool legacy_demo_requested();

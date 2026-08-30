@@ -39,7 +39,6 @@ namespace openre
         // core.runGame in script_bindings.cpp). The native boot screens are
         // gone: every start is module-driven, so init_main always chains into
         // game_loop and game_boot_init walks only its module branches.
-        //   legacyGameStartRequested: set before a module-initiated game.
         //   legacyReturnToMenu: set by the native "return to menu" sites
         //     (which used to chain the legacy boot task); polled by
         //     core.runGame to end the blocking session and hand control back
@@ -51,7 +50,6 @@ namespace openre
         //     game_boot_init re-applies the FG_SYSTEM_14 new-game path plus
         //     the chosen player/scenario/difficulty flags (also wiped by the
         //     boot) so the module-initiated start begins a fresh game.
-        bool legacyGameStartRequested = false;
         bool legacyReturnToMenu = false;
         bool legacyDemoRequested = false;
         bool legacyNewGameRequested = false;

@@ -3227,7 +3227,6 @@ namespace openre::script
             openre::legacy_clear_demo_requested();
             openre::legacy_clear_new_game_requested();
             openre::legacy_clear_warp_requested();
-            openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
             return 1;
@@ -3260,7 +3259,6 @@ namespace openre::script
             openre::legacy_clear_demo_requested();
             openre::legacy_clear_new_game_requested();
             openre::legacy_clear_warp_requested();
-            openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
             return 1;
@@ -3301,7 +3299,6 @@ namespace openre::script
             openre::legacy_clear_new_game_requested();
             openre::legacy_clear_warp_requested();
             openre::legacy_request_demo();
-            openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
             return 1;
@@ -3359,7 +3356,6 @@ namespace openre::script
             openre::legacy_clear_demo_requested();
             openre::legacy_clear_warp_requested();
             openre::legacy_request_new_game(p, s, d);
-            openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
             return 1;
@@ -3463,11 +3459,10 @@ namespace openre::script
             const auto room = static_cast<int32_t>(luaL_checkinteger(L, 3));
 
             // Clear stale demo/new-game latches so a previous module session
-            // cannot hijack this warp, then latch the warp + game start.
+            // cannot hijack this warp, then latch the warp.
             openre::legacy_clear_demo_requested();
             openre::legacy_clear_new_game_requested();
             openre::legacy_request_warp(player, stage, room);
-            openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
             return 1;

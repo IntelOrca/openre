@@ -265,9 +265,19 @@ namespace openre
                 logging::logWarning("[app] audio init failed; running without sound");
             }
         }
+        else
+        {
+            // The native boot is gone: without a module the scene stays empty
+            // (the LegacyGame node never enables), so make the dark screen
+            // deliberate instead of silent.
+            logging::logWarning(
+                "[app] no game module active: set OPENRE_GAME to a games/<name> folder with main.lua; "
+                "the boot scene will otherwise be empty");
+        }
 
-        // Boot the scene tree: hidden root + LegacyGame child (skipped when a
-        // game module is active - the module builds its own entities).
+        // Boot the scene tree: hidden root + a LegacyGame child (disabled
+        // until core.runGame() re-enables it to hand the frame to the legacy
+        // game).
         ecs::system_boot_scene(app.scene);
         s_currentScene = &app.scene;
 
