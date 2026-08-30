@@ -3171,9 +3171,10 @@ namespace openre::script
         // restored into the game table (mirroring CARD_STATE_LOAD and the
         // native command-line divert) and the game is latched to start as a
         // load-game session: the boot chain goes straight into gameplay (the
-        // native title is gone) and title_game_init takes the save-restore
-        // branch. Returns true on success; false (leaving the game state
-        // untouched) when no matching save file exists or it cannot be read.
+        // native boot screens are gone) and game_boot_init takes the
+        // save-restore branch. Returns true on success; false (leaving the
+        // game state untouched) when no matching save file exists or it cannot
+        // be read.
         int coreLoadGame(lua_State* L)
         {
             auto* name = luaL_checkstring(L, 1);
@@ -3212,11 +3213,11 @@ namespace openre::script
                 return 1;
             }
 
-            // Title_main_load's success path: clear the "continue" flag so
-            // title_game_init restores the saved position (instead of treating
-            // the session as a fresh file); the native title is gone so the
-            // boot chain always enters gameplay directly. The save image
-            // itself is applied in title_game_init (apply_saved_image), after
+            // Game_boot_load's success path: clear the "continue" flag so
+            // game_boot_init restores the saved position (instead of treating
+            // the session as a fresh file); the native boot screens are gone so
+            // the boot chain always enters gameplay directly. The save image
+            // itself is applied in game_boot_init (apply_saved_image), after
             // the boot chain's init_global() wipe, so the restored
             // stage/room/position survive.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
@@ -3237,7 +3238,7 @@ namespace openre::script
         // (which matches save.list() entry names): the command-line save
         // argument is a full path that may live anywhere. Returns true on
         // success; false when the file cannot be read. The save image is read
-        // into the card buffer and re-applied by title_game_init after the
+        // into the card buffer and re-applied by game_boot_init after the
         // boot wipe, exactly like core.loadGame.
         int coreLoadSave(lua_State* L)
         {
@@ -3251,9 +3252,9 @@ namespace openre::script
             }
 
             // Same latch recipe as core.loadGame: clear the "continue" flag so
-            // title_game_init restores the saved position and clear stale
+            // game_boot_init restores the saved position and clear stale
             // demo/new-game/warp latches (the boot chain always enters
-            // gameplay directly - there is no native title to skip).
+            // gameplay directly - the native boot screens are gone).
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             gGameTable.dword_99CF6C = 1;
             openre::legacy_clear_demo_requested();
@@ -3270,7 +3271,7 @@ namespace openre::script
         // "PDEMO00" for data://Pl0/Pld/PDEMO00.DAT). The demo header+replay
         // block is copied into the pdemo work area, which lives outside the
         // boot chain's init_global() wipe, and the boot is latched as a demo
-        // session so title_game_init re-applies FG_SYSTEM_DEMO and takes the
+        // session so game_boot_init re-applies FG_SYSTEM_DEMO and takes the
         // original demo branch (position/inventory from the demo file, demo
         // input playback active). Returns true on success; false when the
         // file cannot be read or is too small to be a valid demo.
@@ -3294,7 +3295,7 @@ namespace openre::script
             gGameTable.demo_ended = 0;
             gGameTable.byte_991F80 = 0;
 
-            // Clear the "continue" latch so title_game_init does not treat
+            // Clear the "continue" latch so game_boot_init does not treat
             // the session as a save restore, then latch the demo start.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             openre::legacy_clear_new_game_requested();
@@ -3310,7 +3311,7 @@ namespace openre::script
         // game from the menu before `core.runGame()`. `player` is 'leon' or
         // 'claire', `scenario` is 'a' or 'b', `difficulty` is 'casual',
         // 'standard' or 'hardcore'. The choices are latched and re-applied in
-        // title_game_init after the boot wipe so the FG_SYSTEM_14 new-game
+        // game_boot_init after the boot wipe so the FG_SYSTEM_14 new-game
         // branch sets up a fresh stage/inventory with the chosen character,
         // scenario and difficulty (casual = easy mode, hardcore = hard mode).
         // Returns true on success; false for an unknown player/scenario/
@@ -3408,7 +3409,7 @@ namespace openre::script
 
             // First boot runs psx_main -> init_system -> init_main inside the
             // next update_game(); a module-driven start latches init_main into
-            // chaining game_loop (skipping the native title). After a previous
+            // chaining game_loop (the native boot screens are gone). After a previous
             // session returned to the menu, re-kick task 0 into game_loop.
             if (gGameTable.systemInitialized)
                 openre::task_execute(0, openre::game_loop);
@@ -3453,7 +3454,7 @@ namespace openre::script
         // gameplay with core.runGame(). `player` is a PLD_* id (0 = Leon,
         // 1 = Claire, ...), `stage` a 0-based stage and `room` a room map
         // number (e.g. 0 for room 1000, 0xC for room 10C0). The placement is
-        // latched and re-applied by title_game_init after the boot wipe (same
+        // latched and re-applied by game_boot_init after the boot wipe (same
         // recipe as the native -r warp). Returns true on success.
         int coreStartRoomWarp(lua_State* L)
         {
@@ -3475,8 +3476,8 @@ namespace openre::script
         // core.cmdline() - exposes the parsed command-line options
         // (openre.exe <savefile> -p <player> -r <roomcode> -s <scenario>) to
         // scripts so the module can translate a command-line start into the
-        // module-driven setup APIs + core.runGame (the native title() divert
-        // this replaces is gone). Returns a table:
+        // module-driven setup APIs + core.runGame (the native divert this
+        // replaces is gone). Returns a table:
         //   { startRequested, saveRequested, savePath, player, stage, room,
         //     scenario }
         // startRequested is true when the command line asked to start a game

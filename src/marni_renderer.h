@@ -368,7 +368,7 @@ namespace openre::marni
         /**
          * Unloads every texture currently loaded.
          *
-         * Used during the title / logo sequence to reset all texture state.
+         * Used during the boot / logo sequence to reset all texture state.
          */
         virtual void unloadAllTextures() = 0;
 

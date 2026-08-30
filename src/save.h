@@ -28,7 +28,7 @@ namespace openre::save
 
     // Reads a save file into the card buffer without applying it. The module
     // load-game flow uses this in core.loadGame and defers application to
-    // apply_saved_image() inside title_game_init, because the boot chain's
+    // apply_saved_image() inside game_boot_init, because the boot chain's
     // init_global() wipe would otherwise discard the restored stage/room.
     bool cmdline_read_save(const char* path);
 

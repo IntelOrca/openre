@@ -854,7 +854,7 @@ function core.loadDemo(name) end
 --- `core.runGame()`. `player` is `'leon'` or `'claire'`, `scenario` is
 --- `'a'` or `'b'`, `difficulty` is `'casual'`, `'standard'` or `'hardcore'`.
 ---
---- The choices are latched and re-applied in `title_game_init` after the
+--- The choices are latched and re-applied in `game_boot_init` after the
 --- boot wipe, so the FG_SYSTEM_14 new-game branch sets up a fresh
 --- stage/inventory with the chosen character and scenario (casual enables
 --- easy mode, hardcore enables hard mode). Returns `true` on success;
@@ -869,9 +869,8 @@ function core.startNewGame(player, scenario, difficulty) end
 
 --- Get the parsed command-line options. The module translates a command-line
 --- start (`openre.exe <savefile> -p <player> -r <roomcode> -s <scenario>`)
---- into the module-driven setup APIs + `core.runGame()` at boot (this
---- replaced the native `title()` divert, which no longer exists). Returns a
---- table:
+--- into the module-driven setup APIs + `core.runGame()` at boot (replacing
+--- the old command-line divert from the native boot). Returns a table:
 --- `{ startRequested, saveRequested, savePath, player, stage, room,
 --- scenario }`; `player`/`stage`/`room`/`scenario` are -1 when the argument
 --- was not given.
@@ -895,7 +894,7 @@ function core.startRoomWarp(player, stage, room) end
 --- Hand the frame to the legacy game and block until it returns to the menu.
 ---
 --- The first call boots the legacy game (fonts, audio, room tables) and
---- chains straight into gameplay; there is no native title screen or
+--- chains straight into gameplay; there are no native boot screens or
 --- prologue any more. When a save was loaded with `core.loadGame`, the
 --- session resumes from it; otherwise the game starts as the current
 --- player/scenario settings dictate. On return the legacy game has signalled

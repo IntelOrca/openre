@@ -68,7 +68,7 @@ end
 
 -- Command-line start (openre.exe <savefile> -p <player> -r <roomcode>
 -- -s <scenario>): reach gameplay through the module-driven setup APIs +
--- core.runGame, replacing the native title() divert this flow translates.
+-- core.runGame, replacing the old command-line divert from the native boot.
 -- Runs while the scheduler owns the frame so the blocking runGame can hand
 -- control back to the menu (showTitle) when the game returns.
 -- Returns true when a start was kicked off, false to keep the normal boot.

@@ -155,11 +155,11 @@ namespace openre::input
         // every path, so menu/UI commands (cancel, accept, fire, reload,
         // interact) carry identical bits in rawState and both edge outputs.
         // accept carries the interact bit 0x80 -- the same raw bit the
-        // original return/enter key produced -- so the title screen still
-        // advances on it (key_edge & 0x9FF) while it never opens the
-        // in-game status screen (game_check_status_trigger only reads
-        // key_edge & 0x800, which the inventory command emits). Consumers:
-        // Title_main_wait tests key_edge & 0x9FF, Computer200 tests
+        // original return/enter key produced -- so the menu still advances on
+        // it (key_edge & 0x9FF) while it never opens the in-game status
+        // screen (game_check_status_trigger only reads key_edge & 0x800,
+        // which the inventory command emits). Consumers: the original
+        // boot-wait tests key_edge & 0x9FF, Computer200 tests
         // key_edge & 0xF0 / & 0xF, and Config_main tests raw_state
         // & 0x80 (interact) to drive the speaker/volume toggles.
         struct CommandOutput

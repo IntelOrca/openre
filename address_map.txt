@@ -1138,13 +1138,9 @@ declare     ss_file_string          OldStdString            0x00689F3C
 declare     marni_config            MarniConfig             0x00689F50
 declare     ctcb                    Task*                   0x0068A204
 declare     tasks                   Task[8]                 0x0068A220
-declare     title_mv_state          u8                      0x00691B80
-declare     title_disp_add          u8                      0x00691B81
 declare     byte_691B82             u8                      0x00691B82
 declare     byte_691B83             u8                      0x00691B83
 declare     byte_691B85             u8                      0x00691B85
-declare     title_mode              u8                      0x00691B86
-declare     title_cursor            u8                      0x00691B87
 declare     byte_691B88             u8                      0x00691B88
 declare     byte_691B89             u8                      0x00691B89
 declare     byte_691B8D             u8                      0x00691B8D

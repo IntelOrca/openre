@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace openre::title
+namespace openre::game_boot
 {
     /// Loads background image data to the display surface
     /// @param data Pointer to the ADT/TIM background buffer
@@ -13,7 +13,7 @@ namespace openre::title
     /// (0x00506750). Module-only: every start is latched by the Lua menu
     /// (core.loadDemo / core.loadSave / core.startRoomWarp /
     /// core.startNewGame) before core.runGame boots, so the state machine
-    /// takes only the module branches and the native title/prologue are gone.
+    /// takes only the module branches; the native boot screens are gone.
     // 0x00506750
-    void title_game_init();
+    void game_boot_init();
 }

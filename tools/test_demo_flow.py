@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """test_demo_flow.py — menu demo flow still drives the legacy game after the
-title_game_init extraction.
+game_boot_init extraction.
 
-The title screen plays a recorded demo after ~15s idle: menu.lua calls
+The menu plays a recorded demo after ~15s idle: menu.lua calls
 core.loadDemo + core.runGame, booting the legacy game on the demo branch
-(title_game_setup_demo). This test waits out the idle timeout, confirms the
+(game_boot_setup_demo). This test waits out the idle timeout, confirms the
 demo takes over (menu disappears and the engine stays healthy), then cancels
 the demo (native demo-cancel path) and asserts the title menu comes back.
 
@@ -43,7 +43,7 @@ def main():
 
         # Leave the PRESS START screen idle; after DEMO_TIMEOUT (15s) the menu
         # fades out and core.loadDemo + core.runGame start the recorded demo on
-        # the legacy demo branch (title_game_setup_demo). The demo replays
+        # the legacy demo branch (game_boot_setup_demo). The demo replays
         # advance gGameTable.demo_frame, so its growth is the gameplay signal.
         print("idling on the title screen to trigger the demo...")
         deadline = time.time() + 40

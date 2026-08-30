@@ -36,19 +36,19 @@ namespace openre
         bool frameActive = false;
 
         // Handoff latches bridging the Lua menu to the legacy game (see
-        // core.runGame in script_bindings.cpp). The native title is gone:
-        // every start is module-driven, so init_main always chains into
-        // game_loop and title_game_init walks only its module branches.
+        // core.runGame in script_bindings.cpp). The native boot screens are
+        // gone: every start is module-driven, so init_main always chains into
+        // game_loop and game_boot_init walks only its module branches.
         //   legacyGameStartRequested: set before a module-initiated game.
         //   legacyReturnToMenu: set by the native "return to menu" sites
-        //     (which used to chain the native title task); polled by
+        //     (which used to chain the legacy boot task); polled by
         //     core.runGame to end the blocking session and hand control back
         //     to the module.
-        //   legacyDemoRequested: set by core.loadDemo; title_game_init
+        //   legacyDemoRequested: set by core.loadDemo; game_boot_init
         //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) so the
         //     module-initiated start takes the demo branch.
         //   legacyNewGameRequested + options: set by core.startNewGame;
-        //     title_game_init re-applies the FG_SYSTEM_14 new-game path plus
+        //     game_boot_init re-applies the FG_SYSTEM_14 new-game path plus
         //     the chosen player/scenario/difficulty flags (also wiped by the
         //     boot) so the module-initiated start begins a fresh game.
         bool legacyGameStartRequested = false;
@@ -60,7 +60,7 @@ namespace openre
         int newGameDifficulty = 0; // 0 = standard, 1 = casual, 2 = hardcore
         //   legacyWarpRequested + options: set by core.startRoomWarp (the
         //     command-line -p/-r warp translated onto the module boot path);
-        //     title_game_init re-applies the player/scenario flags and places
+        //     game_boot_init re-applies the player/scenario flags and places
         //     the player at the room's spawn with a fresh new-game inventory.
         bool legacyWarpRequested = false;
         int warpPlayer = 0; // PLD_* id

@@ -2200,7 +2200,7 @@ namespace openre::audio
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
-    // translation units (openre.cpp, title.cpp). Original-binary callers
+    // translation units (openre.cpp, game_boot.cpp). Original-binary callers
     // (Die_move_end, Game_loop, ExBattle_init, ExBattle_exit, Capcom_logo)
     // reach the implementation above via the hook on 0x004EC250.
     void snd_sys_init2()
@@ -2293,7 +2293,7 @@ namespace openre::audio
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
-    // translation units (title.cpp). Original-binary callers (Title_game_init)
+    // translation units (game_boot.cpp). Original-binary callers (Game_boot_init)
     // reach the implementation above via the hook on 0x004EC410.
     void snd_sys_init_sub2()
     {
@@ -2399,7 +2399,7 @@ namespace openre::audio
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
-    // translation units (room.cpp, title.cpp). Original-binary callers reach
+    // translation units (room.cpp, game_boot.cpp). Original-binary callers reach
     // the implementation above via the hook on 0x004EC450.
     void snd_load_core(uint8_t a0, uint8_t a1)
     {
@@ -2513,8 +2513,8 @@ namespace openre::audio
     }
 
     // Public wrapper declared in audio.h; used by C++ callers in other
-    // translation units (room.cpp, title.cpp). Original-binary callers
-    // (Result_init, Set_room, Title) reach the implementation above via the
+    // translation units (room.cpp, game_boot.cpp). Original-binary callers
+    // (Result_init, Set_room, Game_boot_init) reach the implementation above via the
     // hook on 0x004EC7D0.
     void snd_room_load()
     {

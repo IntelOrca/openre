@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -138,7 +138,7 @@
     <ClCompile Include="texture_loader.cpp" />
     <ClCompile Include="text_layout.cpp" />
     <ClCompile Include="tim.cpp" />
-    <ClCompile Include="title.cpp" />
+    <ClCompile Include="game_boot.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="app.h" />
@@ -214,7 +214,7 @@
     <ClInclude Include="texture_loader.h" />
     <ClInclude Include="text_layout.h" />
     <ClInclude Include="tim.h" />
-    <ClInclude Include="title.h" />
+    <ClInclude Include="game_boot.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyLauncher" AfterTargets="Build">

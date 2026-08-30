@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "error.h"
 #include "file.h"
+#include "game_boot.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -32,7 +33,6 @@
 #include "system_window.h"
 #include "systems.h"
 #include "tim.h"
-#include "title.h"
 #include "vk_codes.h"
 
 #include <cctype>
@@ -74,7 +74,7 @@ using namespace openre::scd;
 using namespace openre::sce;
 using namespace openre::input;
 using namespace openre::camera;
-using namespace openre::title;
+using namespace openre::game_boot;
 using namespace openre::itembox;
 using namespace openre::error;
 
@@ -178,9 +178,9 @@ namespace openre
     }
 
     // 0x0050B930
-    // Time-seeded LCG used by the Capcom logo / title screens. The first call
-    // seeds the state from the high resolution tick counter (bit-reversed),
-    // subsequent calls advance the LCG. Replaces timeGetTime().
+    // Time-seeded LCG. The first call seeds the state from the high
+    // resolution tick counter (bit-reversed), subsequent calls advance the
+    // LCG. Replaces timeGetTime().
     static uint32_t sub_50B930()
     {
         static uint8_t& rng_seed_flag = *reinterpret_cast<uint8_t*>(0x540CE8);
@@ -1055,7 +1055,7 @@ namespace openre
             audio::snd_sys_stereo();
             gGameTable.fg_system |= 2;
             // The module owns the boot (core.runGame): chain straight into
-            // gameplay. The native title task this used to chain is gone.
+            // gameplay. The legacy boot task this used to chain is gone.
             task_chain(game_loop);
             return;
 
@@ -1773,9 +1773,9 @@ namespace openre
         switch (ctcb.var_08)
         {
         case 0:
-            // Every start is module-driven now: title_game_init walks only its
+            // Every start is module-driven now: game_boot_init walks only its
             // module branches (demo / save restore / new game / room warp).
-            title_game_init();
+            game_boot_init();
             if (!ctcb.var_13)
             {
                 ctcb.var_08 = 1;

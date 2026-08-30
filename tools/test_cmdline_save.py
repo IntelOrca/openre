@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """test_cmdline_save.py — command-line save start translated onto the module boot path.
 
-Launching the game with a save-file path argument must no longer use the native
-title() divert: games/re2/main.lua reads core.cmdline() and translates the
+Launching the game with a save-file path argument must no longer be diverted
+in the native boot: games/re2/main.lua reads core.cmdline() and translates the
 request into core.loadSave + core.runGame. So the game should:
 
   * boot straight into gameplay restoring the saved session (no menu sits up),

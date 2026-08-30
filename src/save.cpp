@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "error.h"
 #include "file.h"
+#include "game_boot.h"
 #include "hud.h"
 #include "input.h"
 #include "interop.hpp"
@@ -15,7 +16,6 @@
 #include "scheduler.h"
 #include "str.h"
 #include "system_filesystem.h"
-#include "title.h"
 #include "vk_codes.h"
 
 #include <algorithm>
@@ -30,7 +30,7 @@ using namespace openre::file;
 using namespace openre::hud;
 using namespace openre::input;
 using namespace openre::player;
-using namespace openre::title;
+using namespace openre::game_boot;
 
 namespace openre::save
 {
@@ -1383,7 +1383,7 @@ namespace openre::save
                 // The save folder does not exist. Fall through to an empty
                 // list rather than returning early: returning without a
                 // task_sleep here makes mem_card exit the task, and since
-                // FG_SYSTEM_21 was already cleared the title thinks a load
+                // FG_SYSTEM_21 was already cleared, the boot thinks a load
                 // succeeded and starts the game with no save data loaded.
                 gGameTable.cnt0 = 0;
                 gGameTable.cnt1 = 0;
@@ -1868,7 +1868,7 @@ namespace openre::save
     // cmdline_read_save) into the live game table and restores the saved state.
     // Mirrors the CARD_STATE_LOAD recipe. This must run after the boot chain's
     // init_global() wiped the table region, so module load-game defers it here
-    // from title_game_init instead of applying it in core.loadGame where the
+    // from game_boot_init instead of applying it in core.loadGame where the
     // boot would discard it.
     void apply_saved_image()
     {

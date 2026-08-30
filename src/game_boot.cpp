@@ -1,4 +1,4 @@
-#include "title.h"
+#include "game_boot.h"
 #include "audio.h"
 #include "camera.h"
 #include "enemy.h"
@@ -30,7 +30,7 @@ using namespace openre::room;
 using namespace openre::save;
 using namespace openre::scd;
 
-namespace openre::title
+namespace openre::game_boot
 {
     // 0x0043F5A0
     void bg_to_surface(uint8_t* data)
@@ -67,11 +67,11 @@ namespace openre::title
     // the same fresh inventory as a new game. FG_SYSTEM_DEMO is deliberately
     // NOT set so input playback, demo timeout and BGM suppression stay
     // inactive. This is the module replacement for the removed command-line
-    // -p/-r title divert; the placement survives the boot wipe because it is
+    // -p/-r divert; the placement survives the boot wipe because it is
     // re-applied here from the warp latch (core.startRoomWarp ->
     // legacy_request_warp).
-    // 0x00506750 (part of title_game_init)
-    static void title_game_setup_warp(int32_t stage, int32_t room, int32_t player)
+    // 0x00506750 (part of game_boot_init)
+    static void game_boot_setup_warp(int32_t stage, int32_t room, int32_t player)
     {
         logging::logDebug("[cmdline] warp init stage={} room={} player={}", stage, room, player);
 
@@ -127,9 +127,9 @@ namespace openre::title
 
     // Demo session setup: position/inventory come from the demo header in
     // gGameTable.pdemo (read by core.loadDemo; outside the boot wipe range).
-    // Re-applied in title_game_init LABEL_5 when FG_SYSTEM_DEMO is latched.
-    // 0x00506750 (part of title_game_init)
-    static void title_game_setup_demo()
+    // Re-applied in game_boot_init LABEL_5 when FG_SYSTEM_DEMO is latched.
+    // 0x00506750 (part of game_boot_init)
+    static void game_boot_setup_demo()
     {
         auto& pdemo = gGameTable.pdemo;
 
@@ -168,8 +168,8 @@ namespace openre::title
     // card buffer by core.loadGame/core.loadSave but the boot chain's
     // init_global() wiped the table afterwards, so apply_saved_image() is
     // deferred here so the restored stage/room/position survive.
-    // 0x00506750 (part of title_game_init)
-    static void title_game_setup_load()
+    // 0x00506750 (part of game_boot_init)
+    static void game_boot_setup_load()
     {
         apply_saved_image();
         gGameTable.pl.m.pos.x = gGameTable.word_98E9BE;
@@ -199,8 +199,8 @@ namespace openre::title
 
     // Fresh-game placement for the FG_SYSTEM_14 new-game branch: stage 0, the
     // scenario A/B start room and the character's starting position.
-    // 0x00506750 (part of title_game_init)
-    static void title_game_setup_new_game()
+    // 0x00506750 (part of game_boot_init)
+    static void game_boot_setup_new_game()
     {
         gGameTable.pl.nFloor = 0;
         gGameTable.pl.m.pos.y = 0;
@@ -234,20 +234,20 @@ namespace openre::title
     //
     // Game-setup state machine driven from game_loop case 0. Every start is
     // module-driven now (core.runGame latched demo / new game / save / room
-    // warp before the boot), so the native title and its prologue are gone and
-    // the legacy branches (command-line warp divert, FG_SYSTEM_4, 4th
+    // warp before the boot), so the native boot screens and prologue are gone
+    // and the legacy branches (command-line warp divert, FG_SYSTEM_4, 4th
     // survivor, extreme battle) no longer exist here. The state machine only
     // walks the module branches then hands the room/player setup to cases 4-6.
-    void title_game_init()
+    void game_boot_init()
     {
         auto& ctcb = *gGameTable.ctcb;
         switch (ctcb.var_09)
         {
         case 1: goto LABEL_53;
         case 2: [[fallthrough]];
-                case 3:
-                {
-                    gGameTable.dword_99CF6C = 1;
+        case 3:
+        {
+            gGameTable.dword_99CF6C = 1;
 
             // Module demo start: the boot chain's init_global() wiped
             // FG_SYSTEM_DEMO, so re-apply it from the latch (set by
@@ -285,16 +285,16 @@ namespace openre::title
                     const auto player = legacy_warp_player();
                     set_flag(FlagGroup::Status, FG_STATUS_PLAYER, (player & 1) != 0);
                     set_flag(FlagGroup::Status, FG_STATUS_SCENARIO, player == PLD_LEON_1 || player == PLD_CLAIRE_1);
-                    title_game_setup_warp(legacy_warp_stage(), legacy_warp_room(), player);
+                    game_boot_setup_warp(legacy_warp_stage(), legacy_warp_room(), player);
                     legacy_clear_warp_requested();
                 }
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
                 {
-                    title_game_setup_demo();
+                    game_boot_setup_demo();
                 }
                 else
                 {
-                    title_game_setup_load();
+                    game_boot_setup_load();
                 }
 
                 gGameTable.last_cut = 255;
@@ -314,7 +314,7 @@ namespace openre::title
             if (!ctcb.var_13)
             {
                 // New game
-                title_game_setup_new_game();
+                game_boot_setup_new_game();
 
                 gGameTable.pl.old_pos.x = gGameTable.pl.m.pos.x;
                 gGameTable.pl.sca_old_x = gGameTable.pl.m.pos.z;

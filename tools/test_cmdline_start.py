@@ -2,7 +2,7 @@
 """test_cmdline_start.py — command-line start translated onto the module boot path.
 
 Launching the game with `-r 100` (stage 0, room 0 — the main hall) must no
-longer use the native title() divert: games/re2/main.lua reads core.cmdline()
+longer be diverted in the native boot: games/re2/main.lua reads core.cmdline()
 and translates the request into core.startRoomWarp + core.runGame. So the game
 should:
 

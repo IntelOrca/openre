@@ -232,18 +232,18 @@ namespace openre
 
     // ── Module <-> legacy game handoff ────────────────────────────────────
     // The Lua menu drives the legacy game through core.runGame(). These
-    // latches bridge it to the boot chain (the native title is gone; every
-    // start is module-driven):
+    // latches bridge it to the boot chain (the native boot screens are gone;
+    // every start is module-driven):
     //   - legacy_request_game_start() marks a module-initiated start; the boot
     //     task (init_main) always chains straight into game_loop.
     //   - legacy_request_return_to_menu() is called from the native sites that
-    //     used to chain the title task; core.runGame() observes its latch to
-    //     stop pumping and hand control back to the module.
-    //   - legacy_request_demo() is set by core.loadDemo(); title_game_init
+    //     used to chain the legacy boot task; core.runGame() observes its latch
+    //     to stop pumping and hand control back to the module.
+    //   - legacy_request_demo() is set by core.loadDemo(); game_boot_init
     //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) from it so the
     //     module-initiated start takes the demo branch.
     //   - legacy_request_new_game() is set by core.startNewGame();
-    //     title_game_init re-applies the FG_SYSTEM_14 new-game path and the
+    //     game_boot_init re-applies the FG_SYSTEM_14 new-game path and the
     //     chosen player/scenario/difficulty flags (also wiped by the boot).
     void legacy_request_game_start();
     bool legacy_game_start_requested();
@@ -258,7 +258,7 @@ namespace openre
     int legacy_new_game_scenario();
     int legacy_new_game_difficulty();
     //   - legacy_request_warp() is set by core.startRoomWarp (the command-line
-    //     -p/-r warp translated onto the module boot path); title_game_init
+    //     -p/-r warp translated onto the module boot path); game_boot_init
     //     re-applies the player/scenario flags and places the player at the
     //     room's spawn point (warp placement survives the boot wipe).
     void legacy_request_warp(int player, int stage, int room);

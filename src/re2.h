@@ -1469,15 +1469,12 @@ struct GameTable
     Task* ctcb;                         // 0x68A204
     uint8_t pad_68A208[24];             // 0x68A208
     Task tasks[8];                      // 0x68A220
-    uint8_t pad_68A340[30784];          // 0x68A340
-    uint8_t title_mv_state;             // 0x691B80
-    uint8_t title_disp_add;             // 0x691B81
+    uint8_t pad_68A340[30786];          // 0x68A340
     uint8_t byte_691B82;                // 0x691B82
     uint8_t byte_691B83;                // 0x691B83
     uint8_t pad_691B84[1];              // 0x691B84
     uint8_t byte_691B85;                // 0x691B85
-    uint8_t title_mode;                 // 0x691B86
-    uint8_t title_cursor;               // 0x691B87
+    uint8_t pad_691B86[2];              // 0x691B86
     uint8_t byte_691B88;                // 0x691B88
     uint8_t byte_691B89;                // 0x691B89
     uint8_t pad_691B8A[3];              // 0x691B8A
