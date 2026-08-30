@@ -32,525 +32,10 @@ using namespace openre::scd;
 
 namespace openre::title
 {
-    using Action = void (*)();
-
-    enum
-    {
-        TITLE_STATE_CAPCOM_LOGO,
-        TITLE_STATE_TITLE_LOAD,
-        TITLE_STATE_TITLE_MAIN,
-        TITLE_STATE_4TH_SURVIVOR_LOAD,
-        TITLE_STATE_4TH_SURVIVOR_MAIN,
-        TITLE_STATE_EXTREME_BATTLE_LOAD,
-        TITLE_STATE_EXTREME_BATTLE_MAIN,
-        TITLE_STATE_7,
-    };
-
-    // 0x0050AA80
-    static void config_write()
-    {
-        interop::call(0x0050AA80);
-    }
-
     // 0x0043F5A0
     void bg_to_surface(uint8_t* data)
     {
         interop::call<uint8_t*>(0x0043F5A0, data);
-    }
-
-    // 0x00503880
-    static void title_bg_reload()
-    {
-        auto dst = gGameTable.work_buffer_2 + 0x640;
-        if (load_adt("common\\data\\title_bg.adt", dst, 4))
-        {
-            bg_to_surface(dst);
-        }
-        else
-        {
-            file_error();
-        }
-    }
-
-    // 0x00505B80
-    static void moji_set_work()
-    {
-        interop::call(0x00505B80);
-    }
-
-    // 0x005038B0
-    static void title_init()
-    {
-        config_write();
-        gGameTable.hard_mode = 0;
-        gGameTable.censorship_off = 0;
-        gGameTable.byte_68984A = 0;
-        gGameTable.word_98EE7E = 2;
-        gGameTable.byte_989E91 = 2;
-        gGameTable.fg_system &= 0xFFF7FFBF;
-        marni::out();
-        gGameTable.byte_98F1B7 = 1;
-        gGameTable.byte_98F07A = 0;
-        gGameTable.dword_99CF6C = 0;
-        gGameTable.title_mode = 0;
-        gGameTable.title_cursor = 0;
-        gGameTable.byte_691B88 = 0;
-        gGameTable.byte_691B89 = 1;
-        gGameTable.title_disp_add = 0;
-        gGameTable.byte_691B82 = 0;
-        gGameTable.byte_691B83 = 0;
-        gGameTable.byte_691B85 = 0;
-        gGameTable.demo_countdown = 0;
-        gGameTable.byte_691B8D = 0;
-        gGameTable.byte_691B8E = 0;
-        gGameTable.word_691B98 = -46;
-        gGameTable.word_691B96 = 0;
-        gGameTable.dword_691B9C = -1;
-
-        if (check_flag(FlagGroup::System, FG_SYSTEM_2))
-        {
-            set_flag(FlagGroup::System, FG_SYSTEM_2, false);
-            bg_set_mode(2, 0);
-            title_bg_reload();
-            hud_fade_set(0x100, 0, 7, 1);
-            hud_fade_adjust(0, 0x7F80, 0, 0);
-            gGameTable.word_691B98 = 240;
-            gGameTable.title_disp_add = 5;
-        }
-        else
-        {
-            bg_set_mode(0, 0);
-            title_bg_reload();
-            hud_fade_set(0x200, 0, 7, 1);
-            hud_fade_adjust(0, 0x7C00, 0, 0);
-            gGameTable.ti_add = -1024;
-            gGameTable.ti_kido = 0x7C00;
-            gGameTable.title_disp_add = 1;
-        }
-
-        moji_set_work();
-        gGameTable.title_mv_state++;
-    }
-
-    // 0x004450C0
-    static void sub_4450C0(int a0)
-    {
-        marni::unload_register_surfaces(a0);
-    }
-
-    // 0x0043DF40
-    static void sub_43DF40()
-    {
-        marni::release_object_textures();
-    }
-
-    // 0x0050B910
-    static int sub_50B910(int a0)
-    {
-        return interop::call<int, int>(0x0050B910, a0);
-    }
-
-    // 0x00509CB0
-    static void sub_509CB0(int a0)
-    {
-        interop::call<void, int>(0x00509CB0, a0);
-    }
-
-    // 0x004CAEC0
-    static void init_movie_work(int id)
-    {
-        interop::call<void, int>(0x004CAEC0, id);
-    }
-
-    // 0x00503810
-    static void title_bg_load()
-    {
-        interop::call(0x00503810);
-    }
-
-    // 0x00503680
-    static void capcom_logo()
-    {
-        auto& ctcb = *gGameTable.ctcb;
-        switch (ctcb.var_09)
-        {
-        case 0:
-        {
-            marni::g_renderer->unloadAllTextures();
-            sub_4450C0(1);
-            sub_43DF40();
-            snd_sys_init2();
-            ctcb.var_09 = 4;
-            [[fallthrough]];
-        }
-        case 4:
-        {
-            snd_load_core(0x10, 0);
-            if (ctcb.var_13 == 0)
-            {
-                ctcb.var_09 = 5;
-                task_sleep(120);
-            }
-            break;
-        }
-        case 5:
-        {
-            gGameTable.byte_98F1B9 = 2;
-            ctcb.var_09 = 6;
-            task_sleep(1);
-            break;
-        }
-        case 6:
-        {
-            if (check_flag(FlagGroup::System, FG_SYSTEM_30))
-            {
-                title_bg_load();
-                if (ctcb.var_13)
-                {
-                    break;
-                }
-                ctcb.var_09 = 7;
-            LABEL_17:
-                if (gGameTable.byte_98F1B9)
-                {
-                    task_sleep(1);
-                    break;
-                }
-                if (gGameTable.byte_689F24 == 0)
-                {
-                    auto res = sub_50B910(2);
-                    sub_509CB0(res);
-                    init_movie_work(0);
-                    ctcb.var_09 = 8;
-                    if (check_flag(FlagGroup::System, FG_SYSTEM_22))
-                    {
-                        task_sleep(1);
-                        break;
-                    }
-                }
-                if (++gGameTable.byte_689F24 >= 6)
-                {
-                    gGameTable.byte_689F24 = 0;
-                }
-                title_bg_reload();
-                if (gGameTable.demo_ended == 2)
-                {
-                    set_flag(FlagGroup::System, FG_SYSTEM_30, false);
-                }
-            }
-            else
-            {
-                ctcb.var_09 = 9;
-            LABEL_8:
-                title_bg_load();
-                title_bg_reload();
-            }
-
-            gGameTable.moji_tbl1[0x977] = 1;
-            gGameTable.title_mv_state = TITLE_STATE_TITLE_LOAD;
-            if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
-            {
-                gGameTable.title_mv_state = TITLE_STATE_4TH_SURVIVOR_LOAD;
-            }
-            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
-            {
-                gGameTable.title_mv_state = TITLE_STATE_EXTREME_BATTLE_LOAD;
-            }
-            ctcb.var_09 = 0;
-            break;
-        }
-        case 7:
-        {
-            goto LABEL_17;
-        }
-        case 8:
-        {
-            if (check_flag(FlagGroup::System, FG_SYSTEM_22))
-            {
-                task_sleep(1);
-                break;
-            }
-        }
-        case 9:
-        {
-            goto LABEL_8;
-        }
-        }
-    }
-
-    // 0x00503A70
-    static void title_main_wait()
-    {
-        interop::call(0x00503A70);
-    }
-
-    // 0x00503B80
-    static void title_main_select()
-    {
-        interop::call(0x00503B80);
-    }
-
-    // 0x00505320
-    static void title_main_load()
-    {
-        interop::call(0x00505320);
-    }
-
-    // 0x00503A30
-    static void title_main_game()
-    {
-        marni::unloadTexturePage(18);
-        marni::unloadTexturePage(19);
-        marni::unloadTexturePage(20);
-        marni::unloadTexturePage(21);
-        marni::unloadTexturePage(22);
-        task_chain(game_loop);
-    }
-
-    // 0x00505400
-    static void title_main_option()
-    {
-        interop::call(0x00505400);
-    }
-
-    // 0x00503B20
-    static void sub_503B20()
-    {
-        interop::call(0x00503B20);
-    }
-
-    // 0x00503A20
-    static void title_main()
-    {
-        static Action Title_main_mv[] = {
-            title_main_wait,   // Ti_Disp_add = 0
-            title_main_select, // Ti_Disp_add = 1
-            title_main_load,   // Ti_Disp_add = 2
-            title_main_game,   // Ti_Disp_add = 3
-            title_main_option, // Ti_Disp_add = 4
-            sub_503B20,        // Ti_Disp_add = 5
-        };
-        Title_main_mv[gGameTable.title_disp_add]();
-    }
-
-    // 0x00505460
-    static void title_survivor_load()
-    {
-        interop::call(0x00505460);
-    }
-
-    // 0x00505670
-    static void title_survivor_main()
-    {
-        interop::call(0x00505670);
-    }
-
-    // 0x00506F90
-    static void title_extreme_load()
-    {
-        interop::call(0x00506F90);
-    }
-
-    // 0x00507100
-    static void title_extreme_main()
-    {
-        interop::call(0x00507100);
-    }
-
-    // 0x00507AB0
-    static void title_state_7()
-    {
-        interop::call(0x00507AB0);
-    }
-
-    static Action title_mv[] = {
-        capcom_logo,         title_init,         title_main,         title_survivor_load,
-        title_survivor_main, title_extreme_load, title_extreme_main, title_state_7,
-    };
-
-    // 0x004D1150
-    static void pad_rep_set(uint32_t arg0, uint16_t arg1)
-    {
-        gGameTable.key_repeat_mask = arg0;
-        gGameTable.key_repeat_timing = arg1;
-    }
-
-    // 0x00440480
-    static void add_sprt_v(int x, int y, int w, int h, int u, int v, int clut, int page, int depth, int isBack)
-    {
-        using sig = void (*)(int, int, int, int, int, int, int, int, int, int);
-        auto p = (sig)0x00440480;
-        p(x, y, w, h, u, v, clut, page, depth, isBack);
-    }
-
-    // 0x005065C0
-    static void move_and_display_title_image()
-    {
-        auto& gameTable = gGameTable;
-        if (gameTable.word_691B96 != 0)
-            gameTable.word_691B96 -= 2;
-        if (gameTable.dword_691B9C >= 0)
-        {
-            gameTable.dword_691B9C--;
-            gameTable.word_691B98 = 46 * gameTable.dword_691B9C * gameTable.dword_691B9C / 484 - 46;
-        }
-        gameTable.word_691D7A = gameTable.word_691B98 + 76;
-        gameTable.word_691D8E = gameTable.word_691B98 + 76;
-        gameTable.word_691DA2 = gameTable.word_691B98 + 76;
-        add_sprt_v(gGameTable.word_691D78, gameTable.word_691D7A, 128, 80, 0, 0, 0, 19, 6, 0);
-        add_sprt_v(150, gameTable.word_691D8E, 128, 48, 0, 80, 0, 19, 6, 0);
-        add_sprt_v(150, gameTable.word_691D8E + 48, 128, 32, 0, 0, 0, 20, 6, 0);
-        add_sprt_v(278, gameTable.word_691DA2, 128, 80, 0, 32, 0, 20, 6, 0);
-    }
-
-    // 0x005035B0
-    void title()
-    {
-        gGameTable.timer_r2 = 1;
-        if (!(gGameTable.vk_press & 0x40))
-        {
-            if (gGameTable.vk_press & 8)
-                gGameTable.error_no = 255;
-        }
-        else if (!(gGameTable.vk_press & 8))
-        {
-            gGameTable.reset_r0 = 4;
-            gGameTable.vk_press &= ~0x40;
-            if (gGameTable.vk_press & 8)
-                gGameTable.error_no = 255;
-        }
-        else
-        {
-            gGameTable.error_no = 255;
-        }
-
-        auto& ctcb = *gGameTable.ctcb;
-        if (ctcb.var_08 != 0)
-        {
-            if (ctcb.var_08 != 1)
-                return;
-        }
-        else
-        {
-            pad_rep_set(0x5000, 522);
-            moji_set_work();
-            if (cmdline_start_requested())
-            {
-                // A save file and/or -p/-r room warp was given on the command
-                // line: load it and jump straight into gameplay, skipping the
-                // Capcom logo, disclaimer, video and title menu.
-                logging::logDebug(
-                    "[cmdline] title divert: save={} player={} stage={} room={}",
-                    cmdline_save_requested(),
-                    cmdline_player(),
-                    cmdline_stage(),
-                    cmdline_room());
-                bool loaded = false;
-                if (cmdline_save_requested())
-                {
-                    loaded = cmdline_load_save(cmdline_save_path());
-                }
-                if (loaded)
-                {
-                    // Player/scenario flags are restored by load_pop(); fall
-                    // through to the start divert below.
-                }
-                else if (cmdline_stage() >= 0)
-                {
-                    // Player/scenario flags must be set before game_loop so
-                    // title_game_init picks the right sound bank and the room
-                    // path uses the correct Pl0/Pl1 digit. The scenario comes
-                    // from -s when given, otherwise it is derived from the
-                    // player (PLD_LEON_1/PLD_CLAIRE_1 are the B variants).
-                    const auto player = cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0;
-                    const auto scenario = cmdline_scenario() >= 0 ? cmdline_scenario()
-                                                                  : ((player == PLD_LEON_1 || player == PLD_CLAIRE_1) ? 1 : 0);
-                    set_flag(FlagGroup::Status, FG_STATUS_PLAYER, (player & 1) != 0);
-                    set_flag(FlagGroup::Status, FG_STATUS_SCENARIO, scenario != 0);
-                }
-                else
-                {
-                    // Save failed to load and no room warp was requested:
-                    // fall back to the normal title flow.
-                    gGameTable.title_mv_state = TITLE_STATE_CAPCOM_LOGO;
-                    if (gGameTable.byte_989E90 != 0)
-                    {
-                        gGameTable.title_mv_state = TITLE_STATE_7;
-                        snd_load_core(0x10u, 0);
-                        snd_room_load();
-                        title_bg_load();
-                    }
-                    ctcb.var_08 = 1;
-                }
-                if (loaded || cmdline_stage() >= 0)
-                {
-                    // The boot disclaimer task is still waiting for input; dismiss it
-                    // so it does not linger over the game.
-                    gGameTable.byte_98F1B9 = 0;
-                    task_kill(1);
-                    cmdline_mark_start();
-                    task_chain(game_loop);
-                    return;
-                }
-            }
-            gGameTable.title_mv_state = TITLE_STATE_CAPCOM_LOGO;
-            if (gGameTable.byte_989E90 != 0)
-            {
-                gGameTable.title_mv_state = TITLE_STATE_7;
-                snd_load_core(0x10u, 0);
-                snd_room_load();
-                title_bg_load();
-            }
-            ctcb.var_08 = 1;
-        }
-        title_mv[gGameTable.title_mv_state]();
-        if (ctcb.var_13 == 0)
-        {
-            if (gGameTable.title_mv_state == TITLE_STATE_TITLE_MAIN
-                || gGameTable.title_mv_state == TITLE_STATE_4TH_SURVIVOR_LOAD)
-                move_and_display_title_image();
-            task_sleep(1);
-        }
-    }
-
-    // 0x004CEFF0
-    static void prologue()
-    {
-        interop::call(0x004CEFF0);
-    }
-
-    // 0x004E3A20
-    static int8_t sub_4E3A20()
-    {
-        uint8_t mask = 0;
-        int bits_set = 0;
-        int pos = 0;
-
-        while (true)
-        {
-            if (openre::rnd() & 1)
-            {
-                mask |= 1 << pos;
-                bits_set++;
-                if (bits_set == 4)
-                    break;
-            }
-            pos++;
-            if (pos - bits_set >= 4)
-            {
-                mask |= static_cast<uint8_t>(0xF0 << bits_set);
-                break;
-            }
-            if (pos >= 8)
-            {
-                gGameTable.dword_98EBD0 = mask;
-                gGameTable.pad_98EE80[28] = ~mask;
-                return mask;
-            }
-        }
-        gGameTable.dword_98EBD0 = mask;
-        gGameTable.pad_98EE80[28] = ~mask;
-        return mask;
     }
 
     // 0x005018B0
@@ -578,21 +63,13 @@ namespace openre::title
         interop::call(0x004B7FF0);
     }
 
-    // 0x004EA320
-    static void ex_battle()
-    {
-        interop::call(0x004EA320);
-    }
-
-    // Room-warp placement: puts the player at a room's spawn point with the
-    // same fresh inventory as a new game. Mirrors the demo branch of
-    // title_game_init but sources the values from the arguments instead of
-    // the demo file; FG_SYSTEM_DEMO is deliberately NOT set so input
-    // playback, demo timeout and BGM suppression stay inactive. Shared by
-    // the native command-line warp (title_game_warp_init) and the
-    // module-driven warp latch (core.startRoomWarp ->
-    // legacy_request_warp), re-applied in title_game_init LABEL_5 after
-    // the boot wipe.
+    // Module room-warp placement: puts the player at a room's spawn point with
+    // the same fresh inventory as a new game. FG_SYSTEM_DEMO is deliberately
+    // NOT set so input playback, demo timeout and BGM suppression stay
+    // inactive. This is the module replacement for the removed command-line
+    // -p/-r title divert; the placement survives the boot wipe because it is
+    // re-applied here from the warp latch (core.startRoomWarp ->
+    // legacy_request_warp).
     // 0x00506750 (part of title_game_init)
     static void title_game_setup_warp(int32_t stage, int32_t room, int32_t player)
     {
@@ -648,16 +125,6 @@ namespace openre::title
         gGameTable.dword_99CF6C = 0;
     }
 
-    // Command-line room warp (-p / -r): native entry that sources the
-    // placement from the parsed command-line options.
-    static void title_game_warp_init()
-    {
-        title_game_setup_warp(
-            cmdline_stage() >= 0 ? cmdline_stage() : 0,
-            cmdline_room() >= 0 ? cmdline_room() : 0,
-            cmdline_player() >= 0 ? cmdline_player() : PLD_LEON_0);
-    }
-
     // Demo session setup: position/inventory come from the demo header in
     // gGameTable.pdemo (read by core.loadDemo; outside the boot wipe range).
     // Re-applied in title_game_init LABEL_5 when FG_SYSTEM_DEMO is latched.
@@ -697,18 +164,14 @@ namespace openre::title
     }
 
     // Save restore / scenario-B new game: position, inventory and flags come
-    // from the save image in the card buffer (apply_saved_image restores the
-    // table after the boot wipe for a module load-game; a native title-screen
-    // load applied it earlier and skips the copy).
+    // from the save image in the card buffer. The save image was read into the
+    // card buffer by core.loadGame/core.loadSave but the boot chain's
+    // init_global() wiped the table afterwards, so apply_saved_image() is
+    // deferred here so the restored stage/room/position survive.
     // 0x00506750 (part of title_game_init)
     static void title_game_setup_load()
     {
-        // Module load game: the save image was read into the card buffer by
-        // core.loadGame, but the boot chain's init_global() wiped the table
-        // afterwards. Re-apply it here so the restored stage/room/position
-        // from the file survive (mirrors the ordering of a title-screen load).
-        if (legacy_game_start_requested())
-            apply_saved_image();
+        apply_saved_image();
         gGameTable.pl.m.pos.x = gGameTable.word_98E9BE;
         gGameTable.pl.id = gGameTable.byte_98E9A6;
         gGameTable.pl.m.pos.y = gGameTable.word_98E9C0;
@@ -768,33 +231,23 @@ namespace openre::title
     }
 
     // 0x00506750
-    void title_game_init(bool moduleOnly)
+    //
+    // Game-setup state machine driven from game_loop case 0. Every start is
+    // module-driven now (core.runGame latched demo / new game / save / room
+    // warp before the boot), so the native title and its prologue are gone and
+    // the legacy branches (command-line warp divert, FG_SYSTEM_4, 4th
+    // survivor, extreme battle) no longer exist here. The state machine only
+    // walks the module branches then hands the room/player setup to cases 4-6.
+    void title_game_init()
     {
         auto& ctcb = *gGameTable.ctcb;
         switch (ctcb.var_09)
         {
         case 1: goto LABEL_53;
-        case 2:
-        {
-            // Skip prologue when the module set up the game (core.runGame /
-            // command-line start translated into the module APIs), when
-            // starting from the native command line, or when playing extreme
-            // battle, 4th survivor or demo
-            if (moduleOnly || legacy_game_start_requested() || cmdline_start_active()
-                || check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE) || check_flag(FlagGroup::System, FG_SYSTEM_DEMO)
-                || check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
-            {
-                goto LABEL_5;
-            }
-            task_execute(1, &prologue);
-            ctcb.var_09 = 3;
-            task_sleep(1);
-            return;
-        }
-        case 3:
-        {
-        LABEL_5:
-            gGameTable.dword_99CF6C = 1;
+        case 2: [[fallthrough]];
+                case 3:
+                {
+                    gGameTable.dword_99CF6C = 1;
 
             // Module demo start: the boot chain's init_global() wiped
             // FG_SYSTEM_DEMO, so re-apply it from the latch (set by
@@ -823,10 +276,10 @@ namespace openre::title
 
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
-                // Module room warp (core.startRoomWarp): the command-line
-                // -p/-r warp translated onto the module boot path. The
-                // player/scenario flags the native title() divert used to set
-                // before game_loop are re-applied here after the boot wipe.
+                // Module room warp (core.startRoomWarp): places the player at
+                // the room's spawn point, re-applying the player/scenario
+                // flags that the command-line -p/-r divert used to set before
+                // entering game_loop.
                 if (legacy_warp_requested())
                 {
                     const auto player = legacy_warp_player();
@@ -835,42 +288,9 @@ namespace openre::title
                     title_game_setup_warp(legacy_warp_stage(), legacy_warp_room(), player);
                     legacy_clear_warp_requested();
                 }
-                else if (!moduleOnly && !legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())
-                {
-                    // Native command line room warp (-p / -r)
-                    title_game_warp_init();
-                }
                 else if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
                 {
                     title_game_setup_demo();
-                }
-                else if (!moduleOnly && check_flag(FlagGroup::System, FG_SYSTEM_4))
-                {
-                    gGameTable.pl.sca_old_x = 18802;
-                    gGameTable.pl.old_pos.x = 18802;
-                    gGameTable.pl.m.pos.x = 18802;
-                    gGameTable.pl.sca_old_z = -3164;
-                    gGameTable.pl.old_pos.z = -3164;
-                    gGameTable.pl.m.pos.z = -3164;
-                    gGameTable.current_stage = 0;
-                    gGameTable.current_room = 25;
-                    gGameTable.pl.ground = 0;
-                    gGameTable.pl.m.pos.y = 0;
-                    gGameTable.pl.cdir.y = 2048;
-                    gGameTable.pl.nFloor = 0;
-                    gGameTable.current_cut = 0;
-                    gGameTable.saved_splayer_health = 200;
-                    gGameTable.byte_98EE7B = 0;
-                    gGameTable.pl.id = check_flag(FlagGroup::Status, FG_STATUS_PLAYER);
-                    gGameTable.word_98E9B6 = 200;
-                    gGameTable.pl.life = 200;
-                    gGameTable.poison_status = 0;
-                    gGameTable.poison_timer = 0;
-                    gGameTable.input_mapping_idx = gGameTable.byte_98F1B6;
-                    stage_init_item();
-                    gGameTable.dword_689F20 = 1;
-                    bg_set_mode(2, 0);
-                    gGameTable.dword_99CF6C = 0;
                 }
                 else
                 {
@@ -893,55 +313,8 @@ namespace openre::title
             sub_505B20();
             if (!ctcb.var_13)
             {
-                // 4th survivor mode
-                if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
-                {
-                    gGameTable.current_stage = 2;
-                    gGameTable.current_room = 4;
-                    gGameTable.current_cut = 3;
-                    gGameTable.pl.m.pos.x = -7423;
-                    gGameTable.pl.m.pos.y = 0;
-                    gGameTable.pl.m.pos.z = -24492;
-                    gGameTable.pl.cdir.y = 2048;
-                    gGameTable.pl.nFloor = 0;
-
-                    // TOFU 4th survivor mode
-                    if (check_flag(FlagGroup::System, FG_SYSTEM_31))
-                    {
-                        gGameTable.pl.id = PLD_TOFU;
-                        gGameTable.pl.life = 400;
-                    }
-                    // Normal 4th survivor mode
-                    else
-                    {
-                        gGameTable.pl.id = PLD_HUNK;
-                        gGameTable.pl.life = 200;
-                    }
-                }
-                // Extreme battle mode
-                else if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
-                {
-                    gGameTable.word_98EB20 = gGameTable.byte_540780[gGameTable.pl.id];
-                    gGameTable.ex_battle_mode = gGameTable.byte_691EF3 + 1;
-                    gGameTable.word_98EE7E = gGameTable.byte_989E91;
-                    std::memcpy(&gGameTable.dword_98EEF0, &gGameTable.dword_989E94, 0x3C);
-                    gGameTable.current_stage = 5;
-                    gGameTable.byte_98E798 = 9;
-                    gGameTable.current_room = 18;
-                    gGameTable.current_cut = 1;
-                    gGameTable.pl.m.pos.x = -17674;
-                    gGameTable.pl.m.pos.y = 0;
-                    gGameTable.pl.m.pos.z = -7923;
-                    gGameTable.pl.cdir.y = -1707;
-                    gGameTable.pl.nFloor = 0;
-                    gGameTable.pl.life = 200;
-                    sub_4E3A20();
-                }
                 // New game
-                else
-                {
-                    title_game_setup_new_game();
-                }
+                title_game_setup_new_game();
 
                 gGameTable.pl.old_pos.x = gGameTable.pl.m.pos.x;
                 gGameTable.pl.sca_old_x = gGameTable.pl.m.pos.z;
@@ -963,30 +336,7 @@ namespace openre::title
                 case 1: snd_load_core(0, 4); break;
                 case 2: [[fallthrough]];
                 case 3: snd_load_core(1, 4); break;
-                case 4:
-                {
-                    if (check_flag(FlagGroup::System, FG_SYSTEM_31))
-                    {
-                        snd_load_core(13, 4);
-                    }
-                    else
-                    {
-                        snd_load_core(12, 4);
-                    }
-                    break;
-                }
-                case 5:
-                {
-                    switch (gGameTable.byte_540780[gGameTable.pl.id])
-                    {
-                    case 0: snd_load_core(0, 4); break;
-                    case 1: snd_load_core(1, 4); break;
-                    case 2: snd_load_core(14, 4); break;
-                    case 3: snd_load_core(11, 4); break;
-                    default: break;
-                    }
-                    break;
-                }
+                default: break;
                 }
 
                 snd_sys_init_sub2();
@@ -1045,7 +395,7 @@ namespace openre::title
             gGameTable.byte_98F1B7 = 0;
             bg_set_mode(2, 0);
             hud_fade_off(0);
-            if (check_flag(FlagGroup::System, FG_SYSTEM_14) && !check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
+            if (check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
                 ctcb.var_09 = 1;
             }
@@ -1056,27 +406,9 @@ namespace openre::title
             {
                 gGameTable.byte_989E7E++;
             }
-            if (check_flag(FlagGroup::System, FG_SYSTEM_4TH_SURVIVOR))
-            {
-                gGameTable.byte_989E7E = 4;
-                set_flag(FlagGroup::Status, FG_STATUS_BONUS, true);
-            }
-            if (check_flag(FlagGroup::System, FG_SYSTEM_EX_BATTLE))
-            {
-                gGameTable.byte_989E7E = 5;
-                if (check_flag(FlagGroup::System, FG_SYSTEM_14))
-                {
-                    task_execute(1, &ex_battle);
-                }
-            }
             ctcb.var_09 = 2;
             task_sleep(1);
         }
         }
-    }
-
-    void title_init_hooks()
-    {
-        interop::writeJmp(0x005035B0, &title);
     }
 }

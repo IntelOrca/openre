@@ -232,10 +232,10 @@ namespace openre
 
     // ── Module <-> legacy game handoff ────────────────────────────────────
     // The Lua menu drives the legacy game through core.runGame(). These
-    // latches bridge it to the native boot chain:
-    //   - legacy_request_game_start() makes the boot task (init_main) chain
-    //     straight into game_loop (skipping the native title) and makes
-    //     title_game_init skip the native prologue/setup warps.
+    // latches bridge it to the boot chain (the native title is gone; every
+    // start is module-driven):
+    //   - legacy_request_game_start() marks a module-initiated start; the boot
+    //     task (init_main) always chains straight into game_loop.
     //   - legacy_request_return_to_menu() is called from the native sites that
     //     used to chain the title task; core.runGame() observes its latch to
     //     stop pumping and hand control back to the module.

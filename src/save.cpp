@@ -1868,8 +1868,8 @@ namespace openre::save
     // cmdline_read_save) into the live game table and restores the saved state.
     // Mirrors the CARD_STATE_LOAD recipe. This must run after the boot chain's
     // init_global() wiped the table region, so module load-game defers it here
-    // from title_game_init (a title-screen load) instead of applying it in
-    // core.loadGame where the boot would discard it.
+    // from title_game_init instead of applying it in core.loadGame where the
+    // boot would discard it.
     void apply_saved_image()
     {
         gGameTable.p_card_work = gGameTable.card_work;

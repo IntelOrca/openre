@@ -103,12 +103,6 @@ namespace openre
     /// Tile display code flag: enable textured drawing
     constexpr uint8_t kTileCodeDraw = 2;
 
-    // 0x005007B0
-    static void pc_credits()
-    {
-        interop::call(0x005007B0);
-    }
-
     // 0x0043DF40
     static void sub_43DF40()
     {
@@ -920,75 +914,6 @@ namespace openre
     // 0x004DBFD0
     static void marni_out() {}
 
-    // 0x004C4FF0
-    static void load_disclaimer()
-    {
-        enum
-        {
-            kLoadAdt = 0,
-            kWaitFadeIn = 4,
-            kWaitInput = 5,
-            kFadeOut = 6,
-        };
-
-        auto& task = *gGameTable.ctcb;
-        switch (task.var_08)
-        {
-        case kLoadAdt:
-            gGameTable.byte_98F1B7 = 1;
-            bg_set_mode(0, 0);
-            if (!load_adt("common\\data\\gw2.adt", gGameTable.bg_buffer, 4))
-            {
-                file_error();
-                return;
-            }
-            title::bg_to_surface(gGameTable.bg_buffer);
-            hud_fade_set(512, -1024, 7, 0);
-            task.var_08 = kWaitFadeIn;
-            [[fallthrough]];
-
-        case kWaitFadeIn:
-            if (!hud_fade_status(0))
-            {
-                task_sleep(1);
-                return;
-            }
-            gGameTable.byte_98F1B9 = 1;
-            task.var_08 = kWaitInput;
-            [[fallthrough]];
-
-        case kWaitInput:
-            if (gGameTable.byte_98F1B9 != 2)
-            {
-                task_sleep(1);
-                return;
-            }
-            hud_fade_set(512, 1024, 7, 0);
-            task.var_08 = kFadeOut;
-            [[fallthrough]];
-
-        case kFadeOut:
-            if (hud_fade_status(0))
-            {
-                gGameTable.byte_98F1B7 = 0;
-                bg_set_mode(2, 0);
-                gGameTable.byte_98F1B9 = 0;
-                if (gGameTable.ushinabe)
-                {
-                    pc_credits();
-                }
-                task_exit();
-            }
-            else
-            {
-                task_sleep(1);
-            }
-            return;
-
-        default: return;
-        }
-    }
-
     // Graphics rendering mode for font/texture loading
     enum GraphicsMode : uint8_t
     {
@@ -1003,8 +928,7 @@ namespace openre
         enum
         {
             kInitAudio = 0,
-            kInitDisclaimer = 1,
-            kInitFontsAndTex = 2,
+            kInitFontsAndTex = 1,
         };
 
         auto& task = *gGameTable.ctcb;
@@ -1029,31 +953,11 @@ namespace openre
                     tile.b = 0;
                 }
             }
-            task.var_08 = kInitDisclaimer;
+            task.var_08 = kInitFontsAndTex;
             task_sleep(1);
             break;
 
-        case kInitDisclaimer:
-            if (!legacy_game_start_requested())
-            {
-                gGameTable.byte_98F1B9 = 0;
-                task_execute(1, load_disclaimer);
-            }
-            else
-            {
-                // Module-driven start: the Lua menu owns the boot intro, so
-                // skip the disclaimer overlay (and its input wait) entirely.
-                gGameTable.byte_98F1B9 = 1;
-            }
-            task.var_08 = kInitFontsAndTex;
-            [[fallthrough]];
-
         case kInitFontsAndTex:
-            if (!gGameTable.byte_98F1B9)
-            {
-                task_sleep(1);
-                return;
-            }
             marni_out();
             // Initialize display list tiles
             {
@@ -1150,14 +1054,9 @@ namespace openre
             gGameTable.dword_988610 = 0xD20FF024;
             audio::snd_sys_stereo();
             gGameTable.fg_system |= 2;
-            if (legacy_game_start_requested())
-            {
-                // The module set up a game session (see core.runGame): chain
-                // straight into gameplay, bypassing the native title flow.
-                task_chain(game_loop);
-                return;
-            }
-            task_chain(title::title);
+            // The module owns the boot (core.runGame): chain straight into
+            // gameplay. The native title task this used to chain is gone.
+            task_chain(game_loop);
             return;
 
         error:
@@ -1874,11 +1773,9 @@ namespace openre
         switch (ctcb.var_08)
         {
         case 0:
-            // A module start (core.runGame) drives the setup via its own
-            // APIs, so only take the module branches of the init state
-            // machine (skip the native prologue, command-line warp and other
-            // legacy setup paths).
-            title_game_init(legacy_game_start_requested());
+            // Every start is module-driven now: title_game_init walks only its
+            // module branches (demo / save restore / new game / room warp).
+            title_game_init();
             if (!ctcb.var_13)
             {
                 ctcb.var_08 = 1;
@@ -2999,7 +2896,6 @@ void onAttach()
     interop::writeJmp(0x0050AA10, &operator_delete);
 
     scheduler_init_hooks();
-    title_init_hooks();
     door_init_hooks();
     scd_init_hooks();
     sce_init_hooks();

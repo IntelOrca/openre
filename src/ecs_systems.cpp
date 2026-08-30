@@ -47,13 +47,13 @@ namespace openre::ecs
 {
     void system_boot_scene(Scene& scene)
     {
-        // The scene always carries a LegacyGame node. In module mode it starts
-        // disabled (the module builds its own entities and the legacy systems
-        // skip it); core.runGame() re-enables it to hand the frame back to the
+        // The scene always carries a LegacyGame node. It starts disabled: the
+        // module owns the boot (the native no-module boot is gone) and
+        // core.runGame() re-enables the node to hand the frame back to the
         // legacy game.
         Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
-        legacy.enabled = !game_module_active();
+        legacy.enabled = false;
         const auto windowSize = system::config::get_window_size();
         legacy.size = { (float)windowSize.width, (float)windowSize.height };
     }

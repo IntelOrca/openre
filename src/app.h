@@ -36,13 +36,14 @@ namespace openre
         bool frameActive = false;
 
         // Handoff latches bridging the Lua menu to the legacy game (see
-        // core.runGame in script_bindings.cpp).
-        //   legacyGameStartRequested: set before a module-initiated game; makes
-        //     the boot task chain straight into game_loop (skipping the native
-        //     title) and title_game_init skip the prologue/setup warps.
-        //   legacyReturnToMenu: set by the native "return to title" sites
-        //     (repointed from task_chain(title::title)); polled by core.runGame
-        //     to end the blocking session and hand control back to the module.
+        // core.runGame in script_bindings.cpp). The native title is gone:
+        // every start is module-driven, so init_main always chains into
+        // game_loop and title_game_init walks only its module branches.
+        //   legacyGameStartRequested: set before a module-initiated game.
+        //   legacyReturnToMenu: set by the native "return to menu" sites
+        //     (which used to chain the native title task); polled by
+        //     core.runGame to end the blocking session and hand control back
+        //     to the module.
         //   legacyDemoRequested: set by core.loadDemo; title_game_init
         //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) so the
         //     module-initiated start takes the demo branch.

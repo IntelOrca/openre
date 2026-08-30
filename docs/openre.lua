@@ -869,8 +869,9 @@ function core.startNewGame(player, scenario, difficulty) end
 
 --- Get the parsed command-line options. The module translates a command-line
 --- start (`openre.exe <savefile> -p <player> -r <roomcode> -s <scenario>`)
---- into the module-driven setup APIs + `core.runGame()` at boot (replacing
---- the native `title()` divert). Returns a table:
+--- into the module-driven setup APIs + `core.runGame()` at boot (this
+--- replaced the native `title()` divert, which no longer exists). Returns a
+--- table:
 --- `{ startRequested, saveRequested, savePath, player, stage, room,
 --- scenario }`; `player`/`stage`/`room`/`scenario` are -1 when the argument
 --- was not given.
@@ -894,12 +895,13 @@ function core.startRoomWarp(player, stage, room) end
 --- Hand the frame to the legacy game and block until it returns to the menu.
 ---
 --- The first call boots the legacy game (fonts, audio, room tables) and
---- chains straight into gameplay, skipping the native title screen and
---- prologue. When a save was loaded with `core.loadGame`, the session resumes
---- from it; otherwise the game starts as the current player/scenario settings
---- dictate. On return the legacy game has signalled "return to menu" (or the
---- app is closing), the LegacyGame node is disabled again and the module
---- scene renders once more - the caller usually recreates the menu.
+--- chains straight into gameplay; there is no native title screen or
+--- prologue any more. When a save was loaded with `core.loadGame`, the
+--- session resumes from it; otherwise the game starts as the current
+--- player/scenario settings dictate. On return the legacy game has signalled
+--- "return to menu" (or the app is closing), the LegacyGame node is disabled
+--- again and the module scene renders once more - the caller usually recreates
+--- the menu.
 ---
 --- Like `core.playMovie`, this runs inside a Lua tick hook and suspends the
 --- rest of the frame pipeline until it returns; the module's own script tick
