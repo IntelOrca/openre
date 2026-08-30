@@ -682,6 +682,21 @@ namespace openre::title
                 legacy_clear_demo_requested();
             }
 
+            // Module new-game start: init_global() also wiped the
+            // FG_SYSTEM_14 path and the player/scenario/difficulty flags
+            // core.startNewGame latched, so re-apply them here so the
+            // new-game branch below (sub_505B20 + fresh stage/inventory)
+            // runs with the menu's chosen character and difficulty.
+            if (legacy_new_game_requested())
+            {
+                set_flag(FlagGroup::System, FG_SYSTEM_14, true);
+                set_flag(FlagGroup::Status, FG_STATUS_PLAYER, legacy_new_game_player() != 0);
+                set_flag(FlagGroup::Status, FG_STATUS_SCENARIO, legacy_new_game_scenario() != 0);
+                set_flag(FlagGroup::System, FG_SYSTEM_EASY, legacy_new_game_difficulty() == 1);
+                gGameTable.hard_mode = legacy_new_game_difficulty() == 2 ? 1 : 0;
+                legacy_clear_new_game_requested();
+            }
+
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
                 if (!legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())

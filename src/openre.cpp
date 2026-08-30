@@ -1719,6 +1719,52 @@ namespace openre
             app->legacyDemoRequested = false;
     }
 
+    void legacy_request_new_game(int player, int scenario, int difficulty)
+    {
+        if (auto* app = current_app())
+        {
+            app->legacyNewGameRequested = true;
+            app->newGamePlayer = player;
+            app->newGameScenario = scenario;
+            app->newGameDifficulty = difficulty;
+        }
+    }
+
+    bool legacy_new_game_requested()
+    {
+        auto* app = current_app();
+        return app != nullptr && app->legacyNewGameRequested;
+    }
+
+    // Consumes the new-game latch so a later non-new-game start after this
+    // module session is not hijacked by the new-game branch.
+    void legacy_clear_new_game_requested()
+    {
+        if (auto* app = current_app())
+            app->legacyNewGameRequested = false;
+    }
+
+    int legacy_new_game_player()
+    {
+        if (auto* app = current_app())
+            return app->newGamePlayer;
+        return 0;
+    }
+
+    int legacy_new_game_scenario()
+    {
+        if (auto* app = current_app())
+            return app->newGameScenario;
+        return 0;
+    }
+
+    int legacy_new_game_difficulty()
+    {
+        if (auto* app = current_app())
+            return app->newGameDifficulty;
+        return 0;
+    }
+
     // 0x004BF810
     void game_loop()
     {

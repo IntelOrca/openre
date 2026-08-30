@@ -837,6 +837,23 @@ function core.loadGame(name) end
 ---@return boolean
 function core.loadDemo(name) end
 
+--- Begin a fresh game from the menu before entering gameplay with
+--- `core.runGame()`. `player` is `'leon'` or `'claire'`, `scenario` is
+--- `'a'` or `'b'`, `difficulty` is `'casual'`, `'standard'` or `'hardcore'`.
+---
+--- The choices are latched and re-applied in `title_game_init` after the
+--- boot wipe, so the FG_SYSTEM_14 new-game branch sets up a fresh
+--- stage/inventory with the chosen character and scenario (casual enables
+--- easy mode, hardcore enables hard mode). Returns `true` on success;
+--- `false` for an unknown player/scenario/difficulty.
+---
+--- After a successful start, call `core.runGame()` to actually start the game.
+---@param player string 'leon' | 'claire'
+---@param scenario string 'a' | 'b'
+---@param difficulty string 'casual' | 'standard' | 'hardcore'
+---@return boolean
+function core.startNewGame(player, scenario, difficulty) end
+
 --- Hand the frame to the legacy game and block until it returns to the menu.
 ---
 --- The first call boots the legacy game (fonts, audio, room tables) and

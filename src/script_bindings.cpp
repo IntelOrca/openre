@@ -3220,6 +3220,10 @@ namespace openre::script
             // init_global() wipe, so the restored stage/room/position survive.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             gGameTable.dword_99CF6C = 1;
+            // Clear a stale demo/new-game latch so a previous module session
+            // cannot hijack this resume.
+            openre::legacy_clear_demo_requested();
+            openre::legacy_clear_new_game_requested();
             openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
@@ -3259,6 +3263,64 @@ namespace openre::script
             // the session as a save restore, then latch the demo start.
             gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
             openre::legacy_request_demo();
+            openre::legacy_clear_new_game_requested();
+            openre::legacy_request_game_start();
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.startNewGame(player, scenario, difficulty) - begins a fresh
+        // game from the menu before `core.runGame()`. `player` is 'leon' or
+        // 'claire', `scenario` is 'a' or 'b', `difficulty` is 'casual',
+        // 'standard' or 'hardcore'. The choices are latched and re-applied in
+        // title_game_init after the boot wipe so the FG_SYSTEM_14 new-game
+        // branch sets up a fresh stage/inventory with the chosen character,
+        // scenario and difficulty (casual = easy mode, hardcore = hard mode).
+        // Returns true on success; false for an unknown player/scenario/
+        // difficulty.
+        int coreStartNewGame(lua_State* L)
+        {
+            auto* player = luaL_checkstring(L, 1);
+            auto* scenario = luaL_checkstring(L, 2);
+            auto* difficulty = luaL_checkstring(L, 3);
+
+            int p = 0;
+            if (std::strcmp(player, "claire") == 0)
+                p = 1;
+            else if (std::strcmp(player, "leon") != 0)
+            {
+                logging::logWarning("[core] startNewGame: unknown player '{}'", player);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            int s = 0;
+            if (std::strcmp(scenario, "b") == 0)
+                s = 1;
+            else if (std::strcmp(scenario, "a") != 0)
+            {
+                logging::logWarning("[core] startNewGame: unknown scenario '{}'", scenario);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            int d = 0;
+            if (std::strcmp(difficulty, "casual") == 0)
+                d = 1;
+            else if (std::strcmp(difficulty, "hardcore") == 0)
+                d = 2;
+            else if (std::strcmp(difficulty, "standard") != 0)
+            {
+                logging::logWarning("[core] startNewGame: unknown difficulty '{}'", difficulty);
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            // Clear a stale demo latch so a previous idle-triggered demo
+            // cannot hijack this fresh start.
+            openre::legacy_clear_demo_requested();
+            openre::legacy_request_new_game(p, s, d);
             openre::legacy_request_game_start();
 
             lua_pushboolean(L, 1);
@@ -3530,6 +3592,7 @@ namespace openre::script
         setGlobal(L, "core.setRoleFont", coreSetRoleFont);
         setGlobal(L, "core.loadGame", coreLoadGame);
         setGlobal(L, "core.loadDemo", coreLoadDemo);
+        setGlobal(L, "core.startNewGame", coreStartNewGame);
         setGlobal(L, "core.runGame", coreRunGame);
 
         // options.* - engine-wide settings registry (menu screens).

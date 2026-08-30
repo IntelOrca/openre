@@ -684,7 +684,17 @@ local function launchPrologue(self)
     prologue.start({
         character = ctx.player or 'leon',
         scenario = ctx.scenario or 'a',
-        onFinished = function() Title:new() end,
+        onFinished = function()
+            -- Hand over to the legacy game exactly like load/demo: latch a
+            -- fresh game from the chosen character/scenario/difficulty, then
+            -- block in core.runGame() until it returns to the menu.
+            if core.startNewGame(ctx.player or 'leon', ctx.scenario or 'a', ctx.difficulty or 'standard') then
+                core.runGame()
+            else
+                print('[title] new game failed to start')
+            end
+            Title:new({ mainStory = true })
+        end,
     })
 end
 

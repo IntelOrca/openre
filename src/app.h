@@ -46,9 +46,17 @@ namespace openre
         //   legacyDemoRequested: set by core.loadDemo; title_game_init
         //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) so the
         //     module-initiated start takes the demo branch.
+        //   legacyNewGameRequested + options: set by core.startNewGame;
+        //     title_game_init re-applies the FG_SYSTEM_14 new-game path plus
+        //     the chosen player/scenario/difficulty flags (also wiped by the
+        //     boot) so the module-initiated start begins a fresh game.
         bool legacyGameStartRequested = false;
         bool legacyReturnToMenu = false;
         bool legacyDemoRequested = false;
+        bool legacyNewGameRequested = false;
+        int newGamePlayer = 0;     // 0 = leon, 1 = claire
+        int newGameScenario = 0;   // 0 = scenario A, 1 = scenario B
+        int newGameDifficulty = 0; // 0 = standard, 1 = casual, 2 = hardcore
 
     private:
         bool m_running = true;

@@ -242,12 +242,21 @@ namespace openre
     //   - legacy_request_demo() is set by core.loadDemo(); title_game_init
     //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) from it so the
     //     module-initiated start takes the demo branch.
+    //   - legacy_request_new_game() is set by core.startNewGame();
+    //     title_game_init re-applies the FG_SYSTEM_14 new-game path and the
+    //     chosen player/scenario/difficulty flags (also wiped by the boot).
     void legacy_request_game_start();
     bool legacy_game_start_requested();
     void legacy_request_return_to_menu();
     void legacy_request_demo();
     bool legacy_demo_requested();
     void legacy_clear_demo_requested();
+    void legacy_request_new_game(int player, int scenario, int difficulty);
+    bool legacy_new_game_requested();
+    void legacy_clear_new_game_requested();
+    int legacy_new_game_player();
+    int legacy_new_game_scenario();
+    int legacy_new_game_difficulty();
 
     // ── App shell / ECS bridge ────────────────────────────────────────────
 
