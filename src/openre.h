@@ -239,9 +239,15 @@ namespace openre
     //   - legacy_request_return_to_menu() is called from the native sites that
     //     used to chain the title task; core.runGame() observes its latch to
     //     stop pumping and hand control back to the module.
+    //   - legacy_request_demo() is set by core.loadDemo(); title_game_init
+    //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) from it so the
+    //     module-initiated start takes the demo branch.
     void legacy_request_game_start();
     bool legacy_game_start_requested();
     void legacy_request_return_to_menu();
+    void legacy_request_demo();
+    bool legacy_demo_requested();
+    void legacy_clear_demo_requested();
 
     // ── App shell / ECS bridge ────────────────────────────────────────────
 

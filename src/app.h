@@ -43,8 +43,12 @@ namespace openre
         //   legacyReturnToMenu: set by the native "return to title" sites
         //     (repointed from task_chain(title::title)); polled by core.runGame
         //     to end the blocking session and hand control back to the module.
+        //   legacyDemoRequested: set by core.loadDemo; title_game_init
+        //     re-applies FG_SYSTEM_DEMO (cleared by the boot wipe) so the
+        //     module-initiated start takes the demo branch.
         bool legacyGameStartRequested = false;
         bool legacyReturnToMenu = false;
+        bool legacyDemoRequested = false;
 
     private:
         bool m_running = true;

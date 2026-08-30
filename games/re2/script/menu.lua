@@ -6,12 +6,15 @@
 --
 -- States:
 --   PRESS_START  logo + pulsing START GAME. accept/menu -> MENU. After a
---                timeout the screen fades out and the demo plays (stub).
+--                timeout the screen fades out and the next recorded demo plays
+--                (PDEMO00 -> PDEMO01 -> PDEMO02 -> PDEMO00 -> ...).
 --   MENU         a stack of menu levels. up/down/left/right move the cursor;
 --                accept drills one level in, cancel backs one out (or to
 --                PRESS START at the root). Level changes fade out then the new
 --                level fades in; input is locked during the transition.
---   DEMO         fade out to black, run the demo stub, then fade back in to the
+--   DEMO         fade out to black, then core.loadDemo + core.runGame() drive
+--                the legacy game replaying the demo until it returns to the
+--                menu (native demo timeout/cancel), then fade back in to the
 --                PRESS START screen.
 --   LEAVING      difficulty start sequence: play the 'RESIDENT EVIL 2' voice
 --                bite behind a white flash, fade to black, hold solid black,
@@ -47,6 +50,10 @@ local STATE_OPTIONS     = 4
 
 -- Ticks to wait on the PRESS START screen before the demo plays (~15s @ 60fps).
 local DEMO_TIMEOUT      = 60 * 15
+
+-- Recorded demos, cycled by the idle timeout (Pl0\Pld\PDEMO0N.DAT in the game
+-- data). The native core.loadDemo replays them through the legacy game.
+local DEMOS             = { 'PDEMO00', 'PDEMO01', 'PDEMO02' }
 
 -- Handoff timing when the menu hands over to another screen: fade out to
 -- black, destroy, hold solid black (~1s), then let the new screen fade in.
@@ -599,6 +606,7 @@ local function enterDemo(self)
     self.state = STATE_DEMO
     self.demoPhase = 0
     self.demoTimer = 0
+    self.demoIndex = self.demoIndex or 0 -- next index into DEMOS
     scene.setField(self.pressStart, 'text', '')
 end
 
@@ -680,10 +688,23 @@ local function launchPrologue(self)
     })
 end
 
--- Demo playback placeholder. Real demo replays a recorded gameplay movie; for
--- now we just log so the flow is observable and return immediately.
+-- Demo playback: load the next recorded demo into the legacy game and block
+-- inside core.runGame() (the same blocking call the load screen uses) until
+-- the game's native demo-end/cancel path signals a return to the menu. The
+-- menu stays alive behind the black overlay; when the demo ends the overlay
+-- is consumed by the first rendered frame and updateDemo's later phases fade
+-- back in to the PRESS START screen.
 local function playDemo(self)
-    print('[title] playing demo (stub)')
+    local name = DEMOS[((self.demoIndex or 0) % #DEMOS) + 1]
+    self.demoIndex = ((self.demoIndex or 0) + 1) % #DEMOS
+    if not core.loadDemo(name) then
+        print('[title] demo ' .. name .. ' failed to load; skipping')
+        self.demoPhase = 2
+        return
+    end
+    print('[title] playing demo ' .. name)
+    core.runGame()
+    print('[title] demo ' .. name .. ' finished')
 end
 
 -- Keep one scaled-frame layer tracking the window: recentre it and refresh

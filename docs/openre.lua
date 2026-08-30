@@ -821,6 +821,22 @@ function core.playMovie(movie, captions) end
 ---@return boolean
 function core.loadGame(name) end
 
+--- Load a recorded demo before entering gameplay with `core.runGame()`.
+--- `name` is the demo file base name (e.g. `'PDEMO00'` for
+--- `data://Pl0/Pld/PDEMO00.DAT`).
+---
+--- The demo header+replay block is copied into the demo work area and the
+--- boot is latched as a demo session: the game starts at the demo's recorded
+--- stage/room/position and replays its recorded input. When the demo ends (or
+--- the player presses a key, cancelling it), the game signals "return to
+--- menu" the same way a load-game session does. Returns `true` on success;
+--- `false` when the file cannot be read or is too small to be a valid demo.
+---
+--- After a successful load, call `core.runGame()` to actually start the game.
+---@param name string a demo file base name (e.g. 'PDEMO00')
+---@return boolean
+function core.loadDemo(name) end
+
 --- Hand the frame to the legacy game and block until it returns to the menu.
 ---
 --- The first call boots the legacy game (fonts, audio, room tables) and

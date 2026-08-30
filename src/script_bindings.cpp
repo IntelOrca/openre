@@ -3226,6 +3226,45 @@ namespace openre::script
             return 1;
         }
 
+        // core.loadDemo(name) - loads a demo replay before entering gameplay
+        // with core.runGame(). `name` is the demo file base name (e.g.
+        // "PDEMO00" for data://Pl0/Pld/PDEMO00.DAT). The demo header+replay
+        // block is copied into the pdemo work area, which lives outside the
+        // boot chain's init_global() wipe, and the boot is latched as a demo
+        // session so title_game_init re-applies FG_SYSTEM_DEMO and takes the
+        // original demo branch (position/inventory from the demo file, demo
+        // input playback active). Returns true on success; false when the
+        // file cannot be read or is too small to be a valid demo.
+        int coreLoadDemo(lua_State* L)
+        {
+            auto* name = luaL_checkstring(L, 1);
+
+            auto data = system::fs::readAllBytes((std::string("data://Pl0/Pld/") + name + ".DAT").c_str());
+            if (data.size() < sizeof(DemoPlayer))
+            {
+                logging::logWarning("[core] loadDemo: '{}' not found or too small ({} bytes)", name, data.size());
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+
+            // pdemo (0x991FC8) is outside the boot wipe range, so the replay
+            // survives init_global(). Reset the replay cursor/end markers so
+            // a previous session's state cannot bleed into this one.
+            std::memcpy(&gGameTable.pdemo, data.data(), sizeof(DemoPlayer));
+            gGameTable.demo_frame = 0;
+            gGameTable.demo_ended = 0;
+            gGameTable.byte_991F80 = 0;
+
+            // Clear the "continue" latch so title_game_init does not treat
+            // the session as a save restore, then latch the demo start.
+            gGameTable.fg_system &= ~0x20000u; // FG_SYSTEM_14
+            openre::legacy_request_demo();
+            openre::legacy_request_game_start();
+
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+
         // core.runGame() - hands the frame to the legacy game and blocks until
         // the game returns to the menu (or the app closes), mirroring
         // core.playMovie: this call runs inside a Lua tick hook and the rest of
@@ -3490,6 +3529,7 @@ namespace openre::script
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
         setGlobal(L, "core.setRoleFont", coreSetRoleFont);
         setGlobal(L, "core.loadGame", coreLoadGame);
+        setGlobal(L, "core.loadDemo", coreLoadDemo);
         setGlobal(L, "core.runGame", coreRunGame);
 
         // options.* - engine-wide settings registry (menu screens).

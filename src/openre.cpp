@@ -1699,6 +1699,26 @@ namespace openre
             app->legacyReturnToMenu = true;
     }
 
+    void legacy_request_demo()
+    {
+        if (auto* app = current_app())
+            app->legacyDemoRequested = true;
+    }
+
+    bool legacy_demo_requested()
+    {
+        auto* app = current_app();
+        return app != nullptr && app->legacyDemoRequested;
+    }
+
+    // Consumes the demo latch so a later non-demo start after this module
+    // session is not hijacked by the demo branch.
+    void legacy_clear_demo_requested()
+    {
+        if (auto* app = current_app())
+            app->legacyDemoRequested = false;
+    }
+
     // 0x004BF810
     void game_loop()
     {

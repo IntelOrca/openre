@@ -672,6 +672,16 @@ namespace openre::title
         LABEL_5:
             gGameTable.dword_99CF6C = 1;
 
+            // Module demo start: the boot chain's init_global() wiped
+            // FG_SYSTEM_DEMO, so re-apply it from the latch (set by
+            // core.loadDemo) before the demo branch below is selected.
+            // Consume the latch so a later non-demo start is not hijacked.
+            if (legacy_demo_requested())
+            {
+                set_flag(FlagGroup::System, FG_SYSTEM_DEMO, true);
+                legacy_clear_demo_requested();
+            }
+
             if (!check_flag(FlagGroup::System, FG_SYSTEM_14))
             {
                 if (!legacy_game_start_requested() && cmdline_start_active() && !cmdline_save_requested())
