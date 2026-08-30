@@ -431,33 +431,35 @@ namespace openre::text
             g.advanceY = fallbackAdvanceY;
 
             const bool explicitFont = font != nullptr && (font->fromFnt || font->fromTtf);
-            const FontGlyph* glyph = nullptr;
-            if (font != nullptr && font->fromTtf)
-                glyph = font->ensureGlyph(cp); // rasterize on first use
-            else if (font != nullptr && font->fromFnt)
-                glyph = font->findGlyph(cp);
+            ResolvedGlyph resolved;
+            if (explicitFont)
+                resolved = resolveGlyph(*font, cp); // primary font + fallback chain
 
-            if (glyph != nullptr && cp != 0x20 && glyph->srcW > 0 && glyph->srcH > 0)
+            if (resolved.glyph != nullptr && cp != 0x20 && resolved.glyph->srcW > 0 && resolved.glyph->srcH > 0)
             {
-                // Explicit glyph: kerning-aware metrics and source rect.
+                // Explicit glyph: kerning-aware metrics and source rect. The
+                // atlas may come from a fallback font when the primary font
+                // lacks the codepoint (accents, kana, kanji in sprite fonts).
                 g.hasSrc = true;
-                g.srcX = glyph->srcX;
-                g.srcY = glyph->srcY;
-                g.srcW = glyph->srcW;
-                g.srcH = glyph->srcH;
-                g.texture = font->textures[glyph->textureIndex].atlas;
-                g.advanceX = static_cast<float>(glyph->left + glyph->right);
-                g.leftBearing = static_cast<float>(glyph->left);
-                g.topBearing = static_cast<float>(glyph->top);
+                g.srcX = resolved.glyph->srcX;
+                g.srcY = resolved.glyph->srcY;
+                g.srcW = resolved.glyph->srcW;
+                g.srcH = resolved.glyph->srcH;
+                g.texture = resolved.atlas;
+                g.advanceX = static_cast<float>(resolved.glyph->left + resolved.glyph->right);
+                g.leftBearing = static_cast<float>(resolved.glyph->left);
+                g.topBearing = static_cast<float>(resolved.glyph->top);
             }
             else if (explicitFont)
             {
                 // Spaces, withdrawn glyphs and characters missing from the map
                 // draw nothing but still advance the pen, by their recorded
-                // metrics or the header defaults.
+                // metrics or the header defaults. resolveGlyph only returns
+                // null records for these (tofu and real fallbacks are
+                // drawable), so the primary font's defaults stay authoritative.
                 g.blank = true;
-                const int32_t left = glyph != nullptr ? glyph->left : font->defaultLeft;
-                const int32_t right = glyph != nullptr ? glyph->right : font->defaultRight;
+                const int32_t left = resolved.glyph != nullptr ? resolved.glyph->left : font->defaultLeft;
+                const int32_t right = resolved.glyph != nullptr ? resolved.glyph->right : font->defaultRight;
                 g.advanceX = static_cast<float>(left + right);
                 if (g.advanceX <= 0)
                     g.advanceX = fallbackAdvanceX > 0 ? fallbackAdvanceX : kCellSize;

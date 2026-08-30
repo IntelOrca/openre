@@ -10,6 +10,17 @@
 
 namespace openre
 {
+    // Logical font roles addressing the standard UI fonts. The engine is
+    // generic: a role is a named slot that the game's Lua catalogue (core
+    // ui/font, pinned via core.setRoleFont) binds to whatever fonts it likes,
+    // and that every consumer (scene text defaults, input hints, captions,
+    // the font-swap walk) follows without naming a concrete asset.
+    enum class FontRole : uint8_t
+    {
+        Big = 0,   // the "headline" UI font slot
+        Small = 1, // the "supporting" UI font slot
+    };
+
     /**
      * One glyph record from a .fnt font.
      */
@@ -150,6 +161,50 @@ namespace openre
         // glyphs) for TTF-backed fonts. Returns 0 for non-TTF fonts.
         int kerning(uint32_t previous, uint32_t current) const;
     };
+
+    /**
+     * One glyph resolved through FontResource::resolveGlyph. `glyph` is the
+     * rendered record, or nullptr when nothing at all could be resolved (the
+     * layout then draws a blank advance). `atlas` names the texture holding
+     * the bitmap; when a fallback font produced the glyph it is *that* font's
+     * atlas, not the primary font's.
+     */
+    struct ResolvedGlyph
+    {
+        const FontGlyph* glyph = nullptr;
+        ResourceCookie atlas = 0;
+        bool tofu = false; // true when the record draws the synthetic tofu box
+    };
+
+    // Current cookie for a logical font role ('big'/'small'). The Lua font
+    // catalogue pins it via core.setRoleFont; before the game module resolves
+    // (or for games that never set a role) a native boot default is used.
+    ResourceCookie getRoleFont(FontRole role);
+
+    // The cookie a role referenced immediately before its latest
+    // setRoleFont. Equal to getRoleFont when no role change is pending.
+    // FontSwapSystem pairs previous/current to remap scene text.
+    ResourceCookie previousRoleFont(FontRole role);
+
+    // Pins a role's current (primary) font, plus an optional per-role
+    // *fallback* font. Called by the Lua ui/font catalogue; when the primary
+    // font's resource changes, the swap walk remaps every matching
+    // TextComponent from the previous to the new cookie on the next frame.
+    // The fallback is used by resolveGlyph when a sprite (.fnt) primary lacks
+    // a codepoint, so games choose their own Unicode-coverage font (e.g. a
+    // bundled TTF) instead of the engine hardcoding one. Pass 0 to clear.
+    void setRoleFont(FontRole role, ResourceCookie primary, ResourceCookie fallback = 0);
+
+    // Called by FontSwapSystem after a swap walk; makes previous track
+    // current for both roles so the change is not applied again.
+    void syncRoleSwap();
+
+    // Shared per-codepoint resolver: the primary font's own glyphs first,
+    // then the fallback chain. Sprite (.fnt) fonts fall back to the bundled
+    // core TTF, then the system font, then a synthetic tofu box; TTF fonts
+    // fall back to the system font, then tofu. Both decodeText legs call
+    // this so missing codepoints (accents, kana, kanji) never render blank.
+    ResolvedGlyph resolveGlyph(FontResource& font, uint32_t codepoint);
 
     /**
      * Loads a RE2 font (.fnt file, raw font0/font1 atlas, or a TTF/OTF/TTC

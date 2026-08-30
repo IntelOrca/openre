@@ -647,6 +647,9 @@ namespace openre::script
             return 0;
         }
 
+        // Any FontHandle the catalogue keeps alive is not released here; the
+        // generic __gc above handles both cached and raw gfx.loadFont handles.
+
         // ── runtime (Lua-defined) components ─────────────────────────────
 
         // Parses a field type name ('int' / 'float' / 'bool' / 'string').
@@ -1910,6 +1913,32 @@ namespace openre::script
             return 1;
         }
 
+        // core.setRoleFont(role, font[, fallback])
+        //
+        // Pins a loaded font (from gfx.loadFont) onto a standard UI role name
+        // ('big' or 'small'), plus an optional per-role fallback font used by
+        // the engine when a sprite (.fnt) primary lacks a codepoint. The
+        // native role registry reads these bindings so engine-owned text
+        // (input hints, movie captions) and the FontSwapSystem follow the
+        // same roles without knowing concrete paths. The calling catalogue
+        // must keep the handles alive (ui/font.lua caches them); core tracks
+        // its own references so registered role cookies always resolve.
+        // The UI/font catalogue is the only intended caller.
+        int coreSetRoleFont(lua_State* L)
+        {
+            auto* roleName = luaL_checkstring(L, 1);
+            auto* fontHandle = static_cast<FontHandle*>(luaL_checkudata(L, 2, METATABLE_FONT));
+            const FontRole role = strcmp(roleName, "small") == 0 ? FontRole::Small : FontRole::Big;
+            ResourceCookie fallback = 0;
+            if (lua_gettop(L) >= 3 && !lua_isnil(L, 3))
+            {
+                auto* fallbackHandle = static_cast<FontHandle*>(luaL_checkudata(L, 3, METATABLE_FONT));
+                fallback = fallbackHandle->cookie;
+            }
+            setRoleFont(role, fontHandle->cookie, fallback);
+            return 0;
+        }
+
         int gfxScreenWidth(lua_State* L)
         {
             lua_pushinteger(L, render2d::SpriteRenderer::get().screenWidth());
@@ -3027,7 +3056,7 @@ namespace openre::script
                     captionSize.height = 24.0f;
                     captionText.flags
                         = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
-                    captionText.font = loadFontResource("fonts/sm.fnt");
+                    captionText.font = getRoleFont(FontRole::Small);
                 }
             }
 
@@ -3313,6 +3342,7 @@ namespace openre::script
         // core.* - engine services available to game scripts.
         setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);
         setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
+        setGlobal(L, "core.setRoleFont", coreSetRoleFont);
 
         // options.* - engine-wide settings registry (menu screens).
         setGlobal(L, "options.list", optionsList);

@@ -1,0 +1,20 @@
+Barlow-Regular.ttf / Barlow-Bold.ttf
+=====================================
+
+Barlow is a grotesque typeface by Jeremy Tribby, released under the SIL Open
+Font License, Version 1.1.
+
+    https://barlowfont.com
+    https://openfontlicense.org / https://scripts.sil.org/OFL
+
+The full OFL-1.1 licence text is available from the SIL OFL page above.
+In brief:
+
+* You may use, modify and redistribute the fonts freely.
+* You may not sell the fonts by themselves, but embedding them in software
+  (this project) is allowed.
+* If you redistribute the modified fonts, they must remain under the OFL.
+* The Reserved Font Name "Barlow" may not be used for derivative works.
+
+This project bundles the unmodified Barlow Typeface files solely to provide a
+configurable TTF backing font for the `[options] "font" = Modern` text mode.

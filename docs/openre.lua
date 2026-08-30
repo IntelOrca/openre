@@ -806,6 +806,31 @@ function core.loadMovie(path) end
 ---@return boolean|nil
 function core.playMovie(movie, captions) end
 
+--- Pin a font handle onto one of the standard UI font roles and return nothing.
+---
+--- The native text system addresses logical fonts by **role** (`'big'` /
+--- `'small'`), never by concrete path. The core Lua catalogue
+--- `games/core/script/ui/font.lua` owns which font each role uses per
+--- `[options] "font"` mode and calls this to register its choice; engine text
+--- (input hints, movie captions), the swap walk and every role consumer then
+--- follow the binding.
+---
+--- `fallback` (optional) names a font the engine consults when a sprite
+--- (`.fnt`) primary lacks a codepoint - the game's choice of
+--- Unicode-coverage font. Pass nil to clear it.
+---
+--- The native registry keeps its own reference on each registered cookie, so
+--- the role fonts stay valid even if the caller's handles are collected; when
+--- the underlying resource changes, `core.FontSwap` remaps all existing
+--- `core.Text` entities from the previous to the new font on the next frame.
+---
+--- Prefer going through the catalogue (`ui.font.get(role)` /
+--- `ui.font.refresh()`) rather than calling this directly.
+---@param role "big" | "small"
+---@param font Font a gfx.loadFont handle
+---@param fallback? Font|nil optional per-role glyph fallback font
+function core.setRoleFont(role, font, fallback) end
+
 --[[ InputHandler — the only way to receive input ]]
 
 -- The old global input.down / input.pressed / input.commands /

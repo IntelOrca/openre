@@ -925,8 +925,11 @@ function Title:new(opts)
     -- Fonts and textures borrowed by this menu's components. Resource
     -- handles unload on garbage collection, so the instance must keep every
     -- handle alive for as long as its components reference the cookies.
-    local bigFont = gfx.loadFont('fonts/std.fnt')
-    local smallFont = gfx.loadFont('fonts/sm.fnt')
+    -- Role fonts follow the [options] "font" mode; the swap walk remaps
+    -- already-built scene text, and re-opening re-resolves the roles.
+    local uiFont = require('ui.font')
+    local bigFont = uiFont.get('big')
+    local smallFont = uiFont.get('small')
     local bgTex = gfx.loadTexture('common/data/Title_bg', 320, 240)
     instance.assets = { bigFont, smallFont, bgTex }
 

@@ -99,7 +99,12 @@ class Game:
         return self.http("POST", path, body, timeout=timeout)
 
     def post_raw(self, path, raw, content_type="text/plain"):
-        """POST with a raw (non-JSON) body — /api/eval takes plain Lua."""
+        """POST with a raw (non-JSON) body — /api/eval takes plain Lua.
+        The body may carry non-ASCII UTF-8 (e.g. Japanese save names), so
+        strings are encoded as UTF-8 rather than the HTTP client's default
+        latin-1."""
+        if isinstance(raw, str):
+            raw = raw.encode("utf-8")
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         conn.request("POST", path, body=raw,
                      headers={"Content-Type": content_type})
@@ -334,6 +339,29 @@ def eval_lua(game, code):
     res = game.post_raw("/api/eval", code)  # raw LUA string body, not JSON-wrapped
     if isinstance(res, dict) and not res.get("ok"):
         raise RuntimeError("eval failed: %s" % res)
+    return res
+
+
+def lua_quote(s):
+    """Quote s as a Lua string literal (escapes backslash + quote; UTF-8 passthrough)."""
+    return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def eval_game(game, code):
+    """Run Lua inside the game module VM (the only VM that can require core ui modules).
+
+    The catalogue (require("ui.font")) and its handle cache live there, so font
+    refreshes must run in this VM; the web VM only shares the options bindings.
+    Returns the /api/eval response; asserts the re.evalIn call itself succeeded.
+    """
+    res = eval_lua(game, "return re.evalIn('module.game', " + lua_quote(code) + ")")
+    if isinstance(res, dict) and not res.get("ok"):
+        raise RuntimeError("evalIn wrapper failed: %s" % res)
+    # re.evalIn pushes ok + the game-VM result string; the web plugin serializes
+    # the first return, so result "false" means the game VM reported an error.
+    result = res.get("result") if isinstance(res, dict) else ""
+    if result == "false":
+        raise RuntimeError("evalIn in module.game failed for: %s" % code)
     return res
 
 

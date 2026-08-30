@@ -296,7 +296,8 @@ namespace openre::ecs
         InputHintDevice device = InputHintDevice::KeyboardMouse;
 
         // Font used for `text` (FontResource cookie from gfx.loadFont).
-        // 0 selects the engine default (fonts/std.fnt from the core dir).
+        // 0 selects the engine's default role font (getRoleFont; the game's
+        // ui/font catalogue pins it).
         ResourceCookie font = 0;
 
         // Mirror of the inputs used for relayout detection (filled by the

@@ -19,10 +19,10 @@ local tabs = require('ui.tabs')
 local DESIGN_W = 640
 local DESIGN_H = 480
 
-local stdFont = gfx.loadFont('fonts/std.fnt')
-local smFont = gfx.loadFont('fonts/sm.fnt')
-config.setFont(stdFont)
-tabs.setFont(stdFont)
+-- Role fonts follow the [options] "font" mode. config/tabs store the role
+-- names so controls built after a live font switch resolve the new font.
+config.setFont('big')
+tabs.setFont('big')
 
 local root = scene.getRoot('user')
 
@@ -90,7 +90,7 @@ local function addText(parentHandle, w, h, markup, small, flags, name)
         scene.setField(handle, 'name', name)
     end
     local t = scene.addComponent(handle, 'core.Text')
-    scene.setField(t, 'font', small and smFont or stdFont)
+    scene.setField(t, 'font', small and require('ui.font').get('small') or require('ui.font').get('big'))
     scene.setField(t, 'text', markup)
     scene.setField(t, 'flags', flags or TextFlags.xCenter | TextFlags.yMiddle)
     addSize(handle, w, h)
@@ -330,7 +330,7 @@ local function buildTree()
         local handle = ecs.spawn(right)
         scene.setField(handle, 'name', 'pane_body')
         local t = scene.addComponent(handle, 'core.Text')
-        scene.setField(t, 'font', smFont)
+        scene.setField(t, 'font', require('ui.font').get('small'))
         scene.setField(t, 'text', '')
         scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yTop)
         addSize(handle, DESIGN_W * 0.5 - 32, 0, 1)
@@ -727,6 +727,11 @@ re.subscribe(HookKind.tick, function()
             local value = options.get(v.src.def.id) or v.src.def.default
             v.src.index = valueToIndex(v.src.def, value)
             options.flush()
+            -- The font mode drives the whole UI font catalogue: re-pin the
+            -- roles so the native swap walk remaps live text this frame.
+            if v.src.def.id == 'font' then
+                require('ui.font').refresh()
+            end
             pushRow(v)
         end
     end

@@ -213,3 +213,112 @@ page cells: post-fix the Inter20 'g' cell matches the screen at err ~0.05
 not contain the cell's pixel pattern anywhere around the glyph (visibly
 vertically squashed). Diffing pre/post frames shows the correction lands on
 the bottom halves of glyphs across several text rows.
+
+## Configurable fonts: retro sprite vs modern TTF (2026-08-29)
+
+RE2 ships two sprite fonts used for all UI text: `fonts/std.fnt` (14px line
+box) and `fonts/sm.fnt` (8px line box). Every ECS/Core-UI game can now swap
+those for a bundled TTF at runtime behind a single registered option.
+
+### Font roles
+
+Logical fonts are addressed by **role** (`ui.font.get('big')` /
+`ui.font.get('small')`), never by path. The core Lua catalogue
+`games/core/script/ui/font.lua` maps `role × [options] font mode` to a
+resource and pins it into the native registry via `core.setRoleFont`:
+
+| role  | retro (0)              | modern (1)                          |
+|-------|------------------------|-------------------------------------|
+| big   | `fonts/std.fnt`        | `fonts/Barlow-Regular.ttf` @ 12px   |
+| small | `fonts/sm.fnt`         | `fonts/Barlow-Regular.ttf` @ 7px    |
+
+The TTF sizes were chosen so SDL3_ttf metrics match the sprite line boxes
+exactly (verified in-game):
+
+| font | ascent | descent | lineHeight |
+|------|-------:|--------:|-----------:|
+| std.fnt             | —  | — | **14** |
+| Barlow-Regular.ttf @ 12px | 12 | -2 | **14** |
+| sm.fnt              | —  | — | **8**  |
+| Barlow-Regular.ttf @ 7px  |  7 | -1 | **8**  |
+
+The catalogue owns the policy (which family, which size); native code only
+understands roles:
+- C++: `getRoleFont`/`previousRoleFont`/`setRoleFont`/`syncRoleSwap`
+  (src/font.cpp). Engine-owned text (input-hint labels, movie captions) uses
+  `getRoleFont`. `FontSwapSystem` pairs `previousRoleFont` + `getRoleFont` to
+  remap scene text when a role changes.
+- Lua: `ui.font.get('big' | 'small')` (games/core/script/ui/font.lua). Adopted
+  by `games/core/script/ui/*` and the re2 menus/options/load screens. A generic
+  native boot default (`seedRoleFont`) - the platform *system* font at a plain
+  line-box size - covers pre-Lua text and games that never call the catalogue,
+  so no game asset or font family is hardcoded in the engine. `ui.font.refresh()`
+  re-pins both roles for the current mode; `options.lua` calls it when the Font
+  row changes.
+
+### The `[options] font` toggle (live swap)
+
+- A native enum option `font` (`Retro`/`Modern`, default `Retro`) is registered
+  in src/options.cpp and persists to `[options]` in openre.ini. It appears in
+  the in-game options menu automatically.
+- Changing it in the menu runs `ui.font.refresh()`, which re-loads both roles
+  for the new mode and pins them via `core.setRoleFont`. The registry slides
+  the old cookie into `previous` and keeps a reference on the new one, so both
+  resources stay alive until the swap is applied.
+- `core.FontSwap` (src/ecs_systems.cpp) runs each contiguous frame; when any
+  role's `previous` differs from `current` it walks the scene remapping every
+  `core.Text` entity whose font resource is one of the *previous* role fonts
+  onto the `current` cookie, then calls `syncRoleSwap()` (which also collapses
+  the pending reference). Cookies are distinct numbers per load, so the walk
+  compares **`FontResource` pointers** (resources dedupe by path in the
+  resource manager); anything that is not a role font is left alone.
+- Setting a new font changes the layout fingerprint, so `TextLayoutSystem`
+  re-lays all affected text in the same frame - the swap is realtime.
+- The registry keeps every registered role cookie alive (`setRoleFont` takes
+  its own reference), so scene text never renders against a dead cookie even
+  if the calling Lua handle is later collected.
+
+### Glyph fallback chain
+
+`openre::resolveGlyph(FontResource&, uint32_t)` is the shared per-codepoint
+resolver used by both text legs (`decodeText` for `.fnt`, `ensureGlyph` for
+TTF):
+
+```
+sprite (.fnt) primary  -> role fallback TTF -> system TTF -> tofu box
+TTF       primary      -> system TTF        -> tofu box
+```
+
+- **Role fallback TTF**: a per-role fallback font registered by the catalogue
+  via the third `core.setRoleFont` argument. re2 points the retro sprite roles
+  at `games/core/fonts/Barlow-Regular.ttf` (OFL) opened at each sprite's line
+  box, so accents (é, ç), kana and kanji render instead of blanking under the
+  retro sprite fonts - the same path save-name rows on the Load Game screen
+  take for Japanese save files. The engine never names the font: which
+  fallback each role uses is game policy.
+- **System TTF**: a best-effort known path per platform (Windows
+  `%SystemRoot%\Fonts\msgothic.ttc` / `arialuni.ttf`, macOS Arial Unicode/ST
+  Heiti, Linux DejaVu/Noto CJK), validated at runtime and cached per size.
+  No font-config enumeration in v1.
+- **Tofu**: a synthetic hollow box drawn into a dedicated atlas page
+  (one per size), shown only when every fallback lacks the codepoint.
+- Spaces always stay blank (never drawn/fallbacked/tofued).
+
+### Reference-bug fixed: role-font lifetime (2026-08-29)
+
+The original `core.loadFont` (pre-catalogue; now replaced by `ui/font`)
+handed out the role cache's *shared* cookie without acquiring its own resource
+reference; a collected `FontHandle` then released
+the sprite role font (count 1 -> 0) mid-game, and the recycled cookie number
+was picked up by an unrelated resource, so scene text that lazily rebuilt
+against a dead cookie rendered nothing. The fix and the later catalogue
+refactor both anchor role fonts for the process lifetime: the Lua catalogue
+caches one handle per (role, mode) and the native registry keeps its own
+reference per registered cookie (`setRoleFont` -> `dupRef`, released by
+`syncRoleSwap`), so a registered role cookie always resolves. Verified by
+`tools/test_font_swap.py` (realtime swap + consecutive toggling + fresh-entity
+remap, with assertions keyed on resource *paths*, since cookie numbers change
+per load).
+
+See `docs/openre.lua` for the `core.setRoleFont` binding and
+`tools/test_font_swap.py` for the realtime harness.

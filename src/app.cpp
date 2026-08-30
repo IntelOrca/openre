@@ -44,7 +44,8 @@ namespace openre
         registry.registerNative("core.LegacyGame", { "core.Module" }, {}, SystemPlacement::Default, LegacyGameSystem);
         registry.registerNative("core.ScaledFrame", { "core.LegacyGame" }, {}, SystemPlacement::Default, ScaledFrameSystem);
         registry.registerNative("core.UiFlex", { "core.ScaledFrame" }, {}, SystemPlacement::Default, UiFlexSystem);
-        registry.registerNative("core.InputHint", { "core.UiFlex" }, {}, SystemPlacement::Default, InputHintSystem);
+        registry.registerNative("core.FontSwap", { "core.UiFlex" }, {}, SystemPlacement::Default, FontSwapSystem);
+        registry.registerNative("core.InputHint", { "core.FontSwap" }, {}, SystemPlacement::Default, InputHintSystem);
         registry.registerNative("core.TextLayout", { "core.InputHint" }, {}, SystemPlacement::Default, TextLayoutSystem);
         registry.registerNative("core.Video", { "core.TextLayout" }, {}, SystemPlacement::Default, VideoSystem);
         registry.registerNative("core.Audio", { "core.Video" }, {}, SystemPlacement::Default, AudioSystem);
@@ -283,14 +284,27 @@ namespace openre
             systemRegistry().run(app);
         }
 
-        // Closing pass, in reverse order.
+        // Closing pass, in reverse order. Snapshot by value so systems that
+        // mutate the registry during close can't invalidate the in-flight
+        // iteration.
         app.beginClose();
-        const auto& closingOrder = systemRegistry().ordered();
-        for (auto it = closingOrder.rbegin(); it != closingOrder.rend(); ++it)
+        struct ClosingDispatch
         {
-            SystemDef* def = *it;
-            if (def->kind == SystemKind::Native && def->nativeFn != nullptr)
-                def->nativeFn(app);
+            SystemKind kind;
+            SystemFn nativeFn = nullptr;
+            int managedId = -1;
+        };
+        std::vector<ClosingDispatch> closing;
+        {
+            const auto& ordering = systemRegistry().ordered();
+            closing.reserve(ordering.size());
+            for (SystemDef* def : ordering)
+                closing.push_back({ def->kind, def->nativeFn, def->managedId });
+        }
+        for (auto it = closing.rbegin(); it != closing.rend(); ++it)
+        {
+            if (it->kind == SystemKind::Native && it->nativeFn != nullptr)
+                it->nativeFn(app);
         }
 
         return app.exitCode();

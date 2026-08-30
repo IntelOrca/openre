@@ -3,6 +3,7 @@
 #include "game_module.h"
 #include "logger.h"
 #include "marni_renderer.h"
+#include "options.h"
 #include "render2d.h"
 #include "resmgr.h"
 #include "system_filesystem.h"
@@ -13,6 +14,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <set>
@@ -535,23 +538,13 @@ namespace openre
             }
         }
 
-        // Loads a TTF/OTF/TTC font file into a FontResource and registers it,
-        // returning a ResourceCookie (0 on failure). `logicalPath` may carry a
-        // ":NN" size suffix (default 16px). Glyphs are rasterized lazily by
-        // FontResource::ensureGlyph.
-        ResourceCookie loadTtfFont(std::string logicalPath)
+        // Builds a TTF-backed FontResource from raw font bytes and registers
+        // it, returning a ResourceCookie (0 on failure). `resourceKey` is the
+        // stable identity used for dedup (the ":NN" size suffix is appended).
+        ResourceCookie createTtfFont(const std::string& resourceKey, std::vector<uint8_t> bytes, int pixelSize)
         {
-            int pixelSize = 16;
-            splitSizeSuffix(logicalPath, pixelSize);
             if (pixelSize <= 0)
                 pixelSize = 16;
-
-            std::vector<uint8_t> bytes;
-            if (!findAndReadFont(logicalPath, game_module_dir(), bytes))
-            {
-                logging::logError("[font] TTF font '{}' not found (module dir or data://)", logicalPath);
-                return 0;
-            }
             if (!ensureTtfInitialised())
                 return 0;
 
@@ -573,7 +566,7 @@ namespace openre
                 auto* f = TTF_OpenFontIO(io, true, static_cast<float>(pixelSize));
                 if (f == nullptr)
                 {
-                    logging::logError("[font] TTF_OpenFontIO '{}' ({}px) failed: {}", logicalPath, pixelSize, SDL_GetError());
+                    logging::logError("[font] TTF_OpenFontIO '{}' ({}px) failed: {}", resourceKey, pixelSize, SDL_GetError());
                     SDL_CloseIO(io);
                 }
                 return f;
@@ -605,16 +598,160 @@ namespace openre
             const int ascent = font->ascent;
             const int descent = font->descent;
             const int lineHeight = font->lineHeight();
-            const std::string resourceName = logicalPath + ":" + std::to_string(pixelSize);
+            const std::string resourceName = resourceKey + ":" + std::to_string(pixelSize);
             const auto cookie = resmgr.addFirstRef<FontResource>(resourceName, std::move(font));
             logging::logInfo(
                 "[font] loaded TTF '{}' ({}px) -> cookie {}, ascent {} descent {} lineHeight {}",
-                logicalPath,
+                resourceKey,
                 pixelSize,
                 cookie,
                 ascent,
                 descent,
                 lineHeight);
+            return cookie;
+        }
+
+        // Loads a TTF/OTF/TTC font file into a FontResource and registers it,
+        // returning a ResourceCookie (0 on failure). `logicalPath` may carry a
+        // ":NN" size suffix (default 16px). Glyphs are rasterized lazily by
+        // FontResource::ensureGlyph.
+        ResourceCookie loadTtfFont(std::string logicalPath)
+        {
+            int pixelSize = 16;
+            splitSizeSuffix(logicalPath, pixelSize);
+            if (pixelSize <= 0)
+                pixelSize = 16;
+
+            std::vector<uint8_t> bytes;
+            if (!findAndReadFont(logicalPath, game_module_dir(), bytes))
+            {
+                logging::logError("[font] TTF font '{}' not found (module dir or data://)", logicalPath);
+                return 0;
+            }
+            return createTtfFont(logicalPath, std::move(bytes), pixelSize);
+        }
+
+        // ------------------------------------------------------------------
+        // Font role catalogue + fallback chain (shared by both backends)
+        // ------------------------------------------------------------------
+
+        // Sentinel glyph map key for the synthetic tofu box (PUA codepoint).
+        constexpr uint32_t kTofuCodepoint = 0xF0000;
+
+        // Best-effort path to a system font with broad Unicode coverage,
+        // validated at runtime and cached. Empty when no candidate exists.
+        const std::filesystem::path& systemFontFilePath()
+        {
+            static const std::filesystem::path path = []() -> std::filesystem::path {
+                std::vector<std::filesystem::path> candidates;
+#ifdef _WIN32
+                const std::filesystem::path winDir
+                    = std::getenv("SystemRoot") != nullptr ? std::getenv("SystemRoot") : "C:\\Windows";
+                candidates = { winDir / "Fonts/msgothic.ttc", winDir / "Fonts/arialuni.ttf" };
+#elif defined(__APPLE__)
+                candidates = {
+                    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+                    "/System/Library/Fonts/STHeiti Light.ttc",
+                };
+#else
+                candidates = {
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                };
+#endif
+                std::error_code ec;
+                for (const auto& candidate : candidates)
+                {
+                    if (std::filesystem::is_regular_file(candidate, ec))
+                        return candidate;
+                }
+                return {};
+            }();
+            return path;
+        }
+
+        // System font opened at `pixelSize`, cached per size (0 when the
+        // platform has no usable system font).
+        ResourceCookie systemTtfCookie(int pixelSize)
+        {
+            static std::unordered_map<int, ResourceCookie> cache;
+            auto it = cache.find(pixelSize);
+            if (it != cache.end())
+                return it->second;
+
+            ResourceCookie cookie = 0;
+            const auto& path = systemFontFilePath();
+            if (!path.empty())
+            {
+                std::vector<uint8_t> bytes;
+                if (system::fs::info(path.string().c_str()).kind == system::fs::FileKind::file)
+                    bytes = system::fs::readAllBytes(path.string().c_str());
+                if (!bytes.empty())
+                    cookie = createTtfFont("system://" + path.string(), std::move(bytes), pixelSize);
+            }
+            cache[pixelSize] = cookie;
+            return cookie;
+        }
+
+        // Creates (once per box size) the synthetic "last resort" font: a
+        // hollow tofu box drawn programmatically into an atlas page. Returns
+        // 0 only on page allocation failure.
+        ResourceCookie tofuFontCookie(int boxSize)
+        {
+            static std::unordered_map<int, ResourceCookie> cache;
+            auto it = cache.find(boxSize);
+            if (it != cache.end())
+                return it->second;
+
+            const int boxW = std::max(1, boxSize * 3 / 4);
+            const int boxH = std::max(1, boxSize);
+
+            auto font = std::make_unique<FontResource>();
+            if (ttfAddPage(*font) == 0)
+                return 0;
+
+            const int x = kTtfPad;
+            const int y = kTtfPad;
+            auto& page = font->ttfPages[0];
+            auto setPixel = [&](int px, int py) {
+                if (px < 0 || py < 0 || px >= kTtfPageW || py >= kTtfPageH)
+                    return;
+                uint8_t* d = page.pixels.data() + (static_cast<size_t>(py) * kTtfPageW + static_cast<size_t>(px)) * 4;
+                d[0] = 255;
+                d[1] = 255;
+                d[2] = 255;
+                d[3] = 255;
+            };
+            for (int i = 0; i < boxW; i++)
+            {
+                setPixel(x + i, y);
+                setPixel(x + i, y + boxH - 1);
+            }
+            for (int i = 0; i < boxH; i++)
+            {
+                setPixel(x, y + i);
+                setPixel(x + boxW - 1, y + i);
+            }
+            ttfUploadPage(*font, 0);
+
+            // One shared record stands in for every unresolvable codepoint.
+            FontGlyph g;
+            g.textureIndex = 0;
+            g.left = 0;
+            g.top = 0;
+            g.right = boxW;
+            g.bottom = 0;
+            g.srcX = static_cast<float>(x);
+            g.srcY = static_cast<float>(y);
+            g.srcW = static_cast<float>(boxW);
+            g.srcH = static_cast<float>(boxH);
+            font->glyphs[kTofuCodepoint] = g;
+
+            auto& resmgr = ResourceManager::get();
+            const std::string resourceName = "font:tofu " + std::to_string(boxSize);
+            const auto cookie = resmgr.addFirstRef<FontResource>(resourceName, std::move(font));
+            cache[boxSize] = cookie;
+            logging::logInfo("[font] tofu glyph created ({}x{}) -> cookie {}", boxW, boxH, cookie);
             return cookie;
         }
     } // namespace
@@ -786,5 +923,213 @@ namespace openre
         logging::logInfo(
             "[font] loaded '{}' (small={}) -> cookie {}, atlas {}, {}x{}", filePath, small, cookie, atlasCookie, width, height);
         return cookie;
+    }
+
+    // ── Role font registry (consumed by resolveGlyph below) ───────────────
+    //
+    // The ui/font.lua catalogue in core owns which fonts each role uses and
+    // pins them with core.setRoleFont. Native code reads only the cookies
+    // registered here; engine text and the swap walk never name a concrete
+    // font asset. `previous` captures the pre-change cookie so FontSwapSystem
+    // can remap scene text; `fallback` is the per-role glyph fallback used
+    // when a .fnt primary lacks a codepoint.
+
+    namespace
+    {
+        ResourceCookie s_roleCurrent[2] = {};
+        ResourceCookie s_rolePrevious[2] = {};
+        ResourceCookie s_roleFallback[2] = {};
+    }
+
+    // The fallback FontResource pinned for whichever role currently has
+    // `font` as its primary (previous primaries still count while a swap is
+    // pending, so pre-remap text keeps its fallback). nullptr when the font
+    // is not a registered role primary or the role has no fallback.
+    FontResource* roleFallbackFor(const FontResource& font)
+    {
+        auto& resmgr = ResourceManager::get();
+        for (size_t i = 0; i < std::size(s_roleCurrent); i++)
+        {
+            auto* cur = resmgr.fromCookie<FontResource>(s_roleCurrent[i]);
+            auto* prev = resmgr.fromCookie<FontResource>(s_rolePrevious[i]);
+            if ((cur != nullptr && cur == &font) || (prev != nullptr && prev == &font))
+                return resmgr.fromCookie<FontResource>(s_roleFallback[i]);
+        }
+        return nullptr;
+    }
+
+    ResolvedGlyph resolveGlyph(FontResource& font, uint32_t codepoint)
+    {
+        auto& resmgr = ResourceManager::get();
+
+        // 1) The primary font's own glyphs.
+        if (font.fromFnt)
+        {
+            auto* glyph = font.findGlyph(codepoint);
+            if (glyph != nullptr && glyph->srcW > 0 && glyph->srcH > 0)
+                return { glyph, font.textures[glyph->textureIndex].atlas, false };
+        }
+        else if (font.fromTtf)
+        {
+            // Rasterizes on first use; characters the font actually lacks get
+            // a blank advance-only record instead of a bitmap.
+            auto* glyph = font.ensureGlyph(codepoint);
+            if (glyph != nullptr && glyph->srcW > 0 && glyph->srcH > 0)
+                return { glyph, font.textures[glyph->textureIndex].atlas, false };
+        }
+        else
+        {
+            // Legacy grid atlases (font0/font1) have no fallback chain in v1.
+            return {};
+        }
+
+        // Spaces always stay blank: never drawn, fallbacked or tofued.
+        if (codepoint == 0x20)
+            return { font.findGlyph(codepoint), 0, false };
+
+        // Fallback font size mirrors the primary: TTF fonts keep their own
+        // pixel size; sprite fonts use their line box (14px / 8px).
+        const int size = font.fromTtf ? font.pixelSize : font.lineHeight();
+        if (size <= 0)
+            return {};
+
+        // 2) The role's registered fallback font (sprite primaries only; a
+        //    TTF primary skips straight to the system font). The game's Lua
+        //    catalogue pins this per role via core.setRoleFont, so which font
+        //    covers missing codepoints (accents, kana, kanji) is game policy,
+        //    never an engine hardcode.
+        if (font.fromFnt)
+        {
+            if (auto* fallback = roleFallbackFor(font))
+            {
+                auto* glyph = fallback->ensureGlyph(codepoint);
+                if (glyph != nullptr && glyph->srcW > 0 && glyph->srcH > 0)
+                    return { glyph, fallback->textures[glyph->textureIndex].atlas, false };
+            }
+        }
+
+        // 3) System font, best effort (nil when the platform has none).
+        if (auto* system = resmgr.fromCookie<FontResource>(systemTtfCookie(size)))
+        {
+            auto* glyph = system->ensureGlyph(codepoint);
+            if (glyph != nullptr && glyph->srcW > 0 && glyph->srcH > 0)
+                return { glyph, system->textures[glyph->textureIndex].atlas, false };
+        }
+
+        // 4) Tofu: a synthetic box so unrenderable codepoints visibly stand
+        //    in instead of silently blanking. Box height mirrors the primary
+        //    font's line box.
+        if (auto* tofu = resmgr.fromCookie<FontResource>(tofuFontCookie(font.lineHeight())))
+        {
+            if (auto* glyph = tofu->findGlyph(kTofuCodepoint))
+                return { glyph, tofu->textures[glyph->textureIndex].atlas, true };
+        }
+
+        return {};
+    }
+
+    // Generic engine defaults for the role seeds below: the line boxes the
+    // engine opens the platform system font at for pre-Lua text. Any game
+    // that cares pins its own fonts through core.setRoleFont at boot, so
+    // these only size strictly-prelude engine text (input hints, captions).
+    constexpr int kRoleSeedBigSize = 14;
+    constexpr int kRoleSeedSmallSize = 8;
+
+    // Native boot default for a role, used only before the Lua ui/font
+    // catalogue has pinned the role via core.setRoleFont (and for games that
+    // never call it). Generic by construction: it opens the *system* font at
+    // a plain line-box size, so no game asset, font family or mode policy is
+    // duplicated in native code. The choice of which fonts a role uses (and
+    // at what size) belongs entirely to the Lua catalogue.
+    ResourceCookie seedRoleFont(FontRole role)
+    {
+        static ResourceCookie cache[2] = {};
+        auto& slot = cache[static_cast<int>(role)];
+        if (slot != 0)
+            return slot;
+
+        switch (role)
+        {
+        case FontRole::Big: slot = systemTtfCookie(kRoleSeedBigSize); break;
+        case FontRole::Small: slot = systemTtfCookie(kRoleSeedSmallSize); break;
+        }
+        return slot;
+    }
+
+    // ── Role registry accessors ──────────────────────────────────────────
+    //
+    // Storage lives above with roleFallbackFor (resolveGlyph consumes it);
+    // these functions are the public entry points for the Lua catalogue and
+    // the swap walk. The Lua catalogue keeps its handles alive, so a
+    // registered role cookie always resolves; `previous` captures the
+    // pre-change cookie so FontSwapSystem can remap scene text.
+
+    ResourceCookie getRoleFont(FontRole role)
+    {
+        auto& resmgr = ResourceManager::get();
+        const int index = static_cast<int>(role);
+        if (s_roleCurrent[index] != 0)
+            return s_roleCurrent[index];
+        // First touch: seed from the native boot default. Nothing swaps;
+        // previous points at the same cookie. The slot takes its own
+        // reference so the swap walk's syncRoleSwap release of the previous
+        // cookie never drops the seed cache's permanent reference - the
+        // platform system font must stay resolvable for the whole run.
+        const ResourceCookie seeded = seedRoleFont(role);
+        s_roleCurrent[index] = seeded != 0 ? resmgr.dupRef(seeded) : 0;
+        s_rolePrevious[index] = s_roleCurrent[index];
+        return s_roleCurrent[index];
+    }
+
+    ResourceCookie previousRoleFont(FontRole role)
+    {
+        const int index = static_cast<int>(role);
+        if (s_rolePrevious[index] != 0)
+            return s_rolePrevious[index];
+        return getRoleFont(role);
+    }
+
+    void setRoleFont(FontRole role, ResourceCookie primary, ResourceCookie fallback)
+    {
+        const int index = static_cast<int>(role);
+        auto& resmgr = ResourceManager::get();
+
+        // Register (or clear) the per-role glyph fallback first. The swap
+        // walk does not touch it, so no previous/current dance; the catalogue
+        // keeps its fallback handle alive, and the registry takes its own
+        // reference so the cookie always resolves.
+        if (fallback != s_roleFallback[index])
+        {
+            if (s_roleFallback[index] != 0)
+                resmgr.release(s_roleFallback[index]);
+            s_roleFallback[index] = fallback != 0 ? resmgr.dupRef(fallback) : 0;
+        }
+
+        auto* next = resmgr.fromCookie<FontResource>(primary);
+        if (next == nullptr)
+            return;
+        auto* now = resmgr.fromCookie<FontResource>(s_roleCurrent[index]);
+        if (next == now)
+            return; // Same resource under a different cookie number; nothing to do.
+
+        // Slide the roles: the current slot hands its reference to `previous`,
+        // and the current slot takes a fresh reference on the new cookie. The
+        // swap walk then has both resources alive until syncRoleSwap collapses
+        // previous into current.
+        if (s_rolePrevious[index] != 0 && s_rolePrevious[index] != s_roleCurrent[index])
+            resmgr.release(s_rolePrevious[index]);
+        s_rolePrevious[index] = s_roleCurrent[index];
+        s_roleCurrent[index] = resmgr.dupRef(primary);
+    }
+
+    void syncRoleSwap()
+    {
+        auto& resmgr = ResourceManager::get();
+        for (size_t i = 0; i < 2; i++)
+        {
+            if (s_rolePrevious[i] != 0 && s_rolePrevious[i] != s_roleCurrent[i])
+                resmgr.release(s_rolePrevious[i]);
+            s_rolePrevious[i] = s_roleCurrent[i];
+        }
     }
 }

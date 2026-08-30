@@ -107,12 +107,23 @@ ecs.registerComponent('ui.Tab', {
 -- Small builders -------------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- The one font used by every strip; set before creating strips.
+-- The one font used by every strip; set before creating strips. Either a font
+-- handle or a role name ('big'/'small') re-resolved per strip (see
+-- resolveUiFont below) so strips created after a live font switch track it.
 local uiFont = nil
 
----@param font Font A gfx.loadFont handle.
+---@param font Font|string A gfx.loadFont handle, or a role name ('big'/'small').
 function tabs.setFont(font)
     uiFont = font
+end
+
+-- Role names map onto the current mode's font via ui.font (the core role
+-- catalogue pins it into the native registry); plain handles are used as-is.
+local function resolveUiFont()
+    if type(uiFont) == 'string' then
+        return require('ui.font').get(uiFont)
+    end
+    return uiFont
 end
 
 local function addSize(handle, w, h, weight)
@@ -308,14 +319,14 @@ function tabs.addTab(stripId, label)
         local labelHandle, labelChildId = ecs.spawn(tabHandle)
         scene.setField(labelHandle, 'name', prefix .. '.label')
         local t = scene.addComponent(labelHandle, 'core.Text')
-        scene.setField(t, 'font', uiFont)
+        scene.setField(t, 'font', resolveUiFont())
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
         addSize(labelHandle, 0, 0, 1)
         labelId = labelChildId
         addQuad(tabHandle, prefix .. '.sepR', SEP_W, SEP_H, COLOR_SEPARATOR, Z_SEPARATOR)
     else
         local t = scene.addComponent(tabHandle, 'core.Text')
-        scene.setField(t, 'font', uiFont)
+        scene.setField(t, 'font', resolveUiFont())
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
     end
 

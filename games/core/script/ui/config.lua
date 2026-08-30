@@ -177,12 +177,25 @@ ecs.registerComponent('ui.config.ListGroup', {
 -- Small builders -------------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- The one font used by every control; set before creating any.
+-- The one font used by every control; set before creating any. Either a font
+-- handle or a role name ('big'/'small'). A role is re-resolved every time a
+-- text control is created (see resolveUiFont below) so controls built after a
+-- live [options] font switch pick up the new mode's font automatically.
 local uiFont = nil
 
----@param font Font A gfx.loadFont handle.
+---@param font Font|string A gfx.loadFont handle, or a role name ('big'/'small').
 function config.setFont(font)
     uiFont = font
+end
+
+-- Resolves the configured font each time it is applied. Role names map onto
+-- the current mode's font via ui.font (the core role catalogue pins it into
+-- the native registry); plain handles are used as-is.
+local function resolveUiFont()
+    if type(uiFont) == 'string' then
+        return require('ui.font').get(uiFont)
+    end
+    return uiFont
 end
 
 -- Adds a core.UiSize component to `handle`: the visual size plus an
@@ -347,7 +360,7 @@ function config.addEnum(parent, width, name)
     local labelHandle, labelId = ecs.spawn(stack)
     scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.Text')
-    scene.setField(t, 'font', uiFont)
+    scene.setField(t, 'font', resolveUiFont())
     scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
     addSize(labelHandle, bandW, TEXT_ROW_H)
 
@@ -420,7 +433,7 @@ function config.addRange(parent, width, name)
     local valueText, valueTextId = ecs.spawn(valueHandle)
     scene.setField(valueText, 'name', prefix .. '.value.text')
     local vt = scene.addComponent(valueText, 'core.Text')
-    scene.setField(vt, 'font', uiFont)
+    scene.setField(vt, 'font', resolveUiFont())
     scene.setField(vt, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
     addSize(valueText, 0, 0)
 
@@ -511,7 +524,7 @@ function config.addListItem(parent, x, y, width, name)
     local labelHandle, labelId = ecs.spawn(row)
     scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.Text')
-    scene.setField(t, 'font', uiFont)
+    scene.setField(t, 'font', resolveUiFont())
     scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yMiddle)
     addSize(labelHandle, 0, 0, 1)
 
@@ -595,7 +608,7 @@ function config.addListGroup(parent, x, y, width, name)
     local labelHandle, labelId = ecs.spawn(grayBack)
     scene.setField(labelHandle, 'name', prefix .. '.label')
     local t = scene.addComponent(labelHandle, 'core.Text')
-    scene.setField(t, 'font', uiFont)
+    scene.setField(t, 'font', resolveUiFont())
     scene.setField(t, 'flags', TextFlags.xLeft | TextFlags.yMiddle)
     addSize(labelHandle, 0, 0, 1)
 

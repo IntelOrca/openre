@@ -111,15 +111,32 @@ namespace openre
 
     void SystemRegistry::run(AppContext& app)
     {
-        for (SystemDef* def : ordered())
+        // Snapshot the dispatch list by value up front: Lua-managed systems
+        // may call re.registerSystem()/resetManagedSystems() while the loop
+        // runs, which can reallocate `m_defs` and invalidate every pointer in
+        // `m_order`. Dispatching from the snapshot means systems added
+        // mid-frame run on the next frame, and the in-flight loop can never
+        // dereference a moved/freed SystemDef.
+        struct Dispatch
         {
-            if (def->kind == SystemKind::Native && def->nativeFn != nullptr)
+            SystemKind kind;
+            SystemFn nativeFn = nullptr;
+            int managedId = -1;
+        };
+        std::vector<Dispatch> dispatch;
+        dispatch.reserve(m_defs.size());
+        for (const SystemDef* def : ordered())
+            dispatch.push_back({ def->kind, def->nativeFn, def->managedId });
+
+        for (const Dispatch& d : dispatch)
+        {
+            if (d.kind == SystemKind::Native && d.nativeFn != nullptr)
             {
-                def->nativeFn(app);
+                d.nativeFn(app);
             }
-            else if (def->kind == SystemKind::Managed && m_managedRunner != nullptr)
+            else if (d.kind == SystemKind::Managed && m_managedRunner != nullptr)
             {
-                m_managedRunner(def->managedId);
+                m_managedRunner(d.managedId);
             }
         }
     }

@@ -201,6 +201,62 @@ namespace openre
         app.frameActive = true;
     }
 
+    // ── Font role swap ──────────────────────────────────────────────────
+    //
+    // The ui/font.lua catalogue in core owns font policy. When the [options]
+    // "font" mode changes, the options menu runs ui.font.refresh(), whose
+    // core.setRoleFont calls pin each role onto the new cookie and stash the
+    // old one as `previous`. This system walks the scene on the contiguous
+    // frame and remaps every TextComponent whose font resource is one of the
+    // previous role fonts onto the current role cookie, then syncs the roles
+    // so the pending state collapses. Font cookies from gfx.loadFont() are
+    // distinct numbers each load, so the walk compares FontResource pointers
+    // (the resource dedupes by path); anything that is not a role font is
+    // left alone. Assigning a new font changes the layout fingerprint, so
+    // TextLayoutSystem re-lays all affected text in the same frame; input
+    // hint labels are scene entities too and are reached by the same walk.
+    void FontSwapSystem(AppContext& app)
+    {
+        if (app.closing() || !app.running())
+            return;
+        if (!game_module_active())
+            return;
+        // Only act on the contiguous frame that can swap; on throttled frames
+        // frameActive is still false from the previous present, and collapsing
+        // there would drop a swap between frames.
+        if (!app.frameActive)
+            return;
+        // A pending swap is signalled by previous != current on any role; the
+        // registry {previous, current} pair is what setRoleFont leaves behind.
+        const ResourceCookie prevBig = previousRoleFont(FontRole::Big);
+        const ResourceCookie prevSmall = previousRoleFont(FontRole::Small);
+        const ResourceCookie currBig = getRoleFont(FontRole::Big);
+        const ResourceCookie currSmall = getRoleFont(FontRole::Small);
+        if (prevBig == currBig && prevSmall == currSmall)
+            return;
+
+        auto& resmgr = ResourceManager::get();
+        const auto* oldBig = resmgr.fromCookie<FontResource>(prevBig);
+        const auto* oldSmall = resmgr.fromCookie<FontResource>(prevSmall);
+        size_t swapped = 0;
+        app.scene.each<ecs::TextComponent>([&](ecs::Entity, ecs::TextComponent& text) {
+            const auto* res = resmgr.fromCookie<FontResource>(text.font);
+            if (res == oldBig && oldBig != nullptr)
+            {
+                text.font = currBig;
+                ++swapped;
+            }
+            else if (res == oldSmall && oldSmall != nullptr)
+            {
+                text.font = currSmall;
+                ++swapped;
+            }
+        });
+
+        syncRoleSwap();
+        logging::logInfo("[font] swap: {} text component(s) {}", swapped, swapped == 0 ? "(no-op)" : "re-role'd");
+    }
+
     // ── Input hints ─────────────────────────────────────────────────────
     //
     // Two shared atlases (32x32 cells, 16 per row) live in the core asset
@@ -746,8 +802,9 @@ namespace openre
 
     ResourceCookie inputHintFont()
     {
-        static ResourceCookie cookie = loadFontResource("fonts/std.fnt");
-        return cookie;
+        // Follow the Lua ui/font catalogue's role binding so hint labels swap
+        // with the rest of the UI text. getRoleFont caches, so this is cheap.
+        return getRoleFont(FontRole::Big);
     }
 
     // Resolves a hint to a list of atlas cells (one per icon). A registered

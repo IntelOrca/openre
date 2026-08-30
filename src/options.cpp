@@ -278,6 +278,16 @@ namespace openre::options
                     "Switches between the modern presentation and the original retro look."),
                 { "Normal", "Retro" },
                 0);
+            add_enum(
+                make_def(
+                    "GRAPHICS",
+                    "Display",
+                    "Display",
+                    "font",
+                    "Font",
+                    "Switches UI text between the original sprite fonts and a bundled TTF font."),
+                { "Retro", "Modern" },
+                0);
             // GRAPHICS / Image
             add_enum(
                 make_def(

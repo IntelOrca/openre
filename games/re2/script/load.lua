@@ -218,8 +218,9 @@ function LoadScreen:new(opts)
         nav.cancel = containsCommand(frame.press, 'cancel')
     end)
 
-    -- Fonts and textures must stay referenced or they unload on GC.
-    instance.font = gfx.loadFont('fonts/std.fnt')
+    -- Fonts and textures must stay referenced or they unload on GC. Role
+    -- fonts follow the [options] "font" mode (swapped live by the engine).
+    instance.font = require('ui.font').get('big')
     instance.bgTexture = gfx.loadTexture('common/data/type00', CANVAS_W, CANVAS_H)
     if instance.bgTexture then
         local e = scene.createEntity(instance.back)
