@@ -48,30 +48,8 @@ namespace openre::script
 
         processPendingEvents();
 
-        for (auto& entry : _scripts)
-        {
-            if (entry.second)
-            {
-                entry.second->callHooks(HookKind::tick);
-            }
-        }
-
-        // Second phase: runs after every tick hook of every script. Systems
-        // that react to scene mutations (the Lua ECS population systems) live
-        // here so an entity spawned by any tick hook is fully populated
-        // before the renderers read the scene - hook order within a VM is
-        // subscription order and across VMs unspecified, so a plain tick
-        // subscription cannot guarantee this.
-        for (auto& entry : _scripts)
-        {
-            if (entry.second)
-            {
-                entry.second->callHooks(HookKind::post_tick);
-            }
-        }
-
-        // A game-module change schedules a reload that mutates _scripts, so do it
-        // after the tick hooks have run to avoid invalidating the iterator above.
+        // A game-module change schedules a reload that mutates _scripts, so do
+        // it after any startup loads above to avoid invalidating iterators.
         if (_pendingGameModuleReload)
         {
             _pendingGameModuleReload = false;
@@ -92,16 +70,6 @@ namespace openre::script
                 if (entry.second)
                     entry.second->collectGarbage();
             }
-        }
-    }
-
-    void ScriptManager::pumpScript(const std::string& name)
-    {
-        auto it = _scripts.find(name);
-        if (it != _scripts.end() && it->second)
-        {
-            it->second->callHooks(HookKind::tick);
-            it->second->callHooks(HookKind::post_tick);
         }
     }
 

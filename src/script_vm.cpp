@@ -243,31 +243,6 @@ namespace openre::script
         return true;
     }
 
-    void LuaVm::callHooks(HookKind kind)
-    {
-        for (const auto& subscription : _subscriptions)
-        {
-            if (subscription.kind != kind)
-            {
-                continue;
-            }
-
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, subscription.registryRef);
-            auto result = lua_pcall(_state, 0, 0, 0);
-            if (result != LUA_OK)
-            {
-                auto* errorString = lua_tostring(_state, -1);
-                openre::logging::logWarning("[script] {}: {}", _name, errorString != nullptr ? errorString : "(unknown error)");
-                lua_pop(_state, 1);
-            }
-        }
-    }
-
-    void LuaVm::subscribe(HookKind kind, int registryRef)
-    {
-        _subscriptions.push_back({ kind, registryRef });
-    }
-
     void LuaVm::collectGarbage()
     {
         if (_state != nullptr)

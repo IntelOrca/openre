@@ -23,13 +23,12 @@ namespace openre::script
         ScriptManager(const ScriptManager&) = delete;
         ScriptManager& operator=(const ScriptManager&) = delete;
 
-        // Called once per frame from the game loop.
+        // Called once per frame: lazily loads the OPENRE_SCRIPTS files, drains
+        // file-watcher events and performs module-reload housekeeping. Scripts
+        // are no longer driven by per-frame tick hooks; the game module and any
+        // auxiliary scripts (e.g. web.lua) drive themselves through registered
+        // managed systems (re.setSystemRunner / re.registerSystem).
         void tick();
-
-        // Runs the tick hooks of a single named script. Used to keep specific
-        // scripts (e.g. the web inspector) alive while the main loop is blocked
-        // inside a long-running hook such as a blocking movie playback.
-        void pumpScript(const std::string& name);
 
         // Loads a game module directory (games/<name>) - runs main.lua in a
         // dedicated Lua VM registered so tick() drives it. No-op if already

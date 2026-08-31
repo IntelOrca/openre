@@ -15,11 +15,6 @@ namespace openre::script
         ScriptManager::get().tick();
     }
 
-    void pumpScript(const std::string& name)
-    {
-        ScriptManager::get().pumpScript(name);
-    }
-
     void loadGameModule(const std::filesystem::path& dir)
     {
         ScriptManager::get().loadGameModule(dir);

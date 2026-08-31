@@ -66,6 +66,19 @@ local function installWebInputHandler()
             if webInput.active then
                 frame.state = webInput.state
                 frame.press = webInput.press
+                -- Consume an armed tap here, at the input-walk cadence, rather
+                -- than counting frames in web.Pump: the walk runs at the
+                -- throttled 60fps cadence while web.Pump runs every engine
+                -- frame (~450fps), so a pump-side decrement would expire a
+                -- ticks=1 tap before the next walk could inject it.
+                if webInput.tapTicks > 0 then
+                    webInput.tapTicks = webInput.tapTicks - 1
+                    if webInput.tapTicks == 0 then
+                        webInput.active = false
+                        webInput.state = {}
+                        webInput.press = {}
+                    end
+                end
             end
         end)
         webInput.entity = ent
@@ -1061,12 +1074,30 @@ local function handle(sock, req)
     end
 end
 
--- Requests are received across ticks: read() returns whatever the network
+-- Requests are received across frames: read() returns whatever the network
 -- thread has buffered so far (best-effort), so we accumulate until the
 -- header terminator arrives, then handle the request.
 local inflight = {}
 
-re.subscribe(HookKind.tick, function()
+-- Managed-system harness for this script VM, mirroring ecs.lua: the engine
+-- dispatches registered systems through the runner installed with
+-- re.setSystemRunner (kept per-VM, so this coexists with the game module's
+-- own runner). We only drive a single per-frame pump system here.
+local webSystemsById = {}
+re.resetManagedSystems() -- drop stale web.Pump defs from an earlier web.lua load
+
+local function webRunSystem(id)
+    local fn = webSystemsById[id]
+    if fn then
+        local ok, err = pcall(fn)
+        if not ok then
+            print("web: managed system failed: " .. tostring(err))
+        end
+    end
+end
+re.setSystemRunner(webRunSystem)
+
+webSystemsById[1] = function()
     -- Install the InputHandler sample once the scene exists.
     installWebInputHandler()
 
@@ -1076,17 +1107,12 @@ re.subscribe(HookKind.tick, function()
         print("web: inspector overlay error: " .. tostring(ierr))
     end
 
-    -- Auto-clear an armed tap once its window elapses (see /api/input/tap).
-    -- Decremented before requests are handled below, so a tap landed on this
-    -- tick keeps its full window from the next tick on.
-    if webInput.tapTicks > 0 then
-        webInput.tapTicks = webInput.tapTicks - 1
-        if webInput.tapTicks == 0 then
-            webInput.active = false
-            webInput.state = {}
-            webInput.press = {}
-        end
-    end
+    -- A tap's expiry is driven from the web_input InputHandler (which runs at
+    -- the throttled input-walk cadence) rather than counted in frames here:
+    -- web.Pump and the walk can still land on different frames within the
+    -- paced cadence, and counting from the pump side would expire a taps=1 edge
+    -- a frame early. The handler consumes one tick per injection instead.
+    -- (see installWebInputHandler)
 
     -- Serve a requested screenshot once the renderer has grabbed the frame.
     if pendingShot and gfx.takeScreenshot then
@@ -1140,6 +1166,11 @@ re.subscribe(HookKind.tick, function()
             pcall(function() sock:dispose() end)
         end
     end
-end)
+end
+-- Run after core.Module, whose pad_set() performs the input walk. A tap
+-- armed here (POST /api/input/tap) is injected by the *next* paced frame's
+-- input walk and consumed by the web_input handler at the walk cadence, so a
+-- ticks=1 tap yields exactly one edge (same as the old tick hook cadence).
+re.registerSystem("web.Pump", { "core.Module" }, {}, "default", 1)
 
 

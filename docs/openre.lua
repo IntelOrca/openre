@@ -25,15 +25,6 @@ function require(name) end
 
 --[[ Enum tables (runtime globals) ]]
 
----@enum HookKind
-HookKind = {
-    --- Fired every game frame.
-    tick = 1,
-    --- Fired after every tick hook has run, same frame. Use for systems that
-    --- must observe scene mutations made by tick hooks.
-    post_tick = 2,
-}
-
 ---@enum LogLevel
 LogLevel = {
     info = 1,
@@ -130,12 +121,6 @@ local Entity = {}
 
 ---@class re
 local re = {}
-
---- Subscribe a hook callback. Supported kinds: HookKind.tick and
---- HookKind.post_tick (fires after all tick hooks, same frame).
----@param kind HookKind
----@param fn function Called on the hook event.
-function re.subscribe(kind, fn) end
 
 --- All registered systems (native `core.*` and Lua-managed) in resolved
 --- dispatch order. Each entry is
@@ -804,9 +789,10 @@ function core.loadMovie(path) end
 --- order and the first match wins. Captions need a loadable font resource to
 --- be visible; without one they are silently skipped (never a crash).
 ---
---- `core.playMovie` drives playback itself, so it runs inside a tick hook and
---- suspends the frame pipeline until it returns. For async playback from a
---- registered ECS system, instead give an entity a `core.Video` component
+--- `core.playMovie` drives playback itself, so it blocks the main thread
+--- (suspending the whole frame pipeline, including the web inspector's
+--- managed systems) until the movie ends. New game code should prefer the
+--- async path for a registered system: give an entity a `core.Video` component
 --- (set `movie` then `status` = 1 / Playing) and let the native VideoSystem
 --- auto-start the decoder on the next pass. Destroying that entity is the
 --- whole teardown: the decoder and dynamic texture are released by the
@@ -901,23 +887,32 @@ function core.cmdline() end
 ---@return boolean
 function core.startRoomWarp(player, stage, room) end
 
---- Hand the frame to the legacy game and block until it returns to the menu.
+--- Hand the frame to the legacy game and return immediately (non-blocking).
+---
+--- The LegacyGame node is enabled so the legacy game drives the frame inside
+--- the normal app loop; when the legacy game signals "return to menu" (e.g. a
+--- demo ended or a save session finished), the node is disabled again and the
+--- module scene renders once more. Poll `core.inGame()` to react to that
+--- transition, or register a resume callback with the game module's
+--- `game.resumeAfterGame` helper (see `games/re2/script/game.lua`).
 ---
 --- The first call boots the legacy game (fonts, audio, room tables) and
 --- chains straight into gameplay; there are no native boot screens or
 --- prologue any more. When a save was loaded with `core.loadGame`, the
 --- session resumes from it; otherwise the game starts as the current
---- player/scenario settings dictate. On return the legacy game has signalled
---- "return to menu" (or the app is closing), the LegacyGame node is disabled
---- again and the module scene renders once more - the caller usually recreates
---- the menu.
+--- player/scenario settings dictate.
 ---
---- Like `core.playMovie`, this runs inside a Lua tick hook and suspends the
---- rest of the frame pipeline until it returns; the module's own script tick
---- still runs from the legacy update (nested) so the web inspector and other
---- Lua-owned systems keep responding.
+--- Prefer this async form over `core.playMovie`'s blocking loop: it keeps
+--- the whole registry (including the web inspector's managed systems) running
+--- while the game plays.
 ---@return boolean
 function core.runGame() end
+
+--- True while a `core.runGame()` session is live (the LegacyGame node is
+--- enabled and driving the frame). Flips to false on the first frame after
+--- the legacy game returns to the menu.
+---@return boolean
+function core.inGame() end
 
 --- Pin a font handle onto one of the standard UI font roles and return nothing.
 ---

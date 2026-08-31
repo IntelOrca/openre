@@ -53,7 +53,7 @@ namespace openre::ecs
         // legacy game.
         Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
-legacy.enabled = false;
+        legacy.enabled = false;
         const auto windowSize = system::config::get_screen_resolution();
         legacy.size = { (float)windowSize.width, (float)windowSize.height };
     }
@@ -114,12 +114,13 @@ namespace openre
             return;
         }
 
-        // Special states (movie / reset) consume the frame, but we still
-        // tick scripts so the web inspector server keeps responding while
-        // a movie plays (otherwise HTTP requests hang until it finishes).
+        // Special states (movie / reset) consume the frame; the renderer still
+        // presents whatever was drawn, and managed systems (web inspector
+        // included) keep running on this paced frame (this branch replaced the
+        // old explicit script::tick() call that kept HTTP requests flowing).
         if (handle_special_states())
         {
-            openre::script::tick();
+            app.framePaced = true;
             return;
         }
 
@@ -133,6 +134,23 @@ namespace openre
 
         // A full game frame advanced; the render system presents it this frame.
         app.frameActive = true;
+        // Managed Lua systems run on the same throttled cadence (in sync with
+        // the input walk inside update_game/psx_main), replacing the old tick
+        // hooks.
+        app.framePaced = true;
+
+        // core.runGame() is non-blocking: the legacy game signals a return to
+        // the menu through this flag. Disable the node here so the module
+        // (and its screens) resume rendering from the next frame.
+        if (app.legacyReturnToMenu)
+        {
+            auto& mutLegacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
+            if (mutLegacy.enabled)
+            {
+                mutLegacy.enabled = false;
+                app.legacyReturnToMenu = false;
+            }
+        }
     }
 
     void ModuleSystem(AppContext& app)
@@ -143,6 +161,14 @@ namespace openre
         // Only active when a game module is loaded; otherwise the legacy game
         // (LegacyGameSystem) drives the frame.
         if (!game_module_active())
+            return;
+
+        // While a core.runGame() session is live the LegacyGame node is enabled
+        // and owns the frame: skip pad_set (the legacy game's own loop already
+        // ran it) and script maintenance so the module never double-processes
+        // input or renders a stale frame over gameplay.
+        auto legacyEntity = app.scene.find<ecs::LegacyGameComponent>();
+        if (legacyEntity != ecs::NullEntity && app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled)
             return;
 
         // Mirror the OG loop's window-inactive sleep.
@@ -193,6 +219,9 @@ namespace openre
 
         // A full module frame advanced; the render system presents it.
         app.frameActive = true;
+        // Managed Lua systems run on the same throttled cadence (in sync with
+        // the input walk above), replacing the old script::tick tick hooks.
+        app.framePaced = true;
     }
 
     // ── Font role swap ──────────────────────────────────────────────────

@@ -111,6 +111,11 @@ namespace openre
 
     void SystemRegistry::run(AppContext& app)
     {
+        // Reset the paced-frame signal: the frame producers (core.Module,
+        // core.LegacyGame) set it when they advance the game on a throttled
+        // frame, and only then are managed Lua systems dispatched (see below).
+        app.framePaced = false;
+
         // Snapshot the dispatch list by value up front: Lua-managed systems
         // may call re.registerSystem()/resetManagedSystems() while the loop
         // runs, which can reallocate `m_defs` and invalidate every pointer in
@@ -126,7 +131,9 @@ namespace openre
         std::vector<Dispatch> dispatch;
         dispatch.reserve(m_defs.size());
         for (const SystemDef* def : ordered())
+        {
             dispatch.push_back({ def->kind, def->nativeFn, def->managedId });
+        }
 
         for (const Dispatch& d : dispatch)
         {
@@ -134,8 +141,16 @@ namespace openre
             {
                 d.nativeFn(app);
             }
-            else if (d.kind == SystemKind::Managed && m_managedRunner != nullptr)
+            else if (d.kind == SystemKind::Managed && m_managedRunner != nullptr && app.framePaced)
             {
+                // Managed Lua systems replace the old tick hooks, which ran
+                // inside script::tick() on the frame-rate-throttled cadence
+                // (in sync with the input walk). Only dispatch them on frames
+                // where ModuleSystem/LegacyGameSystem actually advanced the
+                // game (framePaced set by the producers); the uncapped
+                // iterations between paced frames must not run them or their
+                // input handling desyncs (one tap stays visible across several
+                // update() calls).
                 m_managedRunner(d.managedId);
             }
         }

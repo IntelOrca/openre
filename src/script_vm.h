@@ -9,12 +9,6 @@ struct lua_State;
 
 namespace openre::script
 {
-    enum class HookKind
-    {
-        tick = 1,
-        post_tick = 2,
-    };
-
     // A single Lua execution environment for one script file.
     // All Lua execution happens on the game thread.
     class LuaVm
@@ -45,29 +39,16 @@ namespace openre::script
         // `outResult`. Never raises into the caller.
         bool runString(const std::string& code, std::string& outResult);
 
-        // Invoke all hooks subscribed for `kind`, each wrapped in pcall.
-        void callHooks(HookKind kind);
-
         // Force a full garbage collection cycle in this VM.
         void collectGarbage();
 
         // Close the Lua state, running all __gc finalizers (disposes sockets etc).
         void dispose();
 
-        // Store a Lua registry reference for a subscribed hook (re.subscribe).
-        void subscribe(HookKind kind, int registryRef);
-
     private:
-        struct HookInfo
-        {
-            HookKind kind;
-            int registryRef;
-        };
-
         std::string _name;
         std::vector<std::filesystem::path> _searchPaths;
         lua_State* _state{};
-        std::vector<HookInfo> _subscriptions;
     };
 
     std::unique_ptr<LuaVm> createLuaVm(std::string name, std::vector<std::filesystem::path> searchPaths);

@@ -39,6 +39,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -386,22 +387,6 @@ namespace openre::script
             return 0;
         }
 
-        int apiSubscribe(lua_State* L)
-        {
-            auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
-            auto kind = static_cast<int32_t>(luaL_checkinteger(L, 1));
-            if (kind != static_cast<int32_t>(HookKind::tick) && kind != static_cast<int32_t>(HookKind::post_tick))
-            {
-                return luaL_error(L, "unsupported hook kind: %d", kind);
-            }
-
-            luaL_checktype(L, 2, LUA_TFUNCTION);
-            lua_pushvalue(L, 2);
-            auto ref = luaL_ref(L, LUA_REGISTRYINDEX);
-            vm->subscribe(static_cast<HookKind>(kind), ref);
-            return 0;
-        }
-
         // ── system registry bridge (native + Lua-managed systems) ─────────
 
         // Pushes a Lua string array at index `arg` (stack: table) into `out`.
@@ -471,58 +456,131 @@ namespace openre::script
             return 1;
         }
 
+        // One globally-unique registered managed system entry: the owning VM
+        // plus its local (VM-relative) id, which the VM's runner resolves.
+        struct ManagedSystemEntry
+        {
+            LuaVm* vm = nullptr;
+            int localId = -1;
+        };
+
+        // Incrementing source of globally-unique managed ids (the shared
+        // registry dispatches managed systems by this id; Lua ids stay local
+        // to each VM).
+        int gNextManagedId = 0;
+        std::unordered_map<int, ManagedSystemEntry> gManagedSystems;
+        // Per-VM registry references to the runner fn installed by
+        // re.setSystemRunner (the Lua ECS module or an auxiliary script).
+        std::unordered_map<LuaVm*, int> gVmRunnerRef;
+        // Per-VM names of the managed systems it registered, so
+        // re.resetManagedSystems can drop exactly those.
+        std::unordered_map<LuaVm*, std::vector<std::string>> gManagedNamesByVm;
+
+        void dispatchManagedSystem(int managedId)
+        {
+            auto it = gManagedSystems.find(managedId);
+            if (it == gManagedSystems.end())
+                return;
+
+            const auto& entry = it->second;
+            if (entry.vm == nullptr || !isVmAlive(entry.vm))
+                return;
+            auto refIt = gVmRunnerRef.find(entry.vm);
+            if (refIt == gVmRunnerRef.end() || refIt->second == LUA_NOREF)
+                return;
+
+            lua_State* L = entry.vm->state();
+            if (L == nullptr)
+                return;
+            lua_rawgeti(L, LUA_REGISTRYINDEX, refIt->second);
+            lua_pushinteger(L, entry.localId);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            {
+                const char* msg = lua_tostring(L, -1);
+                openre::logging::logWarning(
+                    "[script] {}: system runner failed: {}", entry.vm->name(), msg != nullptr ? msg : "(unknown error)");
+                lua_pop(L, 1);
+            }
+        }
+
         // re.registerSystem(name, after, before, placement, managedId) -
         // registers a Lua-managed ECS system with the shared registry. Called
-        // by ecs.registerSystem.
+        // by ecs.registerSystem (and auxiliary script VMs like web.lua through
+        // their own harness). Every VMs' managed ids are local to that VM, so
+        // the engine remaps them onto a globally unique id at registration and
+        // remembers which VM owns it, letting several scripts (game module +
+        // web inspector) coexist as managed systems.
         int apiRegisterSystem(lua_State* L)
         {
+            auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
             const char* name = luaL_checkstring(L, 1);
             std::vector<std::string> after, before;
             readStringArray(L, 2, after);
             readStringArray(L, 3, before);
             const auto placement = systemPlacementFromString(luaL_optstring(L, 4, "default"));
-            const int managedId = static_cast<int>(luaL_checkinteger(L, 5));
-            openre::systemRegistry().registerManaged(name, std::move(after), std::move(before), placement, managedId);
+            const int localId = static_cast<int>(luaL_checkinteger(L, 5));
+
+            const int globalId = gNextManagedId++;
+            gManagedSystems[globalId] = { vm, localId };
+            gManagedNamesByVm[vm].emplace_back(name);
+            openre::systemRegistry().registerManaged(name, std::move(after), std::move(before), placement, globalId);
             return 0;
         }
 
+        // re.resetManagedSystems() - removes every managed system registered by the
+        // calling VM (typically the game module at ecs.lua load, or a hot-reloaded
+        // auxiliary script), plus any whose owning VM is no longer alive (a hot
+        // reload destroys the old VM before the replacement's reset call runs, so its
+        // names would otherwise linger as dead defs in the shared registry). Systems
+        // registered by other *live* VMs (e.g. the web inspector) survive so a game
+        // module reload cannot strand them.
         int apiResetManagedSystems(lua_State* L)
         {
-            openre::systemRegistry().clearManaged();
-            return 0;
-        }
+            auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
 
-        // The system runner callback installed by re.setSystemRunner, invoked
-        // by the registry when a Lua-managed system is dispatched.
-        LuaVm* gSystemRunnerVm = nullptr;
-        int gSystemRunnerRef = LUA_NOREF;
-
-        void dispatchManagedSystem(int managedId)
-        {
-            if (gSystemRunnerVm == nullptr || gSystemRunnerRef == LUA_NOREF)
-                return;
-            lua_State* L = gSystemRunnerVm->state();
-            lua_rawgeti(L, LUA_REGISTRYINDEX, gSystemRunnerRef);
-            lua_pushinteger(L, managedId);
-            if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            std::vector<std::string> names;
+            for (auto& entry : gManagedNamesByVm)
             {
-                const char* msg = lua_tostring(L, -1);
-                openre::logging::logWarning(
-                    "[script] {}: system runner failed: {}", gSystemRunnerVm->name(), msg != nullptr ? msg : "(unknown error)");
-                lua_pop(L, 1);
+                if (entry.first == vm || !isVmAlive(entry.first))
+                {
+                    for (const auto& name : entry.second)
+                    {
+                        if (std::find(names.begin(), names.end(), name) == names.end())
+                            names.push_back(name);
+                    }
+                }
             }
+            for (const auto& name : names)
+                openre::systemRegistry().removeManaged(name);
+
+            for (auto it = gManagedNamesByVm.begin(); it != gManagedNamesByVm.end();)
+            {
+                if (it->first == vm || !isVmAlive(it->first))
+                    it = gManagedNamesByVm.erase(it);
+                else
+                    ++it;
+            }
+            for (auto it = gManagedSystems.begin(); it != gManagedSystems.end();)
+            {
+                if (!isVmAlive(it->second.vm))
+                    it = gManagedSystems.erase(it);
+                else
+                    ++it;
+            }
+            return 0;
         }
 
         // re.setSystemRunner(fn) - installs the callback that dispatches a
-        // managed system by its id. Set once by the Lua ECS module; the
-        // callback resolves the fn in the module's own systems table.
+        // managed system by its id, for THIS VM. Set by the Lua ECS module and
+        // by any auxiliary script that drives its own systems (e.g. web.lua);
+        // the per-VM maps route each managed id back to the VM that registered
+        // it.
         int apiSetSystemRunner(lua_State* L)
         {
             auto* vm = static_cast<LuaVm*>(lua_touserdata(L, lua_upvalueindex(1)));
             luaL_checktype(L, 1, LUA_TFUNCTION);
             lua_pushvalue(L, 1);
-            gSystemRunnerRef = luaL_ref(L, LUA_REGISTRYINDEX);
-            gSystemRunnerVm = vm;
+            gVmRunnerRef[vm] = luaL_ref(L, LUA_REGISTRYINDEX);
             openre::systemRegistry().setManagedRunner(&dispatchManagedSystem);
             return 0;
         }
@@ -880,6 +938,17 @@ namespace openre::script
                     scene->addComponent<ecs::AudioEmitterComponent>(handle->entity);
                 }
                 kind = ComponentKind::audio_emitter;
+            }
+            else if (strcmp(name, "core.Video") == 0)
+            {
+                // The async movie entity path (intro movie via VideoSystem
+                // auto-start): the module spawns a core.Video component and
+                // VideoSystem begins playback when it sees the movie cookie.
+                if (scene->tryGetComponent<ecs::VideoComponent>(handle->entity) == nullptr)
+                {
+                    scene->addComponent<ecs::VideoComponent>(handle->entity);
+                }
+                kind = ComponentKind::video;
             }
             else if (strcmp(name, "core.ScaledFrame") == 0)
             {
@@ -2969,9 +3038,13 @@ namespace openre::script
         // core.playMovie(movie [, captions]) - plays a movie previously
         // registered with core.loadMovie(), blocking until it finishes or any
         // input skips it. The video entity is created automatically to fill
-        // the window; rendering is driven here because this call runs inside a
-        // Lua tick hook and the rest of the frame pipeline is suspended until
-        // it returns.
+        // the window; rendering is driven here because this call suspends the
+        // frame pipeline until it returns.
+        //
+        // New game code should prefer the async path (a core.Video entity
+        // spawned by the module, driven by VideoSystem) so the app loop keeps
+        // running; this API blocks the whole main thread (including the web
+        // inspector's managed systems) until the movie ends.
         //
         // The optional `captions` argument is an array of
         // { from = seconds, to = seconds, text = string } entries shown as a
@@ -3142,10 +3215,10 @@ namespace openre::script
 
                 RenderSystem(*app);
 
-                // Keep the web inspector responsive while this blocking loop
-                // occupies the main thread (the regular script tick never runs
-                // until the movie ends otherwise).
-                openre::script::pumpScript("web");
+                // Note: managed systems (including the web inspector's) do not
+                // run while this blocking loop occupies the main thread; callers
+                // that must keep the inspector responsive should use the async
+                // core.Video entity path instead.
 
                 system::window::delay(8);
             }
@@ -3362,19 +3435,18 @@ namespace openre::script
             return 1;
         }
 
-        // core.runGame() - hands the frame to the legacy game and blocks until
-        // the game returns to the menu (or the app closes), mirroring
-        // core.playMovie: this call runs inside a Lua tick hook and the rest of
-        // the frame pipeline is suspended until it returns. The module's script
-        // tick still runs from the legacy update (nested), so remaining
-        // Lua-owned systems (web inspector etc.) keep responding.
+        // core.runGame() - hands the frame to the legacy game and returns
+        // immediately (non-blocking). The LegacyGame node stays enabled so
+        // LegacyGameSystem drives the gameplay frame inside the normal app-loop
+        // registry run; when the legacy game signals a return to the menu
+        // (legacy_request_return_to_menu), LegacyGameSystem disables the node
+        // again and the module resumes rendering. Game code watches core.inGame()
+        // (or registers a screen-resume callback) to react to the session end.
         //
         // The first call boots the legacy game (psx_main -> init_system ->
         // init_main), which chains straight into game_loop when core.loadGame
         // latched a start. After a previous session returned to the menu, task
-        // 0 is re-kicked into game_loop directly. Returns when the legacy game
-        // signals return-to-menu; always leaves the LegacyGame node disabled so
-        // the module renders again.
+        // 0 is re-kicked into game_loop directly.
         int coreRunGame(lua_State* L)
         {
             auto* app = openre::current_app();
@@ -3413,35 +3485,26 @@ namespace openre::script
 
             app->legacyReturnToMenu = false;
 
-            while (app->running() && !app->closing() && !app->legacyReturnToMenu)
-            {
-                // Feed the window + SDL input pipeline (the same systems the
-                // app shell runs every frame).
-                openre::system_window(*app);
-                if (!app->running() || app->closing() || app->legacyReturnToMenu)
-                    break;
-                openre::system_input(*app);
-
-                // Advance the legacy game (frame throttle + special states +
-                // psx_main via update_game).
-                LegacyGameSystem(*app);
-
-                // Present whatever the game produced this frame.
-                RenderSystem(*app);
-
-                // Keep the web inspector responsive while this blocking loop
-                // occupies the main thread.
-                openre::script::pumpScript("web");
-
-                system::window::delay(8);
-            }
-
-            // Hand the frame back to the module.
-            if (legacyEntity != ecs::NullEntity)
-                scene->getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled = false;
-            app->frameActive = false;
-
+            // Do not block: LegacyGameSystem drives the session in the normal
+            // app loop until the legacy game requests a return to the menu, at
+            // which point it disables the node and the module takes over again.
             lua_pushboolean(L, 1);
+            return 1;
+        }
+
+        // core.inGame() - true while a core.runGame() session is active (the
+        // LegacyGame node is enabled and driving the frame). Flips to false on
+        // the first frame after the legacy game returns to the menu.
+        int coreInGame(lua_State* L)
+        {
+            auto* scene = openre::current_scene();
+            bool inGame = false;
+            if (scene != nullptr)
+            {
+                auto legacyEntity = scene->find<ecs::LegacyGameComponent>();
+                inGame = legacyEntity != ecs::NullEntity && scene->getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled;
+            }
+            lua_pushboolean(L, inGame ? 1 : 0);
             return 1;
         }
 
@@ -3590,10 +3653,9 @@ namespace openre::script
     {
         setGlobalWithVm(L, "print", apiPrint, vm);
 
-        setGlobalWithVm(L, "re.subscribe", apiSubscribe, vm);
+        setGlobalWithVm(L, "re.registerSystem", apiRegisterSystem, vm);
+        setGlobalWithVm(L, "re.resetManagedSystems", apiResetManagedSystems, vm);
         setGlobal(L, "re.systems", apiSystems);
-        setGlobal(L, "re.registerSystem", apiRegisterSystem);
-        setGlobal(L, "re.resetManagedSystems", apiResetManagedSystems);
         setGlobal(L, "re.components", apiComponents);
         setGlobalWithVm(L, "re.setSystemRunner", apiSetSystemRunner, vm);
         setGlobal(L, "re.getFlag", apiGetFlag);
@@ -3608,9 +3670,6 @@ namespace openre::script
         setGlobal(L, "re.unsafe.read", unsafeRead);
         setGlobal(L, "re.unsafe.write", unsafeWrite);
 #endif
-
-        setGlobal(L, "HookKind.tick", static_cast<int32_t>(HookKind::tick));
-        setGlobal(L, "HookKind.post_tick", static_cast<int32_t>(HookKind::post_tick));
 
         setGlobal(L, "LogLevel.info", LogLevel::info);
         setGlobal(L, "LogLevel.warning", LogLevel::warning);
@@ -3686,6 +3745,7 @@ namespace openre::script
         setGlobal(L, "core.startRoomWarp", coreStartRoomWarp);
         setGlobal(L, "core.startNewGame", coreStartNewGame);
         setGlobal(L, "core.runGame", coreRunGame);
+        setGlobal(L, "core.inGame", coreInGame);
         setGlobal(L, "core.cmdline", coreCmdline);
 
         // options.* - engine-wide settings registry (menu screens).

@@ -2728,9 +2728,6 @@ namespace openre
             gGameTable.frame_current = 0;
             ++gGameTable.game_seconds;
         }
-
-        // Lua script hooks (menus + gameplay)
-        openre::script::tick();
     }
 
     void render_frame()

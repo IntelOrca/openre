@@ -35,6 +35,16 @@ namespace openre
         // RenderSystem so it only presents frames the game actually advanced.
         bool frameActive = false;
 
+        // Set by the frame producers (ModuleSystem, LegacyGameSystem, including
+        // special states) when the game actually advanced a paced frame in this
+        // registry iteration. Managed Lua systems replace the old tick hooks
+        // (which ran inside script::tick on the throttled cadence), so they are
+        // only dispatched on these frames - they must not run on the uncapped
+        // registry iterations between paced frames or their input handling
+        // desyncs from the input walk (one tap stays visible across several
+        // update() calls).
+        bool framePaced = false;
+
         // Handoff latches bridging the Lua menu to the legacy game (see
         // core.runGame in script_bindings.cpp). The native boot screens are
         // gone: every start is module-driven, so init_main always chains into
