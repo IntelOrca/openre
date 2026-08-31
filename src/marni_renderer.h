@@ -354,9 +354,12 @@ namespace openre::marni
          * @param image The decoded pixels/palette to upload.
          * @param mode Bit flags controlling the upload (palette handling, RGB
          *     conversion, reload/skip behaviour — see marni create_texture_handle).
+         * @param name Optional label shown in the debug web UI's resource
+         *     browser (e.g. "texture page 3"). When null the renderer picks a
+         *     synthetic label.
          * @return The texture handle, or 0 on failure.
          */
-        virtual int loadTexture(const Image& image, uint32_t mode) = 0;
+        virtual int loadTexture(const Image& image, uint32_t mode, const char* name = nullptr) = 0;
 
         /**
          * Unloads a texture handle previously returned by loadTexture().
@@ -483,7 +486,7 @@ namespace openre::marni
         int addLineF2(const LineF2* p, int z, int is_back) override;
         int addScaler(const PrimScaler* p, int z) override;
 
-        int loadTexture(const Image& image, uint32_t mode) override;
+        int loadTexture(const Image& image, uint32_t mode, const char* name) override;
         void unloadTexture(int handle) override;
         void unloadAllTextures() override;
 

@@ -195,9 +195,9 @@ namespace openre::marni
         return result;
     }
 
-    int LoggingRenderer::loadTexture(const Image& image, uint32_t mode)
+    int LoggingRenderer::loadTexture(const Image& image, uint32_t mode, const char* name)
     {
-        return inner->loadTexture(image, mode);
+        return inner->loadTexture(image, mode, name);
     }
 
     void LoggingRenderer::unloadTexture(int handle)

@@ -2861,7 +2861,7 @@ namespace openre::script
         {
             auto cookie = static_cast<ResourceCookie>(luaL_checkinteger(L, 1));
             auto& rm = ResourceManager::get();
-            auto pushTex = [&](const TextureResource* tex) -> int {
+            auto pushTex = [&](auto* tex) -> int {
                 if (tex == nullptr || tex->rgba.empty())
                 {
                     lua_pushnil(L);
@@ -2877,6 +2877,8 @@ namespace openre::script
                 return 1;
             };
             if (auto* tex = rm.fromCookie<TextureResource>(cookie))
+                return pushTex(tex);
+            if (auto* tex = rm.fromCookie<MarniTextureResource>(cookie))
                 return pushTex(tex);
             if (auto* font = rm.fromCookie<FontResource>(cookie))
                 return pushTex(rm.fromCookie<TextureResource>(font->atlas));

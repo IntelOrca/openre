@@ -3,6 +3,8 @@
 #include "marni_renderer.h"
 #include "openre.h"
 
+#include <string>
+
 namespace openre::marni
 {
     // The hooked Add* family (originally all __cdecl in the 0x00440xxx range)
@@ -157,7 +159,8 @@ namespace openre::marni
             return 0;
         unloadTexturePage(page);
 
-        int handle = g_renderer->loadTexture(image, mode);
+        std::string name = "texture page " + std::to_string(page);
+        int handle = g_renderer->loadTexture(image, mode, name.c_str());
         if (handle == 0)
             return 0;
 

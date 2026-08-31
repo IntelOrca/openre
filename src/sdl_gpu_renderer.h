@@ -60,7 +60,7 @@ namespace openre::marni
         int addLineF2(const LineF2* p, int z, int is_back) override;
         int addScaler(const PrimScaler* p, int z) override;
 
-        int loadTexture(const Image& image, uint32_t mode) override;
+        int loadTexture(const Image& image, uint32_t mode, const char* name) override;
         void unloadTexture(int handle) override;
         void unloadAllTextures() override;
 

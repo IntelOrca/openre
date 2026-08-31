@@ -26,6 +26,7 @@
 #include "marni.h"
 #include "openre.h"
 #include "re2.h"
+#include "resmgr.h"
 #include "system_config.h"
 #include "system_gpu.h"
 
@@ -374,6 +375,13 @@ namespace openre::marni
             int clutCount = 1;        // number of CLUT variants uploaded
             bool hasAlpha = false;    // decoded pixels include transparent (black-keyed) ones -> v40
             bool noAlphaFlag = false; // mode bit 0x4 set -> v41 = 0 -> v32 && v40 blend fallback disabled
+
+            // Cookie for the ResourceManager mirror of this texture, if one was
+            // registered at load time. The renderer owns it and releases it in
+            // unloadTexture()/releaseAll(); the MarniTextureResource destructor
+            // (which runs then) is what actually disposes of this entry. 0 when
+            // no resource was registered.
+            ResourceCookie resmgrCookie = 0;
 
             // Selects the texture for a CLUT index, clamping out-of-range indexes
             // back to clut 0 (the Add* methods already clamp to clutCount).
@@ -3597,6 +3605,32 @@ namespace openre::marni
             if (!dev)
                 return;
             SDL_WaitForGPUIdle(dev);
+
+            // Collect the cookies up front (clearing each entry's reference so
+            // the destructor's re-entrant unloadTexture() call takes the
+            // direct-free branch exactly once): releasing one runs the
+            // mirrored MarniTextureResource destructor, which calls back into
+            // unloadTexture() and erases entries from `textures` while we are
+            // iterating it.
+            std::vector<ResourceCookie> cookies;
+            cookies.reserve(textures.size());
+            for (auto& [handle, entry] : textures)
+            {
+                (void)handle;
+                if (entry.resmgrCookie != 0)
+                {
+                    cookies.push_back(entry.resmgrCookie);
+                    entry.resmgrCookie = 0;
+                }
+            }
+
+            // Release the cookies; the destructor of each mirror frees its SDL
+            // texture(s) via unloadTexture() and erases the entry.
+            for (ResourceCookie cookie : cookies)
+                ResourceManager::get().release(cookie);
+
+            // Entries left over had no registered mirror (no cookie) — free
+            // them directly.
             for (auto& [handle, entry] : textures)
             {
                 (void)handle;
@@ -4898,7 +4932,7 @@ namespace openre::marni
 
     // Uploads `image` as a new SDL_GPU texture, returning the MARNI texture
     // handle (1..255, 0 on failure).
-    int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode)
+    int SdlGpuRenderer::loadTexture(const Image& image, uint32_t mode, const char* name)
     {
         logging::logDebug(
             "[sdlgpu] loadTexture {}x{} depth={} palBpp={} palCnt={} psxFormat={} mode=0x{} pixels={}B palette={}B",
@@ -4975,6 +5009,7 @@ namespace openre::marni
 
         std::vector<SDL_GPUTexture*> texs;
         bool hasAlpha = false;
+        std::vector<uint8_t> clut0Rgba; // clut-0 preview decoded for the resource manager mirror
         for (int clut = 0; clut < clutCount; clut++)
         {
             std::vector<uint8_t> rgba;
@@ -4986,6 +5021,8 @@ namespace openre::marni
                         SDL_ReleaseGPUTexture(dev, t);
                     return 0;
                 }
+                if (clut == 0)
+                    clut0Rgba = rgba;
                 // The original marks a surface as alpha-bearing (var_2C / v40)
                 // when any pixel's alpha bits are not fully set; here that is any
                 // decoded pixel with alpha < 0xFF (the black-keyed transparent
@@ -5087,6 +5124,24 @@ namespace openre::marni
             m->textures[handle].var_00 = mode;
         logging::logInfo(
             "[sdlgpu] loadTexture -> handle {} ({} clut(s), SDL texture {})", handle, clutCount, (void*)entry.texture);
+
+        // Register a ResourceManager mirror so the debug web UI can enumerate
+        // and preview textures loaded by the legacy renderer. The renderer
+        // holds the returned cookie on the entry and releases it in
+        // unloadTexture()/releaseAll(); the MarniTextureResource destructor
+        // then unloads this GPU texture via unloadTexture().
+        auto texRes = std::make_unique<MarniTextureResource>();
+        texRes->textureHandle = handle;
+        texRes->width = image.width;
+        texRes->height = image.height;
+        if (!tempTexture)
+        {
+            texRes->rgba = std::move(clut0Rgba);
+            texRes->rgbaWidth = image.width;
+            texRes->rgbaHeight = image.height;
+        }
+        const std::string path = name ? name : "marni:" + std::to_string(handle);
+        impl->textures[handle].resmgrCookie = ResourceManager::get().addFirstRef<MarniTextureResource>(path, std::move(texRes));
         return handle;
     }
 
@@ -5098,9 +5153,27 @@ namespace openre::marni
         auto it = impl->textures.find(handle);
         if (it == impl->textures.end())
         {
-            logging::logWarning("[sdlgpu] unloadTexture({}): not in registry", handle);
+            // Not in registry: either an unknown handle or a re-entrant call
+            // from a MarniTextureResource destructor whose entry was already
+            // erased. Nothing left to free either way.
+            logging::logDebug("[sdlgpu] unloadTexture({}): not in registry", handle);
             return;
         }
+
+        ResourceCookie cookie = it->second.resmgrCookie;
+        it->second.resmgrCookie = 0;
+        if (cookie != 0)
+        {
+            // The renderer chooses when to dispose the texture: dropping the
+            // cookie runs ~MarniTextureResource, which frees this GPU texture
+            // by calling back into unloadTexture() — it then sees no cookie and
+            // falls through to the direct-free branch below exactly once.
+            ResourceManager::get().release(cookie);
+            it = impl->textures.find(handle);
+            if (it == impl->textures.end())
+                return; // the destructor's callback already freed + erased it
+        }
+
         if (dev && it->second.texture)
         {
             SDL_WaitForGPUIdle(dev);

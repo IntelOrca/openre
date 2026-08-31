@@ -57,6 +57,37 @@ namespace openre
     };
 
     /**
+     * A texture owned by the legacy MARNI renderer (marni::g_renderer).
+     * Mirrors TextureResource so the debug web UI can preview textures the
+     * legacy game code loads, but the textureHandle is a MARNI handle (not a
+     * render2d handle), so the destructor unloads through the legacy renderer
+     * instead of the 2D sprite renderer. The renderer holds the resmgr cookie
+     * and chooses when to release it; freeing the last reference runs this
+     * destructor, which is what actually disposes of the GPU texture.
+     */
+    class MarniTextureResource : public Resource
+    {
+    public:
+        int textureHandle = 0;
+        int width = 0;
+        int height = 0;
+
+        // Decoded RGBA pixels (per-pixel R,G,B,A), cached at load time so the
+        // debug web UI can preview the texture. Empty when no pixel data was
+        // decoded (e.g. temporary mode 0x4000 textures).
+        std::vector<uint8_t> rgba;
+        int rgbaWidth = 0;
+        int rgbaHeight = 0;
+
+        ~MarniTextureResource() override;
+
+        const char* getName() const override
+        {
+            return "texture";
+        }
+    };
+
+    /**
      * A decoded sound owned by the system::audio mixer. The audioHandle is
      * opaque; unloading happens in the destructor. Large sources are backed
      * by a streaming voice instead of a resident PCM buffer, but both share

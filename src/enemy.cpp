@@ -10,6 +10,7 @@
 #include <array>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 using namespace openre::file;
@@ -394,21 +395,27 @@ namespace openre::enemy
             // correct palette entries (offset by 1 for id 54, 2 otherwise).
             const int palStart = id == 54 ? 1 : 2;
             const int palCnt = id == 54 ? image.palCnt - 1 : image.palCnt - 2;
+            std::string labelRight = "player " + std::to_string(workNo) + " right";
             gPlTextureHandle1[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(
-                sliceImage(image, 256, image.width - 256, palStart, palCnt), gPlTextureMode);
+                sliceImage(image, 256, image.width - 256, palStart, palCnt), gPlTextureMode, labelRight.c_str());
 
             if (id == 40 || id == 48 || id == 74 || id == 52 || id == 51 || (id >= 84 && id <= 91))
             {
-                gPlTextureHandle2[10 * workNo]
-                    = (uint32_t)marni::g_renderer->loadTexture(sliceImage(image, 128, 256, 1, 2), gPlTextureMode);
+                std::string labelMid = "player " + std::to_string(workNo) + " mid";
+                gPlTextureHandle2[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(
+                    sliceImage(image, 128, 256, 1, 2), gPlTextureMode, labelMid.c_str());
             }
 
             marni::Image left = sliceImage(image, 0, 256, 0, image.palCnt);
-            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(left), gPlTextureMode);
+            std::string labelLeft = "player " + std::to_string(workNo) + " left";
+            gPlTextureHandle[10 * workNo]
+                = (uint32_t)marni::g_renderer->loadTexture(std::move(left), gPlTextureMode, labelLeft.c_str());
         }
         else
         {
-            gPlTextureHandle[10 * workNo] = (uint32_t)marni::g_renderer->loadTexture(std::move(image), gPlTextureMode);
+            std::string labelWhole = "player " + std::to_string(workNo) + " whole";
+            gPlTextureHandle[10 * workNo]
+                = (uint32_t)marni::g_renderer->loadTexture(std::move(image), gPlTextureMode, labelWhole.c_str());
         }
     }
 

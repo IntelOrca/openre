@@ -2,6 +2,7 @@
 
 #include "font.h"
 #include "logger.h"
+#include "marni_renderer.h"
 #include "render2d.h"
 #include "system_audio.h"
 
@@ -54,6 +55,15 @@ namespace openre
                     info.height = tex->rgbaHeight;
                 }
             }
+            else if (entry.typeIndex == std::type_index(typeid(MarniTextureResource)))
+            {
+                info.type = "texture";
+                if (auto* tex = static_cast<MarniTextureResource*>(entry.resource.get()))
+                {
+                    info.width = tex->rgbaWidth;
+                    info.height = tex->rgbaHeight;
+                }
+            }
             else if (entry.typeIndex == std::type_index(typeid(FontResource)))
             {
                 info.type = "font";
@@ -86,6 +96,12 @@ namespace openre
     {
         if (textureHandle != 0)
             render2d::SpriteRenderer::get().unloadTexture(textureHandle);
+    }
+
+    MarniTextureResource::~MarniTextureResource()
+    {
+        if (textureHandle != 0 && marni::g_renderer)
+            marni::g_renderer->unloadTexture(textureHandle);
     }
 
     SoundResource::~SoundResource()
