@@ -291,6 +291,11 @@ namespace openre
     void render_frame();
     void render_frame_draw();
 
+    /// Clears the native pause-handshake bookkeeping (the previous-state
+    /// static) so a session end (return to menu / restart) cannot leak a
+    /// pending resume into the next runGame session.
+    void pause_handshake_reset();
+
     // Window lifecycle helpers used by the system_window app-system.
     void font_delete();
     void wnd_activate();

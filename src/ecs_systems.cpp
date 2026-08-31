@@ -159,6 +159,15 @@ namespace openre
             {
                 mutLegacy.enabled = false;
                 app.legacyReturnToMenu = false;
+                // A session is ending: drop any lingering pause handshake so
+                // the next runGame() starts unpaused. The module normally
+                // writes paused=0 before requesting the return; this covers
+                // session ends that skip that path (erroring module update /
+                // hot reload) so a stale previous-state can't trigger the
+                // native resume bookkeeping (set_game_seconds + resume_all)
+                // at the start of the next session.
+                mutLegacy.paused = 0;
+                openre::pause_handshake_reset();
             }
         }
     }

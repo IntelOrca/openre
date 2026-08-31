@@ -50,7 +50,8 @@ namespace openre
         registry.registerNative("core.Audio", { "core.Video" }, {}, SystemPlacement::Default, AudioSystem);
         // ScaledFrame runs late (after the Lua-managed systems write
         // frame.target) but before Render consumes the scale.
-        registry.registerNative("core.ScaledFrame", { "core.LegacyGame" }, { "core.Render" }, SystemPlacement::Late, ScaledFrameSystem);
+        registry.registerNative(
+            "core.ScaledFrame", { "core.LegacyGame" }, { "core.Render" }, SystemPlacement::Late, ScaledFrameSystem);
         registry.registerNative("core.Render", { "core.Audio", "core.ScaledFrame" }, {}, SystemPlacement::Late, RenderSystem);
     }
 

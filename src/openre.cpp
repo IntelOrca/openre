@@ -93,6 +93,11 @@ namespace openre
     // cycle when Lua clears the pause by writing `paused = 0`.
     static int s_pausePrevState = 0;
 
+    void pause_handshake_reset()
+    {
+        s_pausePrevState = 0;
+    }
+
     static const char* windowTitle = "BIOHAZARD(R) 2 PC";
     static const char* fontFaceName = "ＭＳ ゴシック";
 
@@ -2257,8 +2262,11 @@ namespace openre
         // Lua cleared the pause: restore the game clock snapshot and the
         // silenced BGM/SFX exactly once. Clear any latched freeze (movie_idx)
         // so the first live frame renders + presents immediately instead of
-        // consuming a stale movie_set(1) from the frozen frames.
-        if (s_pausePrevState != 0 && paused == 0)
+        // consuming a stale movie_set(1) from the frozen frames. Only resume a
+        // pause that was actually confirmed (Paused); an unconfirmed
+        // PauseRequested (1) that Lua clears again never froze the frame, so
+        // it must not run the resume bookkeeping or clobber movie_idx.
+        if (s_pausePrevState == 2 && paused == 0)
         {
             set_game_seconds(gGameTable.dword_689800);
             audio::resume_all();
@@ -2266,12 +2274,16 @@ namespace openre
         }
         s_pausePrevState = paused;
 
-        // Pause key (*relaxed* gate: slot 0 is required; the two multi-flag
-        // engine groups are dropped because the module is the pause authority
-        // and can refuse). The menu command spans kb:Escape / kb:P / gamepad
-        // Start; accepting its rising edge (command_edge) catches all three,
-        // including web-driver `tap menu`, while the legacy bits keep original
-        // raw/vk consumers working.
+        // Pause key gate. Matches the original Psx_main condition mask-for-mask
+        // (fg_system & 0x40000000 / 0x2202200, fg_status & 0x100010 tested
+        // clear), translated to MSB-first indices: pause is only offered while
+        // slot 0 is live, input is enabled, and the engine is not mid door
+        // transition / demo / cutscene. The legacy censorship_off term is
+        // dropped: the module pause is a replacement menu and must work
+        // regardless of the blood/violence option. The menu command spans
+        // kb:Escape / kb:P / gamepad Start; accepting its rising edge
+        // (command_edge) catches all three, including web-driver `tap menu`,
+        // while the legacy bits keep original raw/vk consumers working.
         const bool pauseKey = (gGameTable.raw_edge & 2) != 0 || (gGameTable.vk_press & 0x20) != 0
             || (input::command_edge() & (1u << input::COMMAND_MENU)) != 0;
         if (paused == 0
@@ -2280,6 +2292,12 @@ namespace openre
         && !gGameTable.byte_98F07B
         && !gGameTable.byte_991F80
         && !check_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT)
+        && !check_flag(FlagGroup::System, FG_SYSTEM_DOOR_TRANSITION)
+        && !check_flag(FlagGroup::System, FG_SYSTEM_10)
+        && !check_flag(FlagGroup::System, FG_SYSTEM_BGM_DISABLED)
+        && !check_flag(FlagGroup::System, FG_SYSTEM_22)
+        && !check_flag(FlagGroup::Status, FG_STATUS_11)
+        && !check_flag(FlagGroup::Status, FG_STATUS_CUTSCENE)
             // clang-format on
             && pauseKey)
         {
