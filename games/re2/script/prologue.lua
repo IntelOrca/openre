@@ -1120,12 +1120,12 @@ local function updateRun(c)
         end
 
         -- Keep the fade overlay drawn every frame (the overlay is a persistent
-        -- entity, not the old one-shot gfx.fade).
+        -- entity, not the old one-shot gfx.fade). Write it even at alpha 0 so
+        -- an interstitial fade-out completion that resets c.fade.alpha to 0
+        -- actually clears the overlay instead of leaving it stuck black.
         if c.fadeOv then
             local a = c.fade and c.fade.alpha or 0
-            if a > 0 then
-                scene.setField(c.fadeOv, 'color', { 0, 0, 0, a })
-            end
+            scene.setField(c.fadeOv, 'color', { 0, 0, 0, a })
         end
     end
 
@@ -1183,32 +1183,6 @@ local function updateRun(c)
         active = c
     end
 
-    -- app.Prologue: drives the active prologue once per frame (replaces the
-    -- old per-start tick hook). The module-level `active` guard means a newly
-    -- started prologue takes over immediately and a finished one no-ops.
-    ecs.registerSystem('app.Prologue', {
-        after = { 'core.LegacyGame' },
-    }, function()
-        local c = active
-        if c == nil then
-            return
-        end
-        if c.requestSkip then
-            c.requestSkip = false
-            skipPressed(c)
-        end
-        if c.phase ~= 'done' then
-            -- A held skip key behaves like a single press each press. The
-            -- skip snapshot was written during the input walk (before the
-            -- managed systems); the web-tester hook sets requestSkip directly.
-            if c.allowSkip and (c.skipNav.accept or c.skipNav.menu) then
-                skipPressed(c)
-                if c.finished then return end
-            end
-            updateRun(c)
-        end
-    end)
-
     --- Live test/monitor state (serializable) for the web tester.
     function prologue.status()
         if not active then
@@ -1238,5 +1212,32 @@ local function updateRun(c)
     function prologue.skip()
         if active then active.requestSkip = true end
     end
+
+    -- app.Prologue: drives the active prologue once per frame (replaces the
+    -- old per-start tick hook). Registered once at module scope; the
+    -- module-level `active` guard means a newly started prologue takes over
+    -- immediately and a finished one no-ops.
+    ecs.registerSystem('app.Prologue', {
+        after = { 'core.LegacyGame' },
+    }, function()
+        local c = active
+        if c == nil then
+            return
+        end
+        if c.requestSkip then
+            c.requestSkip = false
+            skipPressed(c)
+        end
+        if c.phase ~= 'done' then
+            -- A held skip key behaves like a single press each press. The
+            -- skip snapshot was written during the input walk (before the
+            -- managed systems); the web-tester hook sets requestSkip directly.
+            if c.allowSkip and (c.skipNav.accept or c.skipNav.menu) then
+                skipPressed(c)
+                if c.finished then return end
+            end
+            updateRun(c)
+        end
+    end)
 
     return prologue
