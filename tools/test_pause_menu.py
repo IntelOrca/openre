@@ -93,6 +93,15 @@ def main():
         print("Quit dialog message:", msg)
         assert msg and "Quit the game and return to the main menu?" in msg
         assert "(Any unsaved data will be lost.)" in msg
+        # The box is a 75%-of-screen vertical flex container.
+        box_w = d.entity_field(g, "dialog.box", "core.UiSize", "width")
+        box_h = d.entity_field(g, "dialog.box", "core.UiSize", "height")
+        print("dialog box size:", box_w, box_h)
+        assert box_w == 640 * 0.75 and box_h == 480 * 0.75
+        assert d.entity_field(g, "dialog.box", "core.UiFlex", "orientation") == "vertical"
+        assert d.entity_field(g, "dialog.message", "core.UiSize", "weight") == 1.0
+        for b in ("dialog.button.1", "dialog.button.2"):
+            assert d.find_entity(g, b), "missing " + b
         tap_once(g, "cancel")  # cancel == No
         d.wait_absent(g, "dialog", timeout=15)
         assert d.find_entity(g, "pause") is not None, "No did not return to pause menu"

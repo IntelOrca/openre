@@ -1,9 +1,9 @@
 -- dialog.lua - generic confirmation dialog (games/re2/script/dialog.lua).
 --
 -- A reusable two-choice dialog that can be opened from anywhere (the pause
--- menu, the title screen, ...). Black box centred on the screen taking up
--- 50% of the window, a message centred inside with white text, and two
--- navigatable buttons (Yes / No) at the bottom.
+-- menu, the title screen, ...). A black box 75% of the window, a message
+-- centred inside with white text, and two navigatable buttons (Yes / No)
+-- flowed vertically at the bottom.
 --
 --   Dialog:new({ message = '...', onChoose = function(choice) end })
 --
@@ -11,10 +11,14 @@
 -- the dialog closes itself. cancel behaves exactly like choosing No.
 --
 -- Layout is authored in a 640x480 design space mapped onto the window by a
--- native scaled_frame ("contain"), the same recipe as options.lua; the frame
--- target is refreshed every tick so resizes are tracked. The dialog builds
--- its own root under the overlay root (or a caller-supplied parent), so it
--- paints above the game and the pause menu.
+-- native scaled_frame ("contain"): the box is a UiFlex (vertical) container,
+-- so the message and button rows are positioned/sized by UiFlexSystem every
+-- frame. The dialog builds its own root under the overlay root (or a
+-- caller-supplied parent), so it paints above the game and the pause menu.
+--
+-- The SFX emitter lives on the dialog root; close() defers destroying the
+-- root to the next dispatch so core.Audio (which runs after app.Dialog in the
+-- same managed dispatch) still sees the closing dialog's last trigger.
 
 local ecs = require('ecs')
 
@@ -22,46 +26,39 @@ local Dialog        = {}
 local dialogMethods = {}
 
 -- Live dialog instances, driven by the registered app.Dialog managed system
--- below. Instances are removed by :close().
+-- below. Instances are removed once close()'s deferred root destroy runs.
 local liveDialogs = {}
-
--- Shared persistent SFX emitter. app.Dialog and core.Audio run in the same
--- managed dispatch, with Audio AFTER Dialog; a per-instance emitter destroyed
--- by close() in the same dispatch would drop its last trigger before the audio
--- system scans live emitters, so accept/back sounds would never play. Sharing
--- one emitter that lives for the module lifetime sidesteps that: a trigger
--- bump on it is always seen. The sound handles are kept module-level too so
--- audio.loadAudio's decoded resources stay resident.
-local sharedEmitter = nil
-local sharedEmitterEntity = nil
-local sharedSfx = nil
-local sharedSfxTrigger = 0
 
 local DESIGN_W = 640
 local DESIGN_H = 480
 
--- The modal box is 50% of the design space, centred.
-local BOX_W = DESIGN_W * 0.5 -- 320
-local BOX_H = DESIGN_H * 0.5 -- 240
+-- The modal box is 75% of the design space, centred.
+local BOX_W = DESIGN_W * 0.75 -- 480
+local BOX_H = DESIGN_H * 0.75 -- 360
 
--- Buttons sit side by side near the bottom of the box.
-local BUTTON_Y = 0.5 * BOX_H - 28
-local BUTTON_SPACING_X = 88
-
--- Message spans the box width minus padding, centred a little above the
--- box centre so multi-line messages read cleanly.
-local MSG_W = BOX_W - 48
-local MSG_H = BOX_H - 64
-local MSG_Y = -24
+-- Box content insets and the button row height for the vertical flex flow.
+local BOX_PADDING = 24
+local BOX_GAP = 12
+local BUTTON_H = 30
 
 local ALPHA_SELECTED = 1.0
 local ALPHA_UNSELECTED = 0.5
 
 -- Small builders (mirror options.lua).
-local function addSize(handle, w, h)
+local function addSize(handle, w, h, weight)
     local size = scene.addComponent(handle, 'core.UiSize')
     scene.setField(size, 'width', w)
     scene.setField(size, 'height', h)
+    if weight ~= nil then
+        scene.setField(size, 'weight', weight)
+    end
+end
+
+local function addFlex(handle, orientation, gap, padding)
+    local flex = scene.addComponent(handle, 'core.UiFlex')
+    scene.setField(flex, 'orientation', orientation)
+    scene.setField(flex, 'gap', gap)
+    scene.setField(flex, 'padding', padding)
 end
 
 local function hexByte(n)
@@ -97,36 +94,16 @@ local function fitCanvas(self)
     scene.setField(self.frame, 'target.height', h)
 end
 
--- Creates the module-level shared SFX emitter + sound handles on first use.
-local function ensureSharedAudio()
-    if sharedEmitter ~= nil then
-        return
-    end
-    sharedSfx = {
-        cursor = audio.loadAudio('common/sound/core/core22.sap', 0),
-        back = audio.loadAudio('common/sound/core/core22.sap', 1),
-        accept = audio.loadAudio('common/sound/core/core22.sap', 2),
-        invalid = audio.loadAudio('common/sound/core/core22.sap', 3),
-    }
-    -- The shared emitter hangs directly off the root of the scene (not any
-    -- dialog subtree) so no close() ever destroys it.
-    sharedEmitterEntity = scene.createEntity(scene.getRoot('overlay'))
-    scene.setField(sharedEmitterEntity, 'name', 'dialog.sfx')
-    sharedEmitter = scene.addComponent(sharedEmitterEntity, 'core.AudioEmitter')
-end
-
 local function playSfx(self, sound)
-    if sound == nil then
+    if sound == nil or self.emitter == nil then
         return
     end
-    sharedSfxTrigger = sharedSfxTrigger + 1
-    scene.setField(sharedEmitter, 'sound', sound)
-    scene.setField(sharedEmitter, 'trigger', sharedSfxTrigger)
+    self.sfxTrigger = self.sfxTrigger + 1
+    scene.setField(self.emitter, 'sound', sound)
+    scene.setField(self.emitter, 'trigger', self.sfxTrigger)
 end
 
 local function refreshButtons(self)
-    local selectedText = self.choices[self.selected]
-    local unselectedText = self.choices[self.selected == 1 and 2 or 1]
     scene.setField(self.buttons[1], 'text', whiteSpan(self.choices[1], self.selected == 1 and ALPHA_SELECTED or ALPHA_UNSELECTED))
     scene.setField(self.buttons[2], 'text', whiteSpan(self.choices[2], self.selected == 2 and ALPHA_SELECTED or ALPHA_UNSELECTED))
 end
@@ -136,29 +113,15 @@ local function close(self, choice)
         return
     end
     self.closed = true
-    -- Unsubscribe from the live-instance list.
-    for i = 1, #liveDialogs do
-        if liveDialogs[i] == self then
-            table.remove(liveDialogs, i)
-            break
-        end
-    end
     if self.onChoose then
         local ok, err = pcall(self.onChoose, choice)
         if not ok then
             print('[dialog] onChoose failed: ' .. tostring(err))
         end
     end
-    if self.root then
-        scene.destroy(self.root)
-        self.root = nil
-    end
-    -- The SFX emitter is shared module state (see playSfx), so it survives
-    -- this close; only the per-instance references are dropped.
-    self.emitterEntity = nil
-    self.emitter = nil
-    self.sfx = nil
-    re.collectGarbage()
+    -- The root (and its emitter) stays alive for one more dispatch so
+    -- core.Audio scans the closing dialog's last trigger; the app.Dialog
+    -- tick destroys it on the next frame.
 end
 
 dialogMethods = {
@@ -185,12 +148,23 @@ function Dialog:new(opts)
     instance.closed = false
     instance.parent = opts.parent or scene.getRoot('overlay')
     instance.sfxTrigger = 0
-        instance.emitter = nil
-        instance.emitterEntity = nil
+    -- Per-instance sound handles; audio.loadAudio deduplicates across
+    -- instances, so this is cheap, and audio keeps the decoded resources
+    -- resident for the module lifetime.
+    instance.sfx = {
+        cursor = audio.loadAudio('common/sound/core/core22.sap', 0),
+        back = audio.loadAudio('common/sound/core/core22.sap', 1),
+        accept = audio.loadAudio('common/sound/core/core22.sap', 2),
+        invalid = audio.loadAudio('common/sound/core/core22.sap', 3),
+    }
 
     -- Root entity for the whole dialog; destroying it removes the entire tree.
     instance.root = scene.createEntity(instance.parent)
     scene.setField(instance.root, 'name', 'dialog')
+
+    -- The SFX emitter lives on the dialog root; it is destroyed together
+    -- with the root (see close / app.Dialog deferred destroy).
+    instance.emitter = scene.addComponent(instance.root, 'core.AudioEmitter')
 
     -- Input handler: reads the real nav presses during the input walk (which
     -- runs before the script tick), snapshots them for close(), then clears
@@ -210,14 +184,8 @@ function Dialog:new(opts)
         frame.press = {}
     end)
 
-    -- UI sounds (audio.loadAudio deduplicates across instances). Loaded once
-        -- and cached module-level; the emitter is shared module state so the
-        -- last trigger of a closing dialog is still seen by core.Audio.
-        ensureSharedAudio()
-        instance.sfx = sharedSfx
-
-        -- Dim the whole window behind the box so the dialog reads over the pause
-        -- menu / game (48% black).
+    -- Dim the whole window behind the box so the dialog reads over the pause
+    -- menu / game (48% black).
     local dim = scene.createEntity(instance.root)
     scene.setField(dim, 'name', 'dialog.dim')
     local dimSprite = scene.addComponent(dim, 'core.Sprite')
@@ -236,34 +204,33 @@ function Dialog:new(opts)
     scene.setField(instance.frame, 'increment', 0)
     instance:fitCanvas()
 
-    -- The black box, centred on the design-space origin (0,0).
+    -- The black box, centred on the design-space origin (0,0), is a vertical
+    -- flex container: the message stretches, then the two buttons flow below.
     local box = scene.createEntity(instance.canvas)
     scene.setField(box, 'name', 'dialog.box')
     local boxSprite = scene.addComponent(box, 'core.Sprite')
     scene.setField(boxSprite, 'color', { 0, 0, 0, 255 })
     addSize(box, BOX_W, BOX_H)
+    addFlex(box, 'vertical', BOX_GAP, BOX_PADDING)
 
-    -- Message, centred inside the box.
-    local msg = scene.createEntity(instance.canvas)
+    -- Message, centre aligned, stretches to fill the box width.
+    local msg = scene.createEntity(box)
     scene.setField(msg, 'name', 'dialog.message')
-        scene.setField(msg, 'y', MSG_Y)
     local msgText = scene.addComponent(msg, 'core.Text')
     scene.setField(msgText, 'font', require('ui.font').get('big'))
     scene.setField(msgText, 'text', whiteSpan(instance.message, 1.0))
     scene.setField(msgText, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
-    addSize(msg, MSG_W, MSG_H)
+    addSize(msg, 0, 0, 1) -- weight 1: fill the remaining flex space
 
-    -- Two buttons at the bottom, side by side.
+    -- Two buttons at the bottom, flowed vertically.
     instance.buttons = {}
     for i = 1, 2 do
-        local b = scene.createEntity(instance.canvas)
+        local b = scene.createEntity(box)
         scene.setField(b, 'name', 'dialog.button.' .. i)
-        scene.setField(b, 'x', (i == 1 and -1 or 1) * BUTTON_SPACING_X)
-        scene.setField(b, 'y', BUTTON_Y)
         local t = scene.addComponent(b, 'core.Text')
         scene.setField(t, 'font', require('ui.font').get('big'))
         scene.setField(t, 'flags', TextFlags.xCenter | TextFlags.yMiddle)
-        addSize(b, 96, 28)
+        addSize(b, 0, BUTTON_H)
         instance.buttons[i] = t
     end
     instance:refreshButtons()
@@ -274,17 +241,29 @@ function Dialog:new(opts)
 end
 
 -- app.Dialog: drive every live dialog instance once per frame and prune
--- closed ones (close() removes it from the list; this loop is a safety net).
+-- closed ones on the next dispatch (the deferred destroy lets core.Audio see
+-- a closing dialog's last SFX trigger).
 ecs.registerSystem('app.Dialog', {
     after = { 'core.LegacyGame' },
 }, function()
     local i = 1
+    local destroyed = false
     while i <= #liveDialogs do
         local d = liveDialogs[i]
         if d.closed then
+            -- Deferred destroy: the root (and its emitter) survived one
+            -- dispatch so core.Audio picked up the last trigger.
+            if d.root then
+                scene.destroy(d.root)
+                d.root = nil
+                d.emitter = nil
+                d.sfx = nil
+            end
             table.remove(liveDialogs, i)
+            destroyed = true
         else
             -- Advance the dialog here (single-frame edge handling).
+            d:fitCanvas()
             if d.nav.left or d.nav.right or d.nav.up or d.nav.down then
                 local delta = (d.nav.left or d.nav.up) and -1 or 1
                 d.selected = ((d.selected - 1 + delta) % #d.choices) + 1
@@ -299,6 +278,9 @@ ecs.registerSystem('app.Dialog', {
             end
             i = i + 1
         end
+    end
+    if destroyed then
+        re.collectGarbage()
     end
 end)
 
