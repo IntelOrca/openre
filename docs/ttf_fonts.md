@@ -81,7 +81,9 @@ left+right". I reuse the reserved `top` field the same way vertically:
 
 ## Verification (sessions 2026-08-24)
 
-Confirmed end-to-end on a temp game `games/ttftest` (not the re2 game):
+Confirmed end-to-end on a temp game `games/ttftest` (not the re2 game; that
+demo was removed later — it relied on the Lua tick hook — but the TTF feature
+it exercised is unchanged).
 
 - `gfx.loadFont('fonts/Barlow-Regular.ttf', 16)` etc. all load cleanly and
   return usable handles. Both `.ttf` (Barlow, Inter) and `.ttc` (msgothic)
@@ -91,12 +93,12 @@ Confirmed end-to-end on a temp game `games/ttftest` (not the re2 game):
   Screenshot pixel analysis shows genuine glyph shapes (not blank / not tofu
   boxes) and per-span colors (red/green/blue `<span>` rendering works).
 - Process is stable: ran 35+ minutes without a crash; atlas grows lazily.
-- **Stale-binary trap (important)**: `run_ttftest.bat` launches a *relative*
-  `bin\Debug\openre.exe`, so it depends on the shell's CWD. An early "crash"
-  was traced to a **stale build in a different worktree** (intelorca-*
-  glowing-fiesta) being launched from the default shell CWD. Verify the
-  running DLL (`Get-FileHash`) or use an env-qualified absolute launch before
-  trusting a crash report.
+- **Stale-binary trap (important)**: `run_ttftest.bat` (removed with the demo)
+  launched a *relative* `bin\Debug\openre.exe`, so it depended on the shell's
+  CWD. An early "crash" was traced to a **stale build in a different worktree**
+  (intelorca-* glowing-fiesta) being launched from the default shell CWD.
+  Verify the running DLL (`Get-FileHash`) or use an env-qualified absolute
+  launch before trusting a crash report.
 - **Crash-dump workflow (Windows WER)**: parse `%LOCALAPPDATA%\CrashDumps`
   `.dmp` with Python `minidump`; i386 CONTEXT: ContextFlags@0x00,
   FloatSave@0x1C, SegGs@0x8C, Edi@0x9C, Esi@0xA0, Ebp@0xA4, Esp@0xAC,
@@ -182,10 +184,11 @@ Fix (src/text_layout.cpp/h):
 - `layoutEntity` counts lines for `totalH` (lineH per line) and, on a
   `lineBreak` run, resets `x = originX` and adds `lineH` to `y`.
 
-Verified on ttftest: the 5-line code block now stacks correctly and the rows
-below it (Symbols, spans) moved down without overlapping after spacing the
-test's fixed row layout for the extra lines. No glyph clipping remains on any
-row when compared to per-glyph SDL3_ttf reference pixels.
+Verified on the (now-removed) ttftest demo: the 5-line code block now stacks
+correctly and the rows below it (Symbols, spans) moved down without overlapping
+after spacing the test's fixed row layout for the extra lines. No glyph
+clipping remains on any row when compared to per-glyph SDL3_ttf reference
+pixels.
 
 ## Glyph tail clipping: quad snapping shrunk fractional-height quads (2026-08-25)
 
@@ -207,8 +210,9 @@ against the snapped origin, only when snapping squeezed the quad. This never
 moves a shared seam that abutting quads already agree on; it only inflates
 quads that snapping shrank.
 
-Verified by exact pixel comparison of the ttftest screenshot against the atlas
-page cells: post-fix the Inter20 'g' cell matches the screen at err ~0.05
+Verified by exact pixel comparison of the ttftest demo screenshot against the
+atlas page cells: post-fix the Inter20 'g' cell matches the screen at err
+~0.05
 (pixel-identical) at both 1600x900 and 1280x720, while the pre-fix build did
 not contain the cell's pixel pattern anywhere around the glyph (visibly
 vertically squashed). Diffing pre/post frames shows the correction lands on
