@@ -13,6 +13,8 @@
 -- Optional debug hooks used by the web tester: prologue.status() / prologue.skip().
 
 local util = require('script/util')
+local game = require('script/game')
+local ecs = require('ecs')
 
 local function containsCommand(list, name)
     for i = 1, #list do
@@ -922,20 +924,14 @@ local function destroyScene(c)
         c.surf = nil
     end
 
--- Plays one opening movie in its own function frame: the handle dies when the
--- function returns (i.e. the moment the movie is over), so the caller's
--- re.collectGarbage() unloads the streamed resource straight away.
-local function playMovieAndRecord(c, path)
-    local handle = core.loadMovie(path)
-    if handle ~= nil then
-        core.playMovie(handle)
-    end
-    c.movies[#c.movies + 1] = path
-end
-
+-- Plays the two opening movies sequentially and async: each is a core.Video
+-- entity driven by the native VideoSystem (destroying the entity is the whole
+-- teardown). updateMovie() advances the queue and calls finish() when both
+-- have played.
 local function beginMovie(c)
     c.phase = 'movie'
-    local def = c.def
+    c.movieQueue = { c.def.movie, c.def.movieAlt }
+    c.movie = nil -- { entity, handle } while a movie plays
     -- The movie takes over the screen and the soundtrack: stop the narration
     -- and BGM emitters, then drop the prologue scene. Both openings play in
     -- sequence and interrupting one skips only that one.
@@ -951,10 +947,37 @@ local function beginMovie(c)
         audioCache[k] = nil
     end
     re.collectGarbage()
-    playMovieAndRecord(c, def.movie)
-    re.collectGarbage()
-    playMovieAndRecord(c, def.movieAlt)
-    re.collectGarbage()
+end
+
+-- Drives the async movie queue. Called from updateRun while c.phase == 'movie'.
+local function updateMovie(c)
+    if c.movie == nil then
+        local path = table.remove(c.movieQueue, 1)
+        if path == nil then
+            finish(c)
+            return
+        end
+        local handle = core.loadMovie(path)
+        c.movies[#c.movies + 1] = path
+        if handle == nil then
+            return -- movie assets missing; skip to the next on the next frame
+        end
+        local entity = game.spawnMovieEntity(scene.getRoot('movie'), handle)
+        if entity == nil then
+            return
+        end
+        c.movie = { entity = entity, handle = handle }
+        return
+    end
+
+    -- Waiting for the current movie: VideoSystem flips status to Stopped
+    -- when playback ends (or mark-and-sweeps the entity away).
+    local row = scene.component(c.movie.entity, 'core.Video')
+    if row == nil or scene.getField(row, 'status') ~= 1 then
+        scene.destroy(c.movie.entity)
+        c.movie = nil
+        re.collectGarbage()
+    end
 end
 
 -- End of the run: hush the audio, remove the intro and hand back.
@@ -997,6 +1020,12 @@ local function skipPressed(c)
 end
 
 local function updateRun(c)
+    if c.phase == 'movie' then
+        -- Intro movies play async through core.Video entities (the backdrops
+        -- and canvas were removed in beginMovie); drive the queue/finish here.
+        updateMovie(c)
+        return
+    end
     if c.canvas == nil then
         -- The scene was already removed (e.g. the movie path); nothing to draw.
         return
@@ -1058,8 +1087,9 @@ local function updateRun(c)
                 c.wait = c.wait - 1
             end
             if c.skipped or c.wait <= 0 then
+                -- Hand over to the movies (async; updateMovie calls finish()
+                -- once both have played).
                 beginMovie(c)
-                finish(c)
             end
         end
 
@@ -1121,25 +1151,33 @@ local function updateRun(c)
 
         buildScene(c)
         active = c
-
-        re.subscribe(HookKind.tick, function()
-            if active ~= c then return end
-            if c.requestSkip then
-                c.requestSkip = false
-                skipPressed(c)
-            end
-            if c.phase ~= 'done' then
-                -- A held skip key behaves like a single press each press. The
-                -- skip snapshot was written during the input walk (before the
-                -- tick); the web-tester hook sets requestSkip directly.
-                if c.allowSkip and (c.skipNav.accept or c.skipNav.menu) then
-                    skipPressed(c)
-                    if c.finished then return end
-                end
-                updateRun(c)
-            end
-        end)
     end
+
+    -- app.Prologue: drives the active prologue once per frame (replaces the
+    -- old per-start tick hook). The module-level `active` guard means a newly
+    -- started prologue takes over immediately and a finished one no-ops.
+    ecs.registerSystem('app.Prologue', {
+        after = { 'core.LegacyGame' },
+    }, function()
+        local c = active
+        if c == nil then
+            return
+        end
+        if c.requestSkip then
+            c.requestSkip = false
+            skipPressed(c)
+        end
+        if c.phase ~= 'done' then
+            -- A held skip key behaves like a single press each press. The
+            -- skip snapshot was written during the input walk (before the
+            -- managed systems); the web-tester hook sets requestSkip directly.
+            if c.allowSkip and (c.skipNav.accept or c.skipNav.menu) then
+                skipPressed(c)
+                if c.finished then return end
+            end
+            updateRun(c)
+        end
+    end)
 
     --- Live test/monitor state (serializable) for the web tester.
     function prologue.status()

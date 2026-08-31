@@ -2,8 +2,9 @@
 --
 -- The module boot sequence (splash -> intro movie -> title menu) used to be
 -- driven by a scheduler plus a re.subscribe(HookKind.tick) closure in
--- main.lua. That per-frame imperative state (timers, gfx.fade alpha) now
--- lives in components on entities, driven by two registered systems:
+-- main.lua - that per-frame hook API is gone. The old per-frame imperative
+-- state (timers, gfx.fade alpha) now lives in components on entities, driven
+-- by two registered systems:
 --
 --   app.GameFlow - the single transition authority. Reads/writes the `state`
 --                  field of the persistent app.GameFlow component on the app
@@ -19,13 +20,16 @@
 --   2 = MOVIE   - the intro movie plays async via the native core.Video
 --                 entity path; destroying the entity is the teardown.
 --   3 = TITLE   - create Title:new() behind a plain black overlay, then
---                 drop the overlay (no animation this step; the menu's own
---                 tick owns fades from the menu migration step onward).
+--                 drop the overlay.
+--   4 = GAMEPLAY - a non-blocking core.runGame() session (cmdline start) is
+--                 live; a game.resumeAfterGame callback lands on the title
+--                 menu when it returns.
 --
 -- Components and systems use the reserved `app.*` namespace.
 
 local ecs = require('ecs')
 local util = require('script/util')
+local game = require('script/game')
 local Title = require('script/menu')
 
 local app = {}
@@ -35,6 +39,7 @@ local STATE_SPLASH = 0
 local STATE_DECIDE = 1
 local STATE_MOVIE = 2
 local STATE_TITLE = 3
+local STATE_GAMEPLAY = 4 -- a non-blocking core.runGame() session is live
 
 -- Splash phases: fade in (overlay alpha 255 -> 0), hold, fade out (0 -> 255),
 -- hold black, done. The old scheduler fadeIn(60)/wait(120)/fadeOut(60) /
@@ -277,11 +282,14 @@ local function startMovie()
         skip = false,
     }
 
-    -- Any press skips the movie. The input walk runs before the managed
-    -- systems, so GameFlow sees the flag the same frame the key went down.
+    -- Any press skips the movie (mirroring the blocking movie loop, which
+    -- breaks on any frame.press left after the input handler chain). The
+    -- frame.press field is an array of command names, so test its length, not
+    -- a raw zero. The input walk runs before the managed systems, so GameFlow
+    -- sees the flag the same frame the key went down.
     local handler = scene.addComponent(entity, 'core.InputHandler')
     scene.setField(handler, 'callback', function(frame)
-        if frame.press ~= 0 then
+        if #frame.press > 0 then
             m.skip = true
         end
     end)
@@ -303,8 +311,8 @@ local function movieFinished()
     if video == nil then
         return true
     end
-    -- VideoSystem flips status to Stopped when playback ends.
-    return scene.getField(video, 'status') ~= 1
+    local st = scene.getField(video, 'status')
+    return st ~= 1
 end
 
 -- Ends the movie: destroying the entity lets VideoSystem's mark-and-sweep
@@ -359,9 +367,9 @@ end
 
 -- Command-line start (openre.exe <savefile> -p <player> -r <roomcode>
 -- -s <scenario>): reach gameplay through the module-driven setup APIs +
--- core.runGame, then fall back to the boot. Returns true once gameplay ran.
--- Mirrors the old main.cmdlineBootStart; it blocks inside a GameFlow
--- transition exactly like the old scheduler boot step did.
+-- core.runGame, then fall back to the boot. core.runGame is non-blocking, so
+-- the caller registers a resume callback that lands on the menu when the
+-- session returns. Returns true once gameplay ran.
 local function cmdlineStart()
     local cmd = core.cmdline()
     if not cmd or not cmd.startRequested then
@@ -403,6 +411,12 @@ end
 -- splash and movie entities and creates the title; the phase systems only
 -- report through their own components.
 local function gameFlowSystem()
+    -- Edge-watch core.inGame() every frame (game.lua): fires any pending
+    -- resume callbacks when a non-blocking core.runGame() session returns to
+    -- the menu. Runs before the state machine below so a cmdline session that
+    -- ended this frame can transition its state same-frame.
+    game.track()
+
     local state = getState()
     if state == nil then
         return
@@ -417,9 +431,13 @@ local function gameFlowSystem()
         end
         destroySplash()
         if cmdlineStart() then
-            -- Gameplay ran (blocking); land on the menu when it returns.
-            spawnTitle(false)
-            setState(STATE_TITLE)
+            -- Non-blocking: the session plays in the app loop; spawn the menu
+            -- when it returns to the module.
+            game.resumeAfterGame(function()
+                spawnTitle(false)
+                setState(STATE_TITLE)
+            end)
+            setState(STATE_GAMEPLAY)
             return
         end
         if skipIntro or fastReload then
@@ -449,6 +467,9 @@ local function gameFlowSystem()
         destroyMovie()
         spawnTitle(false)
         setState(STATE_TITLE)
+    elseif state == STATE_GAMEPLAY then
+        -- Idle: the resumed game session owns the frame. The resume callback
+        -- registered in DECIDE lands on the title menu when it returns.
     elseif state == STATE_TITLE then
         local t = boot.title
         if t == nil or t.overlay == nil then

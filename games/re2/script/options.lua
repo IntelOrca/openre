@@ -4,9 +4,9 @@
 -- open()/isOpen()/close() so the RE2 menu can show it as a popup and park
 -- itself underneath.
 --
--- Run model: open() builds the whole screen under the 'user' root and the tick
--- handler keeps it in sync; close() destroys it. The tick is subscribed once
--- (the engine has no unsubscribe) and is inert while the overlay is closed.
+-- Run model: open() builds the whole screen under the 'user' root and the
+-- registered app.Options managed system keeps it in sync; close() destroys it.
+-- The system is registered once and is inert while the overlay is closed.
 --
 -- All content is authored in a fixed 640x480 design space mapped onto the
 -- window by a native scaled_frame ("contain"); the frame target is refreshed
@@ -666,13 +666,21 @@ end
 -- Per-frame input ------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-re.subscribe(HookKind.tick, function()
+-- app.Options: per-frame overlay update (the old module-level tick hook,
+-- moved onto a registered managed system). Inert while the overlay is closed.
+ecs.registerSystem('app.Options', {
+    after = { 'core.LegacyGame' },
+    -- Runs before the ui.* population systems so the tab-selection reads lag
+    -- one frame exactly like the old tick (which ran ahead of every managed
+    -- system): fine for a demo.
+    before = { 'ui.TabStrip', 'ui.config.Control', 'core.ScaledFrame' },
+}, function()
     if not isOpenFlag or activePanel == nil then
         return
     end
     fitCanvas()
 
-    -- Tab selection is written by the native systems after this hook, so
+    -- Tab selection is written by the native systems after this system, so
     -- these reads lag one frame; fine for a demo.
     local mainSel = tabs.selectedIndex(mainStripId)
     if mainSel ~= lastMainSel then

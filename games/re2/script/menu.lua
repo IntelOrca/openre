@@ -29,9 +29,16 @@ local prologue          = require("script/prologue")
 local LoadScreen        = require("script/load")
 require("script/scheduler") -- Scheduler (global) for the handoff chains
 local options           = require("script/options")
+local game              = require("script/game")
+local ecs               = require("ecs")
 
 local Title             = {}
 local titleMethods      = {}
+
+-- Live Title instances, driven by the registered app.Menu managed system
+-- below (one frame of update() per instance, mirroring the old per-instance
+-- tick subscription). Instances are removed when closeMenu() closes them.
+local liveTitles = {}
 
 -- Design space for the title screen: content is authored in this fixed
 -- 320x240 coordinate space. Two sibling layers under the user root map it
@@ -619,11 +626,13 @@ local function updateDemo(self)
         if self.demoTimer >= 60 then
             self.demoPhase = 1
             self.demoTimer = 0
-            self:playDemo() -- stub
+            self:playDemo()
         end
     elseif self.demoPhase == 1 then
-        -- Demo playback stub: hold a moment, then fade back in.
-        if self.demoTimer >= 180 then
+        -- Demo playback (core.runGame is non-blocking). The menu stays alive
+        -- behind the black; when the session returns to the menu the overlay
+        -- is below 255 and phase 2 fades back in to the PRESS START screen.
+        if not game.inGame() then
             self.demoPhase = 2
             self.demoTimer = 0
         end
@@ -687,34 +696,37 @@ local function launchPrologue(self)
         onFinished = function()
             -- Hand over to the legacy game exactly like load/demo: latch a
             -- fresh game from the chosen character/scenario/difficulty, then
-            -- block in core.runGame() until it returns to the menu.
+            -- run it non-blocking. When the session returns to the menu,
+            -- recreate the title so the player lands back on Main Story.
             if core.startNewGame(ctx.player or 'leon', ctx.scenario or 'a', ctx.difficulty or 'standard') then
                 core.runGame()
+                game.resumeAfterGame(function()
+                    Title:new({ mainStory = true })
+                end)
             else
                 print('[title] new game failed to start')
+                Title:new({ mainStory = true })
             end
-            Title:new({ mainStory = true })
         end,
     })
 end
 
--- Demo playback: load the next recorded demo into the legacy game and block
--- inside core.runGame() (the same blocking call the load screen uses) until
--- the game's native demo-end/cancel path signals a return to the menu. The
--- menu stays alive behind the black overlay; when the demo ends the overlay
--- is consumed by the first rendered frame and updateDemo's later phases fade
--- back in to the PRESS START screen.
+-- Demo playback: load the next recorded demo into the legacy game and run it
+-- non-blocking (core.runGame enables the LegacyGame node and returns; the
+-- game's native demo-end/cancel path signals a return to the menu). The menu
+-- stays alive behind the black overlay; updateDemo's phase 1 waits for the
+-- session to end, then phase 2 fades back in to the PRESS START screen.
 local function playDemo(self)
     local name = DEMOS[((self.demoIndex or 0) % #DEMOS) + 1]
     self.demoIndex = ((self.demoIndex or 0) + 1) % #DEMOS
     if not core.loadDemo(name) then
         print('[title] demo ' .. name .. ' failed to load; skipping')
         self.demoPhase = 2
+        self.demoTimer = 0
         return
     end
     print('[title] playing demo ' .. name)
     core.runGame()
-    print('[title] demo ' .. name .. ' finished')
 end
 
 -- Keep one scaled-frame layer tracking the window: recentre it and refresh
@@ -1079,11 +1091,32 @@ if opts.mainStory then
         refreshTooltip(instance)
     end
 
-    re.subscribe(HookKind.tick, function()
-        update(instance)
-    end)
+    liveTitles[#liveTitles + 1] = instance
 
     return instance
 end
+
+-- app.Menu: drive every live title instance once per frame and prune closed
+-- ones (the instance's update() no-ops once closed, but dropping it also lets
+-- the instance be collected). Replaces the old per-instance tick hook.
+ecs.registerSystem('app.Menu', {
+    after = { 'core.LegacyGame' },
+}, function()
+    local i = 1
+    while i <= #liveTitles do
+        local t = liveTitles[i]
+        if t.closed then
+            table.remove(liveTitles, i)
+        else
+            t:update()
+            if t.closed then
+                -- closeMenu() ran during update (e.g. the LEAVING handover).
+                table.remove(liveTitles, i)
+            else
+                i = i + 1
+            end
+        end
+    end
+end)
 
 return Title

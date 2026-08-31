@@ -22,9 +22,15 @@
 -- the component.
 
 local Scheduler = require('script/scheduler')
+local game = require('script/game')
+local ecs = require('ecs')
 
 local LoadScreen         = {}
 local loadMethods        = {}
+
+-- Live load-screen instances, driven by the registered app.Load managed
+-- system below (mirrors the old per-instance tick hook).
+local liveLoadScreens = {}
 
 -- Forward declarations: these are assigned further down but referenced from
 -- LoadScreen:new.
@@ -291,9 +297,7 @@ function LoadScreen:new(opts)
 
     instance:refresh()
 
-    re.subscribe(HookKind.tick, function()
-        instance:update()
-    end)
+    liveLoadScreens[#liveLoadScreens + 1] = instance
 
     return instance
 end
@@ -390,11 +394,11 @@ local function beginClose(self)
         :fadeIn(FADE_FRAMES)
 end
 
--- Starts the selected save: fade to black (driven frame-by-frame here because
--- core.runGame below blocks the scheduler), then destroy the screen, restore
--- the save via core.loadGame and block inside core.runGame until the game
--- returns to the menu. When it does, recreate the title menu so the player
--- lands back at Main Story / Load Game.
+-- Starts the selected save: fade to black (driven frame-by-frame here), then
+-- destroy the screen, restore the save via core.loadGame and run the session
+-- non-blocking (core.runGame returns immediately). When it returns to the
+-- menu, the resume callback recreates the title so the player lands back at
+-- Main Story / Load Game.
 local function startLoad(self)
     if self.closing or self.enteringGame then
         return
@@ -423,9 +427,9 @@ update = function(self)
     end
 
     -- Enter-the-game fade: accept was pressed, so fade to black over
-    -- FADE_FRAMES, then hand over to the legacy game. core.runGame blocks
-    -- until the game returns to the menu, so everything after it runs once
-    -- the session ends.
+    -- FADE_FRAMES, then hand over to the legacy game. core.runGame returns
+    -- immediately; the resume callback below recreates the menu once the
+    -- session returns to it.
     if self.enteringGame then
         self.fadeRemaining = self.fadeRemaining - 1
         local progress = math.max(0, math.min(1, 1 - self.fadeRemaining / FADE_FRAMES))
@@ -439,11 +443,15 @@ update = function(self)
         local ok = entry ~= nil and core.loadGame(entry.name) or false
         if not ok then
             print('[load] failed to load save ' .. tostring(entry and entry.name or '?'))
+            local Title = require('script/menu')
+            Title:new({ mainStory = true })
         else
             core.runGame()
+            game.resumeAfterGame(function()
+                local Title = require('script/menu')
+                Title:new({ mainStory = true })
+            end)
         end
-        local Title = require('script/menu')
-        Title:new({ mainStory = true })
         return
     end
 
@@ -494,5 +502,26 @@ loadMethods = {
     startLoad = startLoad,
     destroy = destroy,
 }
+
+-- app.Load: drive every live load-screen instance once per frame and prune
+-- closed ones (replaces the old per-instance tick hook).
+ecs.registerSystem('app.Load', {
+    after = { 'core.LegacyGame' },
+}, function()
+    local i = 1
+    while i <= #liveLoadScreens do
+        local s = liveLoadScreens[i]
+        if s.closed then
+            table.remove(liveLoadScreens, i)
+        else
+            s:update()
+            if s.closed then
+                table.remove(liveLoadScreens, i)
+            else
+                i = i + 1
+            end
+        end
+    end
+end)
 
 return LoadScreen

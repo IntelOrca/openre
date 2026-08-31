@@ -1,17 +1,27 @@
 -- scheduler.lua — cooperative per-frame task queue for game scripts.
--- Each Scheduler instance owns its queue and is driven from the tick hook,
--- so :wait/:exec/:run chains run in order across frames. The sandboxed VM
--- removes setmetatable, so instances carry their methods directly instead
--- of sharing them through a class metatable.
+-- Each Scheduler instance owns its queue and is driven from the registered
+-- `app.Scheduler` managed system (no per-instance tick hooks), so
+-- :wait/:exec/:run chains run in order across frames. Finished schedulers are
+-- dropped from the live list so they stop running and can be collected. The
+-- sandboxed VM removes setmetatable, so instances carry their methods directly
+-- instead of sharing them through a class metatable.
 
 ---@class Scheduler
 Scheduler = {}
+
+local ecs = require('ecs')
 
 local SCHEDULER_KIND_WAIT = 0
 local SCHEDULER_KIND_EXEC = 1
 local SCHEDULER_KIND_RUN = 2
 
 local SCHEDULER_METHODS = {}
+
+-- Live scheduler instances driven by the managed system below.
+local live = {}
+local function schedule(instance)
+    live[#live + 1] = instance
+end
 
 local function update(self)
     while true do
@@ -108,10 +118,28 @@ function Scheduler:new()
     for name, fn in pairs(SCHEDULER_METHODS) do
         instance[name] = fn
     end
-    re.subscribe(HookKind.tick, function()
-        instance:update()
-    end)
+    schedule(instance)
     return instance
 end
+
+-- app.Scheduler: drives every live scheduler instance once per frame and
+-- drops the ones whose queue has fully drained (no work left).
+ecs.registerSystem('app.Scheduler', {
+    after = { 'core.LegacyGame' },
+    before = { 'core.ScaledFrame' },
+}, function()
+    local i = 1
+    while i <= #live do
+        local self = live[i]
+        if self == nil or (#self.q == 0 and self.curr == nil) then
+            -- Finished: remove from the live list; the instance can now be
+            -- collected (its captured upvalues otherwise keep it alive).
+            table.remove(live, i)
+        else
+            self:update()
+            i = i + 1
+        end
+    end
+end)
 
 return Scheduler
