@@ -58,25 +58,6 @@ namespace openre
         return false;
     }
 
-    void SystemRegistry::clearManaged()
-    {
-        bool removed = false;
-        for (auto it = m_defs.begin(); it != m_defs.end();)
-        {
-            if (it->kind == SystemKind::Managed)
-            {
-                it = m_defs.erase(it);
-                removed = true;
-            }
-            else
-            {
-                ++it;
-            }
-        }
-        if (removed)
-            m_dirty = true;
-    }
-
     void SystemRegistry::setManagedRunner(void (*fn)(int managedId))
     {
         m_managedRunner = fn;

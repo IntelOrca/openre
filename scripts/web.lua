@@ -67,10 +67,12 @@ local function installWebInputHandler()
                 frame.state = webInput.state
                 frame.press = webInput.press
                 -- Consume an armed tap here, at the input-walk cadence, rather
-                -- than counting frames in web.Pump: the walk runs at the
-                -- throttled 60fps cadence while web.Pump runs every engine
-                -- frame (~450fps), so a pump-side decrement would expire a
-                -- ticks=1 tap before the next walk could inject it.
+                -- than counting frames in web.Pump: the walk and the managed
+                -- pump both run at the throttled 60fps cadence (they are
+                -- gated on the same app.framePaced flag), but decrementing in
+                -- the handler guarantees a ticks=1 tap is consumed on the
+                -- same frame it would be injected, so expiry stays exact no
+                -- matter how often the pump is dispatched.
                 if webInput.tapTicks > 0 then
                     webInput.tapTicks = webInput.tapTicks - 1
                     if webInput.tapTicks == 0 then

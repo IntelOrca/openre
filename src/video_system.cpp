@@ -226,8 +226,8 @@ namespace openre
             st.texture = 0;
         }
 
-        auto* scene = openre::current_scene();
-        if (scene != nullptr && scene->isValid(entity) && scene->hasComponent<ecs::VideoComponent>(entity))
+        auto* scene = &app.scene;
+        if (scene->isValid(entity) && scene->hasComponent<ecs::VideoComponent>(entity))
         {
             auto& video = scene->getComponent<ecs::VideoComponent>(entity);
             video.texture = 0;
@@ -312,8 +312,11 @@ namespace openre
         // Mark-and-sweep: dispose every playback row whose entity was not
         // enumerated above (destroyed or component removed). The text update
         // mirrors the release path above; the component may already be gone,
-        // so guard with isValid + hasComponent.
-        if (!alive.empty() || !s_videoStates.empty())
+        // so guard with isValid + hasComponent. Playback state only changes on
+        // paced frames (async movies are created and destroyed from Lua managed
+        // systems, which run at the paced cadence), so the sweep can be
+        // limited to those frames instead of every uncapped engine iteration.
+        if (app.framePaced)
         {
             std::unordered_set<ecs::Entity> aliveSet(alive.begin(), alive.end());
             for (auto it = s_videoStates.begin(); it != s_videoStates.end();)

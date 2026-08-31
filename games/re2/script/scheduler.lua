@@ -123,7 +123,9 @@ function Scheduler:new()
 end
 
 -- app.Scheduler: drives every live scheduler instance once per frame and
--- drops the ones whose queue has fully drained (no work left).
+-- drops the ones whose queue has fully drained (no work left). A freshly
+-- created instance keeps its first pass so work that is appended after
+-- construction (rather than chained in the constructor) is still driven.
 ecs.registerSystem('app.Scheduler', {
     after = { 'core.LegacyGame' },
     before = { 'core.ScaledFrame' },
@@ -131,11 +133,15 @@ ecs.registerSystem('app.Scheduler', {
     local i = 1
     while i <= #live do
         local self = live[i]
-        if self == nil or (#self.q == 0 and self.curr == nil) then
-            -- Finished: remove from the live list; the instance can now be
-            -- collected (its captured upvalues otherwise keep it alive).
+        if self == nil then
+            table.remove(live, i)
+        elseif self.started and #self.q == 0 and self.curr == nil then
+            -- Finished (a previous update drained the queue): remove it so
+            -- the instance can be collected (its captured upvalues otherwise
+            -- keep it alive).
             table.remove(live, i)
         else
+            self.started = true
             self:update()
             i = i + 1
         end

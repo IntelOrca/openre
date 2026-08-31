@@ -126,6 +126,12 @@ namespace openre
 
         update_game();
 
+        // The module's own frame path calls script::tick() for file-watcher
+        // and hot-reload maintenance; the legacy game frame must do the same
+        // or module scripts can no longer be hot-reloaded mid-session. (This
+        // mirrors the pre-migration update_game() behaviour.)
+        openre::script::tick();
+
         // Keep OG-visible timer fields updated for other hooks.
         gGameTable.timer_last = now;
         gGameTable.timer_current = now;

@@ -562,8 +562,15 @@ namespace openre::script
             }
             for (auto it = gManagedSystems.begin(); it != gManagedSystems.end();)
             {
-                if (!isVmAlive(it->second.vm))
+                if (it->second.vm == vm || !isVmAlive(it->second.vm))
                     it = gManagedSystems.erase(it);
+                else
+                    ++it;
+            }
+            for (auto it = gVmRunnerRef.begin(); it != gVmRunnerRef.end();)
+            {
+                if (it->first == vm || !isVmAlive(it->first))
+                    it = gVmRunnerRef.erase(it);
                 else
                     ++it;
             }

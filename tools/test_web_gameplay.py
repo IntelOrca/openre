@@ -50,15 +50,38 @@ with d.launch(skip_intro=True, extra_args=["-r", "100"]) as g:
 
     r1 = d.eval_lua(g, "return 1 + 1")
     print("eval_lua:", r1)
-    r2 = d.eval_game(g, "return 2 * 3")
+    if not (isinstance(r1, dict) and r1.get("ok") and r1.get("result") == "2"):
+        raise AssertionError("eval_lua did not return 2: %r" % r1)
+
+    # eval_game's /api/eval result serializes the ok flag of the game-VM eval,
+    # so select(2, re.evalIn(...)) retrieves the actual game-VM return value.
+    r2 = d.eval_lua(
+        g,
+        "return select(2, re.evalIn('module.game', " + d.lua_quote("return 2 * 3") + "))",
+    )
     print("eval_game:", r2)
-    r3 = d.eval_game(g, "return core.inGame() and 'ingame' or 'menu'")
+    if not (isinstance(r2, dict) and r2.get("ok") and r2.get("result") == "6"):
+        raise AssertionError("eval_game did not return 6: %r" % r2)
+
+    # The module path is mid-session here, so the managed core.inGame() binding
+    # must report the legacy node enabled.
+    r3 = d.eval_lua(
+        g,
+        "return select(2, re.evalIn('module.game', "
+        + d.lua_quote("return core.inGame() and 'ingame' or 'menu'")
+        + "))",
+    )
     print("core.inGame:", r3)
+    if not (isinstance(r3, dict) and r3.get("ok") and r3.get("result") == "ingame"):
+        raise AssertionError("core.inGame() should be 'ingame' during the session: %r" % r3)
 
     d.tap(g, ["down"])
     print("tap sent")
     time.sleep(0.5)
-    print("health after tap:", d.eval_lua(g, "return 7"))
+    h = d.eval_lua(g, "return 7")
+    print("health after tap:", h)
+    if not (isinstance(h, dict) and h.get("ok") and h.get("result") == "7"):
+        raise AssertionError("web plugin unresponsive after tap: %r" % h)
 
     print("forcing return to menu (vk_press bit 4)...")
     d.eval_lua(g, "re.unsafe.write(0x%X, {4,0,0,0})" % VK_PRESS)

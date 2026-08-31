@@ -53,7 +53,6 @@ namespace openre
             int managedId);
 
         bool removeManaged(const std::string& name);
-        void clearManaged();
 
         // Managed entries dispatch back into Lua through this callback.
         void setManagedRunner(void (*fn)(int managedId));
