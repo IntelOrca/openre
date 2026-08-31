@@ -42,14 +42,16 @@ namespace openre
         registry.registerNative("core.Input", { "core.Window" }, {}, SystemPlacement::Default, system_input);
         registry.registerNative("core.Module", { "core.Input" }, {}, SystemPlacement::Default, ModuleSystem);
         registry.registerNative("core.LegacyGame", { "core.Module" }, {}, SystemPlacement::Default, LegacyGameSystem);
-        registry.registerNative("core.ScaledFrame", { "core.LegacyGame" }, {}, SystemPlacement::Default, ScaledFrameSystem);
-        registry.registerNative("core.UiFlex", { "core.ScaledFrame" }, {}, SystemPlacement::Default, UiFlexSystem);
+        registry.registerNative("core.UiFlex", { "core.LegacyGame" }, {}, SystemPlacement::Default, UiFlexSystem);
         registry.registerNative("core.FontSwap", { "core.UiFlex" }, {}, SystemPlacement::Default, FontSwapSystem);
         registry.registerNative("core.InputHint", { "core.FontSwap" }, {}, SystemPlacement::Default, InputHintSystem);
         registry.registerNative("core.TextLayout", { "core.InputHint" }, {}, SystemPlacement::Default, TextLayoutSystem);
         registry.registerNative("core.Video", { "core.TextLayout" }, {}, SystemPlacement::Default, VideoSystem);
         registry.registerNative("core.Audio", { "core.Video" }, {}, SystemPlacement::Default, AudioSystem);
-        registry.registerNative("core.Render", { "core.Audio" }, {}, SystemPlacement::Late, RenderSystem);
+        // ScaledFrame runs late (after the Lua-managed systems write
+        // frame.target) but before Render consumes the scale.
+        registry.registerNative("core.ScaledFrame", { "core.LegacyGame" }, { "core.Render" }, SystemPlacement::Late, ScaledFrameSystem);
+        registry.registerNative("core.Render", { "core.Audio", "core.ScaledFrame" }, {}, SystemPlacement::Late, RenderSystem);
     }
 
     // The resolved game module directory (set once at boot below).
