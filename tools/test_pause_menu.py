@@ -93,11 +93,11 @@ def main():
         print("Quit dialog message:", msg)
         assert msg and "Quit the game and return to the main menu?" in msg
         assert "(Any unsaved data will be lost.)" in msg
-        # The box is a 75%-of-screen vertical flex container.
+        # The box is a 75%-wide, 50%-tall vertical flex container.
         box_w = d.entity_field(g, "dialog.box", "core.UiSize", "width")
         box_h = d.entity_field(g, "dialog.box", "core.UiSize", "height")
         print("dialog box size:", box_w, box_h)
-        assert box_w == 640 * 0.75 and box_h == 480 * 0.75
+        assert box_w == 640 * 0.75 and box_h == 480 * 0.5
         assert d.entity_field(g, "dialog.box", "core.UiFlex", "orientation") == "vertical"
         assert d.entity_field(g, "dialog.message", "core.UiSize", "weight") == 1.0
         for b in ("dialog.button.1", "dialog.button.2"):

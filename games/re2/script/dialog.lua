@@ -1,9 +1,9 @@
 -- dialog.lua - generic confirmation dialog (games/re2/script/dialog.lua).
 --
 -- A reusable two-choice dialog that can be opened from anywhere (the pause
--- menu, the title screen, ...). A black box 75% of the window, a message
--- centred inside with white text, and two navigatable buttons (Yes / No)
--- flowed vertically at the bottom.
+-- menu, the title screen, ...). A black box 75% wide and 50% tall, a
+-- message centred inside with white text, and two navigatable buttons
+-- (Yes / No) flowed vertically at the bottom.
 --
 --   Dialog:new({ message = '...', onChoose = function(choice) end })
 --
@@ -32,9 +32,9 @@ local liveDialogs = {}
 local DESIGN_W = 640
 local DESIGN_H = 480
 
--- The modal box is 75% of the design space, centred.
+-- The modal box is 75% wide and 50% tall of the design space, centred.
 local BOX_W = DESIGN_W * 0.75 -- 480
-local BOX_H = DESIGN_H * 0.75 -- 360
+local BOX_H = DESIGN_H * 0.5 -- 240
 
 -- Box content insets and the button row height for the vertical flex flow.
 local BOX_PADDING = 24
