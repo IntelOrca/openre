@@ -1445,6 +1445,27 @@ namespace openre
 
     namespace
     {
+        // Pre-order scene-tree indices: the draw-order tiebreaker for
+        // shared-z sprites (a parent behind its children, an earlier sibling
+        // behind a later one). Mirrored by buildSceneSprites so synthesized
+        // draws (the game quad) can slot into the same ordering.
+        void buildTreeOrder(ecs::Scene& scene, std::unordered_map<ecs::Entity, int>& out)
+        {
+            int nextOrder = 0;
+            std::function<void(ecs::Entity)> visit = [&](ecs::Entity e) {
+                out[e] = nextOrder++;
+                const auto* t = scene.tryGetComponent<ecs::TransformComponent>(e);
+                if (t == nullptr)
+                    return;
+                for (ecs::Entity c = t->firstChild; c != ecs::NullEntity;
+                     c = scene.getComponent<ecs::TransformComponent>(c).nextSibling)
+                {
+                    visit(c);
+                }
+            };
+            visit(scene.root());
+        }
+
         // Builds the scene-tree sprite draw list (module UI). Sprites draw
         // back-to-front: higher z first (further back), and equal z in
         // scene-tree (pre-order DFS) order so a parent sits behind its
@@ -1457,21 +1478,7 @@ namespace openre
             // back to tree order, which fixes sibling layering that the old
             // ECS-creation-order tie-break got wrong.
             std::unordered_map<ecs::Entity, int> treeOrder;
-            {
-                int nextOrder = 0;
-                std::function<void(ecs::Entity)> visit = [&](ecs::Entity e) {
-                    treeOrder[e] = nextOrder++;
-                    const auto* t = app.scene.tryGetComponent<ecs::TransformComponent>(e);
-                    if (t == nullptr)
-                        return;
-                    for (ecs::Entity c = t->firstChild; c != ecs::NullEntity;
-                         c = app.scene.getComponent<ecs::TransformComponent>(c).nextSibling)
-                    {
-                        visit(c);
-                    }
-                };
-                visit(app.scene.root());
-            }
+            buildTreeOrder(app.scene, treeOrder);
 
             app.scene.each<ecs::SpriteComponent>([&](ecs::Entity entity, ecs::SpriteComponent& sprite) {
                 const ecs::Mat4 world = ecs::worldMatrix(app.scene, entity);
@@ -1604,7 +1611,7 @@ namespace openre
         {
             // Render the game into the rectangle described by the LegacyGame
             // node: world transform position (top-left) + size (width/height
-            // in window pixels).
+            // in scene-canvas pixels).
             const auto& legacy = app.scene.getComponent<ecs::LegacyGameComponent>(legacyEntity);
             const ecs::Mat4 world = ecs::worldMatrix(app.scene, legacyEntity);
             const int x = (int)world.m[3][0];
@@ -1612,53 +1619,51 @@ namespace openre
             const int w = (int)legacy.size.width;
             const int h = (int)legacy.size.height;
 
-            // Latched pause: the module's pause overlay is live. The game has
-            // frozen (psx_main no longer draws into the guest framebuffer), so
-            // composite the retained guest framebuffer as the bottom-most
-            // sprite and draw the scene tree on top, presenting once. This
-            // keeps the frozen game visible under the 90%-black pause backdrop.
-            if (legacy.paused == 2)
+            // The game renders as the "core.Legacy quad": render_frame_draw
+            // draws the game into the guest framebuffer (the swapchain blit is
+            // skipped), then the framebuffer is published as a scene sprite
+            // fitted to the LegacyGame node's rect. The scene tree is drawn
+            // around it in scene z-order, so the module's overlays (e.g. the
+            // pause menu on the overlay root) layer above the game naturally.
+            // While paused (movie_idx set by the psx_main freeze) the draw is
+            // skipped and the retained frozen frame is displayed instead.
+            render_frame_draw();
+
+            std::vector<render2d::SpriteDraw> draws;
+
+            // The game quad: letterbox the guest framebuffer into the
+            // LegacyGame bounds (same math SdlGpuRenderer::flip used for the
+            // present-rect, authored in the scene canvas so it tracks the same
+            // coordinate space as the scene sprites). Its draw order slots it
+            // between the user and overlay layers, so the game sits above the
+            // user content and below the overlay content.
+            int guestW = system::gpu::framebuffer_width();
+            int guestH = system::gpu::framebuffer_height();
+            if (guestW > 0 && guestH > 0)
             {
-                // Publish the guest framebuffer to the sprite renderer as a
-                // borrowed texture (it retained the frozen game frame).
-                render2d::SpriteRenderer::get().setGuestFramebuffer(
-                    system::gpu::guest_framebuffer(), system::gpu::framebuffer_width(), system::gpu::framebuffer_height());
+                render2d::SpriteRenderer::get().setGuestFramebuffer(system::gpu::guest_framebuffer(), guestW, guestH);
 
-                std::vector<render2d::SpriteDraw> draws;
+                std::unordered_map<ecs::Entity, int> treeOrder;
+                buildTreeOrder(app.scene, treeOrder);
+                const auto gameRoot = app.scene.getRoot(ecs::Scene::RootKind::Game);
 
-                // Bottom-most draw: the frozen game. Letterbox the guest
-                // framebuffer into the LegacyGame bounds (same math as
-                // SdlGpuRenderer::flip's present-rect letterbox, but authored
-                // in the scene canvas so it tracks the same coordinate space as
-                // the overlay sprites).
-                int guestW = system::gpu::framebuffer_width();
-                int guestH = system::gpu::framebuffer_height();
-                if (guestW > 0 && guestH > 0)
-                {
-                    const float scale = std::min((float)w / (float)guestW, (float)h / (float)guestH);
-                    const float outW = (float)guestW * scale;
-                    const float outH = (float)guestH * scale;
-                    // dst is centred on its transform position; anchor on the
-                    // LegacyGame bounds centre.
-                    render2d::SpriteDraw gd{};
-                    gd.textureHandle = render2d::kGuestFramebufferHandle;
-                    gd.dst = { x + 0.5f * w, y + 0.5f * h, outW, outH };
-                    gd.flags = render2d::kStretchX | render2d::kStretchY;
-                    gd.z = std::numeric_limits<int>::max(); // furthest back
-                    draws.push_back(gd);
-                }
-
-                // Scene-tree sprites + video entities on top of the game.
-                buildSceneSprites(app, draws);
-                buildVideoSprites(app, draws);
-                presentSprites(app, draws);
-                app.frameActive = false;
-                return;
+                const float scale = std::min((float)w / (float)guestW, (float)h / (float)guestH);
+                const float outW = (float)guestW * scale;
+                const float outH = (float)guestH * scale;
+                // dst is centred on its transform position; anchor on the
+                // LegacyGame bounds centre.
+                render2d::SpriteDraw gd{};
+                gd.textureHandle = render2d::kGuestFramebufferHandle;
+                gd.dst = { x + 0.5f * w, y + 0.5f * h, outW, outH };
+                gd.flags = render2d::kStretchX | render2d::kStretchY;
+                gd.order = treeOrder[gameRoot]; // game-layer level, before overlay
+                draws.push_back(gd);
             }
 
-            marni::g_renderer->setPresentRect(x, y, w, h);
-            render_frame();
-            marni::g_renderer->resetPresentRect();
+            // Scene-tree sprites + video entities layered around the game quad.
+            buildSceneSprites(app, draws);
+            buildVideoSprites(app, draws);
+            presentSprites(app, draws);
             app.frameActive = false;
             return;
         }

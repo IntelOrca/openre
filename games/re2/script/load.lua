@@ -208,10 +208,12 @@ function LoadScreen:new(opts)
     instance.cursor = 1
     instance.offset = 1
 
-    -- Root entity for the whole screen, under the user layer. Everything this
-    -- screen creates (emitter, layers, text) hangs under it, so destroy()
-    -- removes the entire tree with one scene.destroy.
-    instance.root = scene.createEntity(scene.getRoot('user'))
+    -- Root entity for the whole screen, under the overlay layer (native renders
+    -- the game as the core.Legacy quad on the game layer below; the overlay
+    -- layer is what paints above it). Everything this screen creates (emitter,
+    -- layers, text) hangs under it, so destroy() removes the entire tree with
+    -- one scene.destroy.
+    instance.root = scene.createEntity(scene.getRoot('overlay'))
     scene.setField(instance.root, 'name', 'load')
     instance.userRoot = instance.root
 

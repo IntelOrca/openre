@@ -21,13 +21,14 @@
 -- Restart and Quit raise a confirmation dialog (script/dialog.lua); Load Game
 -- opens the Load screen in pause mode; Options opens the options popup.
 --
--- Root placement: the overlay lives under the *user* root rather than the
--- overlay root. Everything the ECS renders (any root) composites on top of the
--- guest game framebuffer while paused, so the menu still *paints* over the
--- game; and the popups opened from here (options / load) are later siblings
--- under the user root, so they are walked first by the input system and paint
--- above the pause menu. Their handlers null the input frame, which is what
--- stops the pause menu from reacting underneath.
+-- Root placement: the overlay lives under the *overlay* root. Native renders
+-- the game as the core.Legacy quad on the game layer, so the overlay root
+-- (painted above user and game) is what places the pause menu over the frozen
+-- game via plain scene z-order. The popups opened from here (options / load /
+-- dialog) are later-created siblings under the overlay root, so the input
+-- system walks them first (and they paint above the pause menu).
+-- The game framebuffer is authored at the render resolution; the scene canvas
+-- matches it, so scene coordinates line up with the game quad.
 
 local ecs = require('ecs')
 local game = require('script/game')
@@ -159,8 +160,8 @@ local function ensureSharedAudio()
         accept = audio.loadAudio('common/sound/core/core22.sap', 2),
         invalid = audio.loadAudio('common/sound/core/core22.sap', 3),
     }
-    -- Hangs directly off the user root so no close() ever destroys it.
-    sharedEmitterEntity = scene.createEntity(scene.getRoot('user'))
+    -- Hangs directly off the overlay root so no close() ever destroys it.
+        sharedEmitterEntity = scene.createEntity(scene.getRoot('overlay'))
     scene.setField(sharedEmitterEntity, 'name', 'pause.sfx')
     sharedEmitter = scene.addComponent(sharedEmitterEntity, 'core.AudioEmitter')
 end
@@ -203,7 +204,7 @@ local function buildPause()
     end
     ensureSharedAudio()
 
-    pause.root = scene.createEntity(scene.getRoot('user'))
+    pause.root = scene.createEntity(scene.getRoot('overlay'))
     scene.setField(pause.root, 'name', 'pause')
 
     -- Input handler: snapshots the nav presses out of the frame during the

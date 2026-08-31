@@ -289,6 +289,7 @@ namespace openre
     bool handle_special_states();
     void update_game();
     void render_frame();
+    void render_frame_draw();
 
     // Window lifecycle helpers used by the system_window app-system.
     void font_delete();

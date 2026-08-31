@@ -4,7 +4,7 @@
 -- open()/isOpen()/close() so the RE2 menu can show it as a popup and park
 -- itself underneath.
 --
--- Run model: open() builds the whole screen under the 'user' root and the
+-- Run model: open() builds the whole screen under the 'overlay' root and the
 -- registered app.Options managed system keeps it in sync; close() destroys it.
 -- The system is registered once and is inert while the overlay is closed.
 --
@@ -24,7 +24,7 @@ local DESIGN_H = 480
 config.setFont('big')
 tabs.setFont('big')
 
-local root = scene.getRoot('user')
+local root = scene.getRoot('overlay')
 
 -- Popup module state.
 local isOpenFlag = false

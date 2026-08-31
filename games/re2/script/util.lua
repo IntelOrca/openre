@@ -13,17 +13,17 @@ function util.getCropRect()
 end
 
 --- Create a full-window solid-colour sprite overlay under `parent` (defaults
---- to the user root). The sprite is textureless so the renderer draws it as a
---- solid colour quad that covers the whole window; being the newest append to
+--- to the overlay root). The sprite is textureless so the renderer draws it as
+--- a solid colour quad that covers the whole window; being the newest append to
 --- `parent`, it paints above anything already under it. Returns the entity and
 --- the sprite component, so callers can animate the colour/alpha or destroy
 --- the entity when done. Replaces the removed gfx.fade global.
----@param parent handle|nil parent entity (default user root)
+---@param parent handle|nil parent entity (default overlay root)
 ---@param color integer[4] the initial RGBA colour (0-255 each)
 ---@return handle, handle entity and sprite component
 function util.spawnOverlay(parent, color)
     if parent == nil then
-        parent = scene.getRoot('user')
+        parent = scene.getRoot('overlay')
     end
     local w = gfx.screenWidth()
     local h = gfx.screenHeight()

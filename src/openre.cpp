@@ -2770,7 +2770,13 @@ namespace openre
         }
     }
 
-    void render_frame()
+    // Draws the game into the guest framebuffer without presenting it to the
+    // swapchain. RenderSystem draws the retained framebuffer as the
+    // core.Legacy quad in the scene (and the scene tree around it), so the
+    // swapchain blit that used to happen here is owned by the scene pipeline
+    // now. A nonzero movie_idx (set by the pause freeze) skips the draw, which
+    // is what keeps the frozen frame on display.
+    void render_frame_draw()
     {
         make_font();
         if (!gGameTable.pMarni)
@@ -2823,6 +2829,11 @@ namespace openre
         debug::draw();
         save_print_flush();
         marni::g_renderer->fontTrans();
+    }
+
+    void render_frame()
+    {
+        render_frame_draw();
         marni::flip();
     }
 
