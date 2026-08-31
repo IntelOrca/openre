@@ -20,6 +20,16 @@ local inSession = false
 --- the menu. Callbacks fire exactly once, in registration order.
 function game.resumeAfterGame(fn)
     pending[#pending + 1] = fn
+    -- `core.runGame()` enables the LegacyGame node before returning, so a
+    -- session is typically already live when a caller registers its resume
+    -- callback (the usual pattern is runGame() immediately followed by
+    -- resumeAfterGame() in the same managed dispatch). Mark it here so track()
+    -- can spot the transition even if the game returns to the menu before any
+    -- later managed dispatch observes the enabled node (i.e. a session that
+    -- starts and ends between dispatches would otherwise never fire).
+    if core.inGame() then
+        inSession = true
+    end
 end
 
 function game.inGame()

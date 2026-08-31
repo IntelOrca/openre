@@ -29,13 +29,9 @@ def main():
         d.wait_health(game, timeout=60)
         print("web up, port=%d" % port)
 
-        # Wait for the movie entity.
-        def movie_present():
-            try:
-                return d.find_entity(game, "title_movie") is not None
-            except Exception:
-                return False
-                d.wait_for(game, movie_present, what="title_movie entity", timeout=60)
+        # Boot plays the splash (~5s at the 60Hz paced cadence) before the
+        # movie, so wait for the movie entity rather than tapping immediately.
+        d.wait_entity(game, "title_movie", timeout=60)
         print("movie entity PRESENT")
         time.sleep(1.0)  # let playback start
 
@@ -44,20 +40,10 @@ def main():
         print("tap sent")
 
         # Movie should disappear and title should appear shortly after.
-        def movie_gone():
-            try:
-                return d.find_entity(game, "title_movie") is None
-            except Exception:
-                return False
-                d.wait_for(game, movie_gone, what="movie gone after tap", timeout=30)
+        d.wait_absent(game, "title_movie", timeout=30)
         print("movie GONE after tap")
 
-        def title_present():
-            try:
-                return d.find_entity(game, "menu.pressStart") is not None
-            except Exception:
-                return False
-                d.wait_for(game, title_present, what="title menu (pressStart)", timeout=30)
+        d.wait_entity(game, "menu.pressStart", timeout=30)
         print("title menu PRESENT")
 
         # Process must still be alive.

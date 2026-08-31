@@ -341,7 +341,7 @@ namespace openre
                     video.texture = 0;
                     video.status = ecs::VideoStatus::Stopped;
                 }
-                s_videoStates.erase(it);
+                it = s_videoStates.erase(it);
             }
         }
     }

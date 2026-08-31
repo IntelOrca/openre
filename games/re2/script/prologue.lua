@@ -966,12 +966,29 @@ local function updateMovie(c)
         if entity == nil then
             return
         end
+        -- Any press skips only this movie, mirroring the blocking
+        -- core.playMovie skip and the title intro movie handler in app.lua:
+        -- frame.press is an array of command names, so test its length.
+        c.movieSkip = false
+        local handler = scene.addComponent(entity, 'core.InputHandler')
+        scene.setField(handler, 'callback', function(frame)
+            if #frame.press > 0 then
+                c.movieSkip = true
+            end
+        end)
         c.movie = { entity = entity, handle = handle }
         return
     end
 
     -- Waiting for the current movie: VideoSystem flips status to Stopped
-    -- when playback ends (or mark-and-sweeps the entity away).
+    -- when playback ends (or mark-and-sweeps the entity away); a press means
+    -- the player interrupted it, which skips only this movie.
+    if c.movieSkip then
+        scene.destroy(c.movie.entity)
+        c.movie = nil
+        re.collectGarbage()
+        return
+    end
     local row = scene.component(c.movie.entity, 'core.Video')
     if row == nil or scene.getField(row, 'status') ~= 1 then
         scene.destroy(c.movie.entity)
