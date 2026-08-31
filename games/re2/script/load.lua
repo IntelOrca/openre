@@ -19,6 +19,12 @@
 -- core.runGame(), which drives the legacy game until it returns to the menu.
 -- Cancel returns to the title menu (recreated at PRESS START). A `mode`
 -- parameter is reserved so a future save variant can reuse the component.
+--
+-- The pause menu (script/pause.lua) reuses this screen in a `fromPause` mode:
+-- cancel then returns to the still-open pause menu (game keeps its Paused
+-- state), accept hands the chosen save to `onLoaded` instead of running the
+-- default continuation, and the input frame is nulled so the pause menu
+-- underneath never reacts to the navigation.
 
 local Scheduler = require('script/scheduler')
 local game = require('script/game')
@@ -190,6 +196,14 @@ function LoadScreen:new(opts)
     instance.fadeRemaining = 0
     instance.entries = save.list() or {}
 
+    -- Pause-mode opts (opened from the pause menu): fromPause makes cancel
+    -- return to the (still open) pause menu instead of recreating the title,
+    -- onLoaded replaces the default load-and-run continuation, and the input
+    -- frame is nulled so the pause menu underneath never reacts.
+    instance.fromPause = opts.fromPause or false
+    instance.onLoaded = opts.onLoaded
+    instance.onCancelled = opts.onCancelled
+
     -- Cursor over the FULL list (1-based); `offset` is the first visible row.
     instance.cursor = 1
     instance.offset = 1
@@ -232,6 +246,11 @@ function LoadScreen:new(opts)
         nav.down = containsCommand(frame.press, 'down')
         nav.accept = containsCommand(frame.press, 'accept')
         nav.cancel = containsCommand(frame.press, 'cancel')
+        if instance.fromPause then
+            -- Stop the presses reaching the pause menu underneath.
+            frame.state = {}
+            frame.press = {}
+        end
     end)
 
     -- Fonts and textures must stay referenced or they unload on GC. Role
@@ -386,6 +405,19 @@ local function beginClose(self)
     end
     self.closing = true
     playSfx(self, self.sfx.back)
+    if self.fromPause then
+        -- Return to the pause menu: the pause overlay is still alive
+        -- underneath, so just destroy this screen (no fade, no Title) and
+        -- let the caller dismiss us.
+        self:destroy()
+        if self.onCancelled then
+            local ok, err = pcall(self.onCancelled)
+            if not ok then
+                print('[load] onCancelled failed: ' .. tostring(err))
+            end
+        end
+        return
+    end
     local Title = require('script/menu')
     local scheduler = Scheduler:new()
     scheduler
@@ -429,8 +461,9 @@ update = function(self)
     fitLayer(self.front, self.frontFrame)
 
     -- Ignore input while the handoff black overlay still covers the screen or
-    -- while closing.
-    if self.closing or self.age <= INPUT_DELAY then
+    -- while closing. In pause mode the screen pops straight in (no fade
+    -- handoff), so there is no overlay to wait out and input is live at once.
+    if self.closing or (self.age <= INPUT_DELAY and not self.fromPause) then
         return
     end
 
@@ -454,6 +487,15 @@ update = function(self)
         self.enteringGame = false
         local entry = self.entries[self.cursor]
         self:destroy()
+        if self.onLoaded then
+            -- Pause mode: the caller (pause.lua) owns the load-and-continue
+            -- handoff for the still-paused session.
+            local ok, err = pcall(self.onLoaded, entry)
+            if not ok then
+                print('[load] onLoaded failed: ' .. tostring(err))
+            end
+            return
+        end
         local ok = entry ~= nil and core.loadGame(entry.name) or false
         if not ok then
             print('[load] failed to load save ' .. tostring(entry and entry.name or '?'))

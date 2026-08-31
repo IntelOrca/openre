@@ -25,4 +25,10 @@ namespace openre::audio
     int ss_unload_group(int type);
     int ss_load_banks(int type, int id, int bank, int player);
     void bgm_init_hooks();
+
+    // Pauses all currently-playing BGM/SBGM/SE (recording which were playing
+    // so resume_all() restores them), and resumes the recorded BGM/SBGM set.
+    // Used by the module to silence the gameplay audio while paused.
+    void pause_all();
+    void resume_all();
 }

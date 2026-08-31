@@ -318,10 +318,18 @@ namespace openre::ecs
     /// RenderSystem presents it, both only while `enabled` is true. Its world
     /// transform position is the top-left corner of the render area and its
     /// `size` is its width/height in window pixels.
+    ///
+    /// `paused` is the module pause handshake tri-state (see pause.lua):
+    ///   0 = Unpaused      - the game runs freely.
+    ///   1 = PauseRequested - the native pause key fired; Lua has not yet
+    ///                        confirmed the pause, so the game still runs.
+    ///   2 = Paused        - Lua confirmed; the native frame freezes.
+    /// Lua owns resuming: it writes `paused = 0` to allow the game to continue.
     struct LegacyGameComponent
     {
         bool enabled = true;
         Size2f size;
+        int paused = 0;
     };
 
     /// The mutable per-frame input context handed to every input handler

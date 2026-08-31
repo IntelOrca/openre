@@ -2208,6 +2208,20 @@ namespace openre::audio
         snd_sys_init2_impl();
     }
 
+    // 0x00433C40 / 0x004EEE40
+    // Public wrappers so the module pause (pause.lua) can silence and restore
+    // the gameplay audio. ss_stop_all records which BGM/SBGM were playing into
+    // the 0x689DCC/0x689DD0 latches; sub_4eee40 restores exactly those.
+    void pause_all()
+    {
+        ss_stop_all();
+    }
+
+    void resume_all()
+    {
+        sub_4eee40();
+    }
+
     // 0x004ec340
 
     // 0x004EC350

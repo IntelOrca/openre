@@ -7,3 +7,4 @@
 -- so this file only seeds the persistent app entity the systems read/write.
 
 require('script/app').init()
+require('script/pause')

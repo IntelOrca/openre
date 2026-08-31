@@ -230,6 +230,7 @@ namespace openre::render2d
             SDL_GPUTexture* texture = nullptr;
             int width = 0;
             int height = 0;
+            bool owned = true; // false = borrowed (e.g. guest framebuffer)
         };
         std::unordered_map<int, TexEntry> textures;
         int nextHandle = 1;
@@ -860,10 +861,27 @@ namespace openre::render2d
         auto it = impl->textures.find(handle);
         if (it == impl->textures.end())
             return;
-        if (dev && it->second.texture)
+        if (dev && it->second.texture && it->second.owned)
             SDL_ReleaseGPUTexture(dev, it->second.texture);
         impl->textures.erase(it);
         logging::logInfo("[render2d] unloaded texture handle {}", handle);
+    }
+
+    void SpriteRenderer::setGuestFramebuffer(void* texture, int width, int height)
+    {
+        if (texture != nullptr)
+        {
+            impl->textures[kGuestFramebufferHandle] = {
+                (SDL_GPUTexture*)texture,
+                width,
+                height,
+                false, // borrowed: never released here
+            };
+        }
+        else
+        {
+            impl->textures.erase(kGuestFramebufferHandle);
+        }
     }
 
     void SpriteRenderer::present(const SpriteDraw* sprites, size_t count)
@@ -1332,7 +1350,7 @@ namespace openre::render2d
         for (auto& [handle, entry] : impl->textures)
         {
             (void)handle;
-            if (entry.texture)
+            if (entry.texture && entry.owned)
                 SDL_ReleaseGPUTexture(dev, entry.texture);
         }
         impl->textures.clear();

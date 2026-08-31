@@ -58,6 +58,11 @@ namespace openre::render2d
         int order = 0; // pre-order scene-tree index; tie-break when z is equal
     };
 
+    // Reserved texture handle for the guest framebuffer (see
+    // setGuestFramebuffer). The guest framebuffer stays under the legacy
+    // renderer's ownership - this renderer never releases it.
+    constexpr int kGuestFramebufferHandle = 0x7FFFFFF0;
+
     // Self-contained SDL_GPU 2D sprite renderer for the ECS scene tree. It
     // owns its textures, pipelines and vertex buffers and presents directly to
     // the swapchain in window pixel space. It intentionally has no connection
@@ -86,6 +91,14 @@ namespace openre::render2d
 
         // Releases a texture previously returned by loadTexture().
         void unloadTexture(int handle);
+
+        // Points the reserved kGuestFramebufferHandle texture entry at the
+        // legacy guest framebuffer (an R8G8B8A8 SAMPLER texture). The entry is
+        // non-owning: present() may sample it, but unloadTexture()/shutdown()
+        // never release it. Called by the RenderSystem each composite frame so
+        // a recreated guest framebuffer is picked up automatically. Pass
+        // nullptr to unregister.
+        void setGuestFramebuffer(void* texture, int width, int height);
 
         // Clears the window and draws the given sprites, then presents.
         void present(const SpriteDraw* sprites, size_t count);

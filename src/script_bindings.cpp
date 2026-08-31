@@ -1348,6 +1348,8 @@ namespace openre::script
                     legacy->size.width = static_cast<float>(luaL_checknumber(L, 3));
                 else if (strcmp(name, "size.height") == 0)
                     legacy->size.height = static_cast<float>(luaL_checknumber(L, 3));
+                else if (strcmp(name, "paused") == 0)
+                    legacy->paused = static_cast<int>(luaL_checkinteger(L, 3));
                 else
                     return luaL_error(L, "scene.setField: unknown legacy field '%s'", name);
                 return 0;
@@ -1698,6 +1700,8 @@ namespace openre::script
                     lua_pushnumber(L, legacy->size.width);
                 else if (strcmp(name, "size.height") == 0)
                     lua_pushnumber(L, legacy->size.height);
+                else if (strcmp(name, "paused") == 0)
+                    lua_pushinteger(L, legacy->paused);
                 else
                     lua_pushnil(L);
                 return 1;
@@ -2306,6 +2310,7 @@ namespace openre::script
             { "enabled", "bool", "true" },
             { "size.width", "float", "0" },
             { "size.height", "float", "0" },
+            { "paused", "int", "0" },
         };
         static const ComponentFieldInfo kVideoFields[] = {
             { "status", "int", "0" },      { "position", "float", "0" }, { "videoWidth", "int", "0" },
@@ -3268,6 +3273,28 @@ namespace openre::script
             return 1;
         }
 
+        // core.requestReturnToMenu() - ends the current core.runGame() session:
+        // sets the return-to-menu latch that LegacyGameSystem picks up at the
+        // next legacy frame, disabling the LegacyGame node so the module takes
+        // over the frame. A game.resumeAfterGame callback registered
+        // immediately after (e.g. one that calls core.runGame() again for a
+        // Restart flow) runs on that transition the same way. Returns true
+        // when a session is live (the latch was set); false otherwise.
+        int coreRequestReturnToMenu(lua_State* L)
+        {
+            bool requested = false;
+            auto* scene = openre::current_scene();
+            if (scene != nullptr)
+            {
+                auto legacyEntity = scene->find<ecs::LegacyGameComponent>();
+                requested
+                    = legacyEntity != ecs::NullEntity && scene->getComponent<ecs::LegacyGameComponent>(legacyEntity).enabled;
+            }
+            openre::legacy_request_return_to_menu();
+            lua_pushboolean(L, requested ? 1 : 0);
+            return 1;
+        }
+
         // core.startRoomWarp(player, stage, room) - the command-line -p/-r room
         // warp translated onto the module boot path: places the player at the
         // room's spawn point with a fresh new-game inventory before entering
@@ -3503,6 +3530,7 @@ namespace openre::script
         setGlobal(L, "core.startNewGame", coreStartNewGame);
         setGlobal(L, "core.runGame", coreRunGame);
         setGlobal(L, "core.inGame", coreInGame);
+        setGlobal(L, "core.requestReturnToMenu", coreRequestReturnToMenu);
         setGlobal(L, "core.cmdline", coreCmdline);
 
         // options.* - engine-wide settings registry (menu screens).

@@ -876,6 +876,16 @@ function core.runGame() end
 ---@return boolean
 function core.inGame() end
 
+--- End the current `core.runGame()` session: sets the return-to-menu latch
+--- that LegacyGameSystem picks up at the next legacy frame, disabling the
+--- LegacyGame node so the module takes over the frame again. A resume
+--- callback registered with `game.resumeAfterGame` immediately after (e.g.
+--- one that calls `core.runGame()` again for an in-game Restart / Load-Game
+--- flow) runs on that same transition. Returns true when a session was live
+--- (the latch was set), false otherwise.
+---@return boolean
+function core.requestReturnToMenu() end
+
 --- Pin a font handle onto one of the standard UI font roles and return nothing.
 ---
 --- The native text system addresses logical fonts by **role** (`'big'` /

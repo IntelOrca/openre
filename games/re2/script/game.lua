@@ -32,6 +32,14 @@ function game.resumeAfterGame(fn)
     end
 end
 
+--- Drop every pending resume callback. The pause menu's Restart/Load flows
+--- take over the session end (they clear the callbacks the original boot
+--- registered and install their own continuation), so no stale callback
+--- (e.g. the load screen's Title:new) can fire on the way out.
+function game.clearResumeCallbacks()
+    pending = {}
+end
+
 function game.inGame()
     return core.inGame()
 end

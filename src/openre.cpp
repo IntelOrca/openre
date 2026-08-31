@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "display.h"
 #include "door.h"
+#include "ecs_scene.h"
 #include "enemy.h"
 #include "entity.h"
 #include "error.h"
@@ -86,6 +87,11 @@ namespace openre
     GameTable& gGameTable = *((GameTable*)0x00000000);
 
     static int g_speed_multiplier = 1;
+
+    // Previous frame's LegacyGame paused handshake state, so native-side
+    // resume bookkeeping (game clock + audio) runs exactly once per pause
+    // cycle when Lua clears the pause by writing `paused = 0`.
+    static int s_pausePrevState = 0;
 
     static const char* windowTitle = "BIOHAZARD(R) 2 PC";
     static const char* fontFaceName = "ＭＳ ゴシック";
@@ -2221,43 +2227,77 @@ namespace openre
 
         pad_set();
 
-        if (
+        // ── Module pause handshake (pause.lua) ─────────────────────────────
+        // The legacy PAUSE overlay is gone. Native only *requests* a pause on
+        // the pause key; the module's pause system spawns its own overlay and
+        // confirms by writing `paused = 2` (Paused). Native freezes the frame
+        // in that confirmed state and lets the module own resuming (it writes
+        // `paused = 0`). The tri-state values are documented on
+        // LegacyGameComponent.
+        auto* pauseScene = current_scene();
+        auto pauseEntity = pauseScene != nullptr ? pauseScene->find<ecs::LegacyGameComponent>() : ecs::NullEntity;
+        int paused = 0;
+        if (pauseEntity != ecs::NullEntity)
+            paused = pauseScene->getComponent<ecs::LegacyGameComponent>(pauseEntity).paused;
+
+        // Lua confirmed the pause: freeze the frame. Resume is Lua-owned (it
+        // writes `paused = 0`), so no unpause-key handling runs down here.
+        if (paused == 2)
+        {
+            // Silence the gameplay audio once, the first frozen frame (the
+            // module also closes its overlay before writing `paused = 0`).
+            if (s_pausePrevState != 2)
+                audio::pause_all();
+            movie_set(1);
+            vsync();
+            s_pausePrevState = paused;
+            return;
+        }
+
+        // Lua cleared the pause: restore the game clock snapshot and the
+        // silenced BGM/SFX exactly once. Clear any latched freeze (movie_idx)
+        // so the first live frame renders + presents immediately instead of
+        // consuming a stale movie_set(1) from the frozen frames.
+        if (s_pausePrevState != 0 && paused == 0)
+        {
+            set_game_seconds(gGameTable.dword_689800);
+            audio::resume_all();
+            gGameTable.movie_idx = 0;
+        }
+        s_pausePrevState = paused;
+
+        // Pause key (*relaxed* gate: slot 0 is required; the two multi-flag
+        // engine groups are dropped because the module is the pause authority
+        // and can refuse). The menu command spans kb:Escape / kb:P / gamepad
+        // Start; accepting its rising edge (command_edge) catches all three,
+        // including web-driver `tap menu`, while the legacy bits keep original
+        // raw/vk consumers working.
+        const bool pauseKey = (gGameTable.raw_edge & 2) != 0 || (gGameTable.vk_press & 0x20) != 0
+            || (input::command_edge() & (1u << input::COMMAND_MENU)) != 0;
+        if (paused == 0
             // clang-format off
-        gGameTable.censorship_off
         && check_flag(FlagGroup::System, FG_SYSTEM_1)
         && !gGameTable.byte_98F07B
         && !gGameTable.byte_991F80
         && !check_flag(FlagGroup::Stop, FG_STOP_DISABLE_INPUT)
-        && check_flags(FlagGroup::System, { FG_SYSTEM_DOOR_TRANSITION, FG_SYSTEM_10, FG_SYSTEM_BGM_DISABLED, FG_SYSTEM_22 })
-        && check_flags(FlagGroup::Status, { FG_STATUS_11, FG_STATUS_CUTSCENE })
             // clang-format on
-        )
+            && pauseKey)
         {
-            if (gGameTable.pause)
-            {
-                movie_set(1);
-                if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
-                {
-                    marni::out();
-                    gGameTable.pause = 0;
-                    set_game_seconds(gGameTable.dword_689800);
-                }
-                vsync();
-                return;
-            }
+            update_timer();
+            gGameTable.dword_689800 = set_game_seconds(1);
+            if (pauseEntity != ecs::NullEntity)
+                pauseScene->getComponent<ecs::LegacyGameComponent>(pauseEntity).paused = 1; // PauseRequested
 
-            if (gGameTable.raw_edge & 2 || gGameTable.vk_press & 0x20)
-            {
-                gGameTable.pause = 1;
-                update_timer();
-                gGameTable.dword_689800 = set_game_seconds(1);
-                auto v0 = 16 * gGameTable.byte_9888D8;
-                gGameTable.byte_52D8E7[v0] = 2;
-                marni::add_tile((const marni::Tile*)&gGameTable.curtain2[v0], 5, 0);
-                // marni::prim14
-                interop::call<void, int, int, int, int, int>(0x004C8603, 135, 107, 0, 0x4000, gGameTable.pause);
-                marni::out();
-            }
+            // The pause module owns the press now: prevent the legacy engine
+            // from acting on it. The menu command raises key_edge&0x100, which
+            // game_check_status_trigger treats as the old in-game options
+            // screen; the cancel command (bound to the same Escape key) also
+            // contributes g_key 0x2000 and the raw/key 0x2 edges. Clear those
+            // so game_loop on this (still live) frame can't latch FG_SYSTEM_4.
+            gGameTable.key_edge &= ~(0x100u | 0x2u);
+            gGameTable.key_trg &= ~(0x100u | 0x2u);
+            gGameTable.g_key &= ~0x2000u;
+            gGameTable.raw_edge &= ~0x2u;
         }
 
         trans_pointer_set();
