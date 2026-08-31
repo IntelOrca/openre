@@ -949,6 +949,25 @@ local function beginMovie(c)
     re.collectGarbage()
 end
 
+-- End of the run: hush the audio, remove the intro and hand back. Declared
+-- before updateMovie (below) so updateMovie can close over it as a local.
+local function finish(c)
+    if c.finished then return end
+    c.finished = true
+    c.phase = 'done'
+    stopAudio(c)
+    destroyScene(c)
+    -- Clear any full-screen fade the slideshow left so the caller's next
+    -- screen isn't blacked out (the movies already cleared it).
+    c.fade.mode = 'none'
+    c.fade.alpha = 0
+    gfx.fade(0, 0, 0, 0)
+    local cb = c.onFinished
+    c.onFinished = nil
+    active = nil
+    if cb then cb() end
+end
+
 -- Drives the async movie queue. Called from updateRun while c.phase == 'movie'.
 local function updateMovie(c)
     if c.movie == nil then
@@ -995,24 +1014,6 @@ local function updateMovie(c)
         c.movie = nil
         re.collectGarbage()
     end
-end
-
--- End of the run: hush the audio, remove the intro and hand back.
-local function finish(c)
-    if c.finished then return end
-    c.finished = true
-    c.phase = 'done'
-    stopAudio(c)
-    destroyScene(c)
-    -- Clear any full-screen fade the slideshow left so the caller's next
-    -- screen isn't blacked out (the movies already cleared it).
-    c.fade.mode = 'none'
-    c.fade.alpha = 0
-    gfx.fade(0, 0, 0, 0)
-    local cb = c.onFinished
-    c.onFinished = nil
-    active = nil
-    if cb then cb() end
 end
 
 local function skipPressed(c)
