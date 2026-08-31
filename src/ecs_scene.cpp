@@ -56,8 +56,6 @@ namespace openre::ecs
             {
             case Scene::RootKind::User: return "user";
             case Scene::RootKind::Game: return "game";
-            case Scene::RootKind::Movie: return "movie";
-            case Scene::RootKind::Fade: return "fade";
             case Scene::RootKind::Overlay: return "overlay";
             }
             return "";
@@ -69,8 +67,8 @@ namespace openre::ecs
         m_root = allocEntity();
         storage<TransformComponent>().add(m_root);
 
-        // Create the five strict sub-roots beneath the hidden root.
-        for (uint32_t i = 0; i < 5; i++)
+        // Create the three strict sub-roots beneath the hidden root.
+        for (uint32_t i = 0; i < 3; i++)
         {
             auto kind = static_cast<RootKind>(i);
             Entity e = createEntity(m_root);

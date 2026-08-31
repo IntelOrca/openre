@@ -238,8 +238,6 @@ namespace openre::render2d
         SDL_GPUTransferBuffer* vertexTransfer = nullptr;
         size_t vertexCapacity = 0;
 
-        FadeState fade;
-
         // Offscreen copy of the last presented frame. The scene renders
         // directly into this texture at the scene canvas size (the
         // screen_resolution), the present pass contain-fits it onto the
@@ -1302,18 +1300,6 @@ namespace openre::render2d
         int h = 0;
         SDL_GetWindowSize(win, &w, &h);
         return h;
-    }
-
-    void SpriteRenderer::setFade(const FadeState& state)
-    {
-        impl->fade = state;
-    }
-
-    FadeState SpriteRenderer::takeFade()
-    {
-        FadeState state = impl->fade;
-        impl->fade = FadeState{};
-        return state;
     }
 
     void SpriteRenderer::shutdown()

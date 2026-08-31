@@ -121,16 +121,6 @@ namespace openre::input
     void input_wmkeydown(Input* self, int vk);
     void pad_set();
 
-    // Input polling for contexts that cannot call pad_set (the movie playback
-    // loop, which blocks the main thread inside the script tick). The movie
-    // loop samples the real devices into a command frame, computes rising
-    // edges against the previous movie poll, and runs the input-handler walk
-    // over the scene so handlers (web injection, the movie entity's own
-    // InputHandler) can reshape the frame. Call movie_input_begin() before
-    // the first movie_input_poll() to seed the edge baseline so a key held
-    // when the movie starts does not skip it immediately.
-    void movie_input_begin();
-    [[nodiscard]] ecs::InputFrame movie_input_poll();
     [[nodiscard]] int16_t get_menu_key();
     void input_init_hooks();
 

@@ -59,12 +59,13 @@ end
 
 --- Spawn a full-window async video entity (core.Video) under `root`. The
 --- native VideoSystem auto-starts playback when it sees the component with a
---- movie cookie and status Playing; destroying the returned entity is the
---- whole teardown. Returns nil when the movie could not be created.
----@param root scene handle (e.g. scene.getRoot('movie'))
----@param handle movie handle from core.loadMovie
+--- movie path and status Playing; destroying the returned entity is the whole
+--- teardown. Returns nil when the movie could not be created. Unless the
+--- caller explicitly passes a root, movies play under the user layer.
+---@param root scene handle (e.g. scene.getRoot('user'))
+---@param path string movie path (game-relative, resolved by the VideoSystem)
 ---@return handle|nil entity
-function game.spawnMovieEntity(root, handle)
+function game.spawnMovieEntity(root, path)
     local w = gfx.screenWidth()
     local h = gfx.screenHeight()
 
@@ -79,7 +80,7 @@ function game.spawnMovieEntity(root, handle)
     scene.setField(entity, 'y', h * 0.5)
 
     local video = scene.addComponent(entity, 'core.Video')
-    scene.setField(video, 'movie', handle)
+    scene.setField(video, 'movie', path)
     scene.setField(video, 'status', 1) -- VideoStatus.Playing
 
     local size = scene.addComponent(entity, 'core.UiSize')

@@ -661,6 +661,21 @@ local function buildScene(c)
     scene.setField(voice, 'loop', false)
     scene.setField(voice, 'state', 'stopped')
     c.voice = voice
+
+    -- Full-screen fade overlay (replaces the removed gfx.fade): a textureless
+    -- 320x240 black sprite, the newest child of the canvas so it paints over
+    -- every sprite and still. Its alpha tracks c.fade each frame in updateRun.
+    local fe = scene.createEntity(canvas)
+    scene.setField(fe, 'name', 'prologue.fade')
+    scene.setField(fe, 'x', 0)
+    scene.setField(fe, 'y', 0)
+    local fadeS = scene.addComponent(fe, 'core.Sprite')
+    scene.setField(fadeS, 'color', { 0, 0, 0, 0 })
+    scene.setField(fadeS, 'flags', SpriteFlags.stretchX | SpriteFlags.stretchY)
+    local fadeSize = scene.addComponent(fe, 'core.UiSize')
+    scene.setField(fadeSize, 'width', 320)
+    scene.setField(fadeSize, 'height', 240)
+    c.fadeOv = fadeS
 end
 
 -- Apply a sprite-mode change: sprites selected by the mask take the mode's
@@ -931,7 +946,7 @@ local function destroyScene(c)
 local function beginMovie(c)
     c.phase = 'movie'
     c.movieQueue = { c.def.movie, c.def.movieAlt }
-    c.movie = nil -- { entity, handle } while a movie plays
+    c.movie = nil -- { entity } while a movie plays
     -- The movie takes over the screen and the soundtrack: stop the narration
     -- and BGM emitters, then drop the prologue scene. Both openings play in
     -- sequence and interrupting one skips only that one.
@@ -957,11 +972,6 @@ local function finish(c)
     c.phase = 'done'
     stopAudio(c)
     destroyScene(c)
-    -- Clear any full-screen fade the slideshow left so the caller's next
-    -- screen isn't blacked out (the movies already cleared it).
-    c.fade.mode = 'none'
-    c.fade.alpha = 0
-    gfx.fade(0, 0, 0, 0)
     local cb = c.onFinished
     c.onFinished = nil
     active = nil
@@ -976,14 +986,12 @@ local function updateMovie(c)
             finish(c)
             return
         end
-        local handle = core.loadMovie(path)
         c.movies[#c.movies + 1] = path
-        if handle == nil then
-            return -- movie assets missing; skip to the next on the next frame
-        end
-        local entity = game.spawnMovieEntity(scene.getRoot('movie'), handle)
+        -- Movies play under the user layer via the video entity helper; the
+        -- path (not a loadMovie handle) drives the native VideoSystem.
+        local entity = game.spawnMovieEntity(scene.getRoot('user'), path)
         if entity == nil then
-            return
+            return -- movie assets missing; skip to the next on the next frame
         end
         -- Any press skips only this movie, mirroring the blocking
         -- core.playMovie skip and the title intro movie handler in app.lua:
@@ -995,7 +1003,7 @@ local function updateMovie(c)
                 c.movieSkip = true
             end
         end)
-        c.movie = { entity = entity, handle = handle }
+        c.movie = { entity = entity }
         return
     end
 
@@ -1111,9 +1119,13 @@ local function updateRun(c)
             end
         end
 
-        -- Keep the overlay drawn every frame (it clears at the end of a frame).
-        if c.fade and c.fade.alpha and c.fade.alpha > 0 then
-            gfx.fade(0, 0, 0, c.fade.alpha)
+        -- Keep the fade overlay drawn every frame (the overlay is a persistent
+        -- entity, not the old one-shot gfx.fade).
+        if c.fadeOv then
+            local a = c.fade and c.fade.alpha or 0
+            if a > 0 then
+                scene.setField(c.fadeOv, 'color', { 0, 0, 0, a })
+            end
         end
     end
 

@@ -30,6 +30,7 @@ local LoadScreen        = require("script/load")
 require("script/scheduler") -- Scheduler (global) for the handoff chains
 local options           = require("script/options")
 local game              = require("script/game")
+local util              = require("script/util")
 local ecs               = require("ecs")
 
 local Title             = {}
@@ -41,7 +42,7 @@ local titleMethods      = {}
 local liveTitles = {}
 
 -- Design space for the title screen: content is authored in this fixed
--- 320x240 coordinate space. Two sibling layers under the user root map it
+-- 320x240 coordinate space. Two sibling layers under the title root map it
 -- onto the window via native ScaledFrameComponents (see Title:new): "back"
 -- holds only the background and contains-fits it exactly; "front" holds the
 -- UI (logo + text) and snaps its scale down to whole SCALE_STEP increments.
@@ -148,31 +149,22 @@ end
 -------------------------------------------------------------------------------
 
 -- Destroys every entity this menu created, drops all resource handles and
--- collects so they unload before the next screen takes over.
+-- collects so they unload before the next screen takes over. The whole menu
+-- hangs under instance.root, so one destroy removes all of it.
 local function closeMenu(self)
     self.closed = true
-    if self.front then
-        scene.destroy(self.front)
-        self.front = nil
-        self.frontFrame = nil
-    end
-    if self.back then
-        scene.destroy(self.back)
-        self.back = nil
-        self.backFrame = nil
-    end
-    if self.backdrop then
-        scene.destroy(self.backdrop)
-        self.backdrop = nil
-        self.backdropSprite = nil
+    if self.root then
+        scene.destroy(self.root)
+        self.root = nil
     end
     -- The menu's resources (sounds, fonts, textures) belong to this
     -- screen: drop every handle and collect so they unload.
-    if self.emitterEntity then
-        scene.destroy(self.emitterEntity)
-        self.emitterEntity = nil
-    end
+    self.front = nil
+    self.back = nil
+    self.backdrop = nil
+    self.backdropSprite = nil
     self.emitter = nil
+    self.emitterEntity = nil
     self.sfx = nil
     self.assets = nil
     re.collectGarbage()
@@ -622,7 +614,7 @@ local function updateDemo(self)
     if self.demoPhase == 0 then
         -- Fade out to black.
         local t = math.min(self.demoTimer, 60)
-        gfx.fade(0, 0, 0, math.floor((t / 60) * 255))
+        scene.setField(self.overlaySprite, 'color', { 0, 0, 0, math.floor((t / 60) * 255) })
         if self.demoTimer >= 60 then
             self.demoPhase = 1
             self.demoTimer = 0
@@ -639,7 +631,7 @@ local function updateDemo(self)
     else
         -- Fade back in to the title screen.
         local t = math.min(self.demoTimer, 60)
-        gfx.fade(0, 0, 0, math.floor((1 - t / 60) * 255))
+        scene.setField(self.overlaySprite, 'color', { 0, 0, 0, math.floor((1 - t / 60) * 255) })
         if self.demoTimer >= 60 then
             enterPressStart(self)
         end
@@ -653,34 +645,34 @@ local function updateLeaving(self)
     self.leaveTimer = self.leaveTimer + 1
     if self.leavePhase == 0 then -- flash in
         local t = math.min(self.leaveTimer / 12, 1)
-        gfx.fade(255, 255, 255, math.floor(t * 255))
+        scene.setField(self.overlaySprite, 'color', { 255, 255, 255, math.floor(t * 255) })
         if t >= 1 then
             self.leavePhase = 1
             self.leaveTimer = 0
         end
     elseif self.leavePhase == 1 then -- hold white briefly
-        gfx.fade(255, 255, 255, 255)
+        scene.setField(self.overlaySprite, 'color', { 255, 255, 255, 255 })
         if self.leaveTimer >= 10 then
             self.leavePhase = 2
             self.leaveTimer = 0
         end
     elseif self.leavePhase == 2 then -- flash out
         local t = math.min(self.leaveTimer / 12, 1)
-        gfx.fade(255, 255, 255, math.floor((1 - t) * 255))
+        scene.setField(self.overlaySprite, 'color', { 255, 255, 255, math.floor((1 - t) * 255) })
         if t >= 1 then
             self.leavePhase = 3
             self.leaveTimer = 0
         end
     elseif self.leavePhase == 3 then -- fade to black
         local t = math.min(self.leaveTimer / 240, 1)
-        gfx.fade(0, 0, 0, math.floor(t * 255))
+        scene.setField(self.overlaySprite, 'color', { 0, 0, 0, math.floor(t * 255) })
         if t >= 1 then
-            gfx.fade(0, 0, 0, 255)
+            scene.setField(self.overlaySprite, 'color', { 0, 0, 0, 255 })
             self.leavePhase = 4
             self.leaveTimer = 0
         end
     else -- hold solid black for a second, then hand over
-        gfx.fade(0, 0, 0, 255)
+        scene.setField(self.overlaySprite, 'color', { 0, 0, 0, 255 })
         if self.leaveTimer >= 60 then
             closeMenu(self)
             self:launchPrologue()
@@ -701,11 +693,11 @@ local function launchPrologue(self)
             if core.startNewGame(ctx.player or 'leon', ctx.scenario or 'a', ctx.difficulty or 'standard') then
                 core.runGame()
                 game.resumeAfterGame(function()
-                    Title:new({ mainStory = true })
+                    Title:new()
                 end)
             else
                 print('[title] new game failed to start')
-                Title:new({ mainStory = true })
+                Title:new()
             end
         end,
     })
@@ -879,8 +871,12 @@ function Title:new(opts)
     instance.pressLogoY = CANVAS_H * (0.34 - 0.5)
     instance.menuLogoY = CANVAS_H * (0.18 - 0.5)
 
-    -- Root entity for things that must outlive the menu layers.
-    instance.userRoot = scene.getRoot("user")
+    -- Root entity for the whole menu, under the user layer. Everything this
+    -- screen creates (layers, backdrop, emitter, logo, items) hangs under it,
+    -- so closeMenu() removes the entire tree with one scene.destroy.
+    instance.root = scene.createEntity(scene.getRoot("user"))
+    scene.setField(instance.root, "name", "title")
+    instance.userRoot = instance.root
 
     -- Menu sounds, loaded on first open (audio.loadAudio deduplicates, so
     -- later Title instances share the same decoded sounds). The handles are
@@ -1074,8 +1070,15 @@ function Title:new(opts)
             TextFlags.xLeft | TextFlags.yMiddle)
         instance.tooltipComponent = tt
 
-    -- Begin on the PRESS START screen (default), or straight in the Main
-    -- Story menu when returning from a sub-screen (e.g. the load screen).
+    -- Full-window fade overlay (replaces the removed gfx.fade): a textureless
+    -- solid-colour sprite drawn above every menu entity (last child of the
+    -- root). The demo/leaving transitions drive its colour/alpha per frame;
+    -- alpha 0 (transparent) leaves it invisible.
+    local overlay, overlaySprite = util.spawnOverlay(instance.root, { 0, 0, 0, 0 })
+    instance.overlay = overlay
+    instance.overlaySprite = overlaySprite
+
+    -- Begin on the PRESS START screen.
     instance.state = STATE_PRESS_START
     instance.fade = 1
     instance.menu = ROOT_MENU
@@ -1083,13 +1086,6 @@ function Title:new(opts)
     instance.transition = nil
     instance.gameCtx = nil
     instance.closed = false
-if opts.mainStory then
-        enterMenu(instance)
-        instance.menu = MAIN_STORY_MENU
-        instance.selected = 2 -- Load Game
-        refreshItems(instance)
-        refreshTooltip(instance)
-    end
 
     liveTitles[#liveTitles + 1] = instance
 

@@ -19,8 +19,9 @@
 --   1 = DECIDE  - splash finished (or none): pick cmdline / skip / movie.
 --   2 = MOVIE   - the intro movie plays async via the native core.Video
 --                 entity path; destroying the entity is the teardown.
---   3 = TITLE   - create Title:new() behind a plain black overlay, then
---                 drop the overlay.
+--   3 = TITLE   - create Title:new() behind a black overlay child of the
+--                 title root that fades out exactly like the splash fade-in,
+--                 then the overlay is removed.
 --   4 = GAMEPLAY - a non-blocking core.runGame() session (cmdline start) is
 --                 live; a game.resumeAfterGame callback lands on the title
 --                 menu when it returns.
@@ -71,7 +72,7 @@ local skipIntro = re.getEnv('OPENRE_SKIP_INTRO')
 local boot = {
     splash = nil, -- { id, root, logo, fade, fadeSprite, texture } while alive
     movie = nil,  -- { entity, handle, busy, skip } while a movie plays
-    title = nil,  -- { overlay, hold } while the menu is being revealed
+    title = nil,  -- { overlay, sprite, timer } while the menu is being revealed
 }
 
 -- The app entity's numeric scene id (set by app.init).
@@ -246,21 +247,17 @@ end
 -- Title movie ----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
--- Spawns the intro movie as an entity under the movie root. The native
--- VideoSystem auto-starts playback when it sees a core.Video component whose
--- `movie` cookie is set and status is Playing; destroying this entity is the
--- whole teardown (VideoSystem mark-and-sweeps orphaned decoders/textures).
--- Returns false when the movie could not be loaded.
+-- Spawns the intro movie as an entity under the user layer. The path string
+-- is handed to the native VideoSystem, which auto-starts playback when it sees
+-- a core.Video component whose `movie` path is set and status is Playing;
+-- destroying this entity is the whole teardown (VideoSystem mark-and-sweeps
+-- orphaned decoders/textures). Returns false when the movie could not be
+-- created.
 local function startMovie()
-    local intro = core.loadMovie(MOVIE_PATH)
-    if intro == nil then
-        return false
-    end
-
     local w = gfx.screenWidth()
     local h = gfx.screenHeight()
 
-    local entity = scene.createEntity(scene.getRoot('movie'))
+    local entity = scene.createEntity(scene.getRoot('user'))
     scene.setField(entity, 'name', 'title_movie')
     -- Sprites are centred on their transform, so anchor the full-window movie
     -- on the screen centre (same as video_play).
@@ -268,7 +265,7 @@ local function startMovie()
     scene.setField(entity, 'y', h * 0.5)
 
     local video = scene.addComponent(entity, 'core.Video')
-    scene.setField(video, 'movie', intro)
+    scene.setField(video, 'movie', MOVIE_PATH)
     scene.setField(video, 'status', 1) -- VideoStatus.Playing
 
     local size = scene.addComponent(entity, 'core.UiSize')
@@ -277,7 +274,6 @@ local function startMovie()
 
     local m = {
         entity = entity,
-        handle = intro,
         busy = true,
         skip = false,
     }
@@ -316,10 +312,8 @@ local function movieFinished()
 end
 
 -- Ends the movie: destroying the entity lets VideoSystem's mark-and-sweep
--- release the decoder and texture on its next pass; clearing the Movie handle
--- lets its __gc unload the streamed resource (the decoder already opened the
--- file itself, so playback is unaffected). A full collection runs the __gc
--- now so the resource is gone before the menu loads its textures.
+-- release the decoder and texture on its next pass. A full collection runs
+-- any __gc so the resources are gone before the menu loads its textures.
 local function destroyMovie()
     local m = boot.movie
     if m == nil then
@@ -328,7 +322,6 @@ local function destroyMovie()
     if m.entity ~= nil then
         scene.destroy(m.entity)
     end
-    m.handle = nil
     m.entity = nil
     m.busy = false
     m.skip = false
@@ -340,24 +333,29 @@ end
 -- Title ----------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
--- Creates the title menu behind a plain black overlay (under the fade root,
--- which draws above the user root). The overlay is removed after a short
--- black hold with no animation; the smooth hold/fade returns when the menu
--- migration step gives the menu's own tick ownership of the transition.
-local function spawnTitle(noHold)
-    local overlay = scene.createEntity(scene.getRoot('fade'))
-    scene.setField(overlay, 'name', 'title.black')
-    local sprite = scene.addComponent(overlay, 'core.Sprite')
-    scene.setField(sprite, 'color', { 0, 0, 0, 255 })
-    local size = scene.addComponent(overlay, 'core.UiSize')
-    scene.setField(size, 'width', gfx.screenWidth())
-    scene.setField(size, 'height', gfx.screenHeight())
+-- Title fade length: the menu is revealed from black over the same beat as
+-- the splash's fade-in (a black overlay child of the title root animated to
+-- alpha 0), instead of the old hold-then-pop.
+local TITLE_FADE_TICKS = 60
 
-    Title:new()
+-- Creates the title menu behind a black overlay that fades out exactly like
+-- the splash: the overlay is a textureless black sprite child of the title
+-- root (the newest child, so it paints above every menu entity), and GameFlow
+-- animates its alpha 255 -> 0 over TITLE_FADE_TICKS. `noHold` (skip-intro /
+-- fast-reload boots) skips the overlay entirely.
+local function spawnTitle(noHold)
+    local title = Title:new()
+    local overlay = nil
+    local sprite = nil
+    if not noHold then
+        overlay, sprite = util.spawnOverlay(title.root, { 0, 0, 0, 255 })
+        scene.setField(overlay, 'name', 'title.black')
+    end
 
     boot.title = {
         overlay = overlay,
-        hold = noHold and 0 or 60,
+        sprite = sprite,
+        timer = 0,
     }
 end
 
@@ -472,15 +470,21 @@ local function gameFlowSystem()
         -- registered in DECIDE lands on the title menu when it returns.
     elseif state == STATE_TITLE then
         local t = boot.title
-        if t == nil or t.overlay == nil then
+        if t == nil then
             return
         end
-        if t.hold > 0 then
-            t.hold = t.hold - 1
-            return
+        if t.overlay ~= nil then
+            -- Fade the overlay out exactly like the splash fade-in: alpha
+            -- 255 -> 0 over TITLE_FADE_TICKS, then remove it.
+            t.timer = t.timer + 1
+            local alpha = math.floor(255 * (TITLE_FADE_TICKS - t.timer) / TITLE_FADE_TICKS)
+            scene.setField(t.sprite, 'color', { 0, 0, 0, alpha })
+            if t.timer < TITLE_FADE_TICKS then
+                return
+            end
+            scene.destroy(t.overlay)
+            t.overlay = nil
         end
-        scene.destroy(t.overlay)
-        t.overlay = nil
         boot.title = nil
     end
 end

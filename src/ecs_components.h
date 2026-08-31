@@ -248,18 +248,19 @@ namespace openre::ecs
 
     /// A video clip drawn into the window by the scene-tree render path.
     ///
-    /// `movie` is a MovieResource cookie from core.loadMovie; the movie file
-    /// itself is streamed from disk while playing. The entity's UiSizeComponent
-    /// bounds the draw area in window pixels (top-left at the world transform
-    /// position); the decoded video is letterboxed inside these bounds while
-    /// preserving its aspect ratio. `status` and `position` (playback time in
-    /// seconds) are advanced by the VideoSystem. `texture` is the render2d
-    /// dynamic-texture handle for the latest decoded frame (0 when none), and
-    /// `videoWidth`/`videoHeight` are the native decoded frame size used to
-    /// compute the aspect-preserving draw rectangle.
+    /// `movie` is a game-relative movie path string (e.g.
+    /// "pl0\\zmovie\\title_l.bin"); the movie file itself is streamed from disk
+    /// while playing. The entity's UiSizeComponent bounds the draw area in
+    /// window pixels (top-left at the world transform position); the decoded
+    /// video is letterboxed inside these bounds while preserving its aspect
+    /// ratio. `status` and `position` (playback time in seconds) are advanced
+    /// by the VideoSystem. `texture` is the render2d dynamic-texture handle
+    /// for the latest decoded frame (0 when none), and `videoWidth`/
+    /// `videoHeight` are the native decoded frame size used to compute the
+    /// aspect-preserving draw rectangle.
     struct VideoComponent
     {
-        ResourceCookie movie = 0;
+        std::string movie;
         VideoStatus status = VideoStatus::Stopped;
         float position = 0.0f;
         int texture = 0;

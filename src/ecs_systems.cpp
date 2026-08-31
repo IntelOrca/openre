@@ -52,6 +52,8 @@ namespace openre::ecs
         // core.runGame() re-enables the node to hand the frame back to the
         // legacy game.
         Entity entity = scene.createEntity(scene.getRoot(Scene::RootKind::Game));
+        auto& transform = scene.getComponent<TransformComponent>(entity);
+        transform.name = "game";
         auto& legacy = scene.addComponent<LegacyGameComponent>(entity);
         legacy.enabled = false;
         const auto windowSize = system::config::get_screen_resolution();
@@ -1600,24 +1602,6 @@ namespace openre
             d.a = 255;
             draws.push_back(d);
         });
-
-        // Full-window fade overlay set this frame (Lua gfx.fade).
-        const auto fade = render2d::SpriteRenderer::get().takeFade();
-        if (fade.active && fade.a > 0)
-        {
-            const float w = (float)render2d::SpriteRenderer::get().screenWidth();
-            const float h = (float)render2d::SpriteRenderer::get().screenHeight();
-            render2d::SpriteDraw d{};
-            d.textureHandle = 0;
-            // Sprites are centred on their position (see render2d), so anchor
-            // the full-window fade on the screen centre.
-            d.dst = { w * 0.5f, h * 0.5f, w, h };
-            d.r = fade.r;
-            d.g = fade.g;
-            d.b = fade.b;
-            d.a = fade.a;
-            draws.push_back(d);
-        }
 
         render2d::SpriteRenderer::get().present(draws.data(), draws.size());
         app.frameActive = false;

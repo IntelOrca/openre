@@ -17,12 +17,12 @@
 -- The screen tracks selection and loads the chosen save: accept calls
 -- core.loadGame (restores the save image into the game) and blocks inside
 -- core.runGame(), which drives the legacy game until it returns to the menu.
--- Cancel returns to the title menu (recreated straight at Main Story / Load
--- Game). A `mode` parameter is reserved so a future save variant can reuse
--- the component.
+-- Cancel returns to the title menu (recreated at PRESS START). A `mode`
+-- parameter is reserved so a future save variant can reuse the component.
 
 local Scheduler = require('script/scheduler')
 local game = require('script/game')
+local util = require('script/util')
 local ecs = require('ecs')
 
 local LoadScreen         = {}
@@ -194,7 +194,12 @@ function LoadScreen:new(opts)
     instance.cursor = 1
     instance.offset = 1
 
-    instance.userRoot = scene.getRoot('user')
+    -- Root entity for the whole screen, under the user layer. Everything this
+    -- screen creates (emitter, layers, text) hangs under it, so destroy()
+    -- removes the entire tree with one scene.destroy.
+    instance.root = scene.createEntity(scene.getRoot('user'))
+    scene.setField(instance.root, 'name', 'load')
+    instance.userRoot = instance.root
 
     -- UI sounds (audio.loadAudio deduplicates across instances).
     instance.sfx = {
@@ -374,8 +379,7 @@ local function moveCursor(self, delta)
     end
 end
 
--- Cancel: leave the screen and return to the title menu, recreated straight
--- at the Main Story level with the cursor on Load Game.
+-- Cancel: leave the screen and return to the title menu (PRESS START).
 local function beginClose(self)
     if self.closing then
         return
@@ -388,23 +392,27 @@ local function beginClose(self)
         :fadeOut(FADE_FRAMES)
         :exec(function()
             self:destroy()
-            Title:new({ mainStory = true })
+            Title:new()
         end)
         :holdBlack(HOLD_FRAMES)
         :fadeIn(FADE_FRAMES)
 end
 
--- Starts the selected save: fade to black (driven frame-by-frame here), then
--- destroy the screen, restore the save via core.loadGame and run the session
--- non-blocking (core.runGame returns immediately). When it returns to the
--- menu, the resume callback recreates the title so the player lands back at
--- Main Story / Load Game.
+-- Starts the selected save: fade to black (driven frame-by-frame here through
+-- an overlay sprite under the user layer), then destroy the screen, restore
+-- the save via core.loadGame and run the session non-blocking (core.runGame
+-- returns immediately). When it returns to the menu, the resume callback
+-- recreates the title so the player lands back at PRESS START.
 local function startLoad(self)
     if self.closing or self.enteringGame then
         return
     end
     self.enteringGame = true
     self.fadeRemaining = FADE_FRAMES
+    -- Full-window fade overlay (replaces the removed gfx.fade). Created as
+    -- the newest child of the user root so it paints above the load screen;
+    -- destroyed once the fade completes.
+    self.fadeOv, self.fadeOvSprite = util.spawnOverlay(nil, { 0, 0, 0, 0 })
 end
 
 -------------------------------------------------------------------------------
@@ -427,15 +435,21 @@ update = function(self)
     end
 
     -- Enter-the-game fade: accept was pressed, so fade to black over
-    -- FADE_FRAMES, then hand over to the legacy game. core.runGame returns
-    -- immediately; the resume callback below recreates the menu once the
-    -- session returns to it.
+    -- FADE_FRAMES through the overlay, then hand over to the legacy game.
+    -- core.runGame returns immediately; the resume callback below recreates
+    -- the menu once the session returns to it.
     if self.enteringGame then
         self.fadeRemaining = self.fadeRemaining - 1
         local progress = math.max(0, math.min(1, 1 - self.fadeRemaining / FADE_FRAMES))
-        gfx.fade(0, 0, 0, math.floor(progress * 255))
+        if self.fadeOvSprite then
+            scene.setField(self.fadeOvSprite, 'color', { 0, 0, 0, math.floor(progress * 255) })
+        end
         if self.fadeRemaining > 0 then
             return
+        end
+        if self.fadeOv then
+            scene.destroy(self.fadeOv)
+            self.fadeOv = nil
         end
         self.enteringGame = false
         local entry = self.entries[self.cursor]
@@ -444,12 +458,12 @@ update = function(self)
         if not ok then
             print('[load] failed to load save ' .. tostring(entry and entry.name or '?'))
             local Title = require('script/menu')
-            Title:new({ mainStory = true })
+            Title:new()
         else
             core.runGame()
             game.resumeAfterGame(function()
                 local Title = require('script/menu')
-                Title:new({ mainStory = true })
+                Title:new()
             end)
         end
         return
@@ -471,14 +485,20 @@ update = function(self)
     end
 end
 
--- Tears the screen down: destroy every entity this screen created, drop all
--- resource handles and collect so they unload before the next screen takes
--- over.
+-- Tears the screen down: destroy every entity this screen created (the whole
+-- tree hangs under instance.root), drop all resource handles and collect so
+-- they unload before the next screen takes over.
 local function destroy(self)
     self.closed = true
-    scene.destroy(self.front)
-    scene.destroy(self.back)
-    scene.destroy(self.emitterEntity)
+    if self.fadeOv then
+        scene.destroy(self.fadeOv)
+        self.fadeOv = nil
+    end
+    if self.root then
+        scene.destroy(self.root)
+        self.root = nil
+    end
+    self.userRoot = nil
     self.front = nil
     self.back = nil
     self.frontFrame = nil

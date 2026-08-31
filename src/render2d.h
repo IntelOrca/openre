@@ -58,16 +58,6 @@ namespace openre::render2d
         int order = 0; // pre-order scene-tree index; tie-break when z is equal
     };
 
-    // Full-window fade overlay set for the current frame by gfx.fade().
-    struct FadeState
-    {
-        bool active = false;
-        uint8_t r = 0;
-        uint8_t g = 0;
-        uint8_t b = 0;
-        uint8_t a = 0;
-    };
-
     // Self-contained SDL_GPU 2D sprite renderer for the ECS scene tree. It
     // owns its textures, pipelines and vertex buffers and presents directly to
     // the swapchain in window pixel space. It intentionally has no connection
@@ -122,10 +112,6 @@ namespace openre::render2d
         // a present has serviced, or false while none is ready. Consumes the
         // result; each request yields one BMP.
         bool pollCapture(std::vector<uint8_t>& outBmp, int* outWidth = nullptr, int* outHeight = nullptr);
-
-        // Per-frame fade overlay (set by the Lua gfx.fade binding).
-        void setFade(const FadeState& state);
-        FadeState takeFade();
 
         // Releases all GPU resources (called on the closing pass).
         void shutdown();

@@ -310,12 +310,11 @@ local scene = {}
 ---@return SceneEntity|nil
 function scene.createEntity(parent) end
 
---- Return one of the five strict top-level sub-roots of the scene by name.
+--- Return one of the three top-level sub-roots of the scene by name.
 --- These are fixed containers the engine and Lua organise content under:
 --- `"user"` (what Lua code has access to), `"game"` (contains the legacy game
---- entity), `"movie"` (for the video component entity), `"fade"` (for the fade
---- black overlay) and `"overlay"` (mostly for debug overlay text).
----@param name string one of "user", "game", "movie", "fade", "overlay"
+--- entity) and `"overlay"` (mostly for debug overlay text).
+---@param name string one of "user", "game", "overlay"
 ---@return SceneEntity
 function scene.getRoot(name) end
 
@@ -662,14 +661,9 @@ function gfx.screenWidth() end
 ---@return integer
 function gfx.screenHeight() end
 
---- Set a full-window fade overlay for the current frame. A new call replaces
---- the previous one; the overlay is cleared automatically at the end of the
---- frame.
----@param r integer 0-255
----@param g integer 0-255
----@param b integer 0-255
----@param a integer 0-255 alpha
-function gfx.fade(r, g, b, a) end
+--- REMOVED: gfx.fade was removed. Fade overlays are now just entities — spawn
+--- a textureless full-window sprite (see games/re2 util.spawnOverlay) under the
+--- user layer and animate its `color` alpha, destroying it when done.
 
 --- Ask the renderer to grab the next presented frame. The download runs on
 --- the render thread inside that frame's submit, so call this from a tick
@@ -762,45 +756,14 @@ function save.list() end
 ---@class core
 core = {}
 
----@class Movie
---- Opaque handle to a streamed movie resource. Created with `core.loadMovie`.
---- Like textures and sounds, the resource is unloaded when the last handle is
---- garbage collected, so keep the handle referenced while playing.
-local Movie = {}
-
---- Register a movie as a streamed resource and return a Movie handle, or nil
---- when the file cannot be resolved. Movies are always streamed: nothing but
---- the resolved location is kept at load time; the decoder opens the file when
---- playback starts and reads it incrementally. Loading the same path twice
---- returns a handle onto the same shared resource.
----@param path string e.g. "pl0\\zmovie\\opn1stl.bin"
----@return Movie|nil
-function core.loadMovie(path) end
-
---- Play a previously loaded movie, filling the window, and block until it
---- finishes or is skipped. Returns `true` when the movie was skipped early by
---- user input (or a window close), `false` when it played through to the end,
---- and nothing when it could not be started.
----
---- The optional `captions` argument is an array of caption entries
---- `{ from = seconds, to = seconds, text = string }`. While the playback
---- position (in seconds) is inside `[from, to]`, the entry's text is shown as
---- an overlay centred near the bottom of the window; entries are evaluated in
---- order and the first match wins. Captions need a loadable font resource to
---- be visible; without one they are silently skipped (never a crash).
----
---- `core.playMovie` drives playback itself, so it blocks the main thread
---- (suspending the whole frame pipeline, including the web inspector's
---- managed systems) until the movie ends. New game code should prefer the
---- async path for a registered system: give an entity a `core.Video` component
---- (set `movie` then `status` = 1 / Playing) and let the native VideoSystem
---- auto-start the decoder on the next pass. Destroying that entity is the
---- whole teardown: the decoder and dynamic texture are released by the
---- system's mark-and-sweep. Keep the Movie handle referenced while playing.
----@param movie Movie a movie from core.loadMovie
----@param captions? { from: number, to: number, text: string }[]
----@return boolean|nil
-function core.playMovie(movie, captions) end
+--- REMOVED: the blocking Movie workflow (`core.loadMovie` / `core.playMovie`
+--- / the Movie class) was removed along with the `"movie"` scene root. Movies
+--- now play async and under the user layer: create an entity, give it a
+--- `core.Video` component, set `movie` to the movie's **path string** (e.g.
+--- `"pl0\\zmovie\\title_l.bin"`) and `status` = 1 (Playing), and let the native
+--- VideoSystem auto-start the decoder on its next pass. Destroying that entity
+--- is the whole teardown: the decoder and dynamic texture are released by the
+--- system's mark-and-sweep.
 
 --- Load a save file from the save folder before entering gameplay with
 --- `core.runGame()`. `name` is the entry name from `save.list()` (the save
@@ -902,9 +865,8 @@ function core.startRoomWarp(player, stage, room) end
 --- session resumes from it; otherwise the game starts as the current
 --- player/scenario settings dictate.
 ---
---- Prefer this async form over `core.playMovie`'s blocking loop: it keeps
---- the whole registry (including the web inspector's managed systems) running
---- while the game plays.
+--- The async form keeps the whole registry (including the web inspector's
+--- managed systems) running while the game plays.
 ---@return boolean
 function core.runGame() end
 

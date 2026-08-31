@@ -91,51 +91,26 @@ namespace openre
         }
     }
 
-    ResourceCookie loadMovieResource(const std::string& path)
-    {
-        auto& resmgr = ResourceManager::get();
-
-        // Reuse an already-registered movie instead of resolving it again.
-        const ResourceCookie existing = resmgr.addRef<MovieResource>(path);
-        if (existing != 0)
-            return existing;
-
-        // Streaming means nothing but the resolved location is kept: validate
-        // the file exists now so failures surface at loadMovie() time rather
-        // than when playback starts.
-        const std::string resolved = resolveMoviePath(path);
-        if (resolved.empty())
-            return 0;
-
-        auto resource = std::make_unique<MovieResource>();
-        resource->path = resolved;
-        const ResourceCookie cookie = resmgr.addFirstRef<MovieResource>(path, std::move(resource));
-        logging::logInfo("[video] registered movie '{}' -> cookie {}, file '{}'", path, cookie, resolved);
-        return cookie;
-    }
-
     // Bootstraps playback state onto `entity`, which already carries a
-    // VideoComponent with a movie cookie set. Opens the decoder, creates the
+    // VideoComponent with a movie path set. Opens the decoder, creates the
     // dynamic texture (pre-filled black) and inserts an s_videoStates row so
     // VideoSystem drives it. Returns false (leaving the component Stopped)
     // when the movie cannot play; no entity is destroyed here.
     static bool video_begin_playback(AppContext& app, ecs::Entity entity, ecs::VideoComponent& video)
     {
-        auto* resource = ResourceManager::get().fromCookie<MovieResource>(video.movie);
-        if (resource == nullptr || resource->path.empty())
+        const std::string resolved = resolveMoviePath(video.movie);
+        if (resolved.empty())
         {
-            logging::logWarning("[video] auto-start: cookie {} is not a loaded movie", video.movie);
+            logging::logWarning("[video] auto-start: could not resolve movie path '{}'", video.movie.c_str());
             video.status = ecs::VideoStatus::Stopped;
             return false;
         }
 
-        const std::string& resolved = resource->path;
         auto& scene = app.scene;
 
         // The movie is interruptible through the input middleware: carry an
         // InputHandler so scripts and the web plugin can inspect/replace the
-        // frame while it plays. The blocking movie loop polls input via
-        // movie_input_poll and runs this walk over the scene.
+        // frame while it plays.
         if (!scene.hasComponent<ecs::InputHandlerComponent>(entity))
             scene.addComponent<ecs::InputHandlerComponent>(entity);
 
@@ -170,72 +145,6 @@ namespace openre
         return true;
     }
 
-    ecs::Entity video_play(AppContext& app, ResourceCookie movie)
-    {
-        if (!game_module_active())
-            return ecs::NullEntity;
-
-        auto* resource = ResourceManager::get().fromCookie<MovieResource>(movie);
-        if (resource == nullptr || resource->path.empty())
-        {
-            logging::logWarning("[video] video_play: cookie {} is not a loaded movie", movie);
-            return ecs::NullEntity;
-        }
-
-        const auto ws = system::config::get_screen_resolution();
-        auto& scene = app.scene;
-        ecs::Entity entity = scene.createEntity(scene.getRoot(ecs::Scene::RootKind::Movie));
-        auto& videoTransform = scene.getComponent<ecs::TransformComponent>(entity);
-        videoTransform.name = "movie";
-        // Sprites (and thus the video) are centred on their transform (see
-        // render2d), so anchor the full-window movie on the screen centre.
-        videoTransform.position.x = ws.width * 0.5f;
-        videoTransform.position.y = ws.height * 0.5f;
-        auto& video = scene.addComponent<ecs::VideoComponent>(entity);
-        video.movie = movie;
-        video.status = ecs::VideoStatus::Playing;
-
-        auto& videoSize = scene.addComponent<ecs::UiSizeComponent>(entity);
-        videoSize.width = static_cast<float>(ws.width);
-        videoSize.height = static_cast<float>(ws.height);
-
-        if (!video_begin_playback(app, entity, video))
-        {
-            scene.destroyEntity(entity);
-            return ecs::NullEntity;
-        }
-        return entity;
-    }
-
-    void video_stop(AppContext& app, ecs::Entity entity)
-    {
-        auto it = s_videoStates.find(entity);
-        if (it == s_videoStates.end())
-            return;
-
-        VideoState& st = it->second;
-        if (st.decoder != nullptr)
-        {
-            st.decoder->close();
-            delete st.decoder;
-            st.decoder = nullptr;
-        }
-        if (st.texture != 0)
-        {
-            render2d::SpriteRenderer::get().unloadTexture(st.texture);
-            st.texture = 0;
-        }
-
-        auto* scene = &app.scene;
-        if (scene->isValid(entity) && scene->hasComponent<ecs::VideoComponent>(entity))
-        {
-            auto& video = scene->getComponent<ecs::VideoComponent>(entity);
-            video.texture = 0;
-            video.status = ecs::VideoStatus::Stopped;
-        }
-        s_videoStates.erase(it);
-    }
-
     void VideoSystem(AppContext& app)
     {
         if (!game_module_active())
@@ -259,11 +168,11 @@ namespace openre
             auto it = s_videoStates.find(entity);
             if (it == s_videoStates.end())
             {
-                // Auto-start: an entity gained a movie cookie with no playback
+                // Auto-start: an entity gained a movie path with no playback
                 // state yet (async movie created from Lua). Bootstrap the
                 // decoder on the spot so enumerating it on the next pass
                 // progresses playback.
-                if (video.movie != 0 && video.status == ecs::VideoStatus::Playing)
+                if (!video.movie.empty() && video.status == ecs::VideoStatus::Playing)
                     video_begin_playback(app, entity, video);
                 return;
             }

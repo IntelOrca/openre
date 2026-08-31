@@ -92,9 +92,7 @@ namespace openre::ecs
         {
             User = 0,    // what Lua game/plugin code has access to
             Game = 1,    // contains the legacy game entity
-            Movie = 2,   // for the video component entity
-            Fade = 3,    // for the fade black overlay
-            Overlay = 4, // mostly for debug overlay text
+            Overlay = 2, // mostly for debug overlay text
         };
 
         Scene();
@@ -353,6 +351,6 @@ namespace openre::ecs
         std::unordered_map<std::string, std::unordered_map<uint32_t, RuntimeRow>> m_runtimeComponents;
         uint64_t m_runtimeSeq = 0;
         Entity m_root = NullEntity;
-        Entity m_roots[5] = { NullEntity, NullEntity, NullEntity, NullEntity, NullEntity };
+        Entity m_roots[3] = { NullEntity, NullEntity, NullEntity };
     };
 }

@@ -10,6 +10,7 @@
 Scheduler = {}
 
 local ecs = require('ecs')
+local util = require('script/util')
 
 local SCHEDULER_KIND_WAIT = 0
 local SCHEDULER_KIND_EXEC = 1
@@ -21,6 +22,25 @@ local SCHEDULER_METHODS = {}
 local live = {}
 local function schedule(instance)
     live[#live + 1] = instance
+end
+
+-- Full-window fade overlay (replaces the removed gfx.fade). Recreated as the
+-- newest child of the user root every time it is touched, so it always draws
+-- above any screen entity — including a new screen created mid-fade by an
+-- :exec step (which would otherwise paint over a persisting overlay).
+local overlayEntity = nil
+local overlaySprite = nil
+
+local function setOverlayColor(r, g, b, a)
+    if overlayEntity then
+        scene.destroy(overlayEntity)
+        overlayEntity = nil
+    end
+    if a <= 0 then
+        overlaySprite = nil
+        return
+    end
+    overlayEntity, overlaySprite = util.spawnOverlay(nil, { r, g, b, math.max(0, math.min(255, a)) })
 end
 
 local function update(self)
@@ -73,7 +93,7 @@ local function fadeIn(self, time)
     self:run(function()
         timer = timer - 1
         local fade = timer / time
-        gfx.fade(0, 0, 0, math.floor(fade * 255))
+        setOverlayColor(0, 0, 0, math.floor(fade * 255))
         return timer > 0
     end)
     return self
@@ -84,19 +104,20 @@ local function fadeOut(self, time)
     self:run(function()
         timer = timer - 1
         local fade = 1 - (timer / time)
-        gfx.fade(0, 0, 0, math.floor(fade * 255))
+        setOverlayColor(0, 0, 0, math.floor(fade * 255))
         return timer > 0
     end)
     return self
 end
 
--- Holds a solid black screen for `time` ticks after a fade out. gfx.fade only
--- lasts a single frame, so the overlay must be re-issued every tick while
--- waiting or the faded-out scene pops back visible.
+-- Holds a solid black screen for `time` ticks after a fade out. The overlay
+-- is an entity (not a one-shot gfx.fade), so it persists for the whole wait —
+-- but it is recreated each tick to stay the newest user-root child, in case a
+-- new screen landed on top after the fade-out step.
 local function holdBlack(self, time)
     local timer = time
     self:run(function()
-        gfx.fade(0, 0, 0, 255)
+        setOverlayColor(0, 0, 0, 255)
         timer = timer - 1
         return timer > 0
     end)

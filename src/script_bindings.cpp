@@ -53,7 +53,6 @@ namespace openre::script
         constexpr const char* METATABLE_TEXTURE = "meta_texture";
         constexpr const char* METATABLE_FONT = "meta_font";
         constexpr const char* METATABLE_SOUND = "meta_sound";
-        constexpr const char* METATABLE_MOVIE = "meta_movie";
 
         namespace LogLevel
         {
@@ -695,12 +694,7 @@ namespace openre::script
             ResourceCookie cookie;
         };
 
-        struct MovieHandle
-        {
-            ResourceCookie cookie;
-        };
-
-        // __gc for TextureHandle/FontHandle/SoundHandle/MovieHandle: returns
+        // __gc for TextureHandle/FontHandle/SoundHandle: returns
         // the handle's resource-manager reference. Safe after releaseAll()
         // (the empty registry makes release a no-op).
         template<typename T> int resourceHandleGC(lua_State* L)
@@ -842,8 +836,8 @@ namespace openre::script
             return 1;
         }
 
-        // Returns one of the five strict top-level sub-roots (user, game, movie,
-        // fade, overlay) by name.
+        // Returns one of the three strict top-level sub-roots (user, game,
+        // overlay) by name.
         int sceneGetRoot(lua_State* L)
         {
             auto* name = luaL_checkstring(L, 1);
@@ -858,10 +852,6 @@ namespace openre::script
                 kind = ecs::Scene::RootKind::User;
             else if (strcmp(name, "game") == 0)
                 kind = ecs::Scene::RootKind::Game;
-            else if (strcmp(name, "movie") == 0)
-                kind = ecs::Scene::RootKind::Movie;
-            else if (strcmp(name, "fade") == 0)
-                kind = ecs::Scene::RootKind::Fade;
             else if (strcmp(name, "overlay") == 0)
                 kind = ecs::Scene::RootKind::Overlay;
             else
@@ -1123,8 +1113,8 @@ namespace openre::script
             if (L == nullptr)
                 return;
             // This can be invoked from within the game module's own Lua tick
-            // (the movie playback loop polls input and walks the scene while
-            // inside apiPlayMovie), so never clobber the caller's stack: only
+            // or an InputHandler polluted by the movie loop poll, so never
+            // clobber the caller's stack: only
             // wind back to the depth we started at, never `lua_settop(L, 0)`.
             const int base = lua_gettop(L);
             lua_rawgeti(L, LUA_REGISTRYINDEX, state->ref);
@@ -1378,14 +1368,13 @@ namespace openre::script
                     video->videoHeight = static_cast<int>(luaL_checkinteger(L, 3));
                 else if (strcmp(name, "movie") == 0)
                 {
-                    // A Movie from core.loadMovie() selects what the component
-                    // plays; nil clears it.
+                    // A game-relative movie path string selects what the
+                    // component plays; nil clears it. The native VideoSystem
+                    // resolves the path when it auto-starts playback.
                     if (lua_isnoneornil(L, 3))
-                        video->movie = 0;
-                    else if (auto* movie = static_cast<MovieHandle*>(luaL_testudata(L, 3, METATABLE_MOVIE)))
-                        video->movie = movie->cookie;
+                        video->movie.clear();
                     else
-                        return luaL_error(L, "scene.setField: expected a movie or nil for video field 'movie'");
+                        video->movie = luaL_checkstring(L, 3);
                 }
                 else
                     return luaL_error(L, "scene.setField: unknown video field '%s'", name);
@@ -1731,7 +1720,7 @@ namespace openre::script
                 else if (strcmp(name, "videoHeight") == 0)
                     lua_pushinteger(L, video->videoHeight);
                 else if (strcmp(name, "movie") == 0)
-                    lua_pushinteger(L, video->movie);
+                    lua_pushlstring(L, video->movie.data(), video->movie.size());
                 else
                     lua_pushnil(L);
                 return 1;
@@ -2087,18 +2076,6 @@ namespace openre::script
             return 1;
         }
 
-        int gfxFade(lua_State* L)
-        {
-            render2d::FadeState state;
-            state.active = true;
-            state.r = static_cast<uint8_t>(luaL_checkinteger(L, 1));
-            state.g = static_cast<uint8_t>(luaL_checkinteger(L, 2));
-            state.b = static_cast<uint8_t>(luaL_checkinteger(L, 3));
-            state.a = static_cast<uint8_t>(luaL_checkinteger(L, 4));
-            render2d::SpriteRenderer::get().setFade(state);
-            return 0;
-        }
-
         // ── save.* ──────────────────────────────────────────────────────────
         // Saved-game listing for the Lua load/save screens.
 
@@ -2332,7 +2309,7 @@ namespace openre::script
         };
         static const ComponentFieldInfo kVideoFields[] = {
             { "status", "int", "0" },      { "position", "float", "0" }, { "videoWidth", "int", "0" },
-            { "videoHeight", "int", "0" }, { "movie", "int", "0" },
+            { "videoHeight", "int", "0" }, { "movie", "string", "" },
         };
         static const ComponentFieldInfo kAudioEmitterFields[] = {
             { "category", "string", "sfx" }, { "state", "string", "stopped" },
@@ -2902,27 +2879,6 @@ namespace openre::script
             return 1;
         }
 
-        // core.loadMovie(path) - registers a movie as a streamed resource and
-        // returns a Movie handle, or nil when the file cannot be resolved.
-        // Nothing is read beyond validating that the file exists; playback
-        // streams it from disk. Loading the same path twice returns a handle
-        // onto the same shared resource.
-        int coreLoadMovie(lua_State* L)
-        {
-            auto* path = luaL_checkstring(L, 1);
-            const auto cookie = loadMovieResource(path);
-            if (cookie == 0)
-            {
-                lua_pushnil(L);
-                return 1;
-            }
-            auto* movie = static_cast<MovieHandle*>(lua_newuserdata(L, sizeof(MovieHandle)));
-            movie->cookie = cookie;
-            luaL_getmetatable(L, METATABLE_MOVIE);
-            lua_setmetatable(L, -2);
-            return 1;
-        }
-
         // options.* - expose the engine-wide settings registry so game
         // scripts (e.g. the options menu) can enumerate, read, change and
         // persist user settings. `id` is either the stable string key from
@@ -3040,210 +2996,6 @@ namespace openre::script
         {
             options::flush();
             return 0;
-        }
-
-        // core.playMovie(movie [, captions]) - plays a movie previously
-        // registered with core.loadMovie(), blocking until it finishes or any
-        // input skips it. The video entity is created automatically to fill
-        // the window; rendering is driven here because this call suspends the
-        // frame pipeline until it returns.
-        //
-        // New game code should prefer the async path (a core.Video entity
-        // spawned by the module, driven by VideoSystem) so the app loop keeps
-        // running; this API blocks the whole main thread (including the web
-        // inspector's managed systems) until the movie ends.
-        //
-        // The optional `captions` argument is an array of
-        // { from = seconds, to = seconds, text = string } entries shown as a
-        // bottom-centre overlay while the playback position is inside their
-        // range. Returns true when the movie was skipped early, false when it
-        // played through; nil/nothing when it could not be started.
-        int apiPlayMovie(lua_State* L)
-        {
-            auto* movieHandle = static_cast<MovieHandle*>(luaL_checkudata(L, 1, METATABLE_MOVIE));
-            if (movieHandle == nullptr)
-                return luaL_argerror(L, 1, "expected a movie from core.loadMovie");
-            const auto cookie = movieHandle->cookie;
-            auto* app = openre::current_app();
-            if (app == nullptr)
-                return 0;
-
-            // Optional caption list: { {from=..., to=..., text=...}, ... }.
-            struct Caption
-            {
-                float from;
-                float to;
-                std::string text;
-            };
-            std::vector<Caption> captions;
-            if (lua_gettop(L) >= 2 && !lua_isnil(L, 2))
-            {
-                luaL_checktype(L, 2, LUA_TTABLE);
-                const int count = static_cast<int>(luaL_len(L, 2));
-                captions.reserve(count);
-                for (int i = 1; i <= count; i++)
-                {
-                    lua_rawgeti(L, 2, i);
-                    if (lua_istable(L, -1))
-                    {
-                        Caption c{};
-                        lua_getfield(L, -1, "from");
-                        c.from = static_cast<float>(luaL_optnumber(L, -1, 0.0));
-                        lua_pop(L, 1);
-                        lua_getfield(L, -1, "to");
-                        c.to = static_cast<float>(luaL_optnumber(L, -1, c.from));
-                        lua_pop(L, 1);
-                        lua_getfield(L, -1, "text");
-                        c.text = luaL_optstring(L, -1, "");
-                        lua_pop(L, 1);
-                        captions.push_back(std::move(c));
-                    }
-                    lua_pop(L, 1);
-                }
-            }
-
-            ecs::Entity entity = video_play(*app, cookie);
-            if (entity == ecs::NullEntity)
-            {
-                logging::logWarning("[core] playMovie failed to start movie cookie {}", cookie);
-                return 0;
-            }
-
-            // Movies take over the soundtrack: silence every emitter voice so
-            // BGM/narration does not bleed into the film. The movie playback
-            // loop below drives the video/render systems itself and never runs
-            // AudioSystem, so stopping the mix here is the only effective point.
-            system::audio::stop_all();
-            render2d::SpriteRenderer::get().setFade({});
-
-            // One caption entity for the whole movie, created up front and its
-            // string swapped as playback advances. Without a usable font the
-            // layout pass simply draws nothing (never a crash).
-            ecs::Entity captionEntity = ecs::NullEntity;
-            if (!captions.empty())
-            {
-                auto* scene = openre::current_scene();
-                if (scene != nullptr)
-                {
-                    captionEntity = scene->createEntity(scene->getRoot(ecs::Scene::RootKind::Overlay));
-                    auto& transform = scene->getComponent<ecs::TransformComponent>(captionEntity);
-                    transform.name = "movie_captions";
-                    // Sprites are centred on their transform (see render2d), so
-                    // anchor the caption strip at the bottom-centre of the
-                    // window.
-                    transform.position.x = static_cast<float>(render2d::SpriteRenderer::get().screenWidth()) * 0.5f;
-                    transform.position.y = static_cast<float>(render2d::SpriteRenderer::get().screenHeight()) - 20.0f;
-                    auto& captionText = scene->addComponent<ecs::TextComponent>(captionEntity);
-                    auto& captionSize = scene->addComponent<ecs::UiSizeComponent>(captionEntity);
-                    captionSize.width = static_cast<float>(render2d::SpriteRenderer::get().screenWidth());
-                    captionSize.height = 24.0f;
-                    captionText.flags
-                        = static_cast<uint32_t>(ecs::TextFlags::XCenter) | static_cast<uint32_t>(ecs::TextFlags::YMiddle);
-                    captionText.font = getRoleFont(FontRole::Small);
-                }
-            }
-
-            bool skipped = false;
-
-            // The movie loop owns its own input polling: it cannot call
-            // pad_set (that runs from the module tick, which never advances
-            // while this blocking loop occupies the main thread), so it builds
-            // the real command state, computes the rising edge against the
-            // previous movie poll, and runs the full input-handler walk over
-            // the scene. Edge-detect against a fresh baseline so a key already
-            // held from the splash does not skip the movie immediately.
-            openre::input::movie_input_begin();
-
-            while (true)
-            {
-                auto* scene = openre::current_scene();
-                const bool playing = scene != nullptr && scene->isValid(entity)
-                    && scene->hasComponent<ecs::VideoComponent>(entity)
-                    && scene->getComponent<ecs::VideoComponent>(entity).status == ecs::VideoStatus::Playing;
-                if (!playing || app->closing() || !app->running())
-                    break;
-
-                // Pump events (keep the window responsive, detect quit).
-                system::window::Event ev;
-                bool skip = false;
-                while (system::window::poll_event(ev))
-                {
-                    if (ev.type == system::window::EventType::Quit || ev.type == system::window::EventType::CloseRequested)
-                    {
-                        skip = true;
-                        app->requestClose();
-                    }
-                }
-
-                // Poll input through the middleware chain: the real devices are
-                // transformed into commands, then the scene walk lets every
-                // InputHandler (web plugin, the movie entity's own handler,
-                // the demo replay handler) reshape the frame. Any press left
-                // after the chain interrupts the movie.
-                const ecs::InputFrame frame = openre::input::movie_input_poll();
-                if (frame.press != 0)
-                    skip = true;
-
-                if (skip)
-                {
-                    skipped = true;
-                    video_stop(*app, entity);
-                    break;
-                }
-
-                // Advance the video and present the frame. frameActive is set
-                // so RenderSystem performs the present this pass.
-                app->frameActive = true;
-                VideoSystem(*app);
-
-                // Show whichever caption covers the current playback position
-                // (VideoSystem has just refreshed video.position). Relayout
-                // only when the string actually changed.
-                if (captionEntity != ecs::NullEntity && scene != nullptr)
-                {
-                    const char* activeText = nullptr;
-                    const auto& video = scene->getComponent<ecs::VideoComponent>(entity);
-                    for (const auto& caption : captions)
-                    {
-                        if (video.position >= caption.from && video.position <= caption.to)
-                        {
-                            activeText = caption.text.c_str();
-                            break;
-                        }
-                    }
-                    const std::string_view desired(activeText != nullptr ? activeText : "");
-                    auto* captionText = scene->tryGetComponent<ecs::TextComponent>(captionEntity);
-                    if (captionText != nullptr && captionText->text != desired)
-                    {
-                        captionText->text.assign(desired);
-                        TextLayoutSystem(*app); // lay out the glyphs before presenting
-                    }
-                }
-
-                RenderSystem(*app);
-
-                // Note: managed systems (including the web inspector's) do not
-                // run while this blocking loop occupies the main thread; callers
-                // that must keep the inspector responsive should use the async
-                // core.Video entity path instead.
-
-                system::window::delay(8);
-            }
-
-            // Tear down the video entity (and the caption entity with it).
-            video_stop(*app, entity);
-            auto* scene = openre::current_scene();
-            if (scene != nullptr)
-            {
-                if (scene->isValid(entity))
-                    scene->destroyEntity(entity);
-                if (captionEntity != ecs::NullEntity && scene->isValid(captionEntity))
-                    scene->destroyEntity(captionEntity);
-            }
-            app->frameActive = false;
-
-            lua_pushboolean(L, skipped ? 1 : 0);
-            return 1;
         }
 
         // core.loadGame(name) - loads a save file from the save folder before
@@ -3471,6 +3223,7 @@ namespace openre::script
                 // Boot normally creates the node; recreate a fallback so a
                 // removed core.Legacy node can never wedge the call.
                 legacyEntity = scene->createEntity(scene->getRoot(ecs::Scene::RootKind::Game));
+                scene->getComponent<ecs::TransformComponent>(legacyEntity).name = "game";
                 auto& legacy = scene->addComponent<ecs::LegacyGameComponent>(legacyEntity);
                 legacy.enabled = true;
                 legacy.size = {
@@ -3724,7 +3477,7 @@ namespace openre::script
         setGlobal(L, "scene.removeComponent", sceneRemoveComponent);
         setGlobal(L, "scene.entitiesWithComponent", sceneEntitiesWithComponent);
 
-        // gfx.* - 2D engine rendering (textures, fonts, window size, fades).
+        // gfx.* - 2D engine rendering (textures, fonts, window size, screenshots).
         setGlobal(L, "gfx.loadTexture", gfxLoadTexture);
         setGlobal(L, "gfx.loadFont", gfxLoadFont);
         setGlobal(L, "gfx.measureText", gfxMeasureText);
@@ -3732,7 +3485,6 @@ namespace openre::script
         setGlobal(L, "gfx.screenHeight", gfxScreenHeight);
         setGlobal(L, "gfx.requestScreenshot", gfxRequestScreenshot);
         setGlobal(L, "gfx.takeScreenshot", gfxTakeScreenshot);
-        setGlobal(L, "gfx.fade", gfxFade);
         setGlobal(L, "gfx.listResources", gfxListResources);
         setGlobal(L, "gfx.getResourceImage", gfxGetResourceImage);
 
@@ -3743,8 +3495,6 @@ namespace openre::script
         setGlobal(L, "save.list", saveList);
 
         // core.* - engine services available to game scripts.
-        setGlobalWithVm(L, "core.loadMovie", coreLoadMovie, vm);
-        setGlobalWithVm(L, "core.playMovie", apiPlayMovie, vm);
         setGlobal(L, "core.setRoleFont", coreSetRoleFont);
         setGlobal(L, "core.loadGame", coreLoadGame);
         setGlobal(L, "core.loadSave", coreLoadSave);
@@ -3777,10 +3527,6 @@ namespace openre::script
         lua_pop(L, 1);
         luaL_newmetatable(L, METATABLE_SOUND);
         lua_pushcfunction(L, resourceHandleGC<SoundHandle>);
-        lua_setfield(L, -2, "__gc");
-        lua_pop(L, 1);
-        luaL_newmetatable(L, METATABLE_MOVIE);
-        lua_pushcfunction(L, resourceHandleGC<MovieHandle>);
         lua_setfield(L, -2, "__gc");
         lua_pop(L, 1);
 

@@ -933,65 +933,6 @@ namespace openre::input
         input_walk_handlers(*scene, scene->root(), frame);
     }
 
-    // ---- movie-loop input ----
-
-    // The demo replay handler (defined below) participates in the movie poll
-    // exactly as it does in pad_set.
-    static void demo_input_handler(ecs::InputFrame& frame);
-
-    // Previous real command state for the movie loop's dedicated edge
-    // computation. Kept separate from s_commandState so the movie's own
-    // polling cannot corrupt the main pad_set press tracking. The first poll
-    // seeds it from the current real state so a key held when a movie starts
-    // (e.g. the splash screen's skip key) does not skip it immediately.
-    static uint32_t s_moviePrevState = 0;
-    static bool s_movieSeeded = false;
-
-    void movie_input_begin()
-    {
-        s_moviePrevState = 0;
-        s_movieSeeded = false;
-    }
-
-    // Builds the real command state from all devices, computes the rising
-    // edge against the previous movie poll, and runs the full input-handler
-    // walk over the scene. Used by the blocking movie loop, which cannot run
-    // pad_set (the module tick never advances while a movie plays). Handlers
-    // participate exactly as they do in pad_set: web injection can replace
-    // the frame, and any InputHandler placed on the movie entity (added in
-    // video_play) can permit or reject the skip.
-    ecs::InputFrame movie_input_poll()
-    {
-        update_gamepads();
-
-        const uint32_t realState
-            = transform_keyboard(s_commandBindings) | transform_gamepad(s_commandBindings) | transform_mouse(s_commandBindings);
-
-        // First poll of a movie: seed the edge baseline from the current real
-        // state so held keys are not treated as fresh presses.
-        if (!s_movieSeeded)
-        {
-            s_movieSeeded = true;
-            s_moviePrevState = realState;
-            ecs::InputFrame seeded{ realState, 0 };
-            if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
-                demo_input_handler(seeded);
-            input_walk(seeded);
-            return seeded;
-        }
-
-        const uint32_t cmdEdge = rising_edge(realState, s_moviePrevState);
-        s_moviePrevState = realState;
-
-        ecs::InputFrame frame{ realState, cmdEdge };
-
-        if (check_flag(FlagGroup::System, FG_SYSTEM_DEMO))
-            demo_input_handler(frame);
-
-        input_walk(frame);
-        return frame;
-    }
-
     // Converts one frame of recorded demo input (legacy raw bits) into a
     // command bitmask. Mirrors the original demo branch: raw bits are mapped
     // onto the 16 logical keys via the input_mapping_table row selected by
